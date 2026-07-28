@@ -93,6 +93,23 @@ textarea {
   margin-bottom: 24px;
 }
 
+.top-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.primary-link {
+  align-items: center;
+  background: var(--brand);
+  border-radius: 6px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
 .eyebrow {
   color: var(--muted);
   font-size: 13px;

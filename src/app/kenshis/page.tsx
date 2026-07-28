@@ -95,11 +95,14 @@ export default async function KenshisPage({
             <p className="eyebrow">Datos importados desde copia legacy</p>
             <h1>Kenshis</h1>
           </div>
-          <form action={logoutAction}>
-            <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
-              <LogOut aria-hidden="true" size={18} />
-            </button>
-          </form>
+          <div className="top-actions">
+            <a className="primary-link" href="/kenshis/nuevo">Nuevo kenshi</a>
+            <form action={logoutAction}>
+              <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
+                <LogOut aria-hidden="true" size={18} />
+              </button>
+            </form>
+          </div>
         </div>
 
         <section className="grid stats compact" aria-label="Resumen">
