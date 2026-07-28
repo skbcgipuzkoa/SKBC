@@ -47,7 +47,7 @@ export default async function Home({
           <a aria-current="page" href="/">
             Panel
           </a>
-          <a href="/alumnos">Alumnos</a>
+          <a href="/kenshis">Kenshis</a>
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
         </nav>
