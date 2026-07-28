@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { logoutAction, updateKenshiAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { driveImageUrl } from "@/lib/drive";
+import { allGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Member = {
@@ -14,6 +15,13 @@ type Member = {
   class: "kids" | "adults";
   status: "active" | "inactive";
   grade: string | null;
+  joined_on: string | null;
+  last_exam_on: string | null;
+  next_exam_on: string | null;
+  exam_notice: string | null;
+  exam_history: string | null;
+  attendance_history: string | null;
+  site_url: string | null;
   family_email: string | null;
   guardian_name: string | null;
   guardian_phone: string | null;
@@ -64,7 +72,7 @@ export default async function KenshiDetailPage({
   const { data: member, error } = await supabase
     .from("members")
     .select(
-      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,legacy_ficha_url"
+      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,legacy_ficha_url"
     )
     .eq("legacy_id", legacyId)
     .single<Member>();
@@ -141,7 +149,14 @@ export default async function KenshiDetailPage({
                 <label>Nombre<input name="firstName" defaultValue={member.first_name} required /></label>
                 <label>Apellidos<input name="lastName" defaultValue={member.last_name ?? ""} /></label>
                 <label>ID IKA<input name="ikaId" defaultValue={member.ika_id ?? ""} placeholder="Pendiente" /></label>
-                <label>Grado<input name="grade" defaultValue={member.grade ?? ""} /></label>
+                <label>
+                  Grado
+                  <select name="grade" defaultValue={member.grade ?? ""}>
+                    <option value="">Sin grado</option>
+                    {allGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                  </select>
+                </label>
+                <label>Fecha ingreso<input name="joinedOn" type="date" defaultValue={member.joined_on ?? ""} /></label>
                 <label>
                   Clase
                   <select name="class" defaultValue={member.class}>
@@ -160,7 +175,13 @@ export default async function KenshiDetailPage({
                 <label>Tutor<input name="guardianName" defaultValue={member.guardian_name ?? ""} /></label>
                 <label>Telefono tutor<input name="guardianPhone" defaultValue={member.guardian_phone ?? ""} /></label>
                 <label>Telefono alumno<input name="studentPhone" defaultValue={member.student_phone ?? ""} /></label>
+                <label>Ultimo examen<input name="lastExamOn" type="date" defaultValue={member.last_exam_on ?? ""} /></label>
+                <label>Proximo examen<input name="nextExamOn" type="date" defaultValue={member.next_exam_on ?? ""} /></label>
                 <label className="wide">Direccion<input name="address" defaultValue={member.address ?? ""} /></label>
+                <label className="wide">URL material grado<input name="siteUrl" defaultValue={member.site_url ?? ""} /></label>
+                <label className="wide">Aviso examen<textarea name="examNotice" rows={3} defaultValue={member.exam_notice ?? ""} /></label>
+                <label className="wide">Historial examenes<textarea name="examHistory" rows={4} defaultValue={member.exam_history ?? ""} /></label>
+                <label className="wide">Historial asistencias<textarea name="attendanceHistory" rows={4} defaultValue={member.attendance_history ?? ""} /></label>
               </div>
               <div className="form-actions">
                 <button type="submit">Guardar cambios</button>

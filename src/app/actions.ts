@@ -58,6 +58,13 @@ export async function updateKenshiAction(formData: FormData) {
     class: normalizeClass(String(formData.get("class") ?? "")),
     status: normalizeStatus(String(formData.get("status") ?? "")),
     grade: String(formData.get("grade") ?? "").trim() || null,
+    joined_on: parseDateInput(String(formData.get("joinedOn") ?? "")),
+    last_exam_on: parseDateInput(String(formData.get("lastExamOn") ?? "")),
+    next_exam_on: parseDateInput(String(formData.get("nextExamOn") ?? "")),
+    exam_notice: String(formData.get("examNotice") ?? "").trim() || null,
+    exam_history: String(formData.get("examHistory") ?? "").trim() || null,
+    attendance_history: String(formData.get("attendanceHistory") ?? "").trim() || null,
+    site_url: String(formData.get("siteUrl") ?? "").trim() || null,
     family_email: String(formData.get("familyEmail") ?? "").trim() || null,
     guardian_name: String(formData.get("guardianName") ?? "").trim() || null,
     guardian_phone: String(formData.get("guardianPhone") ?? "").trim() || null,
@@ -89,6 +96,13 @@ export async function createKenshiAction(formData: FormData) {
     class: normalizeClass(String(formData.get("class") ?? "")),
     status: normalizeStatus(String(formData.get("status") ?? "")),
     grade: String(formData.get("grade") ?? "").trim() || null,
+    joined_on: parseDateInput(String(formData.get("joinedOn") ?? "")),
+    last_exam_on: parseDateInput(String(formData.get("lastExamOn") ?? "")),
+    next_exam_on: parseDateInput(String(formData.get("nextExamOn") ?? "")),
+    exam_notice: String(formData.get("examNotice") ?? "").trim() || null,
+    exam_history: String(formData.get("examHistory") ?? "").trim() || null,
+    attendance_history: String(formData.get("attendanceHistory") ?? "").trim() || null,
+    site_url: String(formData.get("siteUrl") ?? "").trim() || null,
     family_email: String(formData.get("familyEmail") ?? "").trim() || null,
     guardian_name: String(formData.get("guardianName") ?? "").trim() || null,
     guardian_phone: String(formData.get("guardianPhone") ?? "").trim() || null,
@@ -120,4 +134,9 @@ function normalizeClass(value: string) {
 
 function normalizeStatus(value: string) {
   return value === "active" || value === "inactive" ? value : null;
+}
+
+function parseDateInput(value: string) {
+  const trimmed = value.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
 }

@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "import:legacy:xlsx": "node scripts/import-legacy-xlsx.mjs",
+    "normalize:members": "node scripts/normalize-members.mjs",
     "normalize:legacy": "node scripts/normalize-legacy.mjs"
   },
   "dependencies": {

@@ -411,11 +411,20 @@ th {
 }
 
 .form-grid input,
-.form-grid select {
+.form-grid select,
+.form-grid textarea {
   border: 1px solid var(--line);
   border-radius: 6px;
-  min-height: 38px;
   padding: 8px 10px;
+}
+
+.form-grid input,
+.form-grid select {
+  min-height: 38px;
+}
+
+.form-grid textarea {
+  resize: vertical;
 }
 
 .form-actions {

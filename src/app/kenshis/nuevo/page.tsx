@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { redirect } from "next/navigation";
 import { createKenshiAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
+import { adultGrades, kidsGrades } from "@/lib/grades";
 
 export default async function NewKenshiPage({
   searchParams
@@ -43,7 +44,19 @@ export default async function NewKenshiPage({
               <label>Nombre<input name="firstName" required /></label>
               <label>Apellidos<input name="lastName" /></label>
               <label>ID IKA<input name="ikaId" placeholder="Opcional" /></label>
-              <label>Grado<input name="grade" /></label>
+              <label>
+                Grado
+                <select name="grade" defaultValue="">
+                  <option value="">Sin grado</option>
+                  <optgroup label="Ninos">
+                    {kidsGrades.map((grade) => <option key={`kids-${grade}`} value={grade}>{grade}</option>)}
+                  </optgroup>
+                  <optgroup label="Adultos">
+                    {adultGrades.map((grade) => <option key={`adults-${grade}`} value={grade}>{grade}</option>)}
+                  </optgroup>
+                </select>
+              </label>
+              <label>Fecha ingreso<input name="joinedOn" type="date" /></label>
               <label>
                 Clase
                 <select name="class" defaultValue="adults">
@@ -62,7 +75,13 @@ export default async function NewKenshiPage({
               <label>Tutor<input name="guardianName" /></label>
               <label>Telefono tutor<input name="guardianPhone" /></label>
               <label>Telefono alumno<input name="studentPhone" /></label>
+              <label>Ultimo examen<input name="lastExamOn" type="date" /></label>
+              <label>Proximo examen<input name="nextExamOn" type="date" /></label>
               <label className="wide">Direccion<input name="address" /></label>
+              <label className="wide">URL material grado<input name="siteUrl" /></label>
+              <label className="wide">Aviso examen<textarea name="examNotice" rows={3} /></label>
+              <label className="wide">Historial examenes<textarea name="examHistory" rows={4} /></label>
+              <label className="wide">Historial asistencias<textarea name="attendanceHistory" rows={4} /></label>
             </div>
             <div className="form-actions">
               <button type="submit">Crear kenshi</button>
