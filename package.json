@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "import:legacy:xlsx": "node scripts/import-legacy-xlsx.mjs",
     "normalize:members": "node scripts/normalize-members.mjs",
-    "normalize:legacy": "node scripts/normalize-legacy.mjs"
+    "normalize:legacy": "node scripts/normalize-legacy.mjs",
+    "normalize:child-profiles": "node scripts/normalize-child-profiles.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

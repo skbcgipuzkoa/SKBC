@@ -55,6 +55,43 @@ type Course = {
   sensei: string | null;
 };
 
+type ChildRanking = {
+  attendance_30d: number;
+  attendance_90d: number;
+  last_attendance_on: string | null;
+  days_without_attendance: number | null;
+  score: number;
+  position: number | null;
+  level: string | null;
+  constancy_status: string | null;
+  motivational_message: string | null;
+};
+
+type ChildNote = {
+  note_date: string | null;
+  note_type: string | null;
+  note: string | null;
+  author: string | null;
+};
+
+type ChildNotice = {
+  notice_date: string | null;
+  title: string;
+  body: string | null;
+  color: string | null;
+  source: string;
+};
+
+type ChildBehavior = {
+  report_date: string | null;
+  attitude: string | null;
+  attention: string | null;
+  respect: string | null;
+  effort: string | null;
+  companionship: string | null;
+  observation: string | null;
+};
+
 export default async function KenshiDetailPage({
   params,
   searchParams
@@ -81,7 +118,7 @@ export default async function KenshiDetailPage({
   if (error || !member) notFound();
   const photoSrc = driveImageUrl(member.photo_url);
 
-  const [{ data: attendance }, { data: exams }, { data: courses }] = await Promise.all([
+  const [{ data: attendance }, { data: exams }, { data: courses }, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("attended_on,official_grade,trained_grade,technical_role,classes(name)")
@@ -100,8 +137,48 @@ export default async function KenshiDetailPage({
       .select("kind,course_date,location,title,sensei")
       .eq("member_id", member.id)
       .order("course_date", { ascending: false })
-      .returns<Course[]>()
+      .returns<Course[]>(),
+    member.class === "kids"
+      ? supabase
+          .from("child_rankings")
+          .select("attendance_30d,attendance_90d,last_attendance_on,days_without_attendance,score,position,level,constancy_status,motivational_message")
+          .eq("member_id", member.id)
+          .maybeSingle<ChildRanking>()
+      : Promise.resolve({ data: null, error: null }),
+    member.class === "kids"
+      ? supabase
+          .from("child_notes")
+          .select("note_date,note_type,note,author")
+          .eq("member_id", member.id)
+          .eq("visible_family", true)
+          .order("note_date", { ascending: false, nullsFirst: false })
+          .limit(3)
+          .returns<ChildNote[]>()
+      : Promise.resolve({ data: [], error: null }),
+    member.class === "kids"
+      ? supabase
+          .from("child_notices")
+          .select("notice_date,title,body,color,source")
+          .eq("member_id", member.id)
+          .eq("active", true)
+          .order("notice_date", { ascending: false, nullsFirst: false })
+          .limit(6)
+          .returns<ChildNotice[]>()
+      : Promise.resolve({ data: [], error: null }),
+    member.class === "kids"
+      ? supabase
+          .from("child_behavior_reports")
+          .select("report_date,attitude,attention,respect,effort,companionship,observation")
+          .eq("member_id", member.id)
+          .order("report_date", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .returns<ChildBehavior[]>()
+      : Promise.resolve({ data: [], error: null })
   ]);
+  const childRanking = childRankingResult.data;
+  const childNotes = childNotesResult.data ?? [];
+  const childNotices = childNoticesResult.data ?? [];
+  const childBehavior = childBehaviorResult.data?.[0] ?? null;
 
   return (
     <div className="shell">
@@ -177,6 +254,67 @@ export default async function KenshiDetailPage({
           <article className="card"><h2>Semaforo</h2><div className="metric small">{member.semaphore ?? "-"}</div></article>
           <article className="card"><h2>Aviso</h2><p className="muted">{member.exam_notice ?? "-"}</p></article>
         </section>
+
+        {member.class === "kids" ? (
+          <>
+            <h2 className="section-title">Ficha infantil nueva</h2>
+            <section className="grid stats compact">
+              <article className="card">
+                <h2>Ranking</h2>
+                <div className="metric small">{childRanking?.position ? `#${childRanking.position}` : "-"}</div>
+                <p className="muted">{childRanking?.level ?? "Sin actividad reciente"}</p>
+              </article>
+              <article className="card">
+                <h2>Asistencia 30/90</h2>
+                <div className="metric small">{childRanking ? `${childRanking.attendance_30d}/${childRanking.attendance_90d}` : "-"}</div>
+                <p className="muted">{childRanking?.constancy_status ?? "-"}</p>
+              </article>
+              <article className="card">
+                <h2>Ultima asistencia</h2>
+                <div className="metric small">{childRanking?.last_attendance_on ?? "-"}</div>
+                <p className="muted">{childRanking?.days_without_attendance ?? 0} dias sin venir</p>
+              </article>
+              <article className="card">
+                <h2>Mensaje</h2>
+                <p className="muted">{childRanking?.motivational_message ?? "-"}</p>
+              </article>
+            </section>
+
+            <section className="split-section">
+              <article>
+                <h2 className="section-title">Avisos activos</h2>
+                <div className="stack-list">
+                  {childNotices.length ? childNotices.map((notice) => (
+                    <div className="notice-row" key={`${notice.source}-${notice.title}-${notice.notice_date}`} style={{ borderLeftColor: notice.color ?? "#d9e2ec" }}>
+                      <strong>{notice.title}</strong>
+                      <p>{notice.body ?? "-"}</p>
+                      <span className="muted">{notice.notice_date ?? "-"} · {notice.source === "system" ? "Sistema" : "Manual"}</span>
+                    </div>
+                  )) : <p className="muted">Sin avisos activos.</p>}
+                </div>
+              </article>
+              <article>
+                <h2 className="section-title">Notas y comportamiento</h2>
+                <div className="stack-list">
+                  {childNotes.length ? childNotes.map((note) => (
+                    <div className="notice-row" key={`${note.note_date}-${note.note}`}>
+                      <strong>{note.note_type ?? "Nota sensei"}</strong>
+                      <p>{note.note ?? "-"}</p>
+                      <span className="muted">{note.note_date ?? "-"} · {note.author ?? "-"}</span>
+                    </div>
+                  )) : <p className="muted">Sin notas visibles para familia.</p>}
+                  {childBehavior ? (
+                    <div className="notice-row">
+                      <strong>Comportamiento</strong>
+                      <p>Actitud: {childBehavior.attitude ?? "-"} · Atencion: {childBehavior.attention ?? "-"} · Respeto: {childBehavior.respect ?? "-"} · Esfuerzo: {childBehavior.effort ?? "-"}</p>
+                      <span className="muted">{childBehavior.report_date ?? "-"} · {childBehavior.observation ?? "Sin observacion"}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </article>
+            </section>
+          </>
+        ) : null}
 
         <h2 className="section-title">Ultimas asistencias</h2>
         <section className="table-wrap">

@@ -455,6 +455,23 @@ th {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.stack-list {
+  display: grid;
+  gap: 10px;
+}
+
+.notice-row {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.notice-row p {
+  margin: 6px 0;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
