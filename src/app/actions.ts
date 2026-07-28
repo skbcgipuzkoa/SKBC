@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -141,6 +142,51 @@ export async function generateAdultPlanAction(formData: FormData) {
   }
 
   redirect(`/clases/${legacyId}?saved=plan`);
+}
+
+export async function updatePlanTechniqueAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const planId = String(formData.get("planId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const completed = String(formData.get("completed") ?? "") === "true";
+
+  if (!planId || !legacyId) {
+    redirect("/clases");
+  }
+
+  try {
+    await setPlanTechniqueCompleted(planId, completed);
+  } catch (error) {
+    console.error("Error updating plan technique", error);
+    redirect(`/clases/${legacyId}?error=plan-technique`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=plan-technique`);
+}
+
+export async function closeAdultClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+
+  if (!classId || !legacyId) {
+    redirect("/clases");
+  }
+
+  try {
+    await closeAdultClass(classId);
+  } catch (error) {
+    console.error("Error closing adult class", error);
+    redirect(`/clases/${legacyId}?error=close`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=close`);
 }
 
 function normalizeClass(value: string) {

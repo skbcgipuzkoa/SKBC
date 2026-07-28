@@ -165,3 +165,26 @@ Drive contains `README_sistema`, which confirms that the adult logic lives in th
 - Review techniques do not count for history by default.
 
 The first replicated version in the new platform is implemented in `src/lib/adult-plan.ts` and exposed from the class detail page. It writes only to the new Supabase project.
+
+## Adult class close rules extracted
+
+- Main entry point: `apiFinalizarClaseCompleta(idClase)`.
+- The close flow first checks whether any plan rows were manually marked as completed.
+- Assignments are generated only from plan rows where:
+  - `REALIZADA` is true.
+  - `USADA_PARA_HISTORIAL` is true or effectively usable.
+- Each adult attendee receives only the completed techniques from the technical group/grade they actually trained that day.
+- Duplicate prevention key for assignments is `ID_CLASE + ID_ALUMNO + ID_TECNICA`.
+- Dojo history is generated only for completed/usable plan rows that also match a group with valid attendance.
+- Student technical history is generated from the assignment rows.
+- Review techniques count as review, not progression.
+- If no techniques are manually marked, the legacy motor can still close the class but skips technical assignment/history generation.
+
+The first replicated version in the new platform is implemented in `src/lib/adult-class-close.ts` and exposed from the class detail page:
+
+- Mark/unmark each plan technique as completed.
+- Close an adult class.
+- Generate per-student technique assignments.
+- Generate dojo technical history.
+- Generate member technical history.
+- Update technique repetition count and last trained date in the new Supabase project.

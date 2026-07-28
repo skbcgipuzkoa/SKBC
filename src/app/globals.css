@@ -262,6 +262,26 @@ h1 {
   width: 40px;
 }
 
+.mini-action {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 9px;
+}
+
+.mini-action.selected {
+  background: #e8f5ee;
+  border-color: #b9dec9;
+  color: var(--ok);
+  font-weight: 700;
+}
+
 .filters {
   align-items: end;
   display: grid;

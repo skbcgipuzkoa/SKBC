@@ -1,6 +1,11 @@
-import { ArrowLeft, LogOut, Wand2 } from "lucide-react";
+import { ArrowLeft, Check, LogOut, Wand2, X } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { generateAdultPlanAction, logoutAction } from "@/app/actions";
+import {
+  closeAdultClassAction,
+  generateAdultPlanAction,
+  logoutAction,
+  updatePlanTechniqueAction
+} from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -19,6 +24,7 @@ type ClassRow = {
 };
 
 type PlanRow = {
+  id: string;
   legacy_id: string | null;
   group_grade: string | null;
   target_grade: string | null;
@@ -62,7 +68,7 @@ export default async function ClaseDetailPage({
   const [{ data: plan }, { data: attendance }] = await Promise.all([
     supabase
       .from("technical_plans")
-      .select("legacy_id,group_grade,target_grade,technique_name,category,proposal_type,focus,completed,notes")
+      .select("id,legacy_id,group_grade,target_grade,technique_name,category,proposal_type,focus,completed,notes")
       .eq("class_id", clase.id)
       .order("group_grade")
       .order("suggested_order")
@@ -107,6 +113,16 @@ export default async function ClaseDetailPage({
                 </button>
               </form>
             ) : null}
+            {clase.class_group === "adults" && clase.plan_generated && !clase.closed ? (
+              <form action={closeAdultClassAction}>
+                <input type="hidden" name="classId" value={clase.id} />
+                <input type="hidden" name="legacyId" value={legacyId} />
+                <button className="primary-link button-reset" type="submit">
+                  <Check aria-hidden="true" size={16} />
+                  Cerrar clase
+                </button>
+              </form>
+            ) : null}
             <form action={logoutAction}>
               <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
                 <LogOut aria-hidden="true" size={18} />
@@ -116,8 +132,16 @@ export default async function ClaseDetailPage({
         </div>
 
         {query.saved === "plan" ? <p className="save-ok">Plan tecnico generado.</p> : null}
+        {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
+        {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.error === "plan" ? (
           <p className="form-error">No se ha podido generar el plan tecnico para esta clase.</p>
+        ) : null}
+        {query.error === "plan-technique" ? (
+          <p className="form-error">No se ha podido actualizar la tecnica.</p>
+        ) : null}
+        {query.error === "close" ? (
+          <p className="form-error">No se ha podido cerrar la clase.</p>
         ) : null}
 
         <section className="grid stats compact" aria-label="Resumen">
@@ -141,7 +165,26 @@ export default async function ClaseDetailPage({
                   <td><strong>{item.technique_name}</strong></td>
                   <td>{item.category ?? "-"}</td>
                   <td>{item.proposal_type ?? item.focus ?? "-"}</td>
-                  <td>{item.completed ? "Si" : "No"}</td>
+                  <td>
+                    {clase.closed ? (
+                      item.completed ? "Si" : "No"
+                    ) : (
+                      <form action={updatePlanTechniqueAction}>
+                        <input type="hidden" name="planId" value={item.id} />
+                        <input type="hidden" name="legacyId" value={legacyId} />
+                        <input type="hidden" name="completed" value={item.completed ? "false" : "true"} />
+                        <button
+                          className={item.completed ? "mini-action selected" : "mini-action"}
+                          type="submit"
+                          title={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
+                          aria-label={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
+                        >
+                          {item.completed ? <Check aria-hidden="true" size={15} /> : <X aria-hidden="true" size={15} />}
+                          {item.completed ? "Si" : "No"}
+                        </button>
+                      </form>
+                    )}
+                  </td>
                 </tr>
               )) : (
                 <tr>
