@@ -115,6 +115,59 @@ h1 {
   white-space: nowrap;
 }
 
+.login-panel {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  margin-bottom: 22px;
+  padding: 20px;
+}
+
+.login-panel h2 {
+  font-size: 18px;
+  margin: 8px 0;
+}
+
+.login-form {
+  display: grid;
+  gap: 8px;
+}
+
+.login-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.login-row input,
+.filters input,
+.filters select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.login-row button,
+.filters button {
+  background: var(--brand);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  min-height: 40px;
+  padding: 8px 14px;
+}
+
+.form-error {
+  color: var(--danger);
+  margin: 0;
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -129,6 +182,10 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 18px;
+}
+
+.compact .card {
+  padding: 14px;
 }
 
 .card h2 {
@@ -164,6 +221,85 @@ h1 {
   padding: 4px 8px;
 }
 
+.icon-button {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.filters {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1fr) 160px 160px auto;
+  margin: 22px 0;
+}
+
+.filters label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.table-wrap {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: auto;
+}
+
+table {
+  border-collapse: collapse;
+  min-width: 980px;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  padding: 11px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+th {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.pill {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.pill.active {
+  background: #e8f5ee;
+  color: var(--ok);
+}
+
+.pill.inactive {
+  background: #f3f4f6;
+  color: #667085;
+}
+
+.text-link {
+  color: var(--brand);
+  font-weight: 700;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
@@ -188,7 +324,9 @@ h1 {
   }
 
   .stats,
-  .workflow {
+  .workflow,
+  .login-panel,
+  .filters {
     grid-template-columns: 1fr;
   }
 }
