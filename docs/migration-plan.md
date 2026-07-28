@@ -41,3 +41,22 @@ El sistema actual de AppSheet, Apps Script, Google Sheets, Drive y Telegram no s
 - PDF del plan tecnico.
 - Archivado rolling.
 - Diagnostico de integridad.
+
+## Importacion completa de datos
+
+La importacion no debe depender solo del modelo normalizado. Para garantizar que
+no se pierda informacion, Supabase mantiene una capa legacy:
+
+- `legacy_spreadsheets`: archivo fuente.
+- `legacy_sheets`: cada pestana con metadatos, orden, cabeceras y visibilidad.
+- `legacy_rows`: todas las filas como `jsonb` y como array de valores originales.
+- `import_runs`: trazabilidad de cada importacion.
+
+Despues de preservar todo en `legacy_rows`, los importadores normalizados llenan
+las tablas de aplicacion (`members`, `classes`, `techniques`, etc.).
+
+## Nuevo campo IKA
+
+La tabla `members` incluye `ika_id`, que no existe todavia en la hoja actual. Se
+rellenara durante la migracion o manualmente en la nueva app sin modificar el
+Google Sheet legacy.
