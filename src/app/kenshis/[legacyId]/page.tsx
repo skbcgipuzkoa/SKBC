@@ -1,9 +1,9 @@
 import { ArrowLeft, LogOut } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { logoutAction, updateKenshiAction } from "@/app/actions";
+import { KenshiForm } from "@/components/kenshi-form";
 import { hasInternalAccess } from "@/lib/auth";
 import { driveImageUrl } from "@/lib/drive";
-import { allGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Member = {
@@ -142,53 +142,33 @@ export default async function KenshiDetailPage({
           <article className="card detail-list">
             <h2>Datos</h2>
             <p><strong>ID legacy:</strong> {member.legacy_id}</p>
-            <form action={updateKenshiAction} className="edit-form">
-              <input type="hidden" name="memberId" value={member.id} />
-              <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
-              <div className="form-grid">
-                <label>Nombre<input name="firstName" defaultValue={member.first_name} required /></label>
-                <label>Apellidos<input name="lastName" defaultValue={member.last_name ?? ""} /></label>
-                <label>ID IKA<input name="ikaId" defaultValue={member.ika_id ?? ""} placeholder="Pendiente" /></label>
-                <label>
-                  Grado
-                  <select name="grade" defaultValue={member.grade ?? ""}>
-                    <option value="">Sin grado</option>
-                    {allGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-                  </select>
-                </label>
-                <label>Fecha ingreso<input name="joinedOn" type="date" defaultValue={member.joined_on ?? ""} /></label>
-                <label>
-                  Clase
-                  <select name="class" defaultValue={member.class}>
-                    <option value="kids">Ninos</option>
-                    <option value="adults">Adultos</option>
-                  </select>
-                </label>
-                <label>
-                  Estado
-                  <select name="status" defaultValue={member.status}>
-                    <option value="active">Activo</option>
-                    <option value="inactive">Inactivo</option>
-                  </select>
-                </label>
-                <label>Email familia<input name="familyEmail" defaultValue={member.family_email ?? ""} /></label>
-                <label>Tutor<input name="guardianName" defaultValue={member.guardian_name ?? ""} /></label>
-                <label>Telefono tutor<input name="guardianPhone" defaultValue={member.guardian_phone ?? ""} /></label>
-                <label>Telefono alumno<input name="studentPhone" defaultValue={member.student_phone ?? ""} /></label>
-                <label>Ultimo examen<input name="lastExamOn" type="date" defaultValue={member.last_exam_on ?? ""} /></label>
-                <label>Proximo examen<input name="nextExamOn" type="date" defaultValue={member.next_exam_on ?? ""} /></label>
-                <label className="wide">Direccion<input name="address" defaultValue={member.address ?? ""} /></label>
-                <label className="wide">URL material grado<input name="siteUrl" defaultValue={member.site_url ?? ""} /></label>
-                <label className="wide">Aviso examen<textarea name="examNotice" rows={3} defaultValue={member.exam_notice ?? ""} /></label>
-                <label className="wide">Historial examenes<textarea name="examHistory" rows={4} defaultValue={member.exam_history ?? ""} /></label>
-                <label className="wide">Historial asistencias<textarea name="attendanceHistory" rows={4} defaultValue={member.attendance_history ?? ""} /></label>
-              </div>
-              <div className="form-actions">
-                <button type="submit">Guardar cambios</button>
-                {notices.saved === "kenshi" ? <span className="save-ok">Guardado</span> : null}
-                {notices.error === "kenshi" ? <span className="form-error">No se pudo guardar</span> : null}
-              </div>
-            </form>
+            <KenshiForm
+              action={updateKenshiAction}
+              submitLabel="Guardar cambios"
+              hiddenFields={{ memberId: member.id, legacyId: member.legacy_id ?? "" }}
+              saved={notices.saved === "kenshi"}
+              error={notices.error === "kenshi"}
+              initial={{
+                firstName: member.first_name,
+                lastName: member.last_name,
+                ikaId: member.ika_id,
+                grade: member.grade,
+                joinedOn: member.joined_on,
+                class: member.class,
+                status: member.status,
+                familyEmail: member.family_email,
+                guardianName: member.guardian_name,
+                guardianPhone: member.guardian_phone,
+                studentPhone: member.student_phone,
+                lastExamOn: member.last_exam_on,
+                nextExamOn: member.next_exam_on,
+                address: member.address,
+                siteUrl: member.site_url,
+                examNotice: member.exam_notice,
+                examHistory: member.exam_history,
+                attendanceHistory: member.attendance_history
+              }}
+            />
             {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank">Abrir ficha actual</a> : null}
           </article>
         </section>
