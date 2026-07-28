@@ -92,22 +92,30 @@ Detected behavior:
 
 This is separate from adult technical planning, exams, and kenshi management unless the event registration flow is later folded into the new platform.
 
-## Missing legacy logic
+## Main adult motor
 
-The following requested adult/admin logic is still not in the copied scripts cloned with `clasp list`, but it is documented in `README_sistema` found in Drive:
+The container-bound main adult Apps Script was identified from the Script ID copied from the master spreadsheet and cloned locally into `legacy-appscript/motor-principal`. This folder is ignored by Git and is used only for read-only extraction.
 
-- Adult class creation flow.
-- Adult technical plan generation.
-- Assigning completed techniques per kenshi from a class.
-- Adult exam eligibility / next exam / traffic-light logic.
-- Diploma/PDF generation logic for adult exams.
-- Any AppSheet action formulas that are not part of Apps Script.
+Important files found:
 
-Likely source: the container-bound Apps Script project attached to the main spreadsheet and/or AppSheet formulas/bots. We need that Script ID or an Apps Script project export to continue extracting the exact adult logic.
+- `SCRIPT MOTOR.js`
+- `ZZZ_PATCH_CIERRE_SKBC.js`
+- `PLAN_TECNICO_ADULTOS.js`
+- `PREPARAR CLASE COMPLETA.js`
+- `GENERAR_GRUPOS_TECNICOS_AUTOMATICO.js`
+- `ASIGNACION_TECNICA_ALUMNO_CLASE.js`
+- `HISTORIAL_TECNICO_ADULTOS.js`
+- `HISTORIAL_TECNICO_ALUMNOS.js`
+- `REGISTRO EXAMENES.js`
+- `FICHA_ALUMNO.js`
+- `Ficha.html`
+- `DIPLOMAS EXAMEN.js`
+- `PDF_PLAN_TECNICO.js`
+- `CONTRO_APP_SOLICITUD DE ACCION.js`
 
 ## README_sistema findings
 
-Drive contains `README_sistema`, which confirms that the adult logic lives in the Apps Script container project attached to the master Sheet. It also names the main files/functions that should exist in that project:
+Drive contains `README_sistema`, which confirms that the adult logic lives in the Apps Script container project attached to the master Sheet. It also names the main files/functions that exist in that project:
 
 - `ZZZ_PATCH_CIERRE_SKBC.gs`
   - Main class-close patch and web app endpoint.
@@ -139,10 +147,21 @@ Drive contains `README_sistema`, which confirms that the adult logic lives in th
 - Control bridge:
   - `skbcProcesarSolicitudesControlAppPendientes_()` reads `CONTROL_APP`.
 
-Next exact-source extraction step:
+## Adult technical plan rules extracted
 
-1. Open the master spreadsheet.
-2. Go to Extensions -> Apps Script.
-3. Open Project settings.
-4. Copy the Script ID.
-5. Run `clasp clone <SCRIPT_ID>` into an ignored folder.
+- Main entry point: `generarPlanTecnicoPorClase(idClase)`.
+- Source sheets: `CLASES_ADULTOS`, `GRUPOS_TECNICOS_CLASE`, `TECNICAS_ADULTOS`, `PLAN_TECNICO_ADULTOS`.
+- The engine refuses to generate if the class already has plan rows.
+- Only active technical groups are used.
+- `MINARAI` works technically as `5 KYU`.
+- Target grade sequence is `MINARAI -> 5 KYU -> 4 KYU -> 3 KYU -> 2 KYU -> 1 KYU -> 1 DAN` and then upward to `9 DAN`.
+- For normal adult sessions, the plan tries to select five techniques per technical group:
+  - Four program techniques from the group's current technical grade, balancing `GOHO` and `JUHO`.
+  - One review technique from previous grades when possible.
+  - Fillers become reinforcement when the balanced selection is not enough.
+- Recent repetition block window is 14 days.
+- Forced techniques are prioritized.
+- Sorting prioritizes forced items, non-recent items, lower repetition count, older/never-trained items, lower program order, then name.
+- Review techniques do not count for history by default.
+
+The first replicated version in the new platform is implemented in `src/lib/adult-plan.ts` and exposed from the class detail page. It writes only to the new Supabase project.

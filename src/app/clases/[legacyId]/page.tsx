@@ -1,6 +1,6 @@
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft, LogOut, Wand2 } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { logoutAction } from "@/app/actions";
+import { generateAdultPlanAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -37,12 +37,18 @@ type AttendanceRow = {
   trained_grade: string | null;
 };
 
-export default async function ClaseDetailPage({ params }: { params: Promise<{ legacyId: string }> }) {
+export default async function ClaseDetailPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ legacyId: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
+}) {
   if (!(await hasInternalAccess())) {
     redirect("/");
   }
 
-  const { legacyId } = await params;
+  const [{ legacyId }, query] = await Promise.all([params, searchParams]);
   const supabase = createAdminClient();
 
   const { data: clase, error } = await supabase
@@ -90,12 +96,29 @@ export default async function ClaseDetailPage({ params }: { params: Promise<{ le
             </p>
             <h1>{clase.name}</h1>
           </div>
-          <form action={logoutAction}>
-            <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
-              <LogOut aria-hidden="true" size={18} />
-            </button>
-          </form>
+          <div className="top-actions">
+            {clase.class_group === "adults" && !clase.plan_generated && !clase.closed ? (
+              <form action={generateAdultPlanAction}>
+                <input type="hidden" name="classId" value={clase.id} />
+                <input type="hidden" name="legacyId" value={legacyId} />
+                <button className="primary-link button-reset" type="submit">
+                  <Wand2 aria-hidden="true" size={16} />
+                  Generar plan tecnico
+                </button>
+              </form>
+            ) : null}
+            <form action={logoutAction}>
+              <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
+                <LogOut aria-hidden="true" size={18} />
+              </button>
+            </form>
+          </div>
         </div>
+
+        {query.saved === "plan" ? <p className="save-ok">Plan tecnico generado.</p> : null}
+        {query.error === "plan" ? (
+          <p className="form-error">No se ha podido generar el plan tecnico para esta clase.</p>
+        ) : null}
 
         <section className="grid stats compact" aria-label="Resumen">
           <article className="card"><h2>Fecha</h2><div className="metric small">{clase.class_date}</div></article>
@@ -111,7 +134,7 @@ export default async function ClaseDetailPage({ params }: { params: Promise<{ le
               <tr><th>Grupo</th><th>Objetivo</th><th>Tecnica</th><th>Categoria</th><th>Tipo</th><th>Realizada</th></tr>
             </thead>
             <tbody>
-              {(plan ?? []).map((item) => (
+              {(plan ?? []).length ? (plan ?? []).map((item) => (
                 <tr key={item.legacy_id ?? item.technique_name}>
                   <td>{item.group_grade ?? "-"}</td>
                   <td>{item.target_grade ?? "-"}</td>
@@ -120,7 +143,11 @@ export default async function ClaseDetailPage({ params }: { params: Promise<{ le
                   <td>{item.proposal_type ?? item.focus ?? "-"}</td>
                   <td>{item.completed ? "Si" : "No"}</td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={6} className="muted">Esta clase todavia no tiene plan tecnico.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </section>

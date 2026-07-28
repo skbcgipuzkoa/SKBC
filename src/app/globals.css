@@ -110,6 +110,12 @@ textarea {
   padding: 8px 12px;
 }
 
+.button-reset {
+  border: 0;
+  cursor: pointer;
+  gap: 8px;
+}
+
 .eyebrow {
   color: var(--muted);
   font-size: 13px;

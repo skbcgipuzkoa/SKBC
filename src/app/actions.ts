@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { grantInternalAccess, revokeInternalAccess } from "@/lib/auth";
+import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
+import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function loginAction(formData: FormData) {
@@ -118,6 +119,28 @@ export async function createKenshiAction(formData: FormData) {
   }
 
   redirect(`/kenshis/${data.legacy_id}?saved=kenshi`);
+}
+
+export async function generateAdultPlanAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+
+  if (!classId || !legacyId) {
+    redirect("/clases");
+  }
+
+  try {
+    await generateAdultTechnicalPlan(classId);
+  } catch (error) {
+    console.error("Error generating adult technical plan", error);
+    redirect(`/clases/${legacyId}?error=plan`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=plan`);
 }
 
 function normalizeClass(value: string) {
