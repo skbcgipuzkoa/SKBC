@@ -329,6 +329,45 @@ th {
   margin: 8px 0;
 }
 
+.inline-edit {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+
+.inline-edit label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.inline-edit div {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.inline-edit input {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.inline-edit button {
+  background: var(--brand);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.save-ok {
+  color: var(--ok);
+  font-size: 13px;
+}
+
 .split-section {
   display: grid;
   gap: 16px;

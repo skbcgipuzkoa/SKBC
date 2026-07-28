@@ -1,6 +1,6 @@
 import { ArrowLeft, LogOut } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { logoutAction } from "@/app/actions";
+import { logoutAction, updateIkaIdAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -45,15 +45,18 @@ type Course = {
 };
 
 export default async function KenshiDetailPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ legacyId: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
   }
 
   const { legacyId } = await params;
+  const notices = await searchParams;
   const supabase = createAdminClient();
 
   const { data: member, error } = await supabase
@@ -128,7 +131,17 @@ export default async function KenshiDetailPage({
           <article className="card detail-list">
             <h2>Datos</h2>
             <p><strong>ID legacy:</strong> {member.legacy_id}</p>
-            <p><strong>ID IKA:</strong> {member.ika_id || "Pendiente"}</p>
+            <form action={updateIkaIdAction} className="inline-edit">
+              <input type="hidden" name="memberId" value={member.id} />
+              <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
+              <label htmlFor="ikaId">ID IKA</label>
+              <div>
+                <input id="ikaId" name="ikaId" defaultValue={member.ika_id ?? ""} placeholder="Pendiente" />
+                <button type="submit">Guardar</button>
+              </div>
+              {notices.saved === "ika" ? <span className="save-ok">Guardado</span> : null}
+              {notices.error === "ika" ? <span className="form-error">No se pudo guardar</span> : null}
+            </form>
             <p><strong>Email familia:</strong> {member.family_email || "-"}</p>
             <p><strong>Tutor:</strong> {member.guardian_name || "-"}</p>
             <p><strong>Telefono:</strong> {member.guardian_phone || member.student_phone || "-"}</p>
