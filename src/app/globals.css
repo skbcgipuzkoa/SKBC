@@ -198,6 +198,11 @@ h1 {
   font-weight: 700;
 }
 
+.metric.small {
+  font-size: 20px;
+  line-height: 1.25;
+}
+
 .muted {
   color: var(--muted);
 }

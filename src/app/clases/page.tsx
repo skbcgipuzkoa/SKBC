@@ -74,7 +74,11 @@ export default async function ClasesPage() {
                 <tr key={clase.legacy_id ?? `${clase.class_date}-${clase.name}`}>
                   <td>{clase.legacy_id}</td>
                   <td>{clase.class_date}</td>
-                  <td><strong>{clase.name}</strong></td>
+                  <td>
+                    <a className="text-link" href={`/clases/${clase.legacy_id}`}>
+                      {clase.name}
+                    </a>
+                  </td>
                   <td>{clase.class_group === "kids" ? "Ninos" : "Adultos"}</td>
                   <td>{clase.class_type ?? "-"}</td>
                   <td>{clase.status}</td>

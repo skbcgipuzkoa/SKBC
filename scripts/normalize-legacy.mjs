@@ -17,7 +17,10 @@ const summary = {
   techniques: 0,
   attendance: 0,
   exams: 0,
-  courses: 0
+  courses: 0,
+  technicalGroups: 0,
+  technicalPlans: 0,
+  assignments: 0
 };
 
 summary.classes = await normalizeClasses();
@@ -25,6 +28,9 @@ summary.techniques = await normalizeTechniques();
 summary.attendance = await normalizeAttendance();
 summary.exams = await normalizeExams();
 summary.courses = await normalizeCourses();
+summary.technicalGroups = await normalizeTechnicalGroups();
+summary.technicalPlans = await normalizeTechnicalPlans();
+summary.assignments = await normalizeAssignments();
 
 console.log(JSON.stringify(summary, null, 2));
 
@@ -154,6 +160,106 @@ async function normalizeCourses() {
   return courses.length;
 }
 
+async function normalizeTechnicalGroups() {
+  const rows = await getLegacyRows("GRUPOS_TECNICOS_CLASE");
+  const classMap = await getIdMap("classes", "legacy_id");
+
+  const groups = rows
+    .map(({ row_data: row }) => ({
+      class_id: classMap.get(clean(row.ID_CLASE)),
+      legacy_id: clean(row.ID_GRUPO_TECNICO),
+      grade: clean(row.GRADO_TECNICO) || clean(row.GRADO) || "SIN GRADO",
+      active: parseBool(row.ACTIVO, true)
+    }))
+    .filter((item) => item.class_id && item.legacy_id);
+
+  await supabase.from("class_technical_groups").delete().not("id", "is", null);
+
+  for (const chunk of chunks(groups, 200)) {
+    const { error } = await supabase.from("class_technical_groups").insert(chunk);
+    if (error) throw error;
+  }
+
+  return groups.length;
+}
+
+async function normalizeTechnicalPlans() {
+  const rows = await getLegacyRows("PLAN_TECNICO_ADULTOS");
+  const classMap = await getIdMap("classes", "legacy_id");
+  const techniqueMap = await getIdMap("techniques", "legacy_id");
+  const groupMap = await getTechnicalGroupMap();
+
+  const plans = rows
+    .map(({ row_data: row }) => ({
+      legacy_id: clean(row.ID_PLAN),
+      class_id: classMap.get(clean(row.ID_CLASE)),
+      technical_group_id: groupMap.get(groupKey(clean(row.ID_CLASE), clean(row.ID_GRUPO_TECNICO))) ?? null,
+      class_date: parseDate(row.FECHA),
+      session_type: clean(row.TIPO_SESION_TECNICA) || null,
+      grade: clean(row.GRADO) || null,
+      group_grade: clean(row.GRADO_GRUPO) || null,
+      target_grade: clean(row.GRADO_OBJETIVO) || null,
+      technique_id: techniqueMap.get(clean(row.ID_TECNICA)) ?? null,
+      technique_grade: clean(row.GRADO_TECNICA) || null,
+      technique_base: clean(row.TECNICA_BASE) || null,
+      technique_name: clean(row.NOMBRE_TECNICA),
+      category: normalizeTechniqueCategory(row.CATEGORIA),
+      content_type: clean(row.TIPO_CONTENIDO) || null,
+      proposal_type: clean(row.TIPO_PROPUESTA) || null,
+      focus: clean(row.ENFOQUE_TECNICO) || null,
+      suggested_order: parseInteger(row.ORDEN_SUGERENCIA),
+      score_at_that_moment: parseDecimal(row.PUNTUACION_EN_ESE_MOMENTO),
+      completed: parseBool(row.REALIZADA),
+      notes: clean(row.OBSERVACIONES) || null,
+      used_for_history: parseBool(row.USADA_PARA_HISTORIAL)
+    }))
+    .filter((item) => item.legacy_id && item.class_id && item.class_date && item.technique_name);
+
+  for (const chunk of chunks(plans, 200)) {
+    const { error } = await supabase.from("technical_plans").upsert(chunk, { onConflict: "legacy_id" });
+    if (error) throw error;
+  }
+
+  return plans.length;
+}
+
+async function normalizeAssignments() {
+  const rows = await getLegacyRows("ASIGNACION_TECNICA_ALUMNO_CLASE");
+  const classMap = await getIdMap("classes", "legacy_id");
+  const memberMap = await getIdMap("members", "legacy_id");
+  const techniqueMap = await getIdMap("techniques", "legacy_id");
+  const planMap = await getIdMap("technical_plans", "legacy_id");
+
+  const assignments = rows
+    .map(({ row_data: row }) => ({
+      legacy_id: clean(row.ID_ASIGNACION),
+      class_id: classMap.get(clean(row.ID_CLASE)),
+      plan_id: planMap.get(clean(row.ID_PLAN)) ?? null,
+      technique_id: techniqueMap.get(clean(row.ID_TECNICA)) ?? null,
+      member_id: memberMap.get(clean(row.ID_ALUMNO)),
+      assigned_on: parseDate(row.FECHA),
+      group_grade: clean(row.GRADO_GRUPO_ASIGNADO) || null,
+      active: parseBool(row.ACTIVO, true),
+      completed: parseBool(row.REALIZADA),
+      counts_as_progression: parseBool(row.CUENTA_COMO_PROGRESION),
+      counts_as_review: parseBool(row.CUENTA_COMO_REPASO),
+      counts_for_stats: parseBool(row.CUENTA_PARA_ESTADISTICA, true),
+      notes: clean(row.OBSERVACIONES) || null,
+      created_by: clean(row.CREADO_POR) || "legacy",
+      created_at: parseTimestamp(row.CREADO_EL) ?? new Date().toISOString()
+    }))
+    .filter((item) => item.legacy_id && item.class_id && item.member_id && item.assigned_on);
+
+  for (const chunk of chunks(assignments, 200)) {
+    const { error } = await supabase
+      .from("member_technique_assignments")
+      .upsert(chunk, { onConflict: "legacy_id" });
+    if (error) throw error;
+  }
+
+  return assignments.length;
+}
+
 async function courseRows(sheetTitle, kind, memberMap) {
   const rows = await getLegacyRows(sheetTitle);
   return rows
@@ -190,6 +296,33 @@ async function getIdMap(table, legacyColumn) {
   }
 
   return map;
+}
+
+async function getTechnicalGroupMap() {
+  const map = new Map();
+  let from = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("class_technical_groups")
+      .select("id,legacy_id,classes(legacy_id)")
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    data.forEach((row) => {
+      const classLegacyId = row.classes?.legacy_id;
+      if (classLegacyId && row.legacy_id) map.set(groupKey(classLegacyId, row.legacy_id), row.id);
+    });
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return map;
+}
+
+function groupKey(classLegacyId, groupLegacyId) {
+  return `${classLegacyId}::${groupLegacyId}`;
 }
 
 async function getLegacyRows(sheetTitle) {
@@ -274,6 +407,13 @@ function parseDate(value) {
   if (!match) return null;
   const [, day, month, year] = match;
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
+function parseTimestamp(value) {
+  const text = clean(value);
+  if (!text) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function parseInteger(value) {
