@@ -2,6 +2,7 @@ import { ArrowLeft, LogOut } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { logoutAction, updateIkaIdAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
+import { driveImageUrl } from "@/lib/drive";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Member = {
@@ -68,6 +69,7 @@ export default async function KenshiDetailPage({
     .single<Member>();
 
   if (error || !member) notFound();
+  const photoSrc = driveImageUrl(member.photo_url);
 
   const [{ data: attendance }, { data: exams }, { data: courses }] = await Promise.all([
     supabase
@@ -121,7 +123,7 @@ export default async function KenshiDetailPage({
 
         <section className="profile-grid">
           <article className="card profile-card">
-            {member.photo_url ? <img src={member.photo_url} alt="" /> : <div className="avatar-placeholder" />}
+            {photoSrc ? <img src={photoSrc} alt="" /> : <div className="avatar-placeholder" />}
             <div>
               <span className={`pill ${member.status}`}>{member.status === "active" ? "Activo" : "Inactivo"}</span>
               <h2>{member.grade ?? "Sin grado"}</h2>

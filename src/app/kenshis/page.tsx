@@ -2,6 +2,7 @@ import { LogOut, Search, ShieldCheck, UserRound } from "lucide-react";
 import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
+import { driveImageUrl } from "@/lib/drive";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Kenshi = {
@@ -169,6 +170,9 @@ export default async function KenshisPage({
                   <td>{kenshi.ika_id || <span className="muted">Pendiente</span>}</td>
                   <td>
                     <a className="text-link" href={`/kenshis/${kenshi.legacy_id}`}>
+                      {driveImageUrl(kenshi.photo_url) ? (
+                        <img className="mini-avatar" src={driveImageUrl(kenshi.photo_url) ?? ""} alt="" />
+                      ) : null}
                       {kenshi.first_name} {kenshi.last_name}
                     </a>
                   </td>

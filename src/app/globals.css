@@ -308,6 +308,14 @@ th {
   font-weight: 700;
 }
 
+.mini-avatar {
+  background: #e5e7eb;
+  border-radius: 50%;
+  height: 28px;
+  object-fit: cover;
+  width: 28px;
+}
+
 .profile-grid {
   display: grid;
   gap: 16px;
