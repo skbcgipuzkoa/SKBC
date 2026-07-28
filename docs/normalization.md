@@ -13,8 +13,9 @@ Normalizaciones actuales:
 - `GRUPOS_TECNICOS_CLASE` -> `class_technical_groups`
 - `PLAN_TECNICO_ADULTOS` -> `technical_plans`
 - `ASIGNACION_TECNICA_ALUMNO_CLASE` -> `member_technique_assignments`
+- `HISTORIAL_TECNICO_ADULTOS` -> `dojo_technical_history`
+- `HISTORIAL_TECNICO_ALUMNOS` -> `member_technical_history`
 
 Proximas normalizaciones:
 
-- `HISTORIAL_TECNICO_ADULTOS` -> pendiente de tabla final
-- `HISTORIAL_TECNICO_ALUMNOS` -> pendiente de tabla final
+- `RESUMEN_*` -> pendiente de tablas o vistas finales

@@ -20,7 +20,9 @@ const summary = {
   courses: 0,
   technicalGroups: 0,
   technicalPlans: 0,
-  assignments: 0
+  assignments: 0,
+  dojoHistory: 0,
+  memberHistory: 0
 };
 
 summary.classes = await normalizeClasses();
@@ -31,6 +33,8 @@ summary.courses = await normalizeCourses();
 summary.technicalGroups = await normalizeTechnicalGroups();
 summary.technicalPlans = await normalizeTechnicalPlans();
 summary.assignments = await normalizeAssignments();
+summary.dojoHistory = await normalizeDojoHistory();
+summary.memberHistory = await normalizeMemberHistory();
 
 console.log(JSON.stringify(summary, null, 2));
 
@@ -52,7 +56,7 @@ async function normalizeClasses() {
     }))
     .filter((item) => item.legacy_id && item.class_date);
 
-  for (const chunk of chunks(classes, 200)) {
+  for (const chunk of chunks(uniqueByLegacyId(classes), 200)) {
     const { error } = await supabase.from("classes").upsert(chunk, { onConflict: "legacy_id" });
     if (error) throw error;
   }
@@ -82,7 +86,7 @@ async function normalizeTechniques() {
     }))
     .filter((item) => item.legacy_id && item.name && item.category);
 
-  for (const chunk of chunks(techniques, 200)) {
+  for (const chunk of chunks(uniqueByLegacyId(techniques), 200)) {
     const { error } = await supabase.from("techniques").upsert(chunk, { onConflict: "legacy_id" });
     if (error) throw error;
   }
@@ -109,7 +113,7 @@ async function normalizeAttendance() {
     }))
     .filter((item) => item.legacy_id && item.member_id && item.attended_on);
 
-  for (const chunk of chunks(attendance, 200)) {
+  for (const chunk of chunks(uniqueByLegacyId(attendance), 200)) {
     const { error } = await supabase.from("attendance_logs").upsert(chunk, { onConflict: "legacy_id" });
     if (error) throw error;
   }
@@ -215,7 +219,7 @@ async function normalizeTechnicalPlans() {
     }))
     .filter((item) => item.legacy_id && item.class_id && item.class_date && item.technique_name);
 
-  for (const chunk of chunks(plans, 200)) {
+  for (const chunk of chunks(uniqueByLegacyId(plans), 200)) {
     const { error } = await supabase.from("technical_plans").upsert(chunk, { onConflict: "legacy_id" });
     if (error) throw error;
   }
@@ -250,7 +254,7 @@ async function normalizeAssignments() {
     }))
     .filter((item) => item.legacy_id && item.class_id && item.member_id && item.assigned_on);
 
-  for (const chunk of chunks(assignments, 200)) {
+  for (const chunk of chunks(uniqueByLegacyId(assignments), 200)) {
     const { error } = await supabase
       .from("member_technique_assignments")
       .upsert(chunk, { onConflict: "legacy_id" });
@@ -258,6 +262,89 @@ async function normalizeAssignments() {
   }
 
   return assignments.length;
+}
+
+async function normalizeDojoHistory() {
+  const rows = await getLegacyRows("HISTORIAL_TECNICO_ADULTOS");
+  const classMap = await getIdMap("classes", "legacy_id");
+  const techniqueMap = await getIdMap("techniques", "legacy_id");
+  const groupMap = await getTechnicalGroupMap();
+
+  const history = rows
+    .map(({ row_data: row }) => ({
+      legacy_id: clean(row.ID_HISTORIAL),
+      class_id: classMap.get(clean(row.ID_CLASE)) ?? null,
+      class_date: parseDate(row.FECHA),
+      technical_group_id: groupMap.get(groupKey(clean(row.ID_CLASE), clean(row.ID_GRUPO_TECNICO))) ?? null,
+      group_grade: clean(row.GRADO_GRUPO) || null,
+      target_grade: clean(row.GRADO_OBJETIVO) || null,
+      technique_id: techniqueMap.get(clean(row.ID_TECNICA)) ?? null,
+      technique_grade: clean(row.GRADO_TECNICA) || null,
+      technique_base: clean(row.TECNICA_BASE) || null,
+      technique_name: clean(row.NOMBRE_TECNICA),
+      category: normalizeTechniqueCategory(row.CATEGORIA),
+      content_type: clean(row.TIPO_CONTENIDO) || null,
+      proposal_type: clean(row.TIPO_PROPUESTA) || null,
+      focus: clean(row.ENFOQUE_TECNICO) || null,
+      completed: parseBool(row.REALIZADA),
+      counts_repetition: parseBool(row.CONTABILIZA_REPETICION, true),
+      notes: clean(row.OBSERVACIONES) || null
+    }))
+    .filter((item) => item.legacy_id && item.class_date && item.technique_name);
+
+  for (const chunk of chunks(uniqueByLegacyId(history), 200)) {
+    const { error } = await supabase
+      .from("dojo_technical_history")
+      .upsert(chunk, { onConflict: "legacy_id" });
+    if (error) throw error;
+  }
+
+  return history.length;
+}
+
+async function normalizeMemberHistory() {
+  const rows = await getLegacyRows("HISTORIAL_TECNICO_ALUMNOS");
+  const classMap = await getIdMap("classes", "legacy_id");
+  const memberMap = await getIdMap("members", "legacy_id");
+  const techniqueMap = await getIdMap("techniques", "legacy_id");
+  const assignmentMap = await getIdMap("member_technique_assignments", "legacy_id");
+  const groupMap = await getTechnicalGroupMap();
+
+  const history = rows
+    .map(({ row_data: row }) => ({
+      legacy_id: clean(row.ID_HIST_ALUMNO),
+      class_id: classMap.get(clean(row.ID_CLASE)) ?? null,
+      class_date: parseDate(row.FECHA),
+      assignment_id: assignmentMap.get(clean(row.ID_ASIGNACION)) ?? null,
+      member_id: memberMap.get(clean(row.ID_ALUMNO)),
+      member_grade_at_time: clean(row.GRADO_ALUMNO_EN_ESE_MOMENTO) || null,
+      technical_group_id: groupMap.get(groupKey(clean(row.ID_CLASE), clean(row.ID_GRUPO_TECNICO))) ?? null,
+      group_grade: clean(row.GRADO_GRUPO) || null,
+      target_grade: clean(row.GRADO_OBJETIVO) || null,
+      technique_id: techniqueMap.get(clean(row.ID_TECNICA)) ?? null,
+      technique_name: clean(row.NOMBRE_TECNICA),
+      technique_grade: clean(row.GRADO_TECNICA) || null,
+      category: normalizeTechniqueCategory(row.CATEGORIA),
+      content_type: clean(row.TIPO_CONTENIDO) || null,
+      proposal_type: clean(row.TIPO_PROPUESTA) || null,
+      completed: parseBool(row.REALIZADA),
+      counts_as_progression: parseBool(row.CUENTA_COMO_PROGRESION),
+      counts_as_review: parseBool(row.CUENTA_COMO_REPASO),
+      counts_for_stats: parseBool(row.CUENTA_PARA_ESTADISTICA, true),
+      notes: clean(row.OBSERVACIONES) || null,
+      created_by: clean(row.CREADO_POR) || "legacy",
+      created_at: parseTimestamp(row.CREADO_EL) ?? new Date().toISOString()
+    }))
+    .filter((item) => item.legacy_id && item.class_date && item.member_id && item.technique_name);
+
+  for (const chunk of chunks(uniqueByLegacyId(history), 200)) {
+    const { error } = await supabase
+      .from("member_technical_history")
+      .upsert(chunk, { onConflict: "legacy_id" });
+    if (error) throw error;
+  }
+
+  return history.length;
 }
 
 async function courseRows(sheetTitle, kind, memberMap) {
@@ -444,4 +531,12 @@ function chunks(items, size) {
     result.push(items.slice(index, index + size));
   }
   return result;
+}
+
+function uniqueByLegacyId(items) {
+  const map = new Map();
+  items.forEach((item) => {
+    map.set(item.legacy_id, item);
+  });
+  return [...map.values()];
 }
