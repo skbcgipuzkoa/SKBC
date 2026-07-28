@@ -168,9 +168,9 @@ export default async function KenshisPage({
                   <td>{kenshi.legacy_id}</td>
                   <td>{kenshi.ika_id || <span className="muted">Pendiente</span>}</td>
                   <td>
-                    <strong>
+                    <a className="text-link" href={`/kenshis/${kenshi.legacy_id}`}>
                       {kenshi.first_name} {kenshi.last_name}
-                    </strong>
+                    </a>
                   </td>
                   <td>{kenshi.class === "kids" ? "Ninos" : "Adultos"}</td>
                   <td>

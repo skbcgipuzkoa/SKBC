@@ -297,7 +297,42 @@ th {
 
 .text-link {
   color: var(--brand);
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
   font-weight: 700;
+}
+
+.profile-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+}
+
+.profile-card {
+  align-items: center;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 92px minmax(0, 1fr);
+}
+
+.profile-card img,
+.avatar-placeholder {
+  background: #e5e7eb;
+  border-radius: 50%;
+  height: 92px;
+  object-fit: cover;
+  width: 92px;
+}
+
+.detail-list p {
+  margin: 8px 0;
+}
+
+.split-section {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @media (max-width: 860px) {
@@ -326,7 +361,9 @@ th {
   .stats,
   .workflow,
   .login-panel,
-  .filters {
+  .filters,
+  .profile-grid,
+  .split-section {
     grid-template-columns: 1fr;
   }
 }
