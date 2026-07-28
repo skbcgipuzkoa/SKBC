@@ -94,7 +94,7 @@ This is separate from adult technical planning, exams, and kenshi management unl
 
 ## Missing legacy logic
 
-The following requested adult/admin logic is still not in the copied scripts:
+The following requested adult/admin logic is still not in the copied scripts cloned with `clasp list`, but it is documented in `README_sistema` found in Drive:
 
 - Adult class creation flow.
 - Adult technical plan generation.
@@ -104,3 +104,45 @@ The following requested adult/admin logic is still not in the copied scripts:
 - Any AppSheet action formulas that are not part of Apps Script.
 
 Likely source: the container-bound Apps Script project attached to the main spreadsheet and/or AppSheet formulas/bots. We need that Script ID or an Apps Script project export to continue extracting the exact adult logic.
+
+## README_sistema findings
+
+Drive contains `README_sistema`, which confirms that the adult logic lives in the Apps Script container project attached to the master Sheet. It also names the main files/functions that should exist in that project:
+
+- `ZZZ_PATCH_CIERRE_SKBC.gs`
+  - Main class-close patch and web app endpoint.
+  - `apiFinalizarClaseCompleta(idClase)` orchestrates class close.
+  - `doPost(e)` supports `FINALIZAR_CLASE`, `PREPARAR_CLASE`, `GENERAR_PDF_PLAN`, and ficha-cache update actions.
+- Adult close pipeline:
+  - Check manually marked techniques.
+  - Complete attendance context.
+  - Generate student-technique assignments.
+  - Run diagnosis.
+  - Write dojo technical history.
+  - Write per-student technical history.
+  - Recalculate summaries.
+  - Recalculate technique scores.
+  - Mark class as closed/imparted.
+  - Clear `ACCION_SISTEMA`.
+- Safety rule:
+  - If there are zero manually marked techniques in `PLAN_TECNICO_ADULTOS`, the assignment/history steps are skipped.
+- `SKBC_WEB.gs` and `Ficha.html`
+  - Adult personal profile web app.
+  - Uses `FICHAS_CACHE`.
+  - Calculates adult metrics, progress percentages and pending techniques.
+- `diplomas_examen.gs`
+  - Creates bilingual exam diploma PDFs from a Google Slides template.
+- PDF plan script:
+  - `generarPdfPlanTecnicoPorClase(idClase)` creates a temporary sheet, exports A4 PDF and saves it in Drive.
+- Diagnostic script:
+  - `ZZZ_DIAGNOSTICO_SISTEMA_SKBC.gs`.
+- Control bridge:
+  - `skbcProcesarSolicitudesControlAppPendientes_()` reads `CONTROL_APP`.
+
+Next exact-source extraction step:
+
+1. Open the master spreadsheet.
+2. Go to Extensions -> Apps Script.
+3. Open Project settings.
+4. Copy the Script ID.
+5. Run `clasp clone <SCRIPT_ID>` into an ignored folder.
