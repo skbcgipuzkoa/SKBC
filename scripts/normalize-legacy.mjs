@@ -14,11 +14,17 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 
 const summary = {
   classes: 0,
-  techniques: 0
+  techniques: 0,
+  attendance: 0,
+  exams: 0,
+  courses: 0
 };
 
 summary.classes = await normalizeClasses();
 summary.techniques = await normalizeTechniques();
+summary.attendance = await normalizeAttendance();
+summary.exams = await normalizeExams();
+summary.courses = await normalizeCourses();
 
 console.log(JSON.stringify(summary, null, 2));
 
@@ -78,6 +84,114 @@ async function normalizeTechniques() {
   return techniques.length;
 }
 
+async function normalizeAttendance() {
+  const rows = await getLegacyRows("ASISTENCIAS_LOG");
+  const memberMap = await getIdMap("members", "legacy_id");
+  const classMap = await getIdMap("classes", "legacy_id");
+
+  const attendance = rows
+    .map(({ row_data: row }) => ({
+      legacy_id: clean(row.LOG_ID),
+      class_id: classMap.get(clean(row.ID_CLASE)) ?? null,
+      member_id: memberMap.get(clean(row.ID)),
+      attended_on: parseDate(row.Fecha),
+      official_grade: clean(row.GRADO_OFICIAL_DEL_DIA) || null,
+      trained_grade: clean(row.GRADO_TECNICO_ENTRENADO) || null,
+      technical_role: normalizeTechnicalRole(row.ROL_TECNICO_EN_CLASE),
+      technical_note: clean(row.OBSERVACION_TECNICA) || null,
+      use_for_history: parseBool(row.USAR_PARA_HISTORIAL, true)
+    }))
+    .filter((item) => item.legacy_id && item.member_id && item.attended_on);
+
+  for (const chunk of chunks(attendance, 200)) {
+    const { error } = await supabase.from("attendance_logs").upsert(chunk, { onConflict: "legacy_id" });
+    if (error) throw error;
+  }
+
+  return attendance.length;
+}
+
+async function normalizeExams() {
+  const rows = await getLegacyRows("EXAMENES");
+  const memberMap = await getIdMap("members", "legacy_id");
+
+  await supabase.from("exams").delete().not("id", "is", null);
+
+  const exams = rows
+    .map(({ row_data: row }, index) => ({
+      legacy_row: index + 2,
+      exam_date: parseDate(row.FechaExamen),
+      member_id: memberMap.get(clean(row.ID)),
+      grade: clean(row.Grado),
+      cycle_attendance: parseInteger(row.AsistenciasCiclo),
+      examiner: clean(row.Examinador) || null,
+      registered_by: clean(row.RegistradoPor) || null,
+      diploma_url: clean(row.URL_Diploma) || null
+    }))
+    .filter((item) => item.exam_date && item.member_id && item.grade);
+
+  for (const chunk of chunks(exams, 200)) {
+    const { error } = await supabase.from("exams").insert(chunk);
+    if (error) throw error;
+  }
+
+  return exams.length;
+}
+
+async function normalizeCourses() {
+  const memberMap = await getIdMap("members", "legacy_id");
+  await supabase.from("courses").delete().not("id", "is", null);
+
+  const national = await courseRows("CURSOS_NAC", "national", memberMap);
+  const international = await courseRows("CURSOS_INT", "international", memberMap);
+  const courses = [...national, ...international];
+
+  for (const chunk of chunks(courses, 200)) {
+    const { error } = await supabase.from("courses").insert(chunk);
+    if (error) throw error;
+  }
+
+  return courses.length;
+}
+
+async function courseRows(sheetTitle, kind, memberMap) {
+  const rows = await getLegacyRows(sheetTitle);
+  return rows
+    .map(({ row_data: row }) => ({
+      kind,
+      course_date: parseDate(row.Fecha),
+      member_id: memberMap.get(clean(row.ID)),
+      location: clean(row.Donde) || null,
+      title: clean(row.Curso) || null,
+      sensei: clean(row.Sensei) || null,
+      notes: clean(row.Notas) || null,
+      legacy_id: clean(row.LOG_ID) || null
+    }))
+    .filter((item) => item.course_date && item.member_id);
+}
+
+async function getIdMap(table, legacyColumn) {
+  const map = new Map();
+  let from = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(`id,${legacyColumn}`)
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    data.forEach((row) => {
+      if (row[legacyColumn]) map.set(String(row[legacyColumn]), row.id);
+    });
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return map;
+}
+
 async function getLegacyRows(sheetTitle) {
   const { data: sheet, error: sheetError } = await supabase
     .from("legacy_sheets")
@@ -135,6 +249,15 @@ function normalizeTechniqueCategory(value) {
     kihon: "kihon"
   };
   return map[normalized] ?? null;
+}
+
+function normalizeTechnicalRole(value) {
+  const normalized = clean(value).toLowerCase();
+  if (normalized.includes("ense")) return "teaching";
+  if (normalized.includes("apoyo")) return "support";
+  if (normalized.includes("repas")) return "reviewing";
+  if (normalized.includes("observ")) return "observing";
+  return "student";
 }
 
 function parseBool(value, defaultValue = false) {
