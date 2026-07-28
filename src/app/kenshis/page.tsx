@@ -87,6 +87,7 @@ export default async function KenshisPage({
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/importacion">Importacion</a>
+          <a href="/novedades">Novedades</a>
         </nav>
       </aside>
       <main className="main">

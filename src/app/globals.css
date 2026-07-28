@@ -498,6 +498,21 @@ th {
   margin: 6px 0;
 }
 
+.import-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.import-card {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.import-card p {
+  margin: 0;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
@@ -524,10 +539,11 @@ th {
   .stats,
   .workflow,
   .login-panel,
-  .filters,
-  .profile-grid,
-  .split-section,
-  .form-grid {
+    .filters,
+    .profile-grid,
+    .split-section,
+    .import-grid,
+    .form-grid {
     grid-template-columns: 1fr;
   }
 
