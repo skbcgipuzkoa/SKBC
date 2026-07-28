@@ -1,6 +1,6 @@
 import { ArrowLeft, LogOut } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { logoutAction, updateIkaIdAction } from "@/app/actions";
+import { logoutAction, updateKenshiAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { driveImageUrl } from "@/lib/drive";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -18,6 +18,7 @@ type Member = {
   guardian_name: string | null;
   guardian_phone: string | null;
   student_phone: string | null;
+  address: string | null;
   photo_url: string | null;
   legacy_ficha_url: string | null;
 };
@@ -63,7 +64,7 @@ export default async function KenshiDetailPage({
   const { data: member, error } = await supabase
     .from("members")
     .select(
-      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,family_email,guardian_name,guardian_phone,student_phone,photo_url,legacy_ficha_url"
+      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,legacy_ficha_url"
     )
     .eq("legacy_id", legacyId)
     .single<Member>();
@@ -133,20 +134,40 @@ export default async function KenshiDetailPage({
           <article className="card detail-list">
             <h2>Datos</h2>
             <p><strong>ID legacy:</strong> {member.legacy_id}</p>
-            <form action={updateIkaIdAction} className="inline-edit">
+            <form action={updateKenshiAction} className="edit-form">
               <input type="hidden" name="memberId" value={member.id} />
               <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
-              <label htmlFor="ikaId">ID IKA</label>
-              <div>
-                <input id="ikaId" name="ikaId" defaultValue={member.ika_id ?? ""} placeholder="Pendiente" />
-                <button type="submit">Guardar</button>
+              <div className="form-grid">
+                <label>Nombre<input name="firstName" defaultValue={member.first_name} required /></label>
+                <label>Apellidos<input name="lastName" defaultValue={member.last_name ?? ""} /></label>
+                <label>ID IKA<input name="ikaId" defaultValue={member.ika_id ?? ""} placeholder="Pendiente" /></label>
+                <label>Grado<input name="grade" defaultValue={member.grade ?? ""} /></label>
+                <label>
+                  Clase
+                  <select name="class" defaultValue={member.class}>
+                    <option value="kids">Ninos</option>
+                    <option value="adults">Adultos</option>
+                  </select>
+                </label>
+                <label>
+                  Estado
+                  <select name="status" defaultValue={member.status}>
+                    <option value="active">Activo</option>
+                    <option value="inactive">Inactivo</option>
+                  </select>
+                </label>
+                <label>Email familia<input name="familyEmail" defaultValue={member.family_email ?? ""} /></label>
+                <label>Tutor<input name="guardianName" defaultValue={member.guardian_name ?? ""} /></label>
+                <label>Telefono tutor<input name="guardianPhone" defaultValue={member.guardian_phone ?? ""} /></label>
+                <label>Telefono alumno<input name="studentPhone" defaultValue={member.student_phone ?? ""} /></label>
+                <label className="wide">Direccion<input name="address" defaultValue={member.address ?? ""} /></label>
               </div>
-              {notices.saved === "ika" ? <span className="save-ok">Guardado</span> : null}
-              {notices.error === "ika" ? <span className="form-error">No se pudo guardar</span> : null}
+              <div className="form-actions">
+                <button type="submit">Guardar cambios</button>
+                {notices.saved === "kenshi" ? <span className="save-ok">Guardado</span> : null}
+                {notices.error === "kenshi" ? <span className="form-error">No se pudo guardar</span> : null}
+              </div>
             </form>
-            <p><strong>Email familia:</strong> {member.family_email || "-"}</p>
-            <p><strong>Tutor:</strong> {member.guardian_name || "-"}</p>
-            <p><strong>Telefono:</strong> {member.guardian_phone || member.student_phone || "-"}</p>
             {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank">Abrir ficha actual</a> : null}
           </article>
         </section>

@@ -342,13 +342,15 @@ th {
   margin: 8px 0;
 }
 
-.inline-edit {
+.inline-edit,
+.edit-form {
   display: grid;
   gap: 6px;
   margin: 10px 0 14px;
 }
 
-.inline-edit label {
+.inline-edit label,
+.edit-form label {
   color: var(--muted);
   font-size: 13px;
 }
@@ -367,6 +369,46 @@ th {
 }
 
 .inline-edit button {
+  background: var(--brand);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.form-grid input,
+.form-grid select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.form-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.form-actions button {
   background: var(--brand);
   border: 0;
   border-radius: 6px;
@@ -415,7 +457,12 @@ th {
   .login-panel,
   .filters,
   .profile-grid,
-  .split-section {
+  .split-section,
+  .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .form-grid .wide {
+    grid-column: auto;
   }
 }
