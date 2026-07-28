@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "import:legacy:xlsx": "node scripts/import-legacy-xlsx.mjs"
+    "import:legacy:xlsx": "node scripts/import-legacy-xlsx.mjs",
+    "normalize:legacy": "node scripts/normalize-legacy.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
