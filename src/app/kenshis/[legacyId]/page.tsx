@@ -22,6 +22,7 @@ type Member = {
   exam_history: string | null;
   attendance_history: string | null;
   site_url: string | null;
+  semaphore: string | null;
   family_email: string | null;
   guardian_name: string | null;
   guardian_phone: string | null;
@@ -72,7 +73,7 @@ export default async function KenshiDetailPage({
   const { data: member, error } = await supabase
     .from("members")
     .select(
-      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,legacy_ficha_url"
+      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,legacy_ficha_url"
     )
     .eq("legacy_id", legacyId)
     .single<Member>();
@@ -160,17 +161,21 @@ export default async function KenshiDetailPage({
                 guardianName: member.guardian_name,
                 guardianPhone: member.guardian_phone,
                 studentPhone: member.student_phone,
-                lastExamOn: member.last_exam_on,
-                nextExamOn: member.next_exam_on,
                 address: member.address,
                 siteUrl: member.site_url,
-                examNotice: member.exam_notice,
-                examHistory: member.exam_history,
-                attendanceHistory: member.attendance_history
+                examHistory: member.exam_history
               }}
             />
             {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank">Abrir ficha actual</a> : null}
           </article>
+        </section>
+
+        <h2 className="section-title">Datos calculados</h2>
+        <section className="grid stats compact">
+          <article className="card"><h2>Ultimo examen</h2><div className="metric small">{member.last_exam_on ?? "-"}</div></article>
+          <article className="card"><h2>Proximo examen</h2><div className="metric small">{member.next_exam_on ?? "-"}</div></article>
+          <article className="card"><h2>Semaforo</h2><div className="metric small">{member.semaphore ?? "-"}</div></article>
+          <article className="card"><h2>Aviso</h2><p className="muted">{member.exam_notice ?? "-"}</p></article>
         </section>
 
         <h2 className="section-title">Ultimas asistencias</h2>

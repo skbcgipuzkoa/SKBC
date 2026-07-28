@@ -21,13 +21,9 @@ type Props = {
     guardianName?: string | null;
     guardianPhone?: string | null;
     studentPhone?: string | null;
-    lastExamOn?: string | null;
-    nextExamOn?: string | null;
     address?: string | null;
     siteUrl?: string | null;
-    examNotice?: string | null;
     examHistory?: string | null;
-    attendanceHistory?: string | null;
   };
 };
 
@@ -70,13 +66,9 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
         <label>Tutor<input name="guardianName" defaultValue={initial?.guardianName ?? ""} /></label>
         <label>Telefono tutor<input name="guardianPhone" defaultValue={initial?.guardianPhone ?? ""} /></label>
         <label>Telefono alumno<input name="studentPhone" defaultValue={initial?.studentPhone ?? ""} /></label>
-        <label>Ultimo examen<input name="lastExamOn" type="date" defaultValue={initial?.lastExamOn ?? ""} /></label>
-        <label>Proximo examen<input name="nextExamOn" type="date" defaultValue={initial?.nextExamOn ?? ""} /></label>
         <label className="wide">Direccion<input name="address" defaultValue={initial?.address ?? ""} /></label>
         <label className="wide">URL material grado<input name="siteUrl" defaultValue={initial?.siteUrl ?? ""} /></label>
-        <label className="wide">Aviso examen<textarea name="examNotice" rows={3} defaultValue={initial?.examNotice ?? ""} /></label>
         <label className="wide">Historial examenes<textarea name="examHistory" rows={4} defaultValue={initial?.examHistory ?? ""} /></label>
-        <label className="wide">Historial asistencias<textarea name="attendanceHistory" rows={4} defaultValue={initial?.attendanceHistory ?? ""} /></label>
       </div>
       <div className="form-actions">
         <button type="submit">{submitLabel}</button>
