@@ -249,6 +249,12 @@ h1 {
   padding: 4px 8px;
 }
 
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .icon-button {
   align-items: center;
   background: var(--panel);
@@ -470,6 +476,37 @@ th {
   padding: 8px 12px;
 }
 
+.quick-form {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.quick-form select,
+.quick-form button {
+  border-radius: 6px;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.quick-form select {
+  border: 1px solid var(--line);
+}
+
+.quick-form button {
+  background: var(--brand);
+  border: 0;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .save-ok {
   color: var(--ok);
   font-size: 13px;
@@ -520,20 +557,52 @@ th {
 
   .sidebar {
     border-right: 0;
-    padding: 18px;
+    padding: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .brand {
+    margin-bottom: 12px;
   }
 
   .nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .nav a {
+    flex: 0 0 auto;
+    min-height: 38px;
+    white-space: nowrap;
   }
 
   .main {
-    padding: 20px;
+    padding: 16px;
   }
 
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .top-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .top-actions form,
+  .top-actions .primary-link,
+  .top-actions button.primary-link {
+    width: 100%;
+  }
+
+  .primary-link {
+    justify-content: center;
   }
 
   .stats,
@@ -549,5 +618,54 @@ th {
 
   .form-grid .wide {
     grid-column: auto;
+  }
+
+  table {
+    min-width: 0;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tbody,
+  tr,
+  td {
+    display: block;
+    width: 100%;
+  }
+
+  tr {
+    border-bottom: 1px solid var(--line);
+    padding: 10px 12px;
+  }
+
+  td {
+    border-bottom: 0;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 118px minmax(0, 1fr);
+    padding: 7px 0;
+  }
+
+  td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  td[colspan] {
+    display: block;
+  }
+
+  td[colspan]::before {
+    content: "";
+  }
+
+  .login-row,
+  .inline-edit div {
+    grid-template-columns: 1fr;
   }
 }

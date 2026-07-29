@@ -2,6 +2,8 @@ import { ArrowLeft, Check, LogOut, Wand2, X } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import {
   closeAdultClassAction,
+  addAttendanceAction,
+  generateAdultGroupsAction,
   generateAdultPlanAction,
   logoutAction,
   updatePlanTechniqueAction
@@ -36,11 +38,25 @@ type PlanRow = {
   notes: string | null;
 };
 
+type GroupRow = {
+  id: string;
+  legacy_id: string | null;
+  grade: string;
+  active: boolean;
+};
+
 type AttendanceRow = {
   attended_on: string;
+  member_id: string;
   members: { first_name: string; last_name: string | null } | null;
   official_grade: string | null;
   trained_grade: string | null;
+};
+
+type MemberOption = {
+  id: string;
+  display_name: string;
+  grade: string | null;
 };
 
 export default async function ClaseDetailPage({
@@ -65,7 +81,7 @@ export default async function ClaseDetailPage({
 
   if (error || !clase) notFound();
 
-  const [{ data: plan }, { data: attendance }] = await Promise.all([
+  const [{ data: plan }, { data: attendance }, { data: groups }, { data: adultMembers }] = await Promise.all([
     supabase
       .from("technical_plans")
       .select("id,legacy_id,group_grade,target_grade,technique_name,category,proposal_type,focus,completed,notes")
@@ -75,11 +91,27 @@ export default async function ClaseDetailPage({
       .returns<PlanRow[]>(),
     supabase
       .from("attendance_logs")
-      .select("attended_on,official_grade,trained_grade,members(first_name,last_name)")
+      .select("attended_on,member_id,official_grade,trained_grade,members(first_name,last_name)")
       .eq("class_id", clase.id)
       .order("attended_on", { ascending: false })
-      .returns<AttendanceRow[]>()
+      .returns<AttendanceRow[]>(),
+    supabase
+      .from("class_technical_groups")
+      .select("id,legacy_id,grade,active")
+      .eq("class_id", clase.id)
+      .order("grade")
+      .returns<GroupRow[]>(),
+    supabase
+      .from("members")
+      .select("id,display_name,grade")
+      .eq("class", "adults")
+      .eq("status", "active")
+      .order("display_name")
+      .returns<MemberOption[]>()
   ]);
+
+  const attendanceMemberIds = new Set((attendance ?? []).map((item) => item.member_id));
+  const pendingAdultMembers = (adultMembers ?? []).filter((member) => !attendanceMemberIds.has(member.id));
 
   return (
     <div className="shell">
@@ -105,6 +137,16 @@ export default async function ClaseDetailPage({
             <h1>{clase.name}</h1>
           </div>
           <div className="top-actions">
+            {clase.class_group === "adults" && !clase.plan_generated && !clase.closed ? (
+              <form action={generateAdultGroupsAction}>
+                <input type="hidden" name="classId" value={clase.id} />
+                <input type="hidden" name="legacyId" value={legacyId} />
+                <button className="primary-link button-reset" type="submit">
+                  <Wand2 aria-hidden="true" size={16} />
+                  Generar grupos
+                </button>
+              </form>
+            ) : null}
             {clase.class_group === "adults" && !clase.plan_generated && !clase.closed ? (
               <form action={generateAdultPlanAction}>
                 <input type="hidden" name="classId" value={clase.id} />
@@ -134,10 +176,19 @@ export default async function ClaseDetailPage({
         </div>
 
         {query.saved === "plan" ? <p className="save-ok">Plan tecnico generado.</p> : null}
+        {query.saved === "class" ? <p className="save-ok">Clase creada.</p> : null}
+        {query.saved === "groups" ? <p className="save-ok">Grupos tecnicos generados.</p> : null}
+        {query.saved === "attendance" ? <p className="save-ok">Asistencia anadida.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.error === "plan" ? (
           <p className="form-error">No se ha podido generar el plan tecnico para esta clase.</p>
+        ) : null}
+        {query.error === "groups" ? (
+          <p className="form-error">No se han podido generar los grupos tecnicos.</p>
+        ) : null}
+        {query.error === "attendance" ? (
+          <p className="form-error">No se ha podido anadir la asistencia.</p>
         ) : null}
         {query.error === "plan-technique" ? (
           <p className="form-error">No se ha podido actualizar la tecnica.</p>
@@ -153,6 +204,54 @@ export default async function ClaseDetailPage({
           <article className="card"><h2>Asistentes</h2><div className="metric">{attendance?.length ?? 0}</div></article>
         </section>
 
+        <section className="split-section">
+          <article className="card">
+            <h2>Grupos tecnicos</h2>
+            <div className="chip-list">
+              {(groups ?? []).length ? (groups ?? []).map((group) => (
+                <span className="tag" key={group.id}>{group.grade}</span>
+              )) : <span className="muted">Sin grupos todavia</span>}
+            </div>
+          </article>
+          <article className="card">
+            <h2>Anadir asistencia</h2>
+            {!clase.closed && clase.class_group === "adults" ? (
+              <form action={addAttendanceAction} className="quick-form">
+                <input type="hidden" name="classId" value={clase.id} />
+                <input type="hidden" name="legacyId" value={legacyId} />
+                <label>
+                  Kenshi
+                  <select name="memberId" required>
+                    <option value="">Seleccionar</option>
+                    {pendingAdultMembers.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.display_name} - {member.grade ?? "Sin grado"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Grado oficial
+                  <select name="officialGrade">
+                    <option value="">Usar ficha</option>
+                    {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Grado entrenado
+                  <select name="trainedGrade">
+                    <option value="">Automatico</option>
+                    {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                  </select>
+                </label>
+                <button type="submit">Anadir</button>
+              </form>
+            ) : (
+              <p className="muted">Clase cerrada o no adulta.</p>
+            )}
+          </article>
+        </section>
+
         <h2 className="section-title">Plan tecnico</h2>
         <section className="table-wrap">
           <table>
@@ -162,12 +261,12 @@ export default async function ClaseDetailPage({
             <tbody>
               {(plan ?? []).length ? (plan ?? []).map((item) => (
                 <tr key={item.legacy_id ?? item.technique_name}>
-                  <td>{item.group_grade ?? "-"}</td>
-                  <td>{item.target_grade ?? "-"}</td>
-                  <td><strong>{item.technique_name}</strong></td>
-                  <td>{item.category ?? "-"}</td>
-                  <td>{item.proposal_type ?? item.focus ?? "-"}</td>
-                  <td>
+                  <td data-label="Grupo">{item.group_grade ?? "-"}</td>
+                  <td data-label="Objetivo">{item.target_grade ?? "-"}</td>
+                  <td data-label="Tecnica"><strong>{item.technique_name}</strong></td>
+                  <td data-label="Categoria">{item.category ?? "-"}</td>
+                  <td data-label="Tipo">{item.proposal_type ?? item.focus ?? "-"}</td>
+                  <td data-label="Realizada">
                     {clase.closed ? (
                       item.completed ? "Si" : "No"
                     ) : (
@@ -206,9 +305,9 @@ export default async function ClaseDetailPage({
             <tbody>
               {(attendance ?? []).map((item) => (
                 <tr key={`${item.members?.first_name}-${item.members?.last_name}-${item.trained_grade}`}>
-                  <td><strong>{item.members?.first_name} {item.members?.last_name}</strong></td>
-                  <td>{item.official_grade ?? "-"}</td>
-                  <td>{item.trained_grade ?? "-"}</td>
+                  <td data-label="Kenshi"><strong>{item.members?.first_name} {item.members?.last_name}</strong></td>
+                  <td data-label="Grado oficial">{item.official_grade ?? "-"}</td>
+                  <td data-label="Grado entrenado">{item.trained_grade ?? "-"}</td>
                 </tr>
               ))}
             </tbody>

@@ -73,13 +73,13 @@ export default async function TecnicasPage() {
             <tbody>
               {data.length ? data.map((tecnica) => (
                 <tr key={tecnica.legacy_id ?? tecnica.name}>
-                  <td>{tecnica.legacy_id}</td>
-                  <td>{tecnica.grade}</td>
-                  <td><strong>{tecnica.name}</strong></td>
-                  <td>{tecnica.category}</td>
-                  <td>{tecnica.repetitions}</td>
-                  <td>{tecnica.last_trained_on ?? "-"}</td>
-                  <td>{tecnica.active ? "Activa" : "Inactiva"}</td>
+                  <td data-label="ID">{tecnica.legacy_id}</td>
+                  <td data-label="Grado">{tecnica.grade}</td>
+                  <td data-label="Tecnica"><strong>{tecnica.name}</strong></td>
+                  <td data-label="Categoria">{tecnica.category}</td>
+                  <td data-label="Repeticiones">{tecnica.repetitions}</td>
+                  <td data-label="Ultima vez">{tecnica.last_trained_on ?? "-"}</td>
+                  <td data-label="Estado">{tecnica.active ? "Activa" : "Inactiva"}</td>
                 </tr>
               )) : (
                 <tr>

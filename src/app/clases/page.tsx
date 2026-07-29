@@ -49,14 +49,17 @@ export default async function ClasesPage() {
       <main className="main">
         <div className="topbar">
           <div>
-            <p className="eyebrow">Modulo en preparacion</p>
+            <p className="eyebrow">Gestion de clases</p>
             <h1>Clases</h1>
           </div>
-          <form action={logoutAction}>
-            <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
-              <LogOut aria-hidden="true" size={18} />
-            </button>
-          </form>
+          <div className="top-actions">
+            <a className="primary-link" href="/clases/nueva">Nueva clase</a>
+            <form action={logoutAction}>
+              <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
+                <LogOut aria-hidden="true" size={18} />
+              </button>
+            </form>
+          </div>
         </div>
         <section className="table-wrap">
           <table>
@@ -74,17 +77,17 @@ export default async function ClasesPage() {
             <tbody>
               {data.length ? data.map((clase) => (
                 <tr key={clase.legacy_id ?? `${clase.class_date}-${clase.name}`}>
-                  <td>{clase.legacy_id}</td>
-                  <td>{clase.class_date}</td>
-                  <td>
+                  <td data-label="ID">{clase.legacy_id}</td>
+                  <td data-label="Fecha">{clase.class_date}</td>
+                  <td data-label="Nombre">
                     <a className="text-link" href={`/clases/${clase.legacy_id}`}>
                       {clase.name}
                     </a>
                   </td>
-                  <td>{clase.class_group === "kids" ? "Ninos" : "Adultos"}</td>
-                  <td>{clase.class_type ?? "-"}</td>
-                  <td>{clase.status}</td>
-                  <td>{clase.plan_generated ? "Generado" : "Pendiente"}</td>
+                  <td data-label="Grupo">{clase.class_group === "kids" ? "Ninos" : "Adultos"}</td>
+                  <td data-label="Tipo">{clase.class_type ?? "-"}</td>
+                  <td data-label="Estado">{clase.status}</td>
+                  <td data-label="Plan">{clase.plan_generated ? "Generado" : "Pendiente"}</td>
                 </tr>
               )) : (
                 <tr>

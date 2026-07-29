@@ -111,10 +111,10 @@ export default async function ImportacionPage() {
             <tbody>
               {(sheets ?? []).map((sheet) => (
                 <tr key={sheet.title}>
-                  <td>
+                  <td data-label="Pestana">
                     <FileSpreadsheet aria-hidden="true" size={15} /> <strong>{sheet.title}</strong>
                   </td>
-                  <td>{sheet.row_count ?? "-"}</td>
+                  <td data-label="Filas">{sheet.row_count ?? "-"}</td>
                 </tr>
               ))}
             </tbody>

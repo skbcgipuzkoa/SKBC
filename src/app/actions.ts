@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
+import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -142,6 +143,124 @@ export async function generateAdultPlanAction(formData: FormData) {
   }
 
   redirect(`/clases/${legacyId}?saved=plan`);
+}
+
+export async function createClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classDate = parseDateInput(String(formData.get("classDate") ?? ""));
+  const name = String(formData.get("name") ?? "").trim();
+  const classGroup = normalizeClass(String(formData.get("classGroup") ?? "")) ?? "adults";
+  const classType = String(formData.get("classType") ?? "").trim() || null;
+  const responsible = String(formData.get("responsible") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!classDate || !name) {
+    redirect("/clases/nueva?error=class");
+  }
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("classes")
+    .insert({
+      legacy_id: `NEW-CLA-${Date.now()}`,
+      class_date: classDate,
+      name,
+      class_group: classGroup,
+      class_type: classType,
+      responsible,
+      notes,
+      status: "pending"
+    })
+    .select("legacy_id")
+    .single();
+
+  if (error || !data?.legacy_id) {
+    redirect("/clases/nueva?error=class");
+  }
+
+  redirect(`/clases/${data.legacy_id}?saved=class`);
+}
+
+export async function generateAdultGroupsAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+
+  if (!classId || !legacyId) {
+    redirect("/clases");
+  }
+
+  try {
+    await generateAdultTechnicalGroups(classId);
+  } catch (error) {
+    console.error("Error generating adult technical groups", error);
+    redirect(`/clases/${legacyId}?error=groups`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=groups`);
+}
+
+export async function addAttendanceAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const memberId = String(formData.get("memberId") ?? "");
+  let officialGrade = String(formData.get("officialGrade") ?? "").trim();
+  let trainedGrade = String(formData.get("trainedGrade") ?? "").trim();
+
+  if (!classId || !legacyId || !memberId) {
+    redirect("/clases");
+  }
+
+  const supabase = createAdminClient();
+  const [{ data: clase, error: classError }, { data: member, error: memberError }] = await Promise.all([
+    supabase
+    .from("classes")
+    .select("class_date")
+    .eq("id", classId)
+      .single<{ class_date: string }>(),
+    supabase
+      .from("members")
+      .select("grade")
+      .eq("id", memberId)
+      .single<{ grade: string | null }>()
+  ]);
+
+  if (classError || !clase || memberError) {
+    redirect(`/clases/${legacyId}?error=attendance`);
+  }
+
+  officialGrade = officialGrade || member?.grade || "";
+  trainedGrade = trainedGrade || resolveWorkGrade(officialGrade);
+
+  const { error } = await supabase.from("attendance_logs").upsert(
+    {
+      legacy_id: `NEW-ASIS-${classId}-${memberId}`,
+      class_id: classId,
+      member_id: memberId,
+      attended_on: clase.class_date,
+      official_grade: officialGrade || null,
+      trained_grade: trainedGrade || null,
+      technical_role: "student",
+      use_for_history: true
+    },
+    { onConflict: "legacy_id" }
+  );
+
+  if (error) {
+    redirect(`/clases/${legacyId}?error=attendance`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=attendance`);
 }
 
 export async function updatePlanTechniqueAction(formData: FormData) {

@@ -170,9 +170,9 @@ export default async function KenshisPage({
             <tbody>
               {kenshis.map((kenshi) => (
                 <tr key={kenshi.legacy_id}>
-                  <td>{kenshi.legacy_id}</td>
-                  <td>{kenshi.ika_id || <span className="muted">Pendiente</span>}</td>
-                  <td>
+                  <td data-label="ID">{kenshi.legacy_id}</td>
+                  <td data-label="ID IKA">{kenshi.ika_id || <span className="muted">Pendiente</span>}</td>
+                  <td data-label="Nombre">
                     <a className="text-link" href={`/kenshis/${kenshi.legacy_id}`}>
                       {driveImageUrl(kenshi.photo_url) ? (
                         <img className="mini-avatar" src={driveImageUrl(kenshi.photo_url) ?? ""} alt="" />
@@ -180,13 +180,13 @@ export default async function KenshisPage({
                       {kenshi.first_name} {kenshi.last_name}
                     </a>
                   </td>
-                  <td>{kenshi.class === "kids" ? "Ninos" : "Adultos"}</td>
-                  <td>
+                  <td data-label="Clase">{kenshi.class === "kids" ? "Ninos" : "Adultos"}</td>
+                  <td data-label="Estado">
                     <span className={`pill ${kenshi.status}`}>{kenshi.status === "active" ? "Activo" : "Inactivo"}</span>
                   </td>
-                  <td>{kenshi.grade || <span className="muted">Sin grado</span>}</td>
-                  <td>{kenshi.family_email || kenshi.guardian_phone || kenshi.student_phone || <span className="muted">-</span>}</td>
-                  <td>
+                  <td data-label="Grado">{kenshi.grade || <span className="muted">Sin grado</span>}</td>
+                  <td data-label="Contacto">{kenshi.family_email || kenshi.guardian_phone || kenshi.student_phone || <span className="muted">-</span>}</td>
+                  <td data-label="Ficha">
                     {kenshi.legacy_ficha_url ? (
                       <a className="text-link" href={kenshi.legacy_ficha_url} target="_blank">
                         Abrir

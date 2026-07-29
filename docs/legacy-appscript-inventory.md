@@ -188,3 +188,20 @@ The first replicated version in the new platform is implemented in `src/lib/adul
 - Generate dojo technical history.
 - Generate member technical history.
 - Update technique repetition count and last trained date in the new Supabase project.
+
+## Adult class preparation rules extracted
+
+- Technical groups are generated from active adult students.
+- Only grades with active/plannable adult techniques are kept.
+- `MINARAI` is allowed when `5 KYU` techniques exist.
+- Students from `1 DAN` to `4 DAN` generate normal grade groups.
+- Students from `5 DAN` upward generate one shared `REPASO` group.
+- Completing attendance context uses the selected class date, adult attendance, the student's current official grade, and the technical trained grade.
+- `MINARAI` trains technically as `5 KYU`.
+
+The first replicated version in the new platform now supports:
+
+- Creating a new class from `/clases/nueva`.
+- Generating adult technical groups from the class detail page.
+- Adding adult attendance from the class detail page.
+- Mobile-friendly class workflow controls.
