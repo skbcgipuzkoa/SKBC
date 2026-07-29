@@ -60,6 +60,7 @@ export default async function ImportacionPage() {
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/cursos">Cursos</a>
+          <a href="/pedidos-cinturones">Cinturones</a>
           <a href="/proximos-examenes">Proximos examenes</a>
           <a href="/rankings">Rankings</a>
           <a href="/auditoria">Auditoria</a>

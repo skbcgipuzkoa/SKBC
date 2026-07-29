@@ -709,6 +709,49 @@ export async function createCourseAction(formData: FormData) {
   redirect("/cursos?saved=course");
 }
 
+export async function createBeltOrderLineAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim() || null;
+  const studentName = String(formData.get("studentName") ?? "").trim();
+  const examTitle = String(formData.get("examTitle") ?? "").trim() || null;
+  const program = String(formData.get("program") ?? "").trim() || null;
+  const grade = String(formData.get("grade") ?? "").trim() || null;
+  const item = String(formData.get("item") ?? "").trim() || "Cinturon";
+  const color = String(formData.get("color") ?? "").trim();
+  const size = String(formData.get("size") ?? "").trim();
+  const quantity = Math.max(1, Number.parseInt(String(formData.get("quantity") ?? "1"), 10) || 1);
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if ((!memberId && !studentName) || !item || !color || !size) {
+    redirect("/pedidos-cinturones?error=belt");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("belt_order_lines").insert({
+    exam_title: examTitle,
+    program,
+    grade,
+    member_id: memberId,
+    student_name: studentName || null,
+    item,
+    color,
+    size,
+    quantity,
+    notes,
+    created_by: "WEB SKBC"
+  });
+
+  if (error) {
+    console.error("Error creating belt order line", error);
+    redirect("/pedidos-cinturones?error=belt");
+  }
+
+  redirect("/pedidos-cinturones?saved=belt");
+}
+
 function normalizeClass(value: string) {
   return value === "kids" || value === "adults" ? value : null;
 }

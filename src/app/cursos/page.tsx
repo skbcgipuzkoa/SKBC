@@ -83,6 +83,7 @@ export default async function CursosPage({
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/cursos" aria-current="page">Cursos</a>
+          <a href="/pedidos-cinturones">Cinturones</a>
           <a href="/proximos-examenes">Proximos examenes</a>
           <a href="/rankings">Rankings</a>
           <a href="/auditoria">Auditoria</a>
