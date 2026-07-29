@@ -32,7 +32,7 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
   const gradeOptions = useMemo(() => (memberClass === "kids" ? kidsGrades : adultGrades), [memberClass]);
 
   return (
-    <form action={action} className="edit-form">
+    <form action={action} className="edit-form" encType="multipart/form-data">
       {Object.entries(hiddenFields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
@@ -66,6 +66,7 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
         <label>Tutor<input name="guardianName" defaultValue={initial?.guardianName ?? ""} /></label>
         <label>Telefono tutor<input name="guardianPhone" defaultValue={initial?.guardianPhone ?? ""} /></label>
         <label>Telefono alumno<input name="studentPhone" defaultValue={initial?.studentPhone ?? ""} /></label>
+        <label>Foto perfil<input name="profilePhoto" type="file" accept="image/*" /></label>
         <label className="wide">Direccion<input name="address" defaultValue={initial?.address ?? ""} /></label>
         <label className="wide">URL material grado<input name="siteUrl" defaultValue={initial?.siteUrl ?? ""} /></label>
         <label className="wide">Historial examenes<textarea name="examHistory" rows={4} defaultValue={initial?.examHistory ?? ""} /></label>

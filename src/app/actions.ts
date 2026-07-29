@@ -5,6 +5,7 @@ import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-cl
 import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
+import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function loginAction(formData: FormData) {
@@ -77,7 +78,15 @@ export async function updateKenshiAction(formData: FormData) {
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("members").update(payload).eq("id", memberId);
+  let photoUrl: string | null = null;
+  try {
+    photoUrl = await uploadMemberPhoto(getPhotoFile(formData), legacyId);
+  } catch (error) {
+    console.error("Error uploading kenshi photo", error);
+    redirect(`/kenshis/${legacyId}?error=photo`);
+  }
+  const updatePayload = photoUrl ? { ...payload, photo_url: photoUrl } : payload;
+  const { error } = await supabase.from("members").update(updatePayload).eq("id", memberId);
 
   if (error) {
     redirect(`/kenshis/${legacyId}?error=kenshi`);
@@ -113,11 +122,25 @@ export async function createKenshiAction(formData: FormData) {
   const { data, error } = await supabase
     .from("members")
     .insert(payload)
-    .select("legacy_id")
+    .select("id,legacy_id")
     .single();
 
   if (error || !data?.legacy_id) {
     redirect("/kenshis/nuevo?error=kenshi");
+  }
+
+  try {
+    const photoUrl = await uploadMemberPhoto(getPhotoFile(formData), data.legacy_id);
+    if (photoUrl) {
+      const { error: photoError } = await supabase
+        .from("members")
+        .update({ photo_url: photoUrl, updated_at: new Date().toISOString() })
+        .eq("id", data.id);
+      if (photoError) throw photoError;
+    }
+  } catch (error) {
+    console.error("Error uploading kenshi photo", error);
+    redirect(`/kenshis/${data.legacy_id}?error=photo`);
   }
 
   redirect(`/kenshis/${data.legacy_id}?saved=kenshi`);
@@ -319,4 +342,9 @@ function normalizeStatus(value: string) {
 function parseDateInput(value: string) {
   const trimmed = value.trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+}
+
+function getPhotoFile(formData: FormData) {
+  const file = formData.get("profilePhoto");
+  return file instanceof File ? file : null;
 }

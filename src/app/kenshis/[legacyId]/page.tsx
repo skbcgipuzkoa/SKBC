@@ -243,6 +243,7 @@ export default async function KenshiDetailPage({
                 examHistory: member.exam_history
               }}
             />
+            {notices.error === "photo" ? <p className="form-error">No se pudo subir la foto.</p> : null}
             {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank">Abrir ficha actual</a> : null}
           </article>
         </section>

@@ -1,4 +1,7 @@
 export function driveImageUrl(source: string | null | undefined) {
+  if (source?.startsWith("http://") || source?.startsWith("https://") || source?.startsWith("/")) {
+    if (!extractDriveFileId(source)) return source;
+  }
   const id = extractDriveFileId(source);
   return id ? `/api/drive-image/${id}` : null;
 }
