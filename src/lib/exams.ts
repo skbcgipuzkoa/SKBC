@@ -12,6 +12,26 @@ type MemberForExam = {
   attendance_history: string | null;
 };
 
+type ExternalExamPayload = {
+  memberId?: string;
+  legacyId?: string;
+  alumnoId?: string;
+  alumnoRef?: string;
+  alumno?: string;
+  nombre?: string;
+  fechaExamen?: string;
+  examDate?: string;
+  grado?: string;
+  grade?: string;
+  examinador?: string;
+  examiner?: string;
+  registradoPor?: string;
+  registeredBy?: string;
+  informeUrl?: string;
+  reportUrl?: string;
+  diplomaUrl?: string;
+};
+
 export async function registerExam({
   memberId,
   examDate,
@@ -67,6 +87,55 @@ export async function registerExam({
   return { memberLegacyId: member.legacy_id, cycleAttendance };
 }
 
+export async function registerExternalExam(payload: ExternalExamPayload) {
+  const examDate = normalizeDate(payload.fechaExamen ?? payload.examDate);
+  const grade = String(payload.grado ?? payload.grade ?? "").trim();
+  const examiner = String(payload.examinador ?? payload.examiner ?? "").trim() || null;
+  const registeredBy = String(payload.registradoPor ?? payload.registeredBy ?? "EXTERNAL EXAM APP").trim();
+
+  if (!examDate) throw new Error("Falta fechaExamen.");
+  if (!grade) throw new Error("Falta grado.");
+
+  const member = await findMemberForExternalExam(payload);
+  const result = await registerExam({
+    memberId: member.id,
+    examDate,
+    grade,
+    examiner,
+    registeredBy
+  });
+
+  const documentUrl = String(payload.informeUrl ?? payload.reportUrl ?? payload.diplomaUrl ?? "").trim();
+  if (documentUrl) {
+    const supabase = createAdminClient();
+    const { data: latestExam, error } = await supabase
+      .from("exams")
+      .select("id")
+      .eq("member_id", member.id)
+      .eq("exam_date", examDate)
+      .eq("grade", grade)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single<{ id: string }>();
+
+    if (error) throw error;
+    await saveExamReport({
+      examId: latestExam.id,
+      reportUrl: documentUrl,
+      reportType: null,
+      reportFileName: null,
+      createdBy: registeredBy
+    });
+  }
+
+  return {
+    ok: true,
+    memberId: member.id,
+    memberLegacyId: result.memberLegacyId,
+    cycleAttendance: result.cycleAttendance
+  };
+}
+
 export async function saveExamReport({
   examId,
   reportUrl,
@@ -110,4 +179,55 @@ async function countCycleAttendance(memberId: string, cycleStart: string | null,
 
 function appendHistory(current: string | null, next: string) {
   return current?.trim() ? `${current.trim()} | ${next}` : next;
+}
+
+async function findMemberForExternalExam(payload: ExternalExamPayload) {
+  const supabase = createAdminClient();
+  const directId = String(payload.memberId ?? "").trim();
+  const legacyId = String(payload.legacyId ?? payload.alumnoId ?? payload.alumnoRef ?? "").trim();
+
+  if (directId) {
+    const { data, error } = await supabase
+      .from("members")
+      .select("id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history")
+      .eq("id", directId)
+      .single<MemberForExam>();
+    if (!error && data) return data;
+  }
+
+  if (legacyId) {
+    const { data, error } = await supabase
+      .from("members")
+      .select("id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history")
+      .eq("legacy_id", legacyId)
+      .single<MemberForExam>();
+    if (!error && data) return data;
+  }
+
+  const name = normalizeText(String(payload.alumno ?? payload.nombre ?? ""));
+  if (name) {
+    const { data, error } = await supabase
+      .from("members")
+      .select("id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history")
+      .ilike("display_name", `%${name}%`)
+      .limit(2)
+      .returns<MemberForExam[]>();
+
+    if (error) throw error;
+    if (data.length === 1) return data[0];
+    if (data.length > 1) throw new Error("Hay mas de un kenshi que coincide con ese nombre.");
+  }
+
+  throw new Error("No se encontro el kenshi en el sistema nuevo.");
+}
+
+function normalizeDate(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+}
+
+function normalizeText(value: string) {
+  return value.trim().replace(/\s+/g, " ");
 }

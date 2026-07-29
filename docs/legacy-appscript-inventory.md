@@ -245,3 +245,7 @@ Remaining exam work:
 - `PEDIDO CINTURONES.js` stores belt-order lines and rebuilds a summary sheet.
 
 The new platform now has matching database fields for report metadata on each exam line, plus an internal report URL save flow in `/examenes`. Actual PDF file generation/upload and belt-order UI remain pending.
+
+## New direct-write exam integration
+
+The new platform exposes `POST /api/external/exams` for the separate exams app. This lets the exams app write directly into Supabase instead of relying on the legacy Sheet as the future source of truth. See `docs/external-exams-api.md`.
