@@ -50,8 +50,69 @@ export async function generateDiplomaForExam(examId: string) {
   const folderId = requiredEnv("DIPLOMA_EXAMEN_FOLDER_ID");
   const accessToken = await getGoogleAccessToken();
   const examDate = parseDate(exam.exam_date);
-  const fileBaseName = `Diploma_${formatCompactDate(examDate)}_${cleanFileName(exam.members.display_name)}_${cleanFileName(exam.grade)}`;
+  const diploma = await generateDiplomaPdf({
+    accessToken,
+    templateId,
+    folderId,
+    name: exam.members.display_name,
+    grade: exam.grade,
+    examDate,
+    registry: exam.members.legacy_id ?? ""
+  });
 
+  try {
+    const { error: updateError } = await supabase
+      .from("exams")
+      .update({
+        diploma_url: diploma.url,
+        report_url: diploma.url,
+        report_created_at: new Date().toISOString(),
+        report_created_by: "WEB SKBC",
+        report_type: "Diploma",
+        report_file_name: diploma.fileName
+      })
+      .eq("id", exam.id);
+
+    if (updateError) throw updateError;
+    return diploma.url;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function verifyDiplomaSetup() {
+  const templateId = requiredEnv("DIPLOMA_EXAMEN_TEMPLATE_ID");
+  const folderId = requiredEnv("DIPLOMA_EXAMEN_FOLDER_ID");
+  const accessToken = await getGoogleAccessToken();
+  return generateDiplomaPdf({
+    accessToken,
+    templateId,
+    folderId,
+    name: "PRUEBA SKBC",
+    grade: "5 KYU",
+    examDate: new Date(),
+    registry: "TEST"
+  });
+}
+
+async function generateDiplomaPdf({
+  accessToken,
+  templateId,
+  folderId,
+  name,
+  grade,
+  examDate,
+  registry
+}: {
+  accessToken: string;
+  templateId: string;
+  folderId: string;
+  name: string;
+  grade: string;
+  examDate: Date;
+  registry: string;
+}) {
+  const fileBaseName = `Diploma_${formatCompactDate(examDate)}_${cleanFileName(name)}_${cleanFileName(grade)}`;
   const copy = await googleJson<{ id: string }>(
     `https://www.googleapis.com/drive/v3/files/${templateId}/copy?supportsAllDrives=true`,
     accessToken,
@@ -72,12 +133,12 @@ export async function generateDiplomaForExam(examId: string) {
         method: "POST",
         body: JSON.stringify({
           requests: [
-            replaceText("{{NOMBRE}}", exam.members.display_name),
-            replaceText("{{GRADO_ES}}", exam.grade),
-            replaceText("{{GRADO_EU}}", translateGradeEu(exam.grade)),
+            replaceText("{{NOMBRE}}", name),
+            replaceText("{{GRADO_ES}}", grade),
+            replaceText("{{GRADO_EU}}", translateGradeEu(grade)),
             replaceText("{{FECHA_ES}}", formatDateEs(examDate)),
             replaceText("{{FECHA_EU}}", formatDateEu(examDate)),
-            replaceText("{{REGISTRO}}", exam.members.legacy_id ?? "")
+            replaceText("{{REGISTRO}}", registry)
           ]
         })
       }
@@ -103,21 +164,11 @@ export async function generateDiplomaForExam(examId: string) {
       }
     );
 
-    const pdfUrl = `https://drive.google.com/file/d/${pdfFile.id}/view`;
-    const { error: updateError } = await supabase
-      .from("exams")
-      .update({
-        diploma_url: pdfUrl,
-        report_url: pdfUrl,
-        report_created_at: new Date().toISOString(),
-        report_created_by: "WEB SKBC",
-        report_type: "Diploma",
-        report_file_name: `${fileBaseName}.pdf`
-      })
-      .eq("id", exam.id);
-
-    if (updateError) throw updateError;
-    return pdfUrl;
+    return {
+      id: pdfFile.id,
+      fileName: `${fileBaseName}.pdf`,
+      url: `https://drive.google.com/file/d/${pdfFile.id}/view`
+    };
   } finally {
     await googleJson(
       `https://www.googleapis.com/drive/v3/files/${copy.id}?supportsAllDrives=true`,
