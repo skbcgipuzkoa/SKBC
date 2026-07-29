@@ -43,6 +43,7 @@ export default async function ClasesPage() {
           <a href="/clases" aria-current="page">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
+          <a href="/auditoria">Auditoria</a>
           <a href="/importacion">Importacion</a>
           <a href="/novedades">Novedades</a>
         </nav>

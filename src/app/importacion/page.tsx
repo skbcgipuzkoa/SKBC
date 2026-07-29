@@ -59,6 +59,7 @@ export default async function ImportacionPage() {
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
+          <a href="/auditoria">Auditoria</a>
           <a href="/importacion" aria-current="page">Importacion</a>
           <a href="/novedades">Novedades</a>
         </nav>
