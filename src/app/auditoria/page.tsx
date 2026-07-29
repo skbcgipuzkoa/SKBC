@@ -116,6 +116,7 @@ export default async function AuditoriaPage() {
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
+          <a href="/proximos-examenes">Proximos examenes</a>
           <a href="/auditoria" aria-current="page">Auditoria</a>
           <a href="/importacion">Importacion</a>
           <a href="/novedades">Novedades</a>

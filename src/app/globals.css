@@ -768,6 +768,84 @@ th {
   margin: 0;
 }
 
+.semaphore-strip {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin: 18px 0 6px;
+}
+
+.semaphore-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-height: 72px;
+  padding: 12px;
+}
+
+.semaphore-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.semaphore-card strong {
+  font-size: 24px;
+}
+
+.semaphore-pill {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.semaphore-verde {
+  background: #e8f5ee;
+  border-color: #b9dec9;
+  color: var(--ok);
+}
+
+.semaphore-rojo {
+  background: #fff1f0;
+  border-color: #f1b7b2;
+  color: var(--danger);
+}
+
+.semaphore-gris,
+.semaphore-inactivo,
+.semaphore-sin-datos {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
+.semaphore-amarillo {
+  background: #fff7db;
+  border-color: #f2d36b;
+  color: var(--warn);
+}
+
+.semaphore-azul {
+  background: #eef4fb;
+  border-color: #bed6f2;
+  color: var(--brand-strong);
+}
+
+.exam-filters button {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.notice-cell {
+  min-width: 320px;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
@@ -831,8 +909,19 @@ th {
     .split-section,
     .import-grid,
     .form-grid,
-    .plan-board {
+    .plan-board,
+    .semaphore-strip {
     grid-template-columns: 1fr;
+  }
+
+  .semaphore-strip {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .semaphore-card {
+    flex: 0 0 142px;
   }
 
   .class-stepper {

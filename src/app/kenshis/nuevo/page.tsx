@@ -27,6 +27,7 @@ export default async function NewKenshiPage({
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
+          <a href="/proximos-examenes">Proximos examenes</a>
           <a href="/auditoria">Auditoria</a>
           <a href="/importacion">Importacion</a>
           <a href="/novedades">Novedades</a>
