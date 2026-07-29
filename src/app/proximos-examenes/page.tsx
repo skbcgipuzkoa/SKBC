@@ -87,6 +87,7 @@ export default async function ProximosExamenesPage({
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/proximos-examenes" aria-current="page">Proximos examenes</a>
+          <a href="/rankings">Rankings</a>
           <a href="/auditoria">Auditoria</a>
           <a href="/importacion">Importacion</a>
           <a href="/novedades">Novedades</a>
