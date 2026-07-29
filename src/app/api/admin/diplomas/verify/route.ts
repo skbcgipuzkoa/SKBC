@@ -3,6 +3,14 @@ import { hasInternalAccess } from "@/lib/auth";
 import { verifyDiplomaSetup } from "@/lib/diplomas";
 
 export async function POST() {
+  return verify();
+}
+
+export async function GET() {
+  return verify();
+}
+
+async function verify() {
   if (!(await hasInternalAccess())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
