@@ -251,6 +251,83 @@ export async function createClassAction(formData: FormData) {
   redirect(`/clases/${data.legacy_id}?saved=${classGroup === "adults" ? "class-prepared" : "class"}`);
 }
 
+export async function updateClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const classDate = parseDateInput(String(formData.get("classDate") ?? ""));
+  const name = String(formData.get("name") ?? "").trim();
+  const classType = String(formData.get("classType") ?? "").trim() || null;
+  const responsible = String(formData.get("responsible") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const closed = String(formData.get("closed") ?? "") === "true";
+
+  if (!classId || !legacyId || !classDate || !name) {
+    redirect(`/clases/${legacyId || ""}?error=class`);
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("classes")
+    .update({
+      class_date: classDate,
+      name,
+      class_type: classType,
+      responsible,
+      notes,
+      closed,
+      status: closed ? "completed" : "pending",
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", classId);
+
+  if (error) {
+    redirect(`/clases/${legacyId}?error=class`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=class-updated`);
+}
+
+export async function deleteClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const confirmText = String(formData.get("confirmText") ?? "").trim().toUpperCase();
+
+  if (!classId || !legacyId || confirmText !== "ELIMINAR") {
+    redirect(`/clases/${legacyId || ""}?error=delete`);
+  }
+
+  const supabase = createAdminClient();
+  const deletions = [
+    supabase.from("member_technical_history").delete().eq("class_id", classId),
+    supabase.from("dojo_technical_history").delete().eq("class_id", classId),
+    supabase.from("member_technique_assignments").delete().eq("class_id", classId),
+    supabase.from("attendance_logs").delete().eq("class_id", classId),
+    supabase.from("technical_plans").delete().eq("class_id", classId),
+    supabase.from("class_technical_groups").delete().eq("class_id", classId)
+  ];
+
+  const results = await Promise.all(deletions);
+  if (results.some((result) => result.error)) {
+    console.error("Error deleting class related rows", results.map((result) => result.error).filter(Boolean));
+    redirect(`/clases/${legacyId}?error=delete`);
+  }
+
+  const { error } = await supabase.from("classes").delete().eq("id", classId);
+  if (error) {
+    redirect(`/clases/${legacyId}?error=delete`);
+  }
+
+  redirect("/clases?saved=deleted");
+}
+
 export async function generateAdultGroupsAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

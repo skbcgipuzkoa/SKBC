@@ -5,10 +5,12 @@ import {
   addAttendanceAction,
   addBulkAttendanceAction,
   closeKidsClassAction,
+  deleteClassAction,
   generateAdultGroupsAction,
   generateAdultPlanAction,
   logoutAction,
   prepareAdultClassAction,
+  updateClassAction,
   updatePlanTechniqueAction
 } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
@@ -273,6 +275,7 @@ export default async function ClaseDetailPage({
 
         {query.saved === "plan" ? <p className="save-ok">Plan tecnico generado.</p> : null}
         {query.saved === "class" ? <p className="save-ok">Clase creada.</p> : null}
+        {query.saved === "class-updated" ? <p className="save-ok">Clase actualizada.</p> : null}
         {query.saved === "class-prepared" ? <p className="save-ok">Clase creada con grupos y plan tecnico.</p> : null}
         {query.saved === "prepare" ? <p className="save-ok">Clase preparada: grupos y plan tecnico listos.</p> : null}
         {query.saved === "groups" ? <p className="save-ok">Grupos tecnicos generados.</p> : null}
@@ -281,6 +284,12 @@ export default async function ClaseDetailPage({
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.error === "plan" ? (
           <p className="form-error">No se ha podido generar el plan tecnico para esta clase.</p>
+        ) : null}
+        {query.error === "class" ? (
+          <p className="form-error">No se ha podido actualizar la clase.</p>
+        ) : null}
+        {query.error === "delete" ? (
+          <p className="form-error">No se ha podido eliminar la clase. Escribe ELIMINAR y vuelve a intentarlo.</p>
         ) : null}
         {query.error === "prepare" ? (
           <p className="form-error">No se ha podido preparar la clase.</p>
@@ -304,6 +313,51 @@ export default async function ClaseDetailPage({
           <article className="card"><h2>Estado</h2><div className="metric small">{clase.status}</div></article>
           <article className="card"><h2>Asistentes</h2><div className="metric">{attendance?.length ?? 0}</div></article>
         </section>
+
+        <details className="card maintenance-panel">
+          <summary>Editar o eliminar clase</summary>
+          <div className="split-section">
+            <form action={updateClassAction} className="edit-form">
+              <input type="hidden" name="classId" value={clase.id} />
+              <input type="hidden" name="legacyId" value={legacyId} />
+              <div className="form-grid">
+                <label>Fecha<input name="classDate" type="date" defaultValue={clase.class_date} required /></label>
+                <label>Nombre<input name="name" defaultValue={clase.name} required /></label>
+                <label>
+                  Tipo
+                  <select name="classType" defaultValue={clase.class_type ?? "NORMAL"}>
+                    <option value="NORMAL">Normal</option>
+                    <option value="CONJUNTA">Conjunta</option>
+                    <option value="REPASO">Repaso</option>
+                    <option value="EXAMEN">Examen</option>
+                  </select>
+                </label>
+                <label>Responsable<input name="responsible" defaultValue={clase.responsible ?? ""} /></label>
+                <label>
+                  Estado cierre
+                  <select name="closed" defaultValue={clase.closed ? "true" : "false"}>
+                    <option value="false">Abierta</option>
+                    <option value="true">Cerrada</option>
+                  </select>
+                </label>
+                <label className="wide">Notas<textarea name="notes" rows={3} defaultValue={clase.notes ?? ""} /></label>
+              </div>
+              <div className="form-actions">
+                <button type="submit">Guardar cambios</button>
+              </div>
+            </form>
+            <form action={deleteClassAction} className="edit-form danger-zone">
+              <input type="hidden" name="classId" value={clase.id} />
+              <input type="hidden" name="legacyId" value={legacyId} />
+              <h2>Eliminar clase</h2>
+              <p className="muted">Elimina esta clase del sistema nuevo junto con asistencia, plan, grupos e historiales tecnicos asociados.</p>
+              <label>Confirmacion<input name="confirmText" placeholder="Escribe ELIMINAR" /></label>
+              <div className="form-actions">
+                <button type="submit">Eliminar clase</button>
+              </div>
+            </form>
+          </div>
+        </details>
 
         {clase.class_group === "adults" ? (
           <section className="class-stepper" aria-label="Flujo de clase">

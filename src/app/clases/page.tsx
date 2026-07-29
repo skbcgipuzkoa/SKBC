@@ -16,11 +16,16 @@ type Clase = {
   closed: boolean;
 };
 
-export default async function ClasesPage() {
+export default async function ClasesPage({
+  searchParams
+}: {
+  searchParams: Promise<{ saved?: string }>;
+}) {
   if (!(await hasInternalAccess())) {
     redirect("/");
   }
 
+  const params = await searchParams;
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("classes")
@@ -63,6 +68,7 @@ export default async function ClasesPage() {
             </form>
           </div>
         </div>
+        {params.saved === "deleted" ? <p className="save-ok">Clase eliminada del sistema nuevo.</p> : null}
         <section className="table-wrap">
           <table>
             <thead>
