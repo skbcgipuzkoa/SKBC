@@ -231,14 +231,24 @@ export async function createClassAction(formData: FormData) {
       notes,
       status: "pending"
     })
-    .select("legacy_id")
-    .single();
+    .select("id,legacy_id")
+    .single<{ id: string; legacy_id: string | null }>();
 
   if (error || !data?.legacy_id) {
     redirect("/clases/nueva?error=class");
   }
 
-  redirect(`/clases/${data.legacy_id}?saved=class`);
+  if (classGroup === "adults") {
+    try {
+      await generateAdultTechnicalGroups(data.id);
+      await generateAdultTechnicalPlan(data.id);
+    } catch (prepareError) {
+      console.error("Error auto preparing adult class", prepareError);
+      redirect(`/clases/${data.legacy_id}?saved=class&error=prepare`);
+    }
+  }
+
+  redirect(`/clases/${data.legacy_id}?saved=${classGroup === "adults" ? "class-prepared" : "class"}`);
 }
 
 export async function generateAdultGroupsAction(formData: FormData) {

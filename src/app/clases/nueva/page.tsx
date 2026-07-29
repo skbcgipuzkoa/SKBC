@@ -48,6 +48,9 @@ export default async function NuevaClasePage({
 
         <section className="card">
           <form action={createClassAction} className="edit-form">
+            <p className="muted">
+              En clases de adultos se generaran automaticamente los grupos tecnicos y el plan tecnico al crear la clase.
+            </p>
             <div className="form-grid">
               <label>Fecha<input name="classDate" type="date" required /></label>
               <label>Nombre<input name="name" placeholder="Clase adultos" required /></label>
@@ -71,7 +74,7 @@ export default async function NuevaClasePage({
               <label className="wide">Notas<textarea name="notes" rows={4} /></label>
             </div>
             <div className="form-actions">
-              <button type="submit">Crear clase</button>
+              <button type="submit">Crear clase con plan</button>
               {params.error ? <span className="form-error">No se pudo crear</span> : null}
             </div>
           </form>

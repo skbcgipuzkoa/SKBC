@@ -260,6 +260,7 @@ export default async function ClaseDetailPage({
 
         {query.saved === "plan" ? <p className="save-ok">Plan tecnico generado.</p> : null}
         {query.saved === "class" ? <p className="save-ok">Clase creada.</p> : null}
+        {query.saved === "class-prepared" ? <p className="save-ok">Clase creada con grupos y plan tecnico.</p> : null}
         {query.saved === "prepare" ? <p className="save-ok">Clase preparada: grupos y plan tecnico listos.</p> : null}
         {query.saved === "groups" ? <p className="save-ok">Grupos tecnicos generados.</p> : null}
         {query.saved === "attendance" ? <p className="save-ok">Asistencia anadida.</p> : null}
