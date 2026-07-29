@@ -8,10 +8,12 @@ Endpoint for the separate SKBC exams app to write directly into the new parallel
 
 ## Auth
 
-Send the token configured in Vercel as `SKBC_EXAMS_API_TOKEN`.
+Preferred: send the current Supabase auth access token from the exams app professor session.
+
+Fallback: send the token configured in Vercel as `SKBC_EXAMS_API_TOKEN`.
 
 ```http
-Authorization: Bearer <SKBC_EXAMS_API_TOKEN>
+Authorization: Bearer <EXAMS_APP_ACCESS_TOKEN_OR_SKBC_EXAMS_API_TOKEN>
 Content-Type: application/json
 ```
 

@@ -12,6 +12,11 @@ type MemberForExam = {
   attendance_history: string | null;
 };
 
+export const externalExamAuth = {
+  supabaseUrl: "https://zipfwmmwcawfbqofhwmc.supabase.co",
+  supabaseAnonKey: "sb_publishable_j1dhehxot0jJ98uUNblN4A_c3ujTqn6"
+};
+
 type ExternalExamPayload = {
   memberId?: string;
   legacyId?: string;
@@ -59,16 +64,36 @@ export async function registerExam({
   const nextExamHistory = appendHistory(member.exam_history, `${examDate} (${grade})`);
   const nextAttendanceHistory = appendHistory(member.attendance_history, `${grade}: ${cycleAttendance}`);
 
-  const { error: examError } = await supabase.from("exams").insert({
-    exam_date: examDate,
-    member_id: member.id,
-    grade,
-    cycle_attendance: cycleAttendance,
-    examiner,
-    registered_by: registeredBy
-  });
+  const { data: existingExam, error: existingExamError } = await supabase
+    .from("exams")
+    .select("id")
+    .eq("member_id", member.id)
+    .eq("exam_date", examDate)
+    .eq("grade", grade)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
 
-  if (examError) throw examError;
+  if (existingExamError) throw existingExamError;
+
+  let examId = existingExam?.id ?? null;
+  if (!examId) {
+    const { data: insertedExam, error: examError } = await supabase
+      .from("exams")
+      .insert({
+        exam_date: examDate,
+        member_id: member.id,
+        grade,
+        cycle_attendance: cycleAttendance,
+        examiner,
+        registered_by: registeredBy
+      })
+      .select("id")
+      .single<{ id: string }>();
+
+    if (examError) throw examError;
+    examId = insertedExam.id;
+  }
 
   const { error: updateError } = await supabase
     .from("members")
@@ -84,7 +109,7 @@ export async function registerExam({
 
   if (updateError) throw updateError;
 
-  return { memberLegacyId: member.legacy_id, cycleAttendance };
+  return { examId, memberLegacyId: member.legacy_id, cycleAttendance };
 }
 
 export async function registerExternalExam(payload: ExternalExamPayload) {
@@ -107,20 +132,8 @@ export async function registerExternalExam(payload: ExternalExamPayload) {
 
   const documentUrl = String(payload.informeUrl ?? payload.reportUrl ?? payload.diplomaUrl ?? "").trim();
   if (documentUrl) {
-    const supabase = createAdminClient();
-    const { data: latestExam, error } = await supabase
-      .from("exams")
-      .select("id")
-      .eq("member_id", member.id)
-      .eq("exam_date", examDate)
-      .eq("grade", grade)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single<{ id: string }>();
-
-    if (error) throw error;
     await saveExamReport({
-      examId: latestExam.id,
+      examId: result.examId,
       reportUrl: documentUrl,
       reportType: null,
       reportFileName: null,
@@ -130,6 +143,7 @@ export async function registerExternalExam(payload: ExternalExamPayload) {
 
   return {
     ok: true,
+    examId: result.examId,
     memberId: member.id,
     memberLegacyId: result.memberLegacyId,
     cycleAttendance: result.cycleAttendance
