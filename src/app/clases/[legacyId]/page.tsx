@@ -117,6 +117,66 @@ export default async function ClaseDetailPage({
   const completedPlan = (plan ?? []).filter((item) => item.completed).length;
   const groupedPlan = groupPlanByGrade(plan ?? []);
   const readyToClose = clase.class_group === "adults" && clase.plan_generated && !clase.closed;
+  const attendanceQuickPanel = (
+    <article className="card">
+      <h2>Asistencia final</h2>
+      {!clase.closed && clase.class_group === "adults" ? (
+        <>
+          <form action={addBulkAttendanceAction} className="quick-form">
+            <input type="hidden" name="classId" value={clase.id} />
+            <input type="hidden" name="legacyId" value={legacyId} />
+            <div className="attendance-checklist">
+              {pendingAdultMembers.length ? pendingAdultMembers.map((member) => (
+                <label className="check-row" key={member.id}>
+                  <input name="memberIds" type="checkbox" value={member.id} />
+                  <span>
+                    <strong>{member.display_name}</strong>
+                    <small>{member.grade ?? "Sin grado"}</small>
+                  </span>
+                </label>
+              )) : <p className="muted">Todos los adultos activos estan ya en asistencia.</p>}
+            </div>
+            <button type="submit" disabled={!pendingAdultMembers.length}>Anadir seleccionados</button>
+          </form>
+          <details className="advanced-details">
+            <summary>Anadir uno con grado entrenado manual</summary>
+            <form action={addAttendanceAction} className="quick-form">
+              <input type="hidden" name="classId" value={clase.id} />
+              <input type="hidden" name="legacyId" value={legacyId} />
+              <label>
+                Kenshi
+                <select name="memberId" required>
+                  <option value="">Seleccionar</option>
+                  {pendingAdultMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.display_name} - {member.grade ?? "Sin grado"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Grado oficial
+                <select name="officialGrade">
+                  <option value="">Usar ficha</option>
+                  {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                </select>
+              </label>
+              <label>
+                Grado entrenado
+                <select name="trainedGrade">
+                  <option value="">Automatico</option>
+                  {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                </select>
+              </label>
+              <button type="submit">Anadir uno</button>
+            </form>
+          </details>
+        </>
+      ) : (
+        <p className="muted">Clase cerrada o no adulta.</p>
+      )}
+    </article>
+  );
 
   return (
     <div className="shell">
@@ -228,8 +288,8 @@ export default async function ClaseDetailPage({
         <section className="class-stepper" aria-label="Flujo de clase">
           <span className={(groups ?? []).length ? "step done" : "step"}>1 Grupos</span>
           <span className={clase.plan_generated ? "step done" : "step"}>2 Plan</span>
-          <span className={(attendance ?? []).length ? "step done" : "step"}>3 Asistencia</span>
-          <span className={completedPlan ? "step done" : "step"}>4 Tecnicas</span>
+          <span className={completedPlan ? "step done" : "step"}>3 Tecnicas</span>
+          <span className={(attendance ?? []).length ? "step done" : "step"}>4 Asistencia</span>
           <span className={clase.closed ? "step done" : "step"}>5 Cierre</span>
         </section>
 
@@ -243,62 +303,11 @@ export default async function ClaseDetailPage({
             </div>
           </article>
           <article className="card">
-            <h2>Asistencia rapida</h2>
-            {!clase.closed && clase.class_group === "adults" ? (
-              <>
-                <form action={addBulkAttendanceAction} className="quick-form">
-                  <input type="hidden" name="classId" value={clase.id} />
-                  <input type="hidden" name="legacyId" value={legacyId} />
-                  <div className="attendance-checklist">
-                    {pendingAdultMembers.length ? pendingAdultMembers.map((member) => (
-                      <label className="check-row" key={member.id}>
-                        <input name="memberIds" type="checkbox" value={member.id} />
-                        <span>
-                          <strong>{member.display_name}</strong>
-                          <small>{member.grade ?? "Sin grado"}</small>
-                        </span>
-                      </label>
-                    )) : <p className="muted">Todos los adultos activos estan ya en asistencia.</p>}
-                  </div>
-                  <button type="submit" disabled={!pendingAdultMembers.length}>Anadir seleccionados</button>
-                </form>
-                <details className="advanced-details">
-                  <summary>Anadir uno con grado entrenado manual</summary>
-                  <form action={addAttendanceAction} className="quick-form">
-                    <input type="hidden" name="classId" value={clase.id} />
-                    <input type="hidden" name="legacyId" value={legacyId} />
-                    <label>
-                      Kenshi
-                      <select name="memberId" required>
-                        <option value="">Seleccionar</option>
-                        {pendingAdultMembers.map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {member.display_name} - {member.grade ?? "Sin grado"}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Grado oficial
-                      <select name="officialGrade">
-                        <option value="">Usar ficha</option>
-                        {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
-                      </select>
-                    </label>
-                    <label>
-                      Grado entrenado
-                      <select name="trainedGrade">
-                        <option value="">Automatico</option>
-                        {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
-                      </select>
-                    </label>
-                    <button type="submit">Anadir uno</button>
-                  </form>
-                </details>
-              </>
-            ) : (
-              <p className="muted">Clase cerrada o no adulta.</p>
-            )}
+            <h2>Orden de trabajo</h2>
+            <p className="muted">
+              Marca primero las tecnicas realizadas. Al final anade asistencia y cierra la clase para adjuntar el
+              trabajo al grado entrenado de cada kenshi.
+            </p>
           </article>
         </section>
 
@@ -323,7 +332,7 @@ export default async function ClaseDetailPage({
                     <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
                       <div>
                         <strong>{item.technique_name}</strong>
-                        <span>{item.category ?? "-"} · {item.proposal_type ?? item.focus ?? "-"}</span>
+                        <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
                       </div>
                       {clase.closed ? (
                         <span className={item.completed ? "mini-action selected" : "mini-action"}>
@@ -354,9 +363,20 @@ export default async function ClaseDetailPage({
             <article className="card">
               <h2>Sin plan tecnico</h2>
               <p className="muted">Pulsa Preparar clase para crear grupos y plan tecnico adulto.</p>
-            </article>
-          )}
+          </article>
+        )}
         </section>
+
+        <h2 className="section-title">Asistencia final</h2>
+        <section className="card mobile-attendance-note">
+          <h2>Como se adjuntan las tecnicas</h2>
+          <p className="muted">
+            Puedes marcar primero todas las tecnicas realizadas. Al cerrar la clase, el sistema cruza esas tecnicas con
+            la asistencia final y las adjunta al grado entrenado de cada asistente.
+          </p>
+        </section>
+
+        {attendanceQuickPanel}
 
         {readyToClose ? (
           <section className="mobile-close-bar" aria-label="Cerrar clase">
