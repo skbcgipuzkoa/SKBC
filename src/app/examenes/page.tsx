@@ -1,6 +1,6 @@
 import { LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
-import { logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
+import { generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,7 +25,7 @@ type ExamRow = {
 export default async function ExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; detail?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -87,8 +87,10 @@ export default async function ExamenesPage({
 
         {params.saved === "exam" ? <p className="save-ok">Examen registrado.</p> : null}
         {params.saved === "report" ? <p className="save-ok">Informe guardado en la linea de examen.</p> : null}
+        {params.saved === "diploma" ? <p className="save-ok">Diploma generado y guardado.</p> : null}
         {params.error === "exam" ? <p className="form-error">No se pudo registrar el examen.</p> : null}
         {params.error === "report" ? <p className="form-error">No se pudo guardar el informe.</p> : null}
+        {params.error === "diploma" ? <p className="form-error">No se pudo generar el diploma{params.detail ? `: ${params.detail}` : "."}</p> : null}
 
         <section className="card">
           <form action={registerExamAction} className="edit-form">
@@ -139,13 +141,19 @@ export default async function ExamenesPage({
                     {exam.diploma_url ? (
                       <a className="text-link" href={exam.diploma_url} target="_blank">Abrir documento</a>
                     ) : (
-                      <form action={saveExamReportAction} className="inline-report-form">
-                        <input type="hidden" name="examId" value={exam.id} />
-                        <input name="reportUrl" placeholder="URL informe PDF" required />
-                        <input name="reportType" placeholder="Tipo" defaultValue={exam.members?.class === "kids" ? "Ninos" : "Adultos"} />
-                        <input name="reportFileName" placeholder="Archivo" />
-                        <button type="submit">Guardar</button>
-                      </form>
+                      <div className="inline-report-stack">
+                        <form action={generateDiplomaAction}>
+                          <input type="hidden" name="examId" value={exam.id} />
+                          <button className="mini-action selected" type="submit">Generar diploma</button>
+                        </form>
+                        <form action={saveExamReportAction} className="inline-report-form">
+                          <input type="hidden" name="examId" value={exam.id} />
+                          <input name="reportUrl" placeholder="URL informe PDF" required />
+                          <input name="reportType" placeholder="Tipo" defaultValue={exam.members?.class === "kids" ? "Ninos" : "Adultos"} />
+                          <input name="reportFileName" placeholder="Archivo" />
+                          <button type="submit">Guardar URL</button>
+                        </form>
+                      </div>
                     )}
                   </td>
                 </tr>

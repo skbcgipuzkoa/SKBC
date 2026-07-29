@@ -709,6 +709,16 @@ th {
   min-width: 260px;
 }
 
+.inline-report-stack {
+  display: grid;
+  gap: 8px;
+  min-width: 260px;
+}
+
+.inline-report-stack form {
+  margin: 0;
+}
+
 .inline-report-form input {
   border: 1px solid var(--line);
   border-radius: 6px;

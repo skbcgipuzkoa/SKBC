@@ -5,6 +5,7 @@ import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-cl
 import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
+import { generateDiplomaForExam } from "@/lib/diplomas";
 import { registerExam, saveExamReport } from "@/lib/exams";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
@@ -639,6 +640,26 @@ export async function saveExamReportAction(formData: FormData) {
   }
 
   redirect("/examenes?saved=report");
+}
+
+export async function generateDiplomaAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const examId = String(formData.get("examId") ?? "").trim();
+  if (!examId) {
+    redirect("/examenes?error=diploma");
+  }
+
+  try {
+    await generateDiplomaForExam(examId);
+  } catch (error) {
+    console.error("Error generating diploma", error);
+    redirect(`/examenes?error=diploma&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  redirect("/examenes?saved=diploma");
 }
 
 export async function addAdultRankingBonusAction(formData: FormData) {
