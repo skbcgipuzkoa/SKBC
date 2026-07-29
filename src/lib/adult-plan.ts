@@ -149,7 +149,7 @@ export async function generateAdultTechnicalPlan(classId: string) {
       technique_grade: item.technique.grade,
       technique_base: item.technique.base_name,
       technique_name: item.technique.name,
-      category: item.technique.category,
+      category: categoryForDb(item.technique.category),
       content_type: item.technique.content_type,
       proposal_type: item.proposalType,
       focus: item.focus,
@@ -414,4 +414,9 @@ function resolveTargetGrade(grade: string) {
 
 function normalize(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase();
+}
+
+function categoryForDb(value: string | null | undefined) {
+  const normalized = normalize(value).toLowerCase();
+  return normalized || null;
 }
