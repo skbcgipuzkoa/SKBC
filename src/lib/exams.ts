@@ -84,11 +84,7 @@ export async function saveExamReport({
   const { error } = await supabase
     .from("exams")
     .update({
-      report_url: reportUrl,
-      report_created_at: new Date().toISOString(),
-      report_created_by: createdBy,
-      report_type: reportType,
-      report_file_name: reportFileName
+      diploma_url: reportUrl
     })
     .eq("id", examId);
 

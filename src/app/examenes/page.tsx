@@ -19,9 +19,6 @@ type ExamRow = {
   cycle_attendance: number | null;
   examiner: string | null;
   diploma_url: string | null;
-  report_url: string | null;
-  report_type: string | null;
-  report_file_name: string | null;
   members: { display_name: string; class: "kids" | "adults" } | null;
 };
 
@@ -46,7 +43,7 @@ export default async function ExamenesPage({
       .returns<MemberOption[]>(),
     supabase
       .from("exams")
-      .select("id,exam_date,grade,cycle_attendance,examiner,diploma_url,report_url,report_type,report_file_name,members(display_name,class)")
+      .select("id,exam_date,grade,cycle_attendance,examiner,diploma_url,members(display_name,class)")
       .order("exam_date", { ascending: false })
       .limit(20)
       .returns<ExamRow[]>()
@@ -134,8 +131,8 @@ export default async function ExamenesPage({
                   <td data-label="Asistencias">{exam.cycle_attendance ?? 0}</td>
                   <td data-label="Examinador">{exam.examiner ?? "-"}</td>
                   <td data-label="Informe">
-                    {exam.report_url ? (
-                      <a className="text-link" href={exam.report_url} target="_blank">Abrir informe</a>
+                    {exam.diploma_url ? (
+                      <a className="text-link" href={exam.diploma_url} target="_blank">Abrir documento</a>
                     ) : (
                       <form action={saveExamReportAction} className="inline-report-form">
                         <input type="hidden" name="examId" value={exam.id} />
@@ -145,7 +142,6 @@ export default async function ExamenesPage({
                         <button type="submit">Guardar</button>
                       </form>
                     )}
-                    {exam.diploma_url ? <a className="text-link" href={exam.diploma_url} target="_blank">Diploma</a> : null}
                   </td>
                 </tr>
               ))}
