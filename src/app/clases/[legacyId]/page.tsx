@@ -38,6 +38,12 @@ type PlanRow = {
   focus: string | null;
   completed: boolean;
   notes: string | null;
+  score_at_that_moment: number | null;
+  techniques: {
+    repetitions: number | null;
+    last_trained_on: string | null;
+    score: number | null;
+  } | null;
 };
 
 type GroupRow = {
@@ -86,7 +92,7 @@ export default async function ClaseDetailPage({
   const [{ data: plan }, { data: attendance }, { data: groups }, { data: adultMembers }] = await Promise.all([
     supabase
       .from("technical_plans")
-      .select("id,legacy_id,group_grade,target_grade,technique_name,category,proposal_type,focus,completed,notes")
+      .select("id,legacy_id,group_grade,target_grade,technique_name,category,proposal_type,focus,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score)")
       .eq("class_id", clase.id)
       .order("group_grade")
       .order("suggested_order")
@@ -333,6 +339,9 @@ export default async function ClaseDetailPage({
                       <div>
                         <strong>{item.technique_name}</strong>
                         <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
+                        <small className="plan-reason">
+                          Rep: {item.techniques?.repetitions ?? 0} - Ultima: {item.techniques?.last_trained_on ?? "nunca"} - Score: {item.techniques?.score ?? item.score_at_that_moment ?? 0}
+                        </small>
                       </div>
                       {clase.closed ? (
                         <span className={item.completed ? "mini-action selected" : "mini-action"}>

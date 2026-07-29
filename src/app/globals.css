@@ -653,6 +653,12 @@ th {
   font-size: 13px;
 }
 
+.plan-reason {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .mobile-close-bar {
   align-items: center;
   background: #0f1b2d;
