@@ -304,22 +304,51 @@ function selectBalancedProgram(candidates: Technique[]): SelectedTechnique[] {
   const selected: SelectedTechnique[] = [];
   const ids = new Set<string>();
 
-  addProgramItems(selected, ids, goho, 2);
-  addProgramItems(selected, ids, juho, 2);
-  fillSelection(selected, ids, candidates, "PROGRAMA", "PROGRAMA", true, 4, 3);
-  fillSelection(selected, ids, candidates, "PROGRAMA", "PROGRAMA", true, 4, 4);
+  if (goho.length < 2 || juho.length < 2) {
+    fillSelection(selected, ids, candidates, "PROGRAMA", "PROGRAMA", true, 4);
+    return selected.slice(0, 4);
+  }
+
+  fillBalancedSelection(selected, ids, candidates, 4, 2);
+  fillBalancedSelection(selected, ids, candidates, 4, 3);
+  fillBalancedSelection(selected, ids, candidates, 4, 4);
   fillSelection(selected, ids, candidates, "PROGRAMA", "PROGRAMA", true, 4);
 
   return selected.slice(0, 4);
 }
 
-function addProgramItems(
+function fillBalancedSelection(
   selected: SelectedTechnique[],
   ids: Set<string>,
   candidates: Technique[],
-  limit: number
+  totalLimit: number,
+  categoryLimit: number
 ) {
-  fillSelection(selected, ids, candidates, "PROGRAMA", "PROGRAMA", true, selected.length + limit);
+  while (selected.length < totalLimit) {
+    const next = nextBalancedCandidate(selected, ids, candidates, categoryLimit);
+    if (!next) return;
+    selected.push({ technique: next, proposalType: "PROGRAMA", focus: "PROGRAMA", usedForHistory: true });
+    ids.add(next.id);
+  }
+}
+
+function nextBalancedCandidate(
+  selected: SelectedTechnique[],
+  ids: Set<string>,
+  candidates: Technique[],
+  categoryLimit: number
+) {
+  const counts = selected.reduce<Record<string, number>>((acc, item) => {
+    const category = normalize(item.technique.category);
+    if (category === "GOHO" || category === "JUHO") acc[category] = (acc[category] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return candidates.find((technique) => {
+    const category = normalize(technique.category);
+    if (ids.has(technique.id) || !["GOHO", "JUHO"].includes(category)) return false;
+    return (counts[category] ?? 0) < categoryLimit;
+  });
 }
 
 function fillSelection(
