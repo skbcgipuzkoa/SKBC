@@ -1,6 +1,6 @@
 import { Award, Dumbbell, LogOut, Medal, Users } from "lucide-react";
 import { redirect } from "next/navigation";
-import { logoutAction } from "@/app/actions";
+import { addAdultRankingBonusAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -24,9 +24,18 @@ type TechnicalHistory = {
   class_date: string;
 };
 
-type Exam = {
+type Course = {
   member_id: string;
-  exam_date: string;
+  course_date: string;
+  kind: "national" | "international";
+};
+
+type AdultBonus = {
+  member_id: string;
+  bonus_date: string;
+  points: number;
+  reason: string;
+  members: { display_name: string; legacy_id: string | null } | null;
 };
 
 type ChildRanking = {
@@ -51,22 +60,30 @@ type AdultRankingRow = Member & {
   attendance30: number;
   attendance90: number;
   technical90: number;
-  exams365: number;
+  daysWithoutAttendance: number;
+  nationalCoursePoints: number;
+  internationalCoursePoints: number;
+  manualBonus: number;
   score: number;
 };
 
 const today = new Date();
 const date30 = daysAgo(30);
 const date90 = daysAgo(90);
-const date365 = daysAgo(365);
+const date180 = daysAgo(180);
 
-export default async function RankingsPage() {
+export default async function RankingsPage({
+  searchParams
+}: {
+  searchParams: Promise<{ saved?: string; error?: string }>;
+}) {
   if (!(await hasInternalAccess())) {
     redirect("/");
   }
 
+  const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: exams, error: examsError }, { data: childRankings, error: childError }] =
+  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }] =
     await Promise.all([
       supabase
         .from("members")
@@ -76,7 +93,6 @@ export default async function RankingsPage() {
       supabase
         .from("attendance_logs")
         .select("member_id,attended_on")
-        .gte("attended_on", date90)
         .returns<Attendance[]>(),
       supabase
         .from("member_technical_history")
@@ -85,10 +101,10 @@ export default async function RankingsPage() {
         .eq("completed", true)
         .returns<TechnicalHistory[]>(),
       supabase
-        .from("exams")
-        .select("member_id,exam_date")
-        .gte("exam_date", date365)
-        .returns<Exam[]>(),
+        .from("courses")
+        .select("member_id,course_date,kind")
+        .gte("course_date", date180)
+        .returns<Course[]>(),
       supabase
         .from("child_rankings")
         .select("member_id,attendance_30d,attendance_90d,last_attendance_on,days_without_attendance,score,position,level,members(legacy_id,ika_id,display_name,grade,status)")
@@ -101,10 +117,28 @@ export default async function RankingsPage() {
   if (membersError) throw membersError;
   if (attendanceError) throw attendanceError;
   if (technicalError) throw technicalError;
-  if (examsError) throw examsError;
+  if (coursesError) throw coursesError;
   if (childError) throw childError;
 
-  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], exams ?? []).slice(0, 10);
+  const [bonusResult, recentBonusResult] = await Promise.all([
+    supabase
+      .from("adult_ranking_bonuses")
+      .select("member_id,bonus_date,points,reason,members(display_name,legacy_id)")
+      .gte("bonus_date", date180)
+      .returns<AdultBonus[]>(),
+    supabase
+      .from("adult_ranking_bonuses")
+      .select("member_id,bonus_date,points,reason,members(display_name,legacy_id)")
+      .order("bonus_date", { ascending: false })
+      .limit(8)
+      .returns<AdultBonus[]>()
+  ]);
+  const bonusTableReady = !bonusResult.error && !recentBonusResult.error;
+  const bonuses = bonusTableReady ? bonusResult.data ?? [] : [];
+  const recentBonuses = bonusTableReady ? recentBonusResult.data ?? [] : [];
+
+  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? []).slice(0, 10);
+  const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const kids = (childRankings ?? []).filter((row) => row.members?.status === "active").slice(0, 10);
 
   return (
@@ -164,16 +198,55 @@ export default async function RankingsPage() {
           </article>
         </section>
 
+        {params.saved === "bonus" ? <p className="save-ok">Bonus manual guardado.</p> : null}
+        {params.error === "bonus" ? <p className="form-error">No se pudo guardar el bonus manual.</p> : null}
+        {!bonusTableReady ? <p className="form-error">Bonus manual pendiente de activar: falta aplicar la migracion de Supabase.</p> : null}
+
+        {bonusTableReady ? <section className="split-section">
+          <article className="card">
+            <h2>Sumar bonus adulto</h2>
+            <form action={addAdultRankingBonusAction} className="quick-form">
+              <label>
+                Kenshi
+                <select name="memberId" required>
+                  <option value="">Seleccionar adulto</option>
+                  {adultMembers.map((member) => (
+                    <option value={member.id} key={member.id}>
+                      {member.display_name} · ID {member.legacy_id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>Fecha<input name="bonusDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label>
+              <label>Puntos<input name="points" type="number" defaultValue="1" step="1" required /></label>
+              <label className="wide">Motivo<input name="reason" placeholder="Ayuda en clase, tatami, apoyo a ninos..." required /></label>
+              <button type="submit">Guardar bonus</button>
+            </form>
+          </article>
+          <article className="card">
+            <h2>Ultimos bonus</h2>
+            <div className="stack-list compact-stack">
+              {(recentBonuses ?? []).length ? (recentBonuses ?? []).map((bonus) => (
+                <div className="bonus-row" key={`${bonus.member_id}-${bonus.bonus_date}-${bonus.reason}`}>
+                  <strong>{bonus.points > 0 ? `+${bonus.points}` : bonus.points}</strong>
+                  <span>{bonus.members?.display_name ?? "-"} · {bonus.bonus_date}</span>
+                  <p>{bonus.reason}</p>
+                </div>
+              )) : <p className="muted">Sin bonus manuales todavia.</p>}
+            </div>
+          </article>
+        </section> : null}
+
         <section className="ranking-columns">
           <article>
             <div className="section-heading-row">
               <h2 className="section-title">Adultos</h2>
-              <span className="tag">Score = 30d*3 + 90d + tecnicas*2 + examenes*10</span>
+              <span className="tag">Legacy: 30d*3 + 90d - dias sin venir + cursos + bonus</span>
             </div>
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>#</th><th>Kenshi</th><th>Grado</th><th>Asist. 30/90</th><th>Tecnicas 90</th><th>Examenes</th><th>Score</th></tr>
+                  <tr><th>#</th><th>Kenshi</th><th>Grado</th><th>Asist. 30/90</th><th>Dias sin venir</th><th>Cursos</th><th>Bonus</th><th>Score</th></tr>
                 </thead>
                 <tbody>
                   {adults.length ? adults.map((row, index) => (
@@ -185,12 +258,13 @@ export default async function RankingsPage() {
                       </td>
                       <td data-label="Grado">{row.grade ?? "-"}</td>
                       <td data-label="Asist. 30/90">{row.attendance30}/{row.attendance90}</td>
-                      <td data-label="Tecnicas 90">{row.technical90}</td>
-                      <td data-label="Examenes">{row.exams365}</td>
+                      <td data-label="Dias sin venir">{row.daysWithoutAttendance}</td>
+                      <td data-label="Cursos">{row.nationalCoursePoints + row.internationalCoursePoints}</td>
+                      <td data-label="Bonus">{row.manualBonus}</td>
                       <td data-label="Score"><strong>{row.score}</strong></td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={7} className="muted">Sin datos suficientes para ranking adulto.</td></tr>
+                    <tr><td colSpan={8} className="muted">Sin datos suficientes para ranking adulto.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -234,29 +308,37 @@ export default async function RankingsPage() {
   );
 }
 
-function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], exams: Exam[]): AdultRankingRow[] {
-  const adults = members.filter((member) => member.class === "adults");
+function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[]): AdultRankingRow[] {
+  const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
-  const attendance90 = countByMember(attendance);
+  const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
   const technical90 = countByMember(technical);
-  const exams365 = countByMember(exams);
+  const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national").map((row) => ({ member_id: row.member_id, points: 1 })));
+  const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international").map((row) => ({ member_id: row.member_id, points: 3 })));
+  const manualBonus = sumByMember(bonuses.map((row) => ({ member_id: row.member_id, points: row.points })));
+  const lastAttendance = latestAttendanceByMember(attendance);
 
   return adults
     .map((member) => {
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
-      const e365 = exams365.get(member.id) ?? 0;
+      const daysWithoutAttendance = lastAttendance.get(member.id) ? daysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10)) : 0;
+      const nac = nationalCoursePoints.get(member.id) ?? 0;
+      const intl = internationalCoursePoints.get(member.id) ?? 0;
+      const bonus = manualBonus.get(member.id) ?? 0;
       return {
         ...member,
         attendance30: a30,
         attendance90: a90,
         technical90: t90,
-        exams365: e365,
-        score: a30 * 3 + a90 + t90 * 2 + e365 * 10
+        daysWithoutAttendance,
+        nationalCoursePoints: nac,
+        internationalCoursePoints: intl,
+        manualBonus: bonus,
+        score: a30 * 3 + a90 - daysWithoutAttendance + nac + intl + bonus
       };
     })
-    .filter((row) => row.score > 0)
     .sort((a, b) => b.score - a.score || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));
 }
 
@@ -264,6 +346,27 @@ function countByMember(rows: Array<{ member_id: string }>) {
   const counts = new Map<string, number>();
   rows.forEach((row) => counts.set(row.member_id, (counts.get(row.member_id) ?? 0) + 1));
   return counts;
+}
+
+function sumByMember(rows: Array<{ member_id: string; points: number }>) {
+  const counts = new Map<string, number>();
+  rows.forEach((row) => counts.set(row.member_id, (counts.get(row.member_id) ?? 0) + row.points));
+  return counts;
+}
+
+function latestAttendanceByMember(rows: Attendance[]) {
+  const latest = new Map<string, string>();
+  rows.forEach((row) => {
+    const current = latest.get(row.member_id);
+    if (!current || row.attended_on > current) latest.set(row.member_id, row.attended_on);
+  });
+  return latest;
+}
+
+function daysBetween(from: string, to: string) {
+  const start = new Date(`${from}T00:00:00`).getTime();
+  const end = new Date(`${to}T00:00:00`).getTime();
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.floor((end - start) / 86400000)) : 0;
 }
 
 function daysAgo(days: number) {

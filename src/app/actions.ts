@@ -641,6 +641,37 @@ export async function saveExamReportAction(formData: FormData) {
   redirect("/examenes?saved=report");
 }
 
+export async function addAdultRankingBonusAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const bonusDate = parseDateInput(String(formData.get("bonusDate") ?? "")) ?? new Date().toISOString().slice(0, 10);
+  const points = Number.parseInt(String(formData.get("points") ?? ""), 10);
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (!memberId || !Number.isFinite(points) || points === 0 || !reason) {
+    redirect("/rankings?error=bonus");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("adult_ranking_bonuses").insert({
+    member_id: memberId,
+    bonus_date: bonusDate,
+    points,
+    reason,
+    created_by: "WEB SKBC"
+  });
+
+  if (error) {
+    console.error("Error adding adult ranking bonus", error);
+    redirect("/rankings?error=bonus");
+  }
+
+  redirect("/rankings?saved=bonus");
+}
+
 function normalizeClass(value: string) {
   return value === "kids" || value === "adults" ? value : null;
 }

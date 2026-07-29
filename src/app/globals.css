@@ -864,6 +864,34 @@ th {
   margin-top: 4px;
 }
 
+.compact-stack {
+  gap: 8px;
+}
+
+.bonus-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 46px minmax(0, 1fr);
+  padding: 10px;
+}
+
+.bonus-row strong {
+  color: var(--ok);
+  font-size: 18px;
+  grid-row: span 2;
+}
+
+.bonus-row span {
+  font-weight: 700;
+}
+
+.bonus-row p {
+  color: var(--muted);
+  margin: 0;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
