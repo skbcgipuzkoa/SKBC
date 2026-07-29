@@ -672,8 +672,49 @@ export async function addAdultRankingBonusAction(formData: FormData) {
   redirect("/rankings?saved=bonus");
 }
 
+export async function createCourseAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const kind = normalizeCourseKind(String(formData.get("kind") ?? ""));
+  const courseDate = parseDateInput(String(formData.get("courseDate") ?? ""));
+  const location = String(formData.get("location") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const sensei = String(formData.get("sensei") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!memberId || !kind || !courseDate || !location || !title) {
+    redirect("/cursos?error=course");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("courses").insert({
+    kind,
+    course_date: courseDate,
+    member_id: memberId,
+    location,
+    title,
+    sensei,
+    notes,
+    legacy_id: `CURS-${Date.now()}`
+  });
+
+  if (error) {
+    console.error("Error creating course", error);
+    redirect("/cursos?error=course");
+  }
+
+  redirect("/cursos?saved=course");
+}
+
 function normalizeClass(value: string) {
   return value === "kids" || value === "adults" ? value : null;
+}
+
+function normalizeCourseKind(value: string) {
+  return value === "national" || value === "international" ? value : null;
 }
 
 function normalizeStatus(value: string) {

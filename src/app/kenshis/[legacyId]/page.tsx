@@ -192,6 +192,7 @@ export default async function KenshiDetailPage({
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
+          <a href="/cursos">Cursos</a>
           <a href="/proximos-examenes">Proximos examenes</a>
           <a href="/rankings">Rankings</a>
           <a href="/auditoria">Auditoria</a>
