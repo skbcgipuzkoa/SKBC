@@ -5,7 +5,7 @@ import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-cl
 import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
-import { registerExam } from "@/lib/exams";
+import { registerExam, saveExamReport } from "@/lib/exams";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -362,6 +362,36 @@ export async function registerExamAction(formData: FormData) {
   }
 
   redirect(memberLegacyId ? `/kenshis/${memberLegacyId}?saved=exam` : "/examenes?saved=exam");
+}
+
+export async function saveExamReportAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const examId = String(formData.get("examId") ?? "");
+  const reportUrl = String(formData.get("reportUrl") ?? "").trim();
+  const reportType = String(formData.get("reportType") ?? "").trim() || null;
+  const reportFileName = String(formData.get("reportFileName") ?? "").trim() || null;
+
+  if (!examId || !reportUrl) {
+    redirect("/examenes?error=report");
+  }
+
+  try {
+    await saveExamReport({
+      examId,
+      reportUrl,
+      reportType,
+      reportFileName,
+      createdBy: "WEB SKBC"
+    });
+  } catch (error) {
+    console.error("Error saving exam report", error);
+    redirect("/examenes?error=report");
+  }
+
+  redirect("/examenes?saved=report");
 }
 
 function normalizeClass(value: string) {

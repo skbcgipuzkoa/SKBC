@@ -1,6 +1,6 @@
 import { LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
-import { logoutAction, registerExamAction } from "@/app/actions";
+import { logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,10 +13,15 @@ type MemberOption = {
 };
 
 type ExamRow = {
+  id: string;
   exam_date: string;
   grade: string;
   cycle_attendance: number | null;
   examiner: string | null;
+  diploma_url: string | null;
+  report_url: string | null;
+  report_type: string | null;
+  report_file_name: string | null;
   members: { display_name: string; class: "kids" | "adults" } | null;
 };
 
@@ -41,7 +46,7 @@ export default async function ExamenesPage({
       .returns<MemberOption[]>(),
     supabase
       .from("exams")
-      .select("exam_date,grade,cycle_attendance,examiner,members(display_name,class)")
+      .select("id,exam_date,grade,cycle_attendance,examiner,diploma_url,report_url,report_type,report_file_name,members(display_name,class)")
       .order("exam_date", { ascending: false })
       .limit(20)
       .returns<ExamRow[]>()
@@ -79,7 +84,9 @@ export default async function ExamenesPage({
         </div>
 
         {params.saved === "exam" ? <p className="save-ok">Examen registrado.</p> : null}
+        {params.saved === "report" ? <p className="save-ok">Informe guardado en la linea de examen.</p> : null}
         {params.error === "exam" ? <p className="form-error">No se pudo registrar el examen.</p> : null}
+        {params.error === "report" ? <p className="form-error">No se pudo guardar el informe.</p> : null}
 
         <section className="card">
           <form action={registerExamAction} className="edit-form">
@@ -115,7 +122,7 @@ export default async function ExamenesPage({
         <section className="table-wrap">
           <table>
             <thead>
-              <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th></tr>
+              <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th></tr>
             </thead>
             <tbody>
               {(exams ?? []).map((exam) => (
@@ -126,6 +133,20 @@ export default async function ExamenesPage({
                   <td data-label="Grado">{exam.grade}</td>
                   <td data-label="Asistencias">{exam.cycle_attendance ?? 0}</td>
                   <td data-label="Examinador">{exam.examiner ?? "-"}</td>
+                  <td data-label="Informe">
+                    {exam.report_url ? (
+                      <a className="text-link" href={exam.report_url} target="_blank">Abrir informe</a>
+                    ) : (
+                      <form action={saveExamReportAction} className="inline-report-form">
+                        <input type="hidden" name="examId" value={exam.id} />
+                        <input name="reportUrl" placeholder="URL informe PDF" required />
+                        <input name="reportType" placeholder="Tipo" defaultValue={exam.members?.class === "kids" ? "Ninos" : "Adultos"} />
+                        <input name="reportFileName" placeholder="Archivo" />
+                        <button type="submit">Guardar</button>
+                      </form>
+                    )}
+                    {exam.diploma_url ? <a className="text-link" href={exam.diploma_url} target="_blank">Diploma</a> : null}
+                  </td>
                 </tr>
               ))}
             </tbody>

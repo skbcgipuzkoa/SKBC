@@ -67,6 +67,34 @@ export async function registerExam({
   return { memberLegacyId: member.legacy_id, cycleAttendance };
 }
 
+export async function saveExamReport({
+  examId,
+  reportUrl,
+  reportType,
+  reportFileName,
+  createdBy
+}: {
+  examId: string;
+  reportUrl: string;
+  reportType: string | null;
+  reportFileName: string | null;
+  createdBy: string;
+}) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("exams")
+    .update({
+      report_url: reportUrl,
+      report_created_at: new Date().toISOString(),
+      report_created_by: createdBy,
+      report_type: reportType,
+      report_file_name: reportFileName
+    })
+    .eq("id", examId);
+
+  if (error) throw error;
+}
+
 async function countCycleAttendance(memberId: string, cycleStart: string | null, examDate: string) {
   const supabase = createAdminClient();
   let query = supabase

@@ -228,4 +228,20 @@ The first replicated version in the new platform now supports:
 Remaining exam work:
 
 - Full `generarAvisos()` replica with calendar, next exam, traffic light and adult technical progress.
-- Diploma/report PDF generation.
+- PDF generation itself.
+- Belt order summary workflow.
+
+## Exam web/report module rules extracted
+
+- `FORMULARIO EXAMEN.js` exposes `registrarExamenDesdeWeb(payload)` and validates student by name, student ref or ID.
+- `FICHA_ALUMNO.js` exposes `LISTAR_ALUMNOS_EXAMEN_WEB` to list candidate students by program and current grade.
+- `GUARDAR_INFORME_EXAMEN_WEB.js` stores a PDF report and writes these fields back into the matching `EXAMENES` row:
+  - `InformePDF`.
+  - `InformeCreadoEl`.
+  - `InformeCreadoPor`.
+  - `InformeTipo`.
+  - `InformeNombreArchivo`.
+- The student ficha reads updated `EXAMENES` rows, so a saved report becomes visible in the student profile.
+- `PEDIDO CINTURONES.js` stores belt-order lines and rebuilds a summary sheet.
+
+The new platform now has matching database fields for report metadata on each exam line, plus an internal report URL save flow in `/examenes`. Actual PDF file generation/upload and belt-order UI remain pending.

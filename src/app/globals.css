@@ -507,6 +507,28 @@ th {
   font-weight: 700;
 }
 
+.inline-report-form {
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.inline-report-form input {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.inline-report-form button {
+  background: var(--brand);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  min-height: 34px;
+}
+
 .save-ok {
   color: var(--ok);
   font-size: 13px;
