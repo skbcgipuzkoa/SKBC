@@ -6,6 +6,7 @@ import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-grou
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { registerExam, saveExamReport } from "@/lib/exams";
+import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -112,6 +113,12 @@ export async function updateKenshiAction(formData: FormData) {
     redirect(`/kenshis/${legacyId}?error=kenshi`);
   }
 
+  try {
+    await recalculateMemberExamStatus(memberId);
+  } catch (error) {
+    console.error("Error recalculating kenshi exam status", error);
+  }
+
   redirect(`/kenshis/${legacyId}?saved=kenshi`);
 }
 
@@ -168,6 +175,12 @@ export async function createKenshiAction(formData: FormData) {
   } catch (error) {
     console.error("Error uploading kenshi photo", error);
     redirect(`/kenshis/${data.legacy_id}?error=photo`);
+  }
+
+  try {
+    await recalculateMemberExamStatus(data.id);
+  } catch (error) {
+    console.error("Error recalculating new kenshi exam status", error);
   }
 
   redirect(`/kenshis/${data.legacy_id}?saved=kenshi`);
@@ -525,6 +538,7 @@ export async function closeAdultClassAction(formData: FormData) {
 
   try {
     await closeAdultClass(classId);
+    await recalculateClassExamStatus(classId);
   } catch (error) {
     console.error("Error closing adult class", error);
     redirect(`/clases/${legacyId}?error=close`);
@@ -554,6 +568,12 @@ export async function closeKidsClassAction(formData: FormData) {
 
   if (error) {
     redirect(`/clases/${legacyId}?error=close`);
+  }
+
+  try {
+    await recalculateClassExamStatus(classId);
+  } catch (error) {
+    console.error("Error recalculating kids class exam status", error);
   }
 
   redirect(`/clases/${legacyId}?saved=close`);

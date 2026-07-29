@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
 
 type MemberForExam = {
   id: string;
@@ -108,6 +109,8 @@ export async function registerExam({
     .eq("id", member.id);
 
   if (updateError) throw updateError;
+
+  await recalculateMemberExamStatus(member.id);
 
   return { examId, memberLegacyId: member.legacy_id, cycleAttendance };
 }
