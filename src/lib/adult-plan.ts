@@ -128,8 +128,8 @@ export async function generateAdultTechnicalPlan(classId: string) {
   }
 
   const enrichedTechniques = await addRecentPlanHistory(clase.id, techniques ?? []);
-  const startLegacyNumber = await getNextPlanLegacyNumber();
-  let legacyCounter = startLegacyNumber;
+  const legacyPrefix = `PLA_${Date.now().toString(36).toUpperCase()}`;
+  let legacyCounter = 1;
 
   const inserts = groups.flatMap((group) => {
     const gradeWork = resolveWorkGrade(group.grade);
@@ -137,7 +137,7 @@ export async function generateAdultTechnicalPlan(classId: string) {
     const selected = selectTechniquesForGroup(gradeWork, clase.class_type, enrichedTechniques);
 
     return selected.map((item, index) => ({
-      legacy_id: `PLA_${String(legacyCounter++).padStart(6, "0")}`,
+      legacy_id: `${legacyPrefix}_${String(legacyCounter++).padStart(3, "0")}`,
       class_id: clase.id,
       technical_group_id: group.id,
       class_date: clase.class_date,
@@ -215,24 +215,6 @@ async function addRecentPlanHistory(currentClassId: string, techniques: Techniqu
       plan_last_trained_on: maxDate(technique.last_trained_on, recent?.lastDate ?? null)
     };
   });
-}
-
-async function getNextPlanLegacyNumber() {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("technical_plans")
-    .select("legacy_id")
-    .like("legacy_id", "PLA_%")
-    .returns<{ legacy_id: string | null }[]>();
-
-  if (error) throw error;
-
-  const max = (data ?? []).reduce((highest, row) => {
-    const match = row.legacy_id?.match(/^PLA_(\d+)$/);
-    return match ? Math.max(highest, Number.parseInt(match[1], 10)) : highest;
-  }, 0);
-
-  return max + 1;
 }
 
 function selectTechniquesForGroup(
