@@ -195,7 +195,7 @@ function appendHistory(current: string | null, next: string) {
   return current?.trim() ? `${current.trim()} | ${next}` : next;
 }
 
-async function findMemberForExternalExam(payload: ExternalExamPayload) {
+export async function findMemberForExternalExam(payload: ExternalExamPayload) {
   const supabase = createAdminClient();
   const directId = String(payload.memberId ?? "").trim();
   const legacyId = String(payload.legacyId ?? payload.alumnoId ?? payload.alumnoRef ?? "").trim();
