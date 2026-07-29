@@ -4,6 +4,7 @@ import {
   closeAdultClassAction,
   addAttendanceAction,
   addBulkAttendanceAction,
+  closeKidsClassAction,
   generateAdultGroupsAction,
   generateAdultPlanAction,
   logoutAction,
@@ -56,13 +57,14 @@ type GroupRow = {
 type AttendanceRow = {
   attended_on: string;
   member_id: string;
-  members: { first_name: string; last_name: string | null } | null;
   official_grade: string | null;
   trained_grade: string | null;
+  members: { first_name: string; last_name: string | null; legacy_id: string | null; class: "kids" | "adults" } | null;
 };
 
 type MemberOption = {
   id: string;
+  legacy_id: string | null;
   display_name: string;
   grade: string | null;
 };
@@ -89,7 +91,7 @@ export default async function ClaseDetailPage({
 
   if (error || !clase) notFound();
 
-  const [{ data: plan }, { data: attendance }, { data: groups }, { data: adultMembers }] = await Promise.all([
+  const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }] = await Promise.all([
     supabase
       .from("technical_plans")
       .select("id,legacy_id,group_grade,target_grade,technique_name,category,proposal_type,focus,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score)")
@@ -99,7 +101,7 @@ export default async function ClaseDetailPage({
       .returns<PlanRow[]>(),
     supabase
       .from("attendance_logs")
-      .select("attended_on,member_id,official_grade,trained_grade,members(first_name,last_name)")
+      .select("attended_on,member_id,official_grade,trained_grade,members(first_name,last_name,legacy_id,class)")
       .eq("class_id", clase.id)
       .order("attended_on", { ascending: false })
       .returns<AttendanceRow[]>(),
@@ -111,28 +113,29 @@ export default async function ClaseDetailPage({
       .returns<GroupRow[]>(),
     supabase
       .from("members")
-      .select("id,display_name,grade")
-      .eq("class", "adults")
+      .select("id,legacy_id,display_name,grade")
+      .eq("class", clase.class_group)
       .eq("status", "active")
       .order("display_name")
       .returns<MemberOption[]>()
   ]);
 
   const attendanceMemberIds = new Set((attendance ?? []).map((item) => item.member_id));
-  const pendingAdultMembers = (adultMembers ?? []).filter((member) => !attendanceMemberIds.has(member.id));
+  const pendingClassMembers = (classMembers ?? []).filter((member) => !attendanceMemberIds.has(member.id));
   const completedPlan = (plan ?? []).filter((item) => item.completed).length;
   const groupedPlan = groupPlanByGrade(plan ?? []);
   const readyToClose = clase.class_group === "adults" && clase.plan_generated && !clase.closed;
+  const readyToCloseKids = clase.class_group === "kids" && !clase.closed;
   const attendanceQuickPanel = (
     <article className="card">
       <h2>Asistencia final</h2>
-      {!clase.closed && clase.class_group === "adults" ? (
+      {!clase.closed ? (
         <>
           <form action={addBulkAttendanceAction} className="quick-form">
             <input type="hidden" name="classId" value={clase.id} />
             <input type="hidden" name="legacyId" value={legacyId} />
             <div className="attendance-checklist">
-              {pendingAdultMembers.length ? pendingAdultMembers.map((member) => (
+              {pendingClassMembers.length ? pendingClassMembers.map((member) => (
                 <label className="check-row" key={member.id}>
                   <input name="memberIds" type="checkbox" value={member.id} />
                   <span>
@@ -140,11 +143,11 @@ export default async function ClaseDetailPage({
                     <small>{member.grade ?? "Sin grado"}</small>
                   </span>
                 </label>
-              )) : <p className="muted">Todos los adultos activos estan ya en asistencia.</p>}
+              )) : <p className="muted">Todos los kenshis activos de esta clase estan ya en asistencia.</p>}
             </div>
-            <button type="submit" disabled={!pendingAdultMembers.length}>Anadir seleccionados</button>
+            <button type="submit" disabled={!pendingClassMembers.length}>Anadir seleccionados</button>
           </form>
-          <details className="advanced-details">
+          {clase.class_group === "adults" ? <details className="advanced-details">
             <summary>Anadir uno con grado entrenado manual</summary>
             <form action={addAttendanceAction} className="quick-form">
               <input type="hidden" name="classId" value={clase.id} />
@@ -153,7 +156,7 @@ export default async function ClaseDetailPage({
                 Kenshi
                 <select name="memberId" required>
                   <option value="">Seleccionar</option>
-                  {pendingAdultMembers.map((member) => (
+                  {pendingClassMembers.map((member) => (
                     <option key={member.id} value={member.id}>
                       {member.display_name} - {member.grade ?? "Sin grado"}
                     </option>
@@ -176,10 +179,10 @@ export default async function ClaseDetailPage({
               </label>
               <button type="submit">Anadir uno</button>
             </form>
-          </details>
+          </details> : null}
         </>
       ) : (
-        <p className="muted">Clase cerrada o no adulta.</p>
+        <p className="muted">Clase cerrada.</p>
       )}
     </article>
   );
@@ -250,6 +253,16 @@ export default async function ClaseDetailPage({
                 </button>
               </form>
             ) : null}
+            {readyToCloseKids ? (
+              <form action={closeKidsClassAction}>
+                <input type="hidden" name="classId" value={clase.id} />
+                <input type="hidden" name="legacyId" value={legacyId} />
+                <button className="primary-link button-reset" type="submit">
+                  <Check aria-hidden="true" size={16} />
+                  Cerrar clase
+                </button>
+              </form>
+            ) : null}
             <form action={logoutAction}>
               <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
                 <LogOut aria-hidden="true" size={18} />
@@ -292,15 +305,23 @@ export default async function ClaseDetailPage({
           <article className="card"><h2>Asistentes</h2><div className="metric">{attendance?.length ?? 0}</div></article>
         </section>
 
-        <section className="class-stepper" aria-label="Flujo de clase">
-          <span className={(groups ?? []).length ? "step done" : "step"}>1 Grupos</span>
-          <span className={clase.plan_generated ? "step done" : "step"}>2 Plan</span>
-          <span className={completedPlan ? "step done" : "step"}>3 Tecnicas</span>
-          <span className={(attendance ?? []).length ? "step done" : "step"}>4 Asistencia</span>
-          <span className={clase.closed ? "step done" : "step"}>5 Cierre</span>
-        </section>
+        {clase.class_group === "adults" ? (
+          <section className="class-stepper" aria-label="Flujo de clase">
+            <span className={(groups ?? []).length ? "step done" : "step"}>1 Grupos</span>
+            <span className={clase.plan_generated ? "step done" : "step"}>2 Plan</span>
+            <span className={completedPlan ? "step done" : "step"}>3 Tecnicas</span>
+            <span className={(attendance ?? []).length ? "step done" : "step"}>4 Asistencia</span>
+            <span className={clase.closed ? "step done" : "step"}>5 Cierre</span>
+          </section>
+        ) : (
+          <section className="class-stepper" aria-label="Flujo de clase infantil">
+            <span className={(attendance ?? []).length ? "step done" : "step"}>1 Asistencia</span>
+            <span className="step done">2 Fichas</span>
+            <span className={clase.closed ? "step done" : "step"}>3 Cierre</span>
+          </section>
+        )}
 
-        <section className="split-section class-workbench">
+        {clase.class_group === "adults" ? <section className="split-section class-workbench">
           <article className="card">
             <h2>Grupos tecnicos</h2>
             <div className="chip-list">
@@ -316,74 +337,92 @@ export default async function ClaseDetailPage({
               trabajo al grado entrenado de cada kenshi.
             </p>
           </article>
-        </section>
-
-        <div className="section-heading-row">
-          <h2 className="section-title">Plan tecnico</h2>
-          <span className="status">{completedPlan}/{(plan ?? []).length} realizadas</span>
-        </div>
-        <section className="plan-board">
-          {groupedPlan.length ? groupedPlan.map(([grade, items]) => {
-            const groupCompleted = items.filter((item) => item.completed).length;
-            return (
-              <article className="card plan-group" key={grade}>
-                <div className="plan-group-head">
-                  <div>
-                    <span className="tag">{grade}</span>
-                    <h2>{items[0]?.target_grade ? `Objetivo ${items[0].target_grade}` : "Grupo tecnico"}</h2>
-                  </div>
-                  <strong>{groupCompleted}/{items.length}</strong>
-                </div>
-                <div className="plan-card-list">
-                  {items.map((item) => (
-                    <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
-                      <div>
-                        <strong>{item.technique_name}</strong>
-                        <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
-                        <small className="plan-reason">
-                          Rep: {item.techniques?.repetitions ?? 0} - Ultima: {item.techniques?.last_trained_on ?? "nunca"} - Score: {item.techniques?.score ?? item.score_at_that_moment ?? 0}
-                        </small>
-                      </div>
-                      {clase.closed ? (
-                        <span className={item.completed ? "mini-action selected" : "mini-action"}>
-                          {item.completed ? "Si" : "No"}
-                        </span>
-                      ) : (
-                        <form action={updatePlanTechniqueAction}>
-                          <input type="hidden" name="planId" value={item.id} />
-                          <input type="hidden" name="legacyId" value={legacyId} />
-                          <input type="hidden" name="completed" value={item.completed ? "false" : "true"} />
-                          <button
-                            className={item.completed ? "mini-action selected" : "mini-action"}
-                            type="submit"
-                            title={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
-                            aria-label={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
-                          >
-                            {item.completed ? <Check aria-hidden="true" size={15} /> : <X aria-hidden="true" size={15} />}
-                            {item.completed ? "Hecha" : "Marcar"}
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </article>
-            );
-          }) : (
-            <article className="card">
-              <h2>Sin plan tecnico</h2>
-              <p className="muted">Pulsa Preparar clase para crear grupos y plan tecnico adulto.</p>
-          </article>
+        </section> : (
+          <section className="card">
+            <h2>Clase infantil</h2>
+            <p className="muted">Esta sesion no usa plan tecnico. Registra asistencia y abre las fichas para revisar constancia, avisos y datos del alumno.</p>
+          </section>
         )}
-        </section>
 
-        <h2 className="section-title">Asistencia final</h2>
+        {clase.class_group === "adults" ? (
+          <>
+            <div className="section-heading-row">
+              <h2 className="section-title">Plan tecnico</h2>
+              <span className="status">{completedPlan}/{(plan ?? []).length} realizadas</span>
+            </div>
+            <section className="plan-board">
+              {groupedPlan.length ? groupedPlan.map(([grade, items]) => {
+                const groupCompleted = items.filter((item) => item.completed).length;
+                return (
+                  <article className="card plan-group" key={grade}>
+                    <div className="plan-group-head">
+                      <div>
+                        <span className="tag">{grade}</span>
+                        <h2>{items[0]?.target_grade ? `Objetivo ${items[0].target_grade}` : "Grupo tecnico"}</h2>
+                      </div>
+                      <strong>{groupCompleted}/{items.length}</strong>
+                    </div>
+                    <div className="plan-card-list">
+                      {items.map((item) => (
+                        <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
+                          <div>
+                            <strong>{item.technique_name}</strong>
+                            <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
+                            <small className="plan-reason">
+                              Rep: {item.techniques?.repetitions ?? 0} - Ultima: {item.techniques?.last_trained_on ?? "nunca"} - Score: {item.techniques?.score ?? item.score_at_that_moment ?? 0}
+                            </small>
+                          </div>
+                          {clase.closed ? (
+                            <span className={item.completed ? "mini-action selected" : "mini-action"}>
+                              {item.completed ? "Si" : "No"}
+                            </span>
+                          ) : (
+                            <form action={updatePlanTechniqueAction}>
+                              <input type="hidden" name="planId" value={item.id} />
+                              <input type="hidden" name="legacyId" value={legacyId} />
+                              <input type="hidden" name="completed" value={item.completed ? "false" : "true"} />
+                              <button
+                                className={item.completed ? "mini-action selected" : "mini-action"}
+                                type="submit"
+                                title={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
+                                aria-label={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
+                              >
+                                {item.completed ? <Check aria-hidden="true" size={15} /> : <X aria-hidden="true" size={15} />}
+                                {item.completed ? "Hecha" : "Marcar"}
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                );
+              }) : (
+                <article className="card">
+                  <h2>Sin plan tecnico</h2>
+                  <p className="muted">Pulsa Preparar clase para crear grupos y plan tecnico adulto.</p>
+              </article>
+            )}
+            </section>
+          </>
+        ) : null}
+
+        <h2 className="section-title">{clase.class_group === "kids" ? "Asistencia infantil" : "Asistencia final"}</h2>
         <section className="card mobile-attendance-note">
-          <h2>Como se adjuntan las tecnicas</h2>
-          <p className="muted">
-            Puedes marcar primero todas las tecnicas realizadas. Al cerrar la clase, el sistema cruza esas tecnicas con
-            la asistencia final y las adjunta al grado entrenado de cada asistente.
-          </p>
+          {clase.class_group === "adults" ? (
+            <>
+              <h2>Como se adjuntan las tecnicas</h2>
+              <p className="muted">
+                Puedes marcar primero todas las tecnicas realizadas. Al cerrar la clase, el sistema cruza esas tecnicas con
+                la asistencia final y las adjunta al grado entrenado de cada asistente.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>Registro infantil</h2>
+              <p className="muted">La asistencia infantil actualiza la actividad del alumno y sirve para ranking, constancia y revision de fichas.</p>
+            </>
+          )}
         </section>
 
         {attendanceQuickPanel}
@@ -405,11 +444,28 @@ export default async function ClaseDetailPage({
           </section>
         ) : null}
 
+        {readyToCloseKids ? (
+          <section className="mobile-close-bar" aria-label="Cerrar clase infantil">
+            <div>
+              <strong>{attendance?.length ?? 0}</strong>
+              <span>asistentes</span>
+            </div>
+            <form action={closeKidsClassAction}>
+              <input type="hidden" name="classId" value={clase.id} />
+              <input type="hidden" name="legacyId" value={legacyId} />
+              <button className="primary-link button-reset" type="submit">
+                <Check aria-hidden="true" size={16} />
+                Cerrar clase
+              </button>
+            </form>
+          </section>
+        ) : null}
+
         <h2 className="section-title">Asistencia</h2>
         <section className="table-wrap">
           <table>
             <thead>
-              <tr><th>Kenshi</th><th>Grado oficial</th><th>Grado entrenado</th></tr>
+              <tr><th>Kenshi</th><th>Grado oficial</th><th>Grado entrenado</th><th>Ficha</th></tr>
             </thead>
             <tbody>
               {(attendance ?? []).map((item) => (
@@ -417,6 +473,7 @@ export default async function ClaseDetailPage({
                   <td data-label="Kenshi"><strong>{item.members?.first_name} {item.members?.last_name}</strong></td>
                   <td data-label="Grado oficial">{item.official_grade ?? "-"}</td>
                   <td data-label="Grado entrenado">{item.trained_grade ?? "-"}</td>
+                  <td data-label="Ficha">{item.members?.legacy_id ? <a className="text-link" href={`/kenshis/${item.members.legacy_id}`}>Abrir ficha</a> : "-"}</td>
                 </tr>
               ))}
             </tbody>

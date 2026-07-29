@@ -347,9 +347,9 @@ export async function addBulkAttendanceAction(formData: FormData) {
   const [{ data: clase, error: classError }, { data: members, error: membersError }] = await Promise.all([
     supabase
       .from("classes")
-      .select("class_date")
+      .select("class_date,class_group")
       .eq("id", classId)
-      .single<{ class_date: string }>(),
+      .single<{ class_date: string; class_group: "kids" | "adults" }>(),
     supabase
       .from("members")
       .select("id,grade")
@@ -363,13 +363,14 @@ export async function addBulkAttendanceAction(formData: FormData) {
 
   const rows = members.map((member) => {
     const officialGrade = member.grade || "";
+    const trainedGrade = clase.class_group === "adults" ? resolveWorkGrade(officialGrade) : officialGrade;
     return {
       legacy_id: `NEW-ASIS-${classId}-${member.id}`,
       class_id: classId,
       member_id: member.id,
       attended_on: clase.class_date,
       official_grade: officialGrade || null,
-      trained_grade: resolveWorkGrade(officialGrade) || null,
+      trained_grade: trainedGrade || null,
       technical_role: "student",
       use_for_history: true
     };
@@ -423,6 +424,32 @@ export async function closeAdultClassAction(formData: FormData) {
     await closeAdultClass(classId);
   } catch (error) {
     console.error("Error closing adult class", error);
+    redirect(`/clases/${legacyId}?error=close`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=close`);
+}
+
+export async function closeKidsClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+
+  if (!classId || !legacyId) {
+    redirect("/clases");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("classes")
+    .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+    .eq("id", classId)
+    .eq("class_group", "kids");
+
+  if (error) {
     redirect(`/clases/${legacyId}?error=close`);
   }
 
