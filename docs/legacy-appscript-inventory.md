@@ -205,3 +205,27 @@ The first replicated version in the new platform now supports:
 - Generating adult technical groups from the class detail page.
 - Adding adult attendance from the class detail page.
 - Mobile-friendly class workflow controls.
+
+## Exam registration rules extracted
+
+- Main entry point: `registrarExamen(alumnoSeleccionado, fechaExamen, grado, examinador, opciones)`.
+- Registering an exam updates the student row:
+  - `Fecha Ultimo examen`.
+  - `Grado`.
+  - `Historial Examenes`.
+  - Clears `ProximoExamen`.
+  - Moves current cycle attendance into attendance history.
+- It appends a row to `EXAMENES` with date, student, class, grade, cycle attendance, examiner, registered-by and timestamp.
+- After registering, legacy calls `generarAvisos()`.
+
+The first replicated version in the new platform now supports:
+
+- `/examenes` internal page.
+- Registering an exam in the new `exams` table.
+- Updating member grade, last exam date, exam history and attendance history.
+- Counting cycle attendance from new attendance logs.
+
+Remaining exam work:
+
+- Full `generarAvisos()` replica with calendar, next exam, traffic light and adult technical progress.
+- Diploma/report PDF generation.

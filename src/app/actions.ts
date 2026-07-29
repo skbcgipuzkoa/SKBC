@@ -5,6 +5,7 @@ import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-cl
 import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
+import { registerExam } from "@/lib/exams";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -329,6 +330,38 @@ export async function closeAdultClassAction(formData: FormData) {
   }
 
   redirect(`/clases/${legacyId}?saved=close`);
+}
+
+export async function registerExamAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "");
+  const examDate = parseDateInput(String(formData.get("examDate") ?? ""));
+  const grade = String(formData.get("grade") ?? "").trim();
+  const examiner = String(formData.get("examiner") ?? "").trim() || null;
+
+  if (!memberId || !examDate || !grade) {
+    redirect("/examenes?error=exam");
+  }
+
+  let memberLegacyId: string | null = null;
+  try {
+    const result = await registerExam({
+      memberId,
+      examDate,
+      grade,
+      examiner,
+      registeredBy: "WEB SKBC"
+    });
+    memberLegacyId = result.memberLegacyId;
+  } catch (error) {
+    console.error("Error registering exam", error);
+    redirect("/examenes?error=exam");
+  }
+
+  redirect(memberLegacyId ? `/kenshis/${memberLegacyId}?saved=exam` : "/examenes?saved=exam");
 }
 
 function normalizeClass(value: string) {

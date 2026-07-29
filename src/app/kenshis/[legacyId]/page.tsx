@@ -191,6 +191,9 @@ export default async function KenshiDetailPage({
           <a href="/kenshis" aria-current="page">Kenshis</a>
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
+          <a href="/examenes">Examenes</a>
+          <a href="/importacion">Importacion</a>
+          <a href="/novedades">Novedades</a>
         </nav>
       </aside>
       <main className="main">
@@ -326,11 +329,11 @@ export default async function KenshiDetailPage({
             <tbody>
               {(attendance ?? []).map((item) => (
                 <tr key={`${item.attended_on}-${item.classes?.name}`}>
-                  <td>{item.attended_on}</td>
-                  <td>{item.classes?.name ?? "-"}</td>
-                  <td>{item.official_grade ?? "-"}</td>
-                  <td>{item.trained_grade ?? "-"}</td>
-                  <td>{item.technical_role}</td>
+                  <td data-label="Fecha">{item.attended_on}</td>
+                  <td data-label="Clase">{item.classes?.name ?? "-"}</td>
+                  <td data-label="Grado oficial">{item.official_grade ?? "-"}</td>
+                  <td data-label="Grado entrenado">{item.trained_grade ?? "-"}</td>
+                  <td data-label="Rol">{item.technical_role}</td>
                 </tr>
               ))}
             </tbody>
@@ -346,10 +349,10 @@ export default async function KenshiDetailPage({
                 <tbody>
                   {(exams ?? []).map((item) => (
                     <tr key={`${item.exam_date}-${item.grade}`}>
-                      <td>{item.exam_date}</td>
-                      <td>{item.grade}</td>
-                      <td>{item.examiner ?? "-"}</td>
-                      <td>{item.diploma_url ? <a className="text-link" href={item.diploma_url} target="_blank">Abrir</a> : "-"}</td>
+                      <td data-label="Fecha">{item.exam_date}</td>
+                      <td data-label="Grado">{item.grade}</td>
+                      <td data-label="Examinador">{item.examiner ?? "-"}</td>
+                      <td data-label="Diploma">{item.diploma_url ? <a className="text-link" href={item.diploma_url} target="_blank">Abrir</a> : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -364,10 +367,10 @@ export default async function KenshiDetailPage({
                 <tbody>
                   {(courses ?? []).map((item) => (
                     <tr key={`${item.course_date}-${item.kind}-${item.title}`}>
-                      <td>{item.course_date}</td>
-                      <td>{item.kind === "national" ? "Nacional" : "Internacional"}</td>
-                      <td>{item.title ?? "-"}</td>
-                      <td>{item.location ?? "-"}</td>
+                      <td data-label="Fecha">{item.course_date}</td>
+                      <td data-label="Tipo">{item.kind === "national" ? "Nacional" : "Internacional"}</td>
+                      <td data-label="Curso">{item.title ?? "-"}</td>
+                      <td data-label="Lugar">{item.location ?? "-"}</td>
                     </tr>
                   ))}
                 </tbody>
