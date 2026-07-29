@@ -159,7 +159,7 @@ export default async function KenshisPage({
           <table>
             <thead>
               <tr>
-                <th>ID</th>
+                <th>ID SKBC</th>
                 <th>ID IKA</th>
                 <th>Nombre</th>
                 <th>Clase</th>
@@ -172,7 +172,7 @@ export default async function KenshisPage({
             <tbody>
               {kenshis.map((kenshi) => (
                 <tr key={kenshi.legacy_id}>
-                  <td data-label="ID">{kenshi.legacy_id}</td>
+                  <td data-label="ID SKBC">{kenshi.legacy_id}</td>
                   <td data-label="ID IKA">{kenshi.ika_id || <span className="muted">Pendiente</span>}</td>
                   <td data-label="Nombre">
                     <a className="text-link" href={`/kenshis/${kenshi.legacy_id}`}>

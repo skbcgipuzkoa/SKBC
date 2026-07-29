@@ -26,6 +26,25 @@ export async function logoutAction() {
   redirect("/");
 }
 
+async function getNextSkbcLegacyId(supabase: ReturnType<typeof createAdminClient>) {
+  const { data, error } = await supabase
+    .from("members")
+    .select("legacy_id")
+    .not("legacy_id", "is", null)
+    .limit(10000)
+    .returns<{ legacy_id: string | null }[]>();
+
+  if (error) throw error;
+
+  const highest = data.reduce((max, row) => {
+    const id = row.legacy_id?.trim();
+    if (!id || !/^\d+$/.test(id)) return max;
+    return Math.max(max, Number(id));
+  }, 0);
+
+  return String(highest + 1);
+}
+
 export async function updateIkaIdAction(formData: FormData) {
   const memberId = String(formData.get("memberId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
@@ -98,7 +117,6 @@ export async function updateKenshiAction(formData: FormData) {
 
 export async function createKenshiAction(formData: FormData) {
   const payload = {
-    legacy_id: `NEW-${Date.now()}`,
     first_name: String(formData.get("firstName") ?? "").trim(),
     last_name: String(formData.get("lastName") ?? "").trim() || null,
     ika_id: String(formData.get("ikaId") ?? "").trim() || null,
@@ -120,9 +138,17 @@ export async function createKenshiAction(formData: FormData) {
   }
 
   const supabase = createAdminClient();
+  let nextLegacyId: string;
+  try {
+    nextLegacyId = await getNextSkbcLegacyId(supabase);
+  } catch (error) {
+    console.error("Error resolving next SKBC legacy id", error);
+    redirect("/kenshis/nuevo?error=kenshi");
+  }
+
   const { data, error } = await supabase
     .from("members")
-    .insert(payload)
+    .insert({ ...payload, legacy_id: nextLegacyId })
     .select("id,legacy_id")
     .single();
 

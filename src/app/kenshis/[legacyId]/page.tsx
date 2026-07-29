@@ -223,7 +223,7 @@ export default async function KenshiDetailPage({
           </article>
           <article className="card detail-list">
             <h2>Datos</h2>
-            <p><strong>ID legacy:</strong> {member.legacy_id}</p>
+            <p><strong>ID SKBC:</strong> {member.legacy_id}</p>
             <KenshiForm
               action={updateKenshiAction}
               submitLabel="Guardar cambios"
