@@ -169,6 +169,39 @@ export async function generateAdultPlanAction(formData: FormData) {
   redirect(`/clases/${legacyId}?saved=plan`);
 }
 
+export async function prepareAdultClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+
+  if (!classId || !legacyId) {
+    redirect("/clases");
+  }
+
+  const supabase = createAdminClient();
+  const [{ data: groups }, { data: plan }] = await Promise.all([
+    supabase.from("class_technical_groups").select("id").eq("class_id", classId).limit(1),
+    supabase.from("technical_plans").select("id").eq("class_id", classId).limit(1)
+  ]);
+
+  try {
+    if (!(groups?.length)) {
+      await generateAdultTechnicalGroups(classId);
+    }
+    if (!(plan?.length)) {
+      await generateAdultTechnicalPlan(classId);
+    }
+  } catch (error) {
+    console.error("Error preparing adult class", error);
+    redirect(`/clases/${legacyId}?error=prepare`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=prepare`);
+}
+
 export async function createClassAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -279,6 +312,60 @@ export async function addAttendanceAction(formData: FormData) {
     },
     { onConflict: "legacy_id" }
   );
+
+  if (error) {
+    redirect(`/clases/${legacyId}?error=attendance`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=attendance`);
+}
+
+export async function addBulkAttendanceAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const memberIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
+
+  if (!classId || !legacyId || !memberIds.length) {
+    redirect(`/clases/${legacyId || ""}?error=attendance`);
+  }
+
+  const supabase = createAdminClient();
+  const [{ data: clase, error: classError }, { data: members, error: membersError }] = await Promise.all([
+    supabase
+      .from("classes")
+      .select("class_date")
+      .eq("id", classId)
+      .single<{ class_date: string }>(),
+    supabase
+      .from("members")
+      .select("id,grade")
+      .in("id", memberIds)
+      .returns<{ id: string; grade: string | null }[]>()
+  ]);
+
+  if (classError || !clase || membersError || !members?.length) {
+    redirect(`/clases/${legacyId}?error=attendance`);
+  }
+
+  const rows = members.map((member) => {
+    const officialGrade = member.grade || "";
+    return {
+      legacy_id: `NEW-ASIS-${classId}-${member.id}`,
+      class_id: classId,
+      member_id: member.id,
+      attended_on: clase.class_date,
+      official_grade: officialGrade || null,
+      trained_grade: resolveWorkGrade(officialGrade) || null,
+      technical_role: "student",
+      use_for_history: true
+    };
+  });
+
+  const { error } = await supabase.from("attendance_logs").upsert(rows, { onConflict: "legacy_id" });
 
   if (error) {
     redirect(`/clases/${legacyId}?error=attendance`);

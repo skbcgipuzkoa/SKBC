@@ -110,6 +110,11 @@ textarea {
   padding: 8px 12px;
 }
 
+.secondary-link {
+  background: #eef4fb;
+  color: var(--brand-strong);
+}
+
 .button-reset {
   border: 0;
   cursor: pointer;
@@ -507,6 +512,171 @@ th {
   font-weight: 700;
 }
 
+.quick-form button:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.class-stepper {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 18px 0;
+}
+
+.step {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.step.done {
+  background: #e8f5ee;
+  border-color: #b9dec9;
+  color: var(--ok);
+}
+
+.class-workbench {
+  align-items: start;
+}
+
+.attendance-checklist {
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.check-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-height: 52px;
+  padding: 8px 10px;
+}
+
+.check-row input {
+  height: 18px;
+  width: 18px;
+}
+
+.check-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.check-row small {
+  color: var(--muted);
+}
+
+.advanced-details {
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.advanced-details summary {
+  color: var(--brand);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.section-heading-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.plan-board {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plan-group {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-group-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.plan-group-head h2 {
+  margin-top: 8px;
+}
+
+.plan-card-list {
+  display: grid;
+  gap: 8px;
+}
+
+.plan-card {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 58px;
+  padding: 10px;
+}
+
+.plan-card.completed {
+  background: #f2fbf6;
+  border-color: #b9dec9;
+}
+
+.plan-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.plan-card span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mobile-close-bar {
+  align-items: center;
+  background: #0f1b2d;
+  border-radius: 8px;
+  bottom: 14px;
+  color: #fff;
+  display: none;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px;
+  position: sticky;
+  z-index: 8;
+}
+
+.mobile-close-bar div {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-close-bar span {
+  color: #b8c4d6;
+  font-size: 12px;
+}
+
 .inline-report-form {
   display: grid;
   gap: 6px;
@@ -634,8 +804,43 @@ th {
     .profile-grid,
     .split-section,
     .import-grid,
-    .form-grid {
+    .form-grid,
+    .plan-board {
     grid-template-columns: 1fr;
+  }
+
+  .class-stepper {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .step {
+    flex: 0 0 auto;
+    min-width: 104px;
+  }
+
+  .attendance-checklist {
+    max-height: none;
+  }
+
+  .plan-card {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-card .mini-action {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .section-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mobile-close-bar {
+    display: flex;
   }
 
   .form-grid .wide {

@@ -3,9 +3,11 @@ import { notFound, redirect } from "next/navigation";
 import {
   closeAdultClassAction,
   addAttendanceAction,
+  addBulkAttendanceAction,
   generateAdultGroupsAction,
   generateAdultPlanAction,
   logoutAction,
+  prepareAdultClassAction,
   updatePlanTechniqueAction
 } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
@@ -112,6 +114,9 @@ export default async function ClaseDetailPage({
 
   const attendanceMemberIds = new Set((attendance ?? []).map((item) => item.member_id));
   const pendingAdultMembers = (adultMembers ?? []).filter((member) => !attendanceMemberIds.has(member.id));
+  const completedPlan = (plan ?? []).filter((item) => item.completed).length;
+  const groupedPlan = groupPlanByGrade(plan ?? []);
+  const readyToClose = clase.class_group === "adults" && clase.plan_generated && !clase.closed;
 
   return (
     <div className="shell">
@@ -140,10 +145,20 @@ export default async function ClaseDetailPage({
           </div>
           <div className="top-actions">
             {clase.class_group === "adults" && !clase.plan_generated && !clase.closed ? (
-              <form action={generateAdultGroupsAction}>
+              <form action={prepareAdultClassAction}>
                 <input type="hidden" name="classId" value={clase.id} />
                 <input type="hidden" name="legacyId" value={legacyId} />
                 <button className="primary-link button-reset" type="submit">
+                  <Wand2 aria-hidden="true" size={16} />
+                  Preparar clase
+                </button>
+              </form>
+            ) : null}
+            {clase.class_group === "adults" && !clase.plan_generated && !clase.closed ? (
+              <form action={generateAdultGroupsAction}>
+                <input type="hidden" name="classId" value={clase.id} />
+                <input type="hidden" name="legacyId" value={legacyId} />
+                <button className="primary-link secondary-link button-reset" type="submit">
                   <Wand2 aria-hidden="true" size={16} />
                   Generar grupos
                 </button>
@@ -153,7 +168,7 @@ export default async function ClaseDetailPage({
               <form action={generateAdultPlanAction}>
                 <input type="hidden" name="classId" value={clase.id} />
                 <input type="hidden" name="legacyId" value={legacyId} />
-                <button className="primary-link button-reset" type="submit">
+                <button className="primary-link secondary-link button-reset" type="submit">
                   <Wand2 aria-hidden="true" size={16} />
                   Generar plan tecnico
                 </button>
@@ -179,12 +194,16 @@ export default async function ClaseDetailPage({
 
         {query.saved === "plan" ? <p className="save-ok">Plan tecnico generado.</p> : null}
         {query.saved === "class" ? <p className="save-ok">Clase creada.</p> : null}
+        {query.saved === "prepare" ? <p className="save-ok">Clase preparada: grupos y plan tecnico listos.</p> : null}
         {query.saved === "groups" ? <p className="save-ok">Grupos tecnicos generados.</p> : null}
         {query.saved === "attendance" ? <p className="save-ok">Asistencia anadida.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.error === "plan" ? (
           <p className="form-error">No se ha podido generar el plan tecnico para esta clase.</p>
+        ) : null}
+        {query.error === "prepare" ? (
+          <p className="form-error">No se ha podido preparar la clase.</p>
         ) : null}
         {query.error === "groups" ? (
           <p className="form-error">No se han podido generar los grupos tecnicos.</p>
@@ -206,7 +225,15 @@ export default async function ClaseDetailPage({
           <article className="card"><h2>Asistentes</h2><div className="metric">{attendance?.length ?? 0}</div></article>
         </section>
 
-        <section className="split-section">
+        <section className="class-stepper" aria-label="Flujo de clase">
+          <span className={(groups ?? []).length ? "step done" : "step"}>1 Grupos</span>
+          <span className={clase.plan_generated ? "step done" : "step"}>2 Plan</span>
+          <span className={(attendance ?? []).length ? "step done" : "step"}>3 Asistencia</span>
+          <span className={completedPlan ? "step done" : "step"}>4 Tecnicas</span>
+          <span className={clase.closed ? "step done" : "step"}>5 Cierre</span>
+        </section>
+
+        <section className="split-section class-workbench">
           <article className="card">
             <h2>Grupos tecnicos</h2>
             <div className="chip-list">
@@ -216,87 +243,137 @@ export default async function ClaseDetailPage({
             </div>
           </article>
           <article className="card">
-            <h2>Anadir asistencia</h2>
+            <h2>Asistencia rapida</h2>
             {!clase.closed && clase.class_group === "adults" ? (
-              <form action={addAttendanceAction} className="quick-form">
-                <input type="hidden" name="classId" value={clase.id} />
-                <input type="hidden" name="legacyId" value={legacyId} />
-                <label>
-                  Kenshi
-                  <select name="memberId" required>
-                    <option value="">Seleccionar</option>
-                    {pendingAdultMembers.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.display_name} - {member.grade ?? "Sin grado"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Grado oficial
-                  <select name="officialGrade">
-                    <option value="">Usar ficha</option>
-                    {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
-                  </select>
-                </label>
-                <label>
-                  Grado entrenado
-                  <select name="trainedGrade">
-                    <option value="">Automatico</option>
-                    {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
-                  </select>
-                </label>
-                <button type="submit">Anadir</button>
-              </form>
+              <>
+                <form action={addBulkAttendanceAction} className="quick-form">
+                  <input type="hidden" name="classId" value={clase.id} />
+                  <input type="hidden" name="legacyId" value={legacyId} />
+                  <div className="attendance-checklist">
+                    {pendingAdultMembers.length ? pendingAdultMembers.map((member) => (
+                      <label className="check-row" key={member.id}>
+                        <input name="memberIds" type="checkbox" value={member.id} />
+                        <span>
+                          <strong>{member.display_name}</strong>
+                          <small>{member.grade ?? "Sin grado"}</small>
+                        </span>
+                      </label>
+                    )) : <p className="muted">Todos los adultos activos estan ya en asistencia.</p>}
+                  </div>
+                  <button type="submit" disabled={!pendingAdultMembers.length}>Anadir seleccionados</button>
+                </form>
+                <details className="advanced-details">
+                  <summary>Anadir uno con grado entrenado manual</summary>
+                  <form action={addAttendanceAction} className="quick-form">
+                    <input type="hidden" name="classId" value={clase.id} />
+                    <input type="hidden" name="legacyId" value={legacyId} />
+                    <label>
+                      Kenshi
+                      <select name="memberId" required>
+                        <option value="">Seleccionar</option>
+                        {pendingAdultMembers.map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.display_name} - {member.grade ?? "Sin grado"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Grado oficial
+                      <select name="officialGrade">
+                        <option value="">Usar ficha</option>
+                        {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      Grado entrenado
+                      <select name="trainedGrade">
+                        <option value="">Automatico</option>
+                        {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                      </select>
+                    </label>
+                    <button type="submit">Anadir uno</button>
+                  </form>
+                </details>
+              </>
             ) : (
               <p className="muted">Clase cerrada o no adulta.</p>
             )}
           </article>
         </section>
 
-        <h2 className="section-title">Plan tecnico</h2>
-        <section className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Grupo</th><th>Objetivo</th><th>Tecnica</th><th>Categoria</th><th>Tipo</th><th>Realizada</th></tr>
-            </thead>
-            <tbody>
-              {(plan ?? []).length ? (plan ?? []).map((item) => (
-                <tr key={item.legacy_id ?? item.technique_name}>
-                  <td data-label="Grupo">{item.group_grade ?? "-"}</td>
-                  <td data-label="Objetivo">{item.target_grade ?? "-"}</td>
-                  <td data-label="Tecnica"><strong>{item.technique_name}</strong></td>
-                  <td data-label="Categoria">{item.category ?? "-"}</td>
-                  <td data-label="Tipo">{item.proposal_type ?? item.focus ?? "-"}</td>
-                  <td data-label="Realizada">
-                    {clase.closed ? (
-                      item.completed ? "Si" : "No"
-                    ) : (
-                      <form action={updatePlanTechniqueAction}>
-                        <input type="hidden" name="planId" value={item.id} />
-                        <input type="hidden" name="legacyId" value={legacyId} />
-                        <input type="hidden" name="completed" value={item.completed ? "false" : "true"} />
-                        <button
-                          className={item.completed ? "mini-action selected" : "mini-action"}
-                          type="submit"
-                          title={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
-                          aria-label={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
-                        >
-                          {item.completed ? <Check aria-hidden="true" size={15} /> : <X aria-hidden="true" size={15} />}
+        <div className="section-heading-row">
+          <h2 className="section-title">Plan tecnico</h2>
+          <span className="status">{completedPlan}/{(plan ?? []).length} realizadas</span>
+        </div>
+        <section className="plan-board">
+          {groupedPlan.length ? groupedPlan.map(([grade, items]) => {
+            const groupCompleted = items.filter((item) => item.completed).length;
+            return (
+              <article className="card plan-group" key={grade}>
+                <div className="plan-group-head">
+                  <div>
+                    <span className="tag">{grade}</span>
+                    <h2>{items[0]?.target_grade ? `Objetivo ${items[0].target_grade}` : "Grupo tecnico"}</h2>
+                  </div>
+                  <strong>{groupCompleted}/{items.length}</strong>
+                </div>
+                <div className="plan-card-list">
+                  {items.map((item) => (
+                    <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
+                      <div>
+                        <strong>{item.technique_name}</strong>
+                        <span>{item.category ?? "-"} · {item.proposal_type ?? item.focus ?? "-"}</span>
+                      </div>
+                      {clase.closed ? (
+                        <span className={item.completed ? "mini-action selected" : "mini-action"}>
                           {item.completed ? "Si" : "No"}
-                        </button>
-                      </form>
-                    )}
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan={6} className="muted">Esta clase todavia no tiene plan tecnico.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                        </span>
+                      ) : (
+                        <form action={updatePlanTechniqueAction}>
+                          <input type="hidden" name="planId" value={item.id} />
+                          <input type="hidden" name="legacyId" value={legacyId} />
+                          <input type="hidden" name="completed" value={item.completed ? "false" : "true"} />
+                          <button
+                            className={item.completed ? "mini-action selected" : "mini-action"}
+                            type="submit"
+                            title={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
+                            aria-label={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
+                          >
+                            {item.completed ? <Check aria-hidden="true" size={15} /> : <X aria-hidden="true" size={15} />}
+                            {item.completed ? "Hecha" : "Marcar"}
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </article>
+            );
+          }) : (
+            <article className="card">
+              <h2>Sin plan tecnico</h2>
+              <p className="muted">Pulsa Preparar clase para crear grupos y plan tecnico adulto.</p>
+            </article>
+          )}
         </section>
+
+        {readyToClose ? (
+          <section className="mobile-close-bar" aria-label="Cerrar clase">
+            <div>
+              <strong>{completedPlan}/{(plan ?? []).length}</strong>
+              <span>tecnicas realizadas</span>
+            </div>
+            <form action={closeAdultClassAction}>
+              <input type="hidden" name="classId" value={clase.id} />
+              <input type="hidden" name="legacyId" value={legacyId} />
+              <button className="primary-link button-reset" type="submit">
+                <Check aria-hidden="true" size={16} />
+                Cerrar clase
+              </button>
+            </form>
+          </section>
+        ) : null}
 
         <h2 className="section-title">Asistencia</h2>
         <section className="table-wrap">
@@ -318,4 +395,15 @@ export default async function ClaseDetailPage({
       </main>
     </div>
   );
+}
+
+function groupPlanByGrade(plan: PlanRow[]) {
+  const groups = new Map<string, PlanRow[]>();
+  plan.forEach((item) => {
+    const key = item.group_grade ?? "Sin grupo";
+    const current = groups.get(key) ?? [];
+    current.push(item);
+    groups.set(key, current);
+  });
+  return [...groups.entries()];
 }
