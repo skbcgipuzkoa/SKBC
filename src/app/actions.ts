@@ -614,5 +614,14 @@ function getPhotoFile(formData: FormData) {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Error desconocido.";
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts = [record.message, record.details, record.hint, record.code]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+    if (parts.length) return parts.join(" - ");
+    return JSON.stringify(record);
+  }
+  return String(error || "Error desconocido.");
 }
