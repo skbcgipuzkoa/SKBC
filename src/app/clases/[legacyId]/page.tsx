@@ -76,7 +76,7 @@ export default async function ClaseDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; detail?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -126,6 +126,8 @@ export default async function ClaseDetailPage({
   const pendingClassMembers = (classMembers ?? []).filter((member) => !attendanceMemberIds.has(member.id));
   const completedPlan = (plan ?? []).filter((item) => item.completed).length;
   const groupedPlan = groupPlanByGrade(plan ?? []);
+  const hasGroups = Boolean((groups ?? []).length);
+  const hasPlan = Boolean((plan ?? []).length);
   const readyToClose = clase.class_group === "adults" && clase.plan_generated && !clase.closed;
   const readyToCloseKids = clase.class_group === "kids" && !clase.closed;
   const attendanceQuickPanel = (
@@ -221,11 +223,11 @@ export default async function ClaseDetailPage({
                 <input type="hidden" name="legacyId" value={legacyId} />
                 <button className="primary-link button-reset" type="submit">
                   <Wand2 aria-hidden="true" size={16} />
-                  Preparar clase
+                  {hasGroups && !hasPlan ? "Completar plan tecnico" : "Preparar clase"}
                 </button>
               </form>
             ) : null}
-            {clase.class_group === "adults" && !clase.plan_generated && !clase.closed ? (
+            {clase.class_group === "adults" && !hasGroups && !clase.plan_generated && !clase.closed ? (
               <form action={generateAdultGroupsAction}>
                 <input type="hidden" name="classId" value={clase.id} />
                 <input type="hidden" name="legacyId" value={legacyId} />
@@ -235,7 +237,7 @@ export default async function ClaseDetailPage({
                 </button>
               </form>
             ) : null}
-            {clase.class_group === "adults" && !clase.plan_generated && !clase.closed ? (
+            {clase.class_group === "adults" && !hasPlan && !clase.plan_generated && !clase.closed ? (
               <form action={generateAdultPlanAction}>
                 <input type="hidden" name="classId" value={clase.id} />
                 <input type="hidden" name="legacyId" value={legacyId} />
@@ -283,7 +285,7 @@ export default async function ClaseDetailPage({
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.error === "plan" ? (
-          <p className="form-error">No se ha podido generar el plan tecnico para esta clase.</p>
+          <p className="form-error">No se ha podido generar el plan tecnico{query.detail ? `: ${query.detail}` : " para esta clase."}</p>
         ) : null}
         {query.error === "class" ? (
           <p className="form-error">No se ha podido actualizar la clase.</p>
@@ -292,7 +294,7 @@ export default async function ClaseDetailPage({
           <p className="form-error">No se ha podido eliminar la clase. Escribe ELIMINAR y vuelve a intentarlo.</p>
         ) : null}
         {query.error === "prepare" ? (
-          <p className="form-error">No se ha podido preparar la clase.</p>
+          <p className="form-error">No se ha podido preparar la clase{query.detail ? `: ${query.detail}` : "."}</p>
         ) : null}
         {query.error === "groups" ? (
           <p className="form-error">No se han podido generar los grupos tecnicos.</p>
@@ -362,7 +364,7 @@ export default async function ClaseDetailPage({
         {clase.class_group === "adults" ? (
           <section className="class-stepper" aria-label="Flujo de clase">
             <span className={(groups ?? []).length ? "step done" : "step"}>1 Grupos</span>
-            <span className={clase.plan_generated ? "step done" : "step"}>2 Plan</span>
+            <span className={hasPlan ? "step done" : "step"}>2 Plan</span>
             <span className={completedPlan ? "step done" : "step"}>3 Tecnicas</span>
             <span className={(attendance ?? []).length ? "step done" : "step"}>4 Asistencia</span>
             <span className={clase.closed ? "step done" : "step"}>5 Cierre</span>

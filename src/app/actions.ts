@@ -163,7 +163,7 @@ export async function generateAdultPlanAction(formData: FormData) {
     await generateAdultTechnicalPlan(classId);
   } catch (error) {
     console.error("Error generating adult technical plan", error);
-    redirect(`/clases/${legacyId}?error=plan`);
+    redirect(`/clases/${legacyId}?error=plan&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
   redirect(`/clases/${legacyId}?saved=plan`);
@@ -196,7 +196,7 @@ export async function prepareAdultClassAction(formData: FormData) {
     }
   } catch (error) {
     console.error("Error preparing adult class", error);
-    redirect(`/clases/${legacyId}?error=prepare`);
+    redirect(`/clases/${legacyId}?error=prepare&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
   redirect(`/clases/${legacyId}?saved=prepare`);
@@ -244,7 +244,7 @@ export async function createClassAction(formData: FormData) {
       await generateAdultTechnicalPlan(data.id);
     } catch (prepareError) {
       console.error("Error auto preparing adult class", prepareError);
-      redirect(`/clases/${data.legacy_id}?saved=class&error=prepare`);
+      redirect(`/clases/${data.legacy_id}?saved=class&error=prepare&detail=${encodeURIComponent(errorMessage(prepareError))}`);
     }
   }
 
@@ -611,4 +611,8 @@ function parseDateInput(value: string) {
 function getPhotoFile(formData: FormData) {
   const file = formData.get("profilePhoto");
   return file instanceof File ? file : null;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Error desconocido.";
 }
