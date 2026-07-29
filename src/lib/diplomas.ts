@@ -131,6 +131,10 @@ export async function generateDiplomaForExam(examId: string) {
 }
 
 async function getGoogleAccessToken() {
+  if (process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REFRESH_TOKEN) {
+    return getGoogleOAuthAccessToken();
+  }
+
   const clientEmail = requiredEnv("GOOGLE_CLIENT_EMAIL");
   const privateKey = requiredEnv("GOOGLE_PRIVATE_KEY").replace(/\\n/g, "\n");
   const now = Math.floor(Date.now() / 1000);
@@ -159,6 +163,26 @@ async function getGoogleAccessToken() {
   if (!response.ok) throw new Error(`Google auth error ${response.status}: ${await response.text()}`);
   const data = await response.json() as { access_token?: string };
   if (!data.access_token) throw new Error("Google no devolvio access_token.");
+  return data.access_token;
+}
+
+async function getGoogleOAuthAccessToken() {
+  const body = new URLSearchParams({
+    client_id: requiredEnv("GOOGLE_OAUTH_CLIENT_ID"),
+    client_secret: requiredEnv("GOOGLE_OAUTH_CLIENT_SECRET"),
+    refresh_token: requiredEnv("GOOGLE_OAUTH_REFRESH_TOKEN"),
+    grant_type: "refresh_token"
+  });
+
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body
+  });
+
+  if (!response.ok) throw new Error(`Google OAuth error ${response.status}: ${await response.text()}`);
+  const data = await response.json() as { access_token?: string };
+  if (!data.access_token) throw new Error("Google OAuth no devolvio access_token.");
   return data.access_token;
 }
 
