@@ -1129,6 +1129,31 @@ th {
   margin: 6px 0;
 }
 
+.sync-status {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 9px;
+  text-transform: uppercase;
+}
+
+.sync-completed {
+  background: #e8f5ee;
+  color: var(--ok);
+}
+
+.sync-failed {
+  background: #fff1f0;
+  color: var(--danger);
+}
+
+.sync-running,
+.sync-pending {
+  background: #fff8e6;
+  color: var(--warn);
+}
+
 .import-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }

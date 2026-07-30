@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, ClipboardList, LogOut, ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
-import { logoutAction } from "@/app/actions";
+import { logoutAction, retryLegacySheetSyncAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -33,6 +33,19 @@ type SheetRow = {
   row_count: number | null;
 };
 
+type LegacySyncJob = {
+  id: string;
+  event_type: string;
+  target_sheet: string;
+  source_table: string | null;
+  source_id: string | null;
+  status: "pending" | "running" | "completed" | "failed";
+  attempts: number;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
 const countItems = [
   { label: "Kenshis nuevos", table: "members", href: "/kenshis" },
   { label: "Examenes nuevos", table: "exams", href: "/examenes" },
@@ -42,11 +55,12 @@ const countItems = [
   { label: "Asistencias", table: "attendance_logs", href: "/clases" }
 ];
 
-export default async function AuditoriaPage() {
+export default async function AuditoriaPage({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string }> }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
   }
 
+  const params = await searchParams;
   const supabase = createAdminClient();
 
   const [
@@ -55,7 +69,8 @@ export default async function AuditoriaPage() {
     recentExamsResult,
     adultClassTodoResult,
     activeAdultClassResult,
-    legacySheetsResult
+    legacySheetsResult,
+    legacySyncJobsResult
   ] = await Promise.all([
     Promise.all(countItems.map((item) => countRows(item.table, item.label, item.href, item.filter === "diploma"))),
     supabase
@@ -94,7 +109,13 @@ export default async function AuditoriaPage() {
       .or("title.ilike.%EXAM%,title.ilike.%CLASE%,title.ilike.%ASIST%,title.ilike.%TECN%")
       .order("row_count", { ascending: false })
       .limit(12)
-      .returns<SheetRow[]>()
+      .returns<SheetRow[]>(),
+    supabase
+      .from("legacy_sheet_sync_jobs")
+      .select("id,event_type,target_sheet,source_table,source_id,status,attempts,error_message,created_at,completed_at")
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .returns<LegacySyncJob[]>()
   ]);
 
   const missingReports = missingReportResult.data ?? [];
@@ -102,7 +123,9 @@ export default async function AuditoriaPage() {
   const adultClassTodo = adultClassTodoResult.data ?? [];
   const activeAdultClasses = activeAdultClassResult.data ?? [];
   const legacySheets = legacySheetsResult.data ?? [];
-  const issueCount = missingReports.length + adultClassTodo.length;
+  const legacySyncJobs = legacySyncJobsResult.data ?? [];
+  const failedSyncJobs = legacySyncJobs.filter((job) => job.status === "failed");
+  const issueCount = missingReports.length + adultClassTodo.length + failedSyncJobs.length;
 
   return (
     <div className="shell">
@@ -166,6 +189,8 @@ export default async function AuditoriaPage() {
         </section>
 
         <h2 className="section-title">Contadores clave</h2>
+        {params.saved === "legacy-sync" ? <p className="save-ok">Sincronizacion legacy reintentada correctamente.</p> : null}
+        {params.error === "legacy-sync" ? <p className="form-error">No se pudo reintentar la sincronizacion legacy.</p> : null}
         <section className="grid import-grid">
           {counts.map((item) => (
             <a className="card import-card" href={item.href} key={item.label}>
@@ -177,6 +202,37 @@ export default async function AuditoriaPage() {
               <strong>{item.value ?? "-"}</strong>
             </a>
           ))}
+        </section>
+
+        <h2 className="section-title">Sincronizacion con archivo viejo</h2>
+        <section className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Estado</th><th>Hoja</th><th>Evento</th><th>Origen</th><th>Intentos</th><th>Error</th><th>Accion</th></tr>
+            </thead>
+            <tbody>
+              {legacySyncJobs.length ? legacySyncJobs.map((job) => (
+                <tr key={job.id}>
+                  <td data-label="Estado"><span className={`sync-status sync-${job.status}`}>{job.status}</span></td>
+                  <td data-label="Hoja"><strong>{job.target_sheet}</strong></td>
+                  <td data-label="Evento">{job.event_type}</td>
+                  <td data-label="Origen">{job.source_table ?? "-"} · {job.source_id?.slice(0, 10) ?? "-"}</td>
+                  <td data-label="Intentos">{job.attempts}</td>
+                  <td data-label="Error" className="muted">{job.error_message ? job.error_message.slice(0, 120) : "-"}</td>
+                  <td data-label="Accion">
+                    {job.status === "failed" ? (
+                      <form action={retryLegacySheetSyncAction}>
+                        <input type="hidden" name="jobId" value={job.id} />
+                        <button className="mini-action" type="submit">Reintentar</button>
+                      </form>
+                    ) : "-"}
+                  </td>
+                </tr>
+              )) : (
+                <tr><td colSpan={7} className="muted">Aun no hay trabajos de sincronizacion con el archivo viejo.</td></tr>
+              )}
+            </tbody>
+          </table>
         </section>
 
         <section className="split-section">

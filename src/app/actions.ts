@@ -8,7 +8,7 @@ import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
-import { syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
+import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -878,6 +878,26 @@ export async function deactivateAdultRankingBonusAction(formData: FormData) {
   }
 
   redirect("/rankings?saved=bonus");
+}
+
+export async function retryLegacySheetSyncAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const jobId = String(formData.get("jobId") ?? "").trim();
+  if (!jobId) {
+    redirect("/auditoria?error=legacy-sync");
+  }
+
+  try {
+    await retryLegacySheetSyncJob(jobId);
+  } catch (error) {
+    console.error("Error retrying legacy sheet sync", error);
+    redirect("/auditoria?error=legacy-sync");
+  }
+
+  redirect("/auditoria?saved=legacy-sync");
 }
 
 export async function createCourseAction(formData: FormData) {

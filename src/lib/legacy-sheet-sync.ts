@@ -227,6 +227,21 @@ async function appendLegacyRow({
 }) {
   const supabase = createAdminClient();
   const spreadsheetId = legacySpreadsheetId();
+
+  const { data: completedJob, error: completedError } = await supabase
+    .from("legacy_sheet_sync_jobs")
+    .select("id")
+    .eq("event_type", eventType)
+    .eq("target_sheet", targetSheet)
+    .eq("source_table", sourceTable)
+    .eq("source_id", sourceId)
+    .eq("status", "completed")
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
+  if (completedError) throw completedError;
+  if (completedJob) return;
+
   const { data: job, error: jobError } = await supabase
     .from("legacy_sheet_sync_jobs")
     .insert({
@@ -235,7 +250,7 @@ async function appendLegacyRow({
       target_spreadsheet_id: spreadsheetId,
       source_table: sourceTable,
       source_id: sourceId,
-      payload,
+      payload: { data: payload, values },
       status: "running",
       attempts: 1,
       started_at: new Date().toISOString()
@@ -257,6 +272,53 @@ async function appendLegacyRow({
       .update({ status: "failed", error_message: errorMessage(error), updated_at: new Date().toISOString() })
       .eq("id", job.id);
     throw error;
+  }
+}
+
+export async function retryLegacySheetSyncJob(jobId: string) {
+  const supabase = createAdminClient();
+  const { data: job, error } = await supabase
+    .from("legacy_sheet_sync_jobs")
+    .select("id,target_spreadsheet_id,target_sheet,payload,attempts,status")
+    .eq("id", jobId)
+    .single<{
+      id: string;
+      target_spreadsheet_id: string;
+      target_sheet: string;
+      payload: { values?: unknown[] } | null;
+      attempts: number;
+      status: string;
+    }>();
+
+  if (error || !job) throw error ?? new Error("Trabajo de sincronizacion no encontrado.");
+  if (job.status === "completed") return;
+  if (!Array.isArray(job.payload?.values)) {
+    throw new Error("Este trabajo no tiene valores preparados para reintento.");
+  }
+
+  await supabase
+    .from("legacy_sheet_sync_jobs")
+    .update({
+      status: "running",
+      attempts: (job.attempts ?? 0) + 1,
+      started_at: new Date().toISOString(),
+      error_message: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", job.id);
+
+  try {
+    await appendSheetValues(job.target_spreadsheet_id, job.target_sheet, job.payload.values);
+    await supabase
+      .from("legacy_sheet_sync_jobs")
+      .update({ status: "completed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", job.id);
+  } catch (retryError) {
+    await supabase
+      .from("legacy_sheet_sync_jobs")
+      .update({ status: "failed", error_message: errorMessage(retryError), updated_at: new Date().toISOString() })
+      .eq("id", job.id);
+    throw retryError;
   }
 }
 
