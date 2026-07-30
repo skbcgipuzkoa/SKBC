@@ -1008,6 +1008,68 @@ export async function transitionChildToAdultAction(formData: FormData) {
   redirect(`/kenshis/${legacyId}?saved=transition`);
 }
 
+export async function undoChildToAdultTransitionAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  if (!memberId || !legacyId) {
+    redirect(`/kenshis/${legacyId || ""}?error=transition-undo`);
+  }
+
+  const supabase = createAdminClient();
+  const [{ data: member, error: memberError }, { data: transition, error: transitionError }] = await Promise.all([
+    supabase
+      .from("members")
+      .select("id,class")
+      .eq("id", memberId)
+      .single<{ id: string; class: "kids" | "adults" }>(),
+    supabase
+      .from("child_adult_transitions")
+      .select("id,child_grade,notes")
+      .eq("member_id", memberId)
+      .order("transitioned_on", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ id: string; child_grade: string | null; notes: string | null }>()
+  ]);
+
+  if (memberError || transitionError || !member || member.class !== "adults" || !transition) {
+    redirect(`/kenshis/${legacyId}?error=transition-undo`);
+  }
+
+  const { error: updateError } = await supabase
+    .from("members")
+    .update({
+      class: "kids",
+      grade: transition.child_grade,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", memberId);
+
+  if (updateError) {
+    console.error("Error undoing child to adult transition", updateError);
+    redirect(`/kenshis/${legacyId}?error=transition-undo`);
+  }
+
+  await supabase
+    .from("child_adult_transitions")
+    .update({
+      notes: [transition.notes, `DESHECHO: restaurado a ninos el ${new Date().toISOString().slice(0, 10)}`].filter(Boolean).join("\n"),
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", transition.id);
+
+  try {
+    await recalculateMemberExamStatus(memberId);
+  } catch (error) {
+    console.error("Error recalculating restored child kenshi", error);
+  }
+
+  redirect(`/kenshis/${legacyId}?saved=transition-undo`);
+}
+
 export async function saveChildNoteAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

@@ -805,6 +805,18 @@ tbody tr:hover {
   padding: 8px 12px;
 }
 
+.form-actions .danger-button,
+.danger-button {
+  background: var(--danger);
+  color: #fff;
+}
+
+.transition-undo-form {
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
 .quick-form {
   display: grid;
   gap: 10px;

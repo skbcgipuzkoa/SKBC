@@ -1,6 +1,6 @@
 import { ArrowLeft, LogOut } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, transitionChildToAdultAction, updateKenshiAction } from "@/app/actions";
+import { ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, transitionChildToAdultAction, undoChildToAdultTransitionAction, updateKenshiAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
 import { hasInternalAccess } from "@/lib/auth";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
@@ -285,6 +285,8 @@ export default async function KenshiDetailPage({
             {notices.error === "ficha" ? <p className="form-error">No se pudo crear el enlace de ficha nueva.</p> : null}
             {notices.saved === "transition" ? <p className="save-ok">Kenshi pasado a adultos y ficha infantil archivada.</p> : null}
             {notices.error === "transition" ? <p className="form-error">No se pudo pasar a adultos. Revisa el grado adulto.</p> : null}
+            {notices.saved === "transition-undo" ? <p className="save-ok">Paso a adultos deshecho. Kenshi restaurado a ninos.</p> : null}
+            {notices.error === "transition-undo" ? <p className="form-error">No se pudo deshacer el paso a adultos.</p> : null}
             <div className="profile-actions">
               {member.ficha_token ? <a className="text-link" href={`/ficha/${member.ficha_token}`} target="_blank">Abrir ficha nueva</a> : (
                 <form action={ensureFichaTokenAction}>
@@ -355,6 +357,11 @@ export default async function KenshiDetailPage({
                 <span className="muted">{childTransition.notes ?? "Sin notas de transicion."}</span>
               </div>
             </div>
+            <form className="form-actions transition-undo-form" action={undoChildToAdultTransitionAction}>
+              <input type="hidden" name="memberId" value={member.id} />
+              <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
+              <button className="danger-button" type="submit">Deshacer paso a adultos</button>
+            </form>
           </section>
         ) : null}
 
