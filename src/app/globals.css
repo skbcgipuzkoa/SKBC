@@ -1688,16 +1688,25 @@ th {
 }
 
 @media (max-width: 860px) {
+  html {
+    scroll-padding-top: 122px;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   .shell {
     grid-template-columns: 1fr;
   }
 
   .sidebar {
+    box-shadow: 0 8px 22px rgba(15, 27, 45, 0.14);
     border-right: 0;
-    padding: 10px;
+    padding: 9px 10px 10px;
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 20;
   }
 
   .brand {
@@ -1716,28 +1725,38 @@ th {
   }
 
   .nav {
-    display: grid;
+    display: flex;
     gap: 6px;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    overflow: visible;
-    padding-bottom: 0;
+    margin: 0 -10px;
+    overflow-x: auto;
+    padding: 0 10px 2px;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
   }
 
   .nav a {
     align-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
-    font-size: 11px;
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 800;
     justify-content: center;
-    min-height: 34px;
+    min-height: 38px;
+    min-width: 78px;
     overflow: hidden;
-    padding: 7px 5px;
+    padding: 8px 10px;
     text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .main {
-    padding: 12px;
+    padding: 12px 10px 24px;
   }
 
   .class-detail-main {
@@ -1745,10 +1764,10 @@ th {
   }
 
   .topbar {
-    align-items: center;
+    align-items: flex-start;
     flex-direction: row;
     gap: 10px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
 
   .topbar > div:first-child {
@@ -1756,7 +1775,7 @@ th {
   }
 
   .topbar h1 {
-    font-size: 24px;
+    font-size: 23px;
     overflow-wrap: anywhere;
   }
 
@@ -1787,6 +1806,14 @@ th {
     white-space: nowrap;
   }
 
+  .secondary-link {
+    border-radius: 999px;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 38px;
+    padding: 8px 11px;
+  }
+
   .compact-mobile-actions .primary-link {
     max-width: 126px;
     overflow: hidden;
@@ -1812,6 +1839,40 @@ th {
     .ranking-columns,
     .public-profile {
     grid-template-columns: 1fr;
+  }
+
+  .stats {
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats .card {
+    min-height: 78px;
+    padding: 11px;
+  }
+
+  .stats .card h2 {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  .stats .metric {
+    font-size: 25px;
+    line-height: 1.08;
+  }
+
+  .stats .metric.small {
+    font-size: 17px;
+  }
+
+  .card {
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .section-title {
+    font-size: 17px;
+    margin: 20px 0 10px;
   }
 
   .public-profile {
@@ -1844,7 +1905,7 @@ th {
     overflow-x: auto;
     padding-bottom: 2px;
     position: sticky;
-    top: 152px;
+    top: 96px;
     z-index: 6;
   }
 
@@ -1927,7 +1988,8 @@ th {
   }
 
   .mobile-class-list {
-    display: none;
+    display: grid;
+    gap: 8px;
   }
 
   .mobile-class-card {
@@ -2003,7 +2065,7 @@ th {
   }
 
   .calendar-day {
-    min-height: 76px;
+    min-height: 68px;
     padding: 4px;
   }
 
@@ -2014,6 +2076,7 @@ th {
 
   .calendar-event {
     font-size: 10px;
+    max-width: 100%;
     padding: 4px;
   }
 
@@ -2097,12 +2160,63 @@ th {
     min-height: 48px;
   }
 
+  .quick-form input,
+  .quick-form select,
+  .quick-form textarea,
+  .edit-form input,
+  .edit-form select,
+  .edit-form textarea,
+  .form-grid input,
+  .form-grid select,
+  .form-grid textarea,
+  .filters input,
+  .filters select {
+    font-size: 16px;
+    min-height: 46px;
+  }
+
+  .quick-form textarea,
+  .edit-form textarea,
+  .form-grid textarea {
+    min-height: 86px;
+  }
+
+  .form-actions {
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .form-actions button,
+  .filters button {
+    min-height: 48px;
+    width: 100%;
+  }
+
   .course-member-picker {
     max-height: 48vh;
   }
 
   .course-member-option {
     min-height: 60px;
+  }
+
+  .course-event-card summary {
+    grid-template-columns: 1fr;
+    min-height: 66px;
+  }
+
+  .course-event-card summary strong,
+  .course-event-card summary small {
+    white-space: normal;
+  }
+
+  .course-event-card summary b {
+    justify-self: start;
+  }
+
+  .course-edit-form {
+    padding: 10px;
   }
 
   .section-heading-row {
@@ -2122,6 +2236,12 @@ th {
     min-width: 0;
   }
 
+  .table-wrap {
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
   thead {
     display: none;
   }
@@ -2134,7 +2254,11 @@ th {
   }
 
   tr {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
     border-bottom: 1px solid var(--line);
+    margin-bottom: 8px;
     padding: 10px 12px;
   }
 
@@ -2142,7 +2266,7 @@ th {
     border-bottom: 0;
     display: grid;
     gap: 8px;
-    grid-template-columns: 118px minmax(0, 1fr);
+    grid-template-columns: 104px minmax(0, 1fr);
     padding: 7px 0;
   }
 
@@ -2165,6 +2289,53 @@ th {
   .login-row,
   .inline-edit div {
     grid-template-columns: 1fr;
+  }
+
+  .filters {
+    gap: 9px;
+    margin: 14px 0;
+  }
+
+  .filters label {
+    font-size: 12px;
+  }
+
+  .profile-card {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .profile-card img,
+  .avatar-placeholder {
+    height: 76px;
+    width: 76px;
+  }
+
+  .split-section {
+    gap: 12px;
+  }
+
+  .ranking-columns table {
+    min-width: 0;
+  }
+
+  .inline-report-form,
+  .inline-report-stack {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .inline-report-form button,
+  .inline-report-stack .mini-action,
+  .link-stack .text-link,
+  td .mini-action {
+    justify-content: center;
+    min-height: 40px;
+    width: 100%;
+  }
+
+  .link-stack {
+    display: grid;
+    gap: 6px;
   }
 
   .legacy-ficha {
@@ -2216,5 +2387,62 @@ th {
 
   .ficha-table {
     min-width: 0;
+  }
+}
+
+@media (max-width: 430px) {
+  .main {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .brand strong {
+    font-size: 14px;
+  }
+
+  .nav a {
+    min-width: 72px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .topbar h1 {
+    font-size: 21px;
+  }
+
+  .compact-mobile-actions .primary-link {
+    max-width: 104px;
+  }
+
+  .stats {
+    gap: 7px;
+  }
+
+  .stats .card {
+    min-height: 72px;
+    padding: 10px;
+  }
+
+  td {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
+
+  td::before {
+    font-size: 11px;
+  }
+
+  .calendar-day {
+    min-height: 58px;
+    padding: 3px;
+  }
+
+  .calendar-event {
+    font-size: 9px;
+    padding: 3px;
+  }
+
+  .course-member-option,
+  .check-row {
+    grid-template-columns: 26px minmax(0, 1fr);
   }
 }
