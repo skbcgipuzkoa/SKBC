@@ -156,8 +156,8 @@ async function renderDiplomaPdf({
 
   page.drawRectangle({ x: 50, y: 294, width: 741, height: 76, color: white });
   page.drawRectangle({ x: 78, y: 185, width: 365, height: 135, color: white });
-  page.drawRectangle({ x: 420, y: 185, width: 365, height: 135, color: white });
-  page.drawRectangle({ x: 620, y: 124, width: 175, height: 42, color: white });
+  page.drawRectangle({ x: 420, y: 185, width: 320, height: 135, color: white });
+  page.drawRectangle({ x: 610, y: 164, width: 150, height: 24, color: white });
   page.drawRectangle({ x: 672, y: 52, width: 120, height: 18, color: white });
 
   drawCenteredText(page, name, {
