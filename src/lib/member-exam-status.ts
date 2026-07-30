@@ -13,6 +13,11 @@ type AttendanceRow = {
   attended_on: string;
 };
 
+type CourseRow = {
+  kind: "national" | "international";
+  course_date: string;
+};
+
 type TechniqueProgressRow = {
   technique_id: string | null;
   technique_name: string;
@@ -49,6 +54,13 @@ type TechnicalStatus = {
   missingFirst: number;
   missingRequired: number;
   requiredRepetitions: number;
+};
+
+type EngagementStatus = {
+  points180: number;
+  attendanceCredit: number;
+  internationalKyuAdvanceMonths: number;
+  notice: string;
 };
 
 export async function recalculateMemberExamStatus(memberId: string) {
@@ -113,7 +125,8 @@ async function calculateExamStatus(member: MemberRow) {
   }
 
   const requirement = await getExamRequirement(member);
-  const eligibilityDate = addEligibilityTime(cycleStartDate, member.grade, requirement.min_months);
+  const engagement = await calculateEngagementStatus(member, cycleStart);
+  const eligibilityDate = addEligibilityTime(cycleStartDate, member.grade, Math.max(0, requirement.min_months - engagement.internationalKyuAdvanceMonths));
   const [cycleAttendance, totalCycleSessions, recent, examCalls] = await Promise.all([
     countAttendance(member.id, cycleStart, formatDate(today)),
     countExpectedTrainingSessions(cycleStart, formatDate(eligibilityDate), member.class),
@@ -139,8 +152,10 @@ async function calculateExamStatus(member: MemberRow) {
   const nextExam = nextExamCall(eligibilityDate, examCalls);
   const warningDate = addMonths(nextExam, -2);
   const minimumAttendance = Math.ceil(totalCycleSessions * requirement.attendance_ratio);
-  const missingAttendance = Math.max(0, minimumAttendance - cycleAttendance);
+  const effectiveCycleAttendance = cycleAttendance + engagement.attendanceCredit;
+  const missingAttendance = Math.max(0, minimumAttendance - effectiveCycleAttendance);
   const attendancePercentage = totalCycleSessions > 0 ? Math.min(100, Math.round((cycleAttendance / totalCycleSessions) * 1000) / 10) : 0;
+  const effectiveAttendancePercentage = totalCycleSessions > 0 ? Math.min(100, Math.round((effectiveCycleAttendance / totalCycleSessions) * 1000) / 10) : 0;
   const eligibleByTime = today.getTime() >= eligibilityDate.getTime();
   const inWarningWindow = today.getTime() >= warningDate.getTime();
   const examCallExpired = today.getTime() > nextExam.getTime();
@@ -167,12 +182,15 @@ async function calculateExamStatus(member: MemberRow) {
     totalCycleSessions,
     minimumAttendance,
     cycleAttendance,
+    effectiveCycleAttendance,
     missingAttendance,
     attendancePercentage,
+    effectiveAttendancePercentage,
     attendanceRatio: requirement.attendance_ratio,
     recent,
     technicalStatus,
-    technicalBlocksExam: requirement.technical_blocks_exam
+    technicalBlocksExam: requirement.technical_blocks_exam,
+    engagement
   });
 
   return {
@@ -267,6 +285,63 @@ async function getRecentAttendance(memberId: string) {
   };
 }
 
+async function calculateEngagementStatus(member: MemberRow, cycleStart: string): Promise<EngagementStatus> {
+  if (member.class !== "adults") {
+    return { points180: 0, attendanceCredit: 0, internationalKyuAdvanceMonths: 0, notice: "" };
+  }
+
+  const supabase = createAdminClient();
+  const date180 = formatDate(addDays(startOfDay(new Date()), -180));
+  const [{ data: courses }, bonusResult, blackBeltResult, shakujoResult] = await Promise.all([
+    supabase
+      .from("courses")
+      .select("kind,course_date")
+      .eq("member_id", member.id)
+      .returns<CourseRow[]>(),
+    supabase
+      .from("adult_ranking_bonuses")
+      .select("points,bonus_date,active,permanent")
+      .eq("member_id", member.id)
+      .returns<Array<{ points: number; bonus_date: string; active: boolean; permanent: boolean }>>(),
+    supabase
+      .from("black_belt_special_attendance")
+      .select("status,black_belt_special_classes(class_date)")
+      .eq("member_id", member.id)
+      .returns<Array<{ status: "present" | "justified" | "absent"; black_belt_special_classes: { class_date: string } | null }>>(),
+    supabase
+      .from("shakujo_attendance")
+      .select("shakujo_classes(class_date)")
+      .eq("member_id", member.id)
+      .returns<Array<{ shakujo_classes: { class_date: string } | null }>>()
+  ]);
+
+  const recentCourses = (courses ?? []).filter((row) => row.course_date >= date180);
+  const coursePoints = recentCourses.reduce((sum, row) => sum + (row.kind === "international" ? 3 : 1), 0);
+  const bonusPoints = bonusResult.error ? 0 : (bonusResult.data ?? [])
+    .filter((row) => (row.permanent && row.active) || row.bonus_date >= date180)
+    .reduce((sum, row) => sum + row.points, 0);
+  const busenPoints = blackBeltResult.error ? 0 : (blackBeltResult.data ?? [])
+    .filter((row) => row.black_belt_special_classes?.class_date && row.black_belt_special_classes.class_date >= date180)
+    .reduce((sum, row) => sum + (row.status === "present" ? 3 : row.status === "absent" ? -2 : 0), 0);
+  const shakujoPoints = shakujoResult.error ? 0 : (shakujoResult.data ?? [])
+    .filter((row) => row.shakujo_classes?.class_date && row.shakujo_classes.class_date >= date180)
+    .length * 2;
+  const points180 = Math.max(0, coursePoints + bonusPoints + busenPoints + shakujoPoints);
+  const attendanceCredit = Math.min(2, Math.floor(points180 / 6));
+  const internationalSinceCycle = (courses ?? []).filter((row) => row.kind === "international" && row.course_date > cycleStart).length;
+  const internationalKyuAdvanceMonths = normalizeGrade(member.grade).endsWith(" KYU") ? Math.min(3, internationalSinceCycle * 2) : 0;
+
+  const parts = [];
+  if (attendanceCredit > 0) parts.push(`implicacion +${attendanceCredit} asistencia virtual para minimo`);
+  if (internationalKyuAdvanceMonths > 0) parts.push(`curso internacional KYU adelanta ${internationalKyuAdvanceMonths} meses`);
+  return {
+    points180,
+    attendanceCredit,
+    internationalKyuAdvanceMonths,
+    notice: parts.join("; ")
+  };
+}
+
 async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: number): Promise<TechnicalStatus> {
   if (!member.grade || requiredRepetitions <= 0) {
     return { ok: true, notice: "", missingFirst: 0, missingRequired: 0, requiredRepetitions };
@@ -329,12 +404,15 @@ function buildNotice({
   totalCycleSessions,
   minimumAttendance,
   cycleAttendance,
+  effectiveCycleAttendance,
   missingAttendance,
   attendancePercentage,
+  effectiveAttendancePercentage,
   attendanceRatio,
   recent,
   technicalStatus,
-  technicalBlocksExam
+  technicalBlocksExam,
+  engagement
 }: {
   semaphore: string;
   nextExam: Date;
@@ -343,19 +421,22 @@ function buildNotice({
   totalCycleSessions: number;
   minimumAttendance: number;
   cycleAttendance: number;
+  effectiveCycleAttendance: number;
   missingAttendance: number;
   attendancePercentage: number;
+  effectiveAttendancePercentage: number;
   attendanceRatio: number;
   recent: Awaited<ReturnType<typeof getRecentAttendance>>;
   technicalStatus: TechnicalStatus;
   technicalBlocksExam: boolean;
+  engagement: EngagementStatus;
 }) {
   const ratioLabel = `${Math.round(attendanceRatio * 100)}%`;
   let notice = "";
   if (semaphore === "AZUL") {
     notice = `AZUL: por tiempo no puede hasta ${formatDate(eligibilityDate)}. Convocatoria objetivo ${formatDate(nextExam)}.`;
   } else if (semaphore === "AMARILLO") {
-    notice = `AMARILLO: proxima convocatoria ${formatDate(nextExam)}. Aviso desde ${formatDate(warningDate)}. (${attendancePercentage}% - min ${ratioLabel}: ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}).`;
+    notice = `AMARILLO: proxima convocatoria ${formatDate(nextExam)}. Aviso desde ${formatDate(warningDate)}. (${effectiveAttendancePercentage}% - min ${ratioLabel}: ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}${engagement.attendanceCredit ? ` + ${engagement.attendanceCredit} implicacion` : ""}).`;
   } else if (semaphore === "ROJO") {
     notice = missingAttendance > 0
       ? `ROJO: no convocar por asistencia. Convocatoria ${formatDate(nextExam)}. Faltan ${missingAttendance} para el minimo ${minimumAttendance}/${totalCycleSessions}.`
@@ -363,13 +444,14 @@ function buildNotice({
   } else if (semaphore === "GRIS") {
     notice = `GRIS: revisar reactivacion reciente (${recent.total60}/6 en 60 dias y ${recent.total21}/1 en 21 dias).`;
   } else {
-    notice = `VERDE: apto para valoracion. Convocatoria ${formatDate(nextExam)} (${attendancePercentage}% - min ${ratioLabel}: ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}).`;
+    notice = `VERDE: apto para valoracion. Convocatoria ${formatDate(nextExam)} (${effectiveAttendancePercentage}% - min ${ratioLabel}: ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}${engagement.attendanceCredit ? ` + ${engagement.attendanceCredit} implicacion` : ""}).`;
   }
 
   const technicalNotice = technicalStatus.notice
     ? `${technicalBlocksExam && !technicalStatus.ok ? "BLOQUEO " : ""}${technicalStatus.notice}`
     : "";
-  return technicalNotice ? `${notice} | ${technicalNotice}` : notice;
+  const engagementNotice = engagement.notice ? `Implicacion: ${engagement.notice} (${engagement.points180} pts/180d).` : "";
+  return [notice, technicalNotice, engagementNotice].filter(Boolean).join(" | ");
 }
 
 async function getExamRequirement(member: MemberRow): Promise<ExamRequirement> {

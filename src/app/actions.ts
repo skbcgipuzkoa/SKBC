@@ -30,6 +30,30 @@ export async function logoutAction() {
   redirect("/");
 }
 
+export async function recalculateAllExamStatusesAction() {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("members")
+    .select("id")
+    .eq("status", "active")
+    .returns<Array<{ id: string }>>();
+
+  if (error) {
+    console.error("Error loading members for exam recalculation", error);
+    redirect("/proximos-examenes?error=recalculate");
+  }
+
+  for (const member of data ?? []) {
+    await recalculateMemberExamStatus(member.id);
+  }
+
+  redirect("/proximos-examenes?saved=recalculate");
+}
+
 async function getNextSkbcLegacyId(supabase: ReturnType<typeof createAdminClient>) {
   const { data, error } = await supabase
     .from("members")
@@ -1332,6 +1356,8 @@ export async function createCourseAction(formData: FormData) {
     console.error("Error syncing course to legacy sheet", syncError);
   }
 
+  await Promise.all(selectedMemberIds.map((memberId) => recalculateMemberExamStatus(memberId)));
+
   redirect("/cursos?saved=course");
 }
 
@@ -1405,6 +1431,9 @@ export async function updateCourseGroupAction(formData: FormData) {
       redirect("/cursos?error=course");
     }
   }
+
+  const affectedMemberIds = Array.from(new Set([...memberIds, ...existing.map((row) => row.member_id)]));
+  await Promise.all(affectedMemberIds.map((memberId) => recalculateMemberExamStatus(memberId)));
 
   redirect("/cursos?saved=course");
 }
@@ -1600,6 +1629,8 @@ export async function saveBlackBeltAttendanceAction(formData: FormData) {
       .eq("id", classId);
   }
 
+  await Promise.all(rows.map((row) => recalculateMemberExamStatus(row.member_id)));
+
   redirect("/clases-negras?saved=attendance");
 }
 
@@ -1664,6 +1695,8 @@ export async function saveShakujoAttendanceAction(formData: FormData) {
       .update({ closed: true, updated_at: now })
       .eq("id", classId);
   }
+
+  await Promise.all(memberIds.map((memberId) => recalculateMemberExamStatus(memberId)));
 
   redirect("/shakujo?saved=attendance");
 }

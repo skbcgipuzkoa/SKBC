@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, Clock, LogOut, Search, ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
-import { logoutAction } from "@/app/actions";
+import { logoutAction, recalculateAllExamStatusesAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -28,7 +28,7 @@ const semaphoreOrder = ["VERDE", "ROJO", "GRIS", "AMARILLO", "AZUL", "INACTIVO",
 export default async function ProximosExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; semaforo?: string; class?: string }>;
+  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -107,6 +107,9 @@ export default async function ProximosExamenesPage({
           </form>
         </div>
 
+        {params.saved === "recalculate" ? <p className="save-ok">Semaforos recalculados con implicacion, cursos y calendario.</p> : null}
+        {params.error === "recalculate" ? <p className="form-error">No se pudieron recalcular los semaforos.</p> : null}
+
         <section className="grid stats compact" aria-label="Resumen proximos examenes">
           <article className="card">
             <CheckCircle2 aria-hidden="true" size={19} />
@@ -143,8 +146,12 @@ export default async function ProximosExamenesPage({
             <span>Convocatorias configurables: junio y diciembre</span>
             <span>Asistencia minima por defecto: 40%</span>
             <span>Adultos: tecnica necesaria para VERDE</span>
+            <span>Cursos e implicacion reciente pueden bonificar convocatoria</span>
             <span>Cierres editables: festivos, Semana Santa, carnavales</span>
           </div>
+          <form action={recalculateAllExamStatusesAction} className="form-actions">
+            <button type="submit">Recalcular semaforos</button>
+          </form>
         </section>
 
         <section className="semaphore-strip" aria-label="Semaforos">
