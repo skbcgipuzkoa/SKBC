@@ -1,11 +1,12 @@
 :root {
-  --bg: #f8fafc;
+  --bg: #f3f6fa;
   --panel: #ffffff;
   --ink: #172033;
   --muted: #667085;
   --line: #d9e2ec;
   --brand: #0057b8;
   --brand-strong: #003f88;
+  --brand-dark: #0f1b2d;
   --accent: #c89b3c;
   --ok: #18864b;
   --warn: #b7791f;
@@ -45,24 +46,42 @@ textarea {
 
 .sidebar {
   border-right: 1px solid var(--line);
-  background: #0f1b2d;
+  background:
+    linear-gradient(180deg, rgba(15, 27, 45, 0.96), rgba(9, 17, 31, 0.98)),
+    radial-gradient(circle at 30% 0%, rgba(0, 87, 184, 0.28), transparent 36%);
   color: #fff;
   padding: 24px 18px;
 }
 
 .brand {
+  align-items: center;
   display: grid;
-  gap: 4px;
+  gap: 10px;
+  grid-template-columns: 48px minmax(0, 1fr);
   margin-bottom: 28px;
 }
 
+.brand::before {
+  background: #fff url("/skbc-icon.png") center / contain no-repeat;
+  border: 2px solid rgba(200, 155, 60, 0.55);
+  border-radius: 50%;
+  content: "";
+  display: block;
+  height: 48px;
+  width: 48px;
+}
+
 .brand strong {
+  display: block;
   font-size: 18px;
+  line-height: 1.1;
 }
 
 .brand span {
   color: #b8c4d6;
+  display: block;
   font-size: 13px;
+  margin-top: 4px;
 }
 
 .nav {
@@ -74,10 +93,18 @@ textarea {
   border-radius: 6px;
   color: #dbe7f5;
   padding: 10px 12px;
+  transition: background 160ms ease, color 160ms ease;
 }
 
 .nav a[aria-current="page"] {
-  background: #1f3353;
+  background: linear-gradient(90deg, #1f3353, rgba(0, 87, 184, 0.38));
+  border-left: 3px solid var(--accent);
+  color: #fff;
+  padding-left: 9px;
+}
+
+.nav a:hover {
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
@@ -145,7 +172,9 @@ h1 {
 
 .login-panel {
   align-items: center;
-  background: var(--panel);
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.98), rgba(238, 244, 251, 0.92)),
+    radial-gradient(circle at 100% 0%, rgba(200, 155, 60, 0.16), transparent 34%);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
@@ -153,6 +182,23 @@ h1 {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
   margin-bottom: 22px;
   padding: 20px;
+}
+
+.official-lockup {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.official-lockup img {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  height: 54px;
+  object-fit: contain;
+  padding: 4px;
+  width: 54px;
 }
 
 .login-panel h2 {
@@ -255,7 +301,9 @@ h1 {
 
 .home-hero-panel {
   align-items: center;
-  background: var(--panel);
+  background:
+    linear-gradient(120deg, #ffffff, #eef4fb),
+    radial-gradient(circle at 96% 8%, rgba(200, 155, 60, 0.18), transparent 36%);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
@@ -1563,12 +1611,29 @@ th {
 }
 
 .delegate-hero {
-  background: #0f1b2d;
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(15, 27, 45, 0.96), rgba(0, 63, 136, 0.88)),
+    radial-gradient(circle at 94% 12%, rgba(200, 155, 60, 0.28), transparent 28%);
   color: #fff;
-  display: grid;
-  gap: 6px;
+  display: flex;
+  gap: 14px;
   margin-bottom: 14px;
   padding: 18px;
+}
+
+.delegate-hero img {
+  background: #fff;
+  border: 2px solid rgba(200, 155, 60, 0.75);
+  border-radius: 50%;
+  height: 72px;
+  object-fit: contain;
+  padding: 4px;
+  width: 72px;
+}
+
+.delegate-hero div {
+  min-width: 0;
 }
 
 .delegate-hero span {
@@ -1750,7 +1815,9 @@ th {
 }
 
 .ficha-hero {
-  background: #0f1b2d;
+  background:
+    linear-gradient(135deg, rgba(15, 27, 45, 0.97), rgba(0, 63, 136, 0.9)),
+    radial-gradient(circle at 50% 0%, rgba(200, 155, 60, 0.24), transparent 32%);
   border-radius: 16px;
   color: #fff;
   display: grid;
@@ -1769,7 +1836,8 @@ th {
 
 .logo-box {
   background: #fff;
-  border-radius: 14px;
+  border: 2px solid rgba(200, 155, 60, 0.55);
+  border-radius: 16px;
   min-height: 154px;
   padding: 8px;
 }
@@ -1781,6 +1849,11 @@ th {
 }
 
 .student-box {
+  align-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  padding: 14px;
   text-align: center;
 }
 

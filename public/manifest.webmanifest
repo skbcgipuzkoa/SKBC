@@ -1,7 +1,7 @@
 {
-  "name": "SKBC Gipuzkoa",
+  "name": "SKBC Gipuzkoa Oficial",
   "short_name": "SKBC",
-  "description": "Panel interno privado de SKBC Gipuzkoa",
+  "description": "Plataforma oficial de gestion y fichas de SKBC Gipuzkoa",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

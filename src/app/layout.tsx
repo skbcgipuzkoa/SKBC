@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SKBC Gipuzkoa",
-  description: "Nueva plataforma de gestion de SKBC Gipuzkoa",
+  description: "Plataforma oficial de gestion y fichas de SKBC Gipuzkoa",
+  metadataBase: new URL("https://skbc.vercel.app"),
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -17,6 +18,19 @@ export const metadata: Metadata = {
     capable: true,
     title: "SKBC",
     statusBarStyle: "default"
+  },
+  openGraph: {
+    title: "SKBC Gipuzkoa",
+    description: "Plataforma oficial de gestion y fichas de SKBC Gipuzkoa",
+    siteName: "SKBC Gipuzkoa",
+    images: [{ url: "/skbc-icon.png", width: 1200, height: 1200, alt: "SKBC Gipuzkoa" }],
+    type: "website"
+  },
+  twitter: {
+    card: "summary",
+    title: "SKBC Gipuzkoa",
+    description: "Plataforma oficial de gestion y fichas de SKBC Gipuzkoa",
+    images: ["/skbc-icon.png"]
   }
 };
 

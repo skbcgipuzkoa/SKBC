@@ -243,7 +243,10 @@ function LoginHome({ error }: { error?: string }) {
 
         <section className="login-panel">
           <div>
-            <LockKeyhole aria-hidden="true" size={22} />
+            <div className="official-lockup">
+              <img src="/skbc-icon.png" alt="SKBC Gipuzkoa" />
+              <LockKeyhole aria-hidden="true" size={22} />
+            </div>
             <h2>Acceso admin e instructores</h2>
             <p className="muted">
               Los alumnos siguen usando sus fichas actuales. Este panel es solo para gestion interna.

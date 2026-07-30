@@ -125,9 +125,12 @@ export default async function DelegateClassPage({
   return (
     <main className="delegate-page">
       <section className="delegate-hero">
-        <span>{title}</span>
-        <h1>{primaryName}</h1>
-        <p>{primaryClass.class_date}</p>
+        <img src="/skbc-icon.png" alt="SKBC Gipuzkoa" />
+        <div>
+          <span>SKBC Gipuzkoa · {title}</span>
+          <h1>{primaryName}</h1>
+          <p>{primaryClass.class_date}</p>
+        </div>
       </section>
 
       {query.saved === "sent" ? (
