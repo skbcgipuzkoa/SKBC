@@ -257,6 +257,8 @@ export default async function KenshiDetailPage({
           <a href="/">Inicio</a>
           <a href="/kenshis" aria-current="page">Kenshis</a>
           <a href="/clases">Clases</a>
+          <a href="/clases-negras">Busen</a>
+          <a href="/shakujo">Shakujo</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/cursos">Cursos</a>

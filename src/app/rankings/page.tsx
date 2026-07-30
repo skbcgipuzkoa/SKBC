@@ -171,6 +171,8 @@ export default async function RankingsPage({
           <a href="/">Inicio</a>
           <a href="/kenshis">Kenshis</a>
           <a href="/clases">Clases</a>
+          <a href="/clases-negras">Busen</a>
+          <a href="/shakujo">Shakujo</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/cursos">Cursos</a>
@@ -363,7 +365,8 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
-      const daysWithoutAttendance = lastAttendance.get(member.id) ? daysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10)) : 0;
+      const last = lastAttendance.get(member.id);
+      const daysWithoutAttendance = last ? daysBetween(last, new Date().toISOString().slice(0, 10)) : 999;
       const nac = nationalCoursePoints.get(member.id) ?? 0;
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const bonus = manualBonus.get(member.id) ?? 0;

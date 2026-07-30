@@ -91,6 +91,8 @@ export default async function CursosPage({
           <a href="/">Inicio</a>
           <a href="/kenshis">Kenshis</a>
           <a href="/clases">Clases</a>
+          <a href="/clases-negras">Busen</a>
+          <a href="/shakujo">Shakujo</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/cursos" aria-current="page">Cursos</a>
