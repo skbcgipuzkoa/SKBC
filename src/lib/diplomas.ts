@@ -1,4 +1,7 @@
 import { createSign } from "crypto";
+import { readFile } from "fs/promises";
+import path from "path";
+import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ExamForDiploma = {
@@ -46,13 +49,11 @@ export async function generateDiplomaForExam(examId: string) {
   if (exam.diploma_url) return exam.diploma_url;
   if (!exam.members?.display_name) throw new Error("El examen no tiene kenshi vinculado.");
 
-  const templateId = requiredEnv("DIPLOMA_EXAMEN_TEMPLATE_ID");
   const folderId = requiredEnv("DIPLOMA_EXAMEN_FOLDER_ID");
   const accessToken = await getGoogleAccessToken();
   const examDate = parseDate(exam.exam_date);
   const diploma = await generateDiplomaPdf({
     accessToken,
-    templateId,
     folderId,
     name: exam.members.display_name,
     grade: exam.grade,
@@ -81,12 +82,10 @@ export async function generateDiplomaForExam(examId: string) {
 }
 
 export async function verifyDiplomaSetup() {
-  const templateId = requiredEnv("DIPLOMA_EXAMEN_TEMPLATE_ID");
   const folderId = requiredEnv("DIPLOMA_EXAMEN_FOLDER_ID");
   const accessToken = await getGoogleAccessToken();
   return generateDiplomaPdf({
     accessToken,
-    templateId,
     folderId,
     name: "PRUEBA SKBC",
     grade: "5 KYU",
@@ -97,7 +96,6 @@ export async function verifyDiplomaSetup() {
 
 async function generateDiplomaPdf({
   accessToken,
-  templateId,
   folderId,
   name,
   grade,
@@ -105,7 +103,6 @@ async function generateDiplomaPdf({
   registry
 }: {
   accessToken: string;
-  templateId: string;
   folderId: string;
   name: string;
   grade: string;
@@ -113,72 +110,93 @@ async function generateDiplomaPdf({
   registry: string;
 }) {
   const fileBaseName = `Diploma_${formatCompactDate(examDate)}_${cleanFileName(name)}_${cleanFileName(grade)}`;
-  const copy = await googleJson<{ id: string }>(
-    `https://www.googleapis.com/drive/v3/files/${templateId}/copy?supportsAllDrives=true`,
+  const pdf = await renderDiplomaPdf({ name, grade, examDate, registry });
+  const pdfFile = await uploadPdfToDrive({
+    accessToken,
+    folderId,
+    fileName: `${fileBaseName}.pdf`,
+    pdf
+  });
+
+  await googleJson(
+    `https://www.googleapis.com/drive/v3/files/${pdfFile.id}/permissions?supportsAllDrives=true`,
     accessToken,
     {
       method: "POST",
-      body: JSON.stringify({
-        name: fileBaseName,
-        parents: [folderId]
-      })
+      body: JSON.stringify({ role: "reader", type: "anyone" })
     }
   );
 
-  try {
-    await googleJson(
-      `https://slides.googleapis.com/v1/presentations/${copy.id}:batchUpdate`,
-      accessToken,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          requests: [
-            replaceText("{{NOMBRE}}", name),
-            replaceText("{{GRADO_ES}}", grade),
-            replaceText("{{GRADO_EU}}", translateGradeEu(grade)),
-            replaceText("{{FECHA_ES}}", formatDateEs(examDate)),
-            replaceText("{{FECHA_EU}}", formatDateEu(examDate)),
-            replaceText("{{REGISTRO}}", registry)
-          ]
-        })
-      }
-    );
+  return {
+    id: pdfFile.id,
+    fileName: `${fileBaseName}.pdf`,
+    url: `https://drive.google.com/file/d/${pdfFile.id}/view`
+  };
+}
 
-    const pdf = await googleBinary(
-      `https://www.googleapis.com/drive/v3/files/${copy.id}/export?mimeType=application/pdf`,
-      accessToken
-    );
-    const pdfFile = await uploadPdfToDrive({
-      accessToken,
-      folderId,
-      fileName: `${fileBaseName}.pdf`,
-      pdf
-    });
+async function renderDiplomaPdf({
+  name,
+  grade,
+  examDate,
+  registry
+}: {
+  name: string;
+  grade: string;
+  examDate: Date;
+  registry: string;
+}) {
+  const templatePath = path.join(process.cwd(), "private", "diploma-template.pdf");
+  const templateBytes = await readFile(templatePath);
+  const pdfDoc = await PDFDocument.load(templateBytes);
+  const page = pdfDoc.getPages()[0];
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const italic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const black = rgb(0, 0, 0);
+  const white = rgb(1, 1, 1);
 
-    await googleJson(
-      `https://www.googleapis.com/drive/v3/files/${pdfFile.id}/permissions?supportsAllDrives=true`,
-      accessToken,
-      {
-        method: "POST",
-        body: JSON.stringify({ role: "reader", type: "anyone" })
-      }
-    );
+  page.drawRectangle({ x: 50, y: 294, width: 741, height: 76, color: white });
+  page.drawRectangle({ x: 48, y: 123, width: 350, height: 98, color: white });
+  page.drawRectangle({ x: 442, y: 123, width: 350, height: 98, color: white });
+  page.drawRectangle({ x: 672, y: 52, width: 120, height: 18, color: white });
 
-    return {
-      id: pdfFile.id,
-      fileName: `${fileBaseName}.pdf`,
-      url: `https://drive.google.com/file/d/${pdfFile.id}/view`
-    };
-  } finally {
-    await googleJson(
-      `https://www.googleapis.com/drive/v3/files/${copy.id}?supportsAllDrives=true`,
-      accessToken,
-      {
-        method: "PATCH",
-        body: JSON.stringify({ trashed: true })
-      }
-    ).catch((error) => console.error("Error trashing temporary diploma presentation", error));
-  }
+  drawCenteredText(page, name, {
+    font: bold,
+    size: fitFontSize(name, 44, 690, bold),
+    x: 50,
+    y: 318,
+    width: 741,
+    color: black
+  });
+
+  drawWrappedText(page, `Ha realizado y culminado con exito el examen de ${grade}. Para que asi conste, hoy ${formatDateEs(examDate)}, hacemos entrega del presente certificado.`, {
+    font: italic,
+    size: 13,
+    x: 64,
+    y: 200,
+    width: 330,
+    lineHeight: 16,
+    color: black
+  });
+
+  drawWrappedText(page, `${translateGradeEu(grade)} azterketa egin eta gainditu du. Hala jakinarazten dugu gaur, ${formatDateEu(examDate)}, agiri honen bidez.`, {
+    font: italic,
+    size: 13,
+    x: 455,
+    y: 200,
+    width: 330,
+    lineHeight: 16,
+    color: black
+  });
+
+  page.drawText(`Reg.: ${registry}`, {
+    font: bold,
+    size: 11,
+    x: 686,
+    y: 57,
+    color: black
+  });
+
+  return Buffer.from(await pdfDoc.save());
 }
 
 async function getGoogleAccessToken() {
@@ -250,14 +268,6 @@ async function googleJson<T = unknown>(url: string, accessToken: string, init: R
   return response.status === 204 ? ({} as T) : await response.json() as T;
 }
 
-async function googleBinary(url: string, accessToken: string) {
-  const response = await fetch(url, {
-    headers: { authorization: `Bearer ${accessToken}` }
-  });
-  if (!response.ok) throw new Error(`Google export error ${response.status}: ${await response.text()}`);
-  return Buffer.from(await response.arrayBuffer());
-}
-
 async function uploadPdfToDrive({
   accessToken,
   folderId,
@@ -293,18 +303,6 @@ async function uploadPdfToDrive({
 
   if (!response.ok) throw new Error(`Google upload error ${response.status}: ${await response.text()}`);
   return await response.json() as { id: string };
-}
-
-function replaceText(text: string, replaceTextValue: string) {
-  return {
-    replaceAllText: {
-      containsText: {
-        text,
-        matchCase: true
-      },
-      replaceText: replaceTextValue
-    }
-  };
 }
 
 function translateGradeEu(grade: string) {
@@ -352,4 +350,74 @@ function base64Url(value: string | Buffer) {
     .replace(/=/g, "")
     .replace(/\+/g, "-")
     .replace(/\//g, "_");
+}
+
+function drawCenteredText(
+  page: PDFPage,
+  text: string,
+  options: {
+    font: PDFFont;
+    size: number;
+    x: number;
+    y: number;
+    width: number;
+    color: ReturnType<typeof rgb>;
+  }
+) {
+  const textWidth = options.font.widthOfTextAtSize(text, options.size);
+  page.drawText(text, {
+    font: options.font,
+    size: options.size,
+    x: options.x + Math.max(0, (options.width - textWidth) / 2),
+    y: options.y,
+    color: options.color
+  });
+}
+
+function drawWrappedText(
+  page: PDFPage,
+  text: string,
+  options: {
+    font: PDFFont;
+    size: number;
+    x: number;
+    y: number;
+    width: number;
+    lineHeight: number;
+    color: ReturnType<typeof rgb>;
+  }
+) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (options.font.widthOfTextAtSize(next, options.size) <= options.width || !current) {
+      current = next;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+
+  if (current) lines.push(current);
+
+  lines.forEach((line, index) => {
+    page.drawText(line, {
+      font: options.font,
+      size: options.size,
+      x: options.x,
+      y: options.y - index * options.lineHeight,
+      color: options.color
+    });
+  });
+}
+
+function fitFontSize(text: string, preferredSize: number, maxWidth: number, font: PDFFont) {
+  let size = preferredSize;
+  while (size > 24 && font.widthOfTextAtSize(text, size) > maxWidth) {
+    size -= 1;
+  }
+  return size;
 }
