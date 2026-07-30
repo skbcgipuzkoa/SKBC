@@ -24,6 +24,15 @@ type ClassPreview = {
   plan_generated: boolean;
 };
 
+type ExamAlert = {
+  legacy_id: string | null;
+  display_name: string;
+  class: "kids" | "adults";
+  grade: string | null;
+  semaphore: string | null;
+  exam_notice: string | null;
+};
+
 const moduleGroups = [
   {
     title: "Trabajo diario",
@@ -69,7 +78,9 @@ export default async function Home({
     { count: kidsMembers },
     { count: openClasses },
     { data: todayClasses },
-    { data: nextClasses }
+    { data: nextClasses },
+    { data: pendingPlanClasses },
+    { data: urgentExamMembers }
   ] = await Promise.all([
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults"),
@@ -87,7 +98,25 @@ export default async function Home({
       .gte("class_date", today)
       .order("class_date")
       .limit(5)
-      .returns<ClassPreview[]>()
+      .returns<ClassPreview[]>(),
+    supabase
+      .from("classes")
+      .select("legacy_id,class_date,name,class_group,closed,plan_generated")
+      .eq("closed", false)
+      .eq("class_group", "adults")
+      .eq("plan_generated", false)
+      .order("class_date")
+      .limit(5)
+      .returns<ClassPreview[]>(),
+    supabase
+      .from("members")
+      .select("legacy_id,display_name,class,grade,semaphore,exam_notice")
+      .eq("status", "active")
+      .in("semaphore", ["ROJO", "VERDE"])
+      .order("class")
+      .order("display_name")
+      .limit(6)
+      .returns<ExamAlert[]>()
   ]);
 
   const stats = [
@@ -191,6 +220,46 @@ export default async function Home({
               )) : <p className="muted">No hay clases proximas.</p>}
             </div>
           </article>
+        </section>
+
+        <section className="card home-pending-card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Pendientes importantes</h2>
+              <p className="muted">Atajos para lo que puede necesitar accion antes de navegar por menus.</p>
+            </div>
+            <a className="secondary-link" href="/proximos-examenes">Ver examenes</a>
+          </div>
+          <div className="home-pending-grid">
+            <div>
+              <h3>Planes tecnicos pendientes</h3>
+              <div className="home-class-list">
+                {pendingPlanClasses?.length ? pendingPlanClasses.map((clase) => (
+                  <a className="home-class-row warning" href={`/clases/${clase.legacy_id}`} key={`pending-${clase.legacy_id ?? clase.name}`}>
+                    <span>
+                      <strong>{clase.name}</strong>
+                      <small>{clase.class_date} - Adultos</small>
+                    </span>
+                    <b>Preparar</b>
+                  </a>
+                )) : <p className="muted">No hay planes adultos pendientes.</p>}
+              </div>
+            </div>
+            <div>
+              <h3>Examenes con aviso</h3>
+              <div className="home-class-list">
+                {urgentExamMembers?.length ? urgentExamMembers.map((member) => (
+                  <a className={`home-class-row ${member.semaphore === "ROJO" ? "danger" : "ready"}`} href={member.legacy_id ? `/kenshis/${member.legacy_id}` : "/proximos-examenes"} key={`exam-${member.legacy_id ?? member.display_name}`}>
+                    <span>
+                      <strong>{member.display_name}</strong>
+                      <small>{member.class === "kids" ? "Ninos" : "Adultos"} - {member.grade ?? "Sin grado"}</small>
+                    </span>
+                    <b>{member.semaphore ?? "-"}</b>
+                  </a>
+                )) : <p className="muted">No hay avisos urgentes.</p>}
+              </div>
+            </div>
+          </div>
         </section>
 
         <section className="home-modules" aria-label="Accesos por tarea">
