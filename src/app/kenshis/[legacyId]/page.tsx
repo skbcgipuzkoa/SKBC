@@ -1,8 +1,9 @@
 import { ArrowLeft, LogOut } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { ensureFichaTokenAction, logoutAction, updateKenshiAction } from "@/app/actions";
+import { ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, updateKenshiAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
 import { hasInternalAccess } from "@/lib/auth";
+import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -178,8 +179,9 @@ export default async function KenshiDetailPage({
   ]);
   const childRanking = childRankingResult.data;
   const childNotes = childNotesResult.data ?? [];
-  const childNotices = childNoticesResult.data ?? [];
+  const childNotices = [...buildAutomaticChildNotices(childRanking), ...(childNoticesResult.data ?? [])];
   const childBehavior = childBehaviorResult.data?.[0] ?? null;
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="shell">
@@ -317,6 +319,10 @@ export default async function KenshiDetailPage({
               <article>
                 <h2 className="section-title">Notas y comportamiento</h2>
                 <div className="stack-list">
+                  {notices.saved === "child-note" ? <p className="save-ok">Nota guardada y visible en la ficha infantil.</p> : null}
+                  {notices.error === "child-note" ? <p className="form-error">No se pudo guardar la nota.</p> : null}
+                  {notices.saved === "child-behavior" ? <p className="save-ok">Comportamiento guardado en la ficha infantil.</p> : null}
+                  {notices.error === "child-behavior" ? <p className="form-error">No se pudo guardar el comportamiento.</p> : null}
                   {childNotes.length ? childNotes.map((note) => (
                     <div className="notice-row" key={`${note.note_date}-${note.note}`}>
                       <strong>{note.note_type ?? "Nota sensei"}</strong>
@@ -332,6 +338,50 @@ export default async function KenshiDetailPage({
                     </div>
                   ) : null}
                 </div>
+              </article>
+            </section>
+
+            <section className="split-section child-edit-section">
+              <article className="card">
+                <h2>Editar nota del Sensei</h2>
+                <form className="form-grid" action={saveChildNoteAction}>
+                  <input type="hidden" name="memberId" value={member.id} />
+                  <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
+                  <label>Fecha<input type="date" name="noteDate" defaultValue={childNotes[0]?.note_date ?? today} /></label>
+                  <label>
+                    Tipo
+                    <select name="noteType" defaultValue={childNotes[0]?.note_type ?? "NOTA DEL SENSEI"}>
+                      {NOTE_TYPES.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </label>
+                  <label>Autor<input name="author" defaultValue={childNotes[0]?.author ?? "Alvaro"} /></label>
+                  <label className="checkbox-line">
+                    <input type="checkbox" name="visibleFamily" defaultChecked />
+                    Visible en ficha infantil
+                  </label>
+                  <label className="wide">Nota<textarea name="note" rows={5} defaultValue={childNotes[0]?.note ?? ""} required /></label>
+                  <div className="form-actions wide">
+                    <button type="submit">Guardar nota</button>
+                  </div>
+                </form>
+              </article>
+
+              <article className="card">
+                <h2>Editar comportamiento</h2>
+                <form className="form-grid" action={saveChildBehaviorAction}>
+                  <input type="hidden" name="memberId" value={member.id} />
+                  <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
+                  <label>Fecha<input type="date" name="reportDate" defaultValue={childBehavior?.report_date ?? today} /></label>
+                  <label>Actitud<SelectOptions name="attitude" options={BEHAVIOR_OPTIONS} value={childBehavior?.attitude} /></label>
+                  <label>Atencion<SelectOptions name="attention" options={BEHAVIOR_OPTIONS} value={childBehavior?.attention} /></label>
+                  <label>Respeto<SelectOptions name="respect" options={RESPECT_OPTIONS} value={childBehavior?.respect} /></label>
+                  <label>Esfuerzo<SelectOptions name="effort" options={EFFORT_OPTIONS} value={childBehavior?.effort} /></label>
+                  <label>Companerismo<SelectOptions name="companionship" options={BEHAVIOR_OPTIONS} value={childBehavior?.companionship} /></label>
+                  <label className="wide">Observacion<textarea name="observation" rows={4} defaultValue={childBehavior?.observation ?? ""} /></label>
+                  <div className="form-actions wide">
+                    <button type="submit">Guardar comportamiento</button>
+                  </div>
+                </form>
               </article>
             </section>
           </>
@@ -397,5 +447,19 @@ export default async function KenshiDetailPage({
         </section>
       </main>
     </div>
+  );
+}
+
+const NOTE_TYPES = ["NOTA DEL SENSEI", "FELICITACION", "SEGUIMIENTO", "AVISO", "COMPORTAMIENTO"];
+const BEHAVIOR_OPTIONS = ["EXCELENTE", "MUY BUENA", "BUENA", "NORMAL", "A MEJORAR"];
+const RESPECT_OPTIONS = ["10", "9", "8", "7", "BUENO", "NORMAL", "A MEJORAR"];
+const EFFORT_OPTIONS = ["EXCELENTE", "MUY BUENO", "BUENO", "POCO A POCO MEJORANDO", "A MEJORAR"];
+
+function SelectOptions({ name, options, value }: { name: string; options: string[]; value: string | null | undefined }) {
+  return (
+    <select name={name} defaultValue={value ?? ""}>
+      <option value="">Sin valorar</option>
+      {options.map((option) => <option key={option} value={option}>{option}</option>)}
+    </select>
   );
 }

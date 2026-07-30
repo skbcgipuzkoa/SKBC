@@ -710,6 +710,90 @@ export async function ensureFichaTokenAction(formData: FormData) {
   redirect(`/kenshis/${legacyId}?saved=ficha`);
 }
 
+export async function saveChildNoteAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  const noteDate = parseDateInput(String(formData.get("noteDate") ?? "")) ?? new Date().toISOString().slice(0, 10);
+  const noteType = String(formData.get("noteType") ?? "").trim() || "NOTA DEL SENSEI";
+  const note = String(formData.get("note") ?? "").trim();
+  const author = String(formData.get("author") ?? "").trim() || "Alvaro";
+  const visibleFamily = String(formData.get("visibleFamily") ?? "") === "on";
+
+  if (!memberId || !legacyId || !note) {
+    redirect(`/kenshis/${legacyId || ""}?error=child-note`);
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("child_notes").upsert(
+    {
+      member_id: memberId,
+      legacy_id: `MANUAL-NOTE-${legacyId}`,
+      note_date: noteDate,
+      note_type: noteType,
+      note,
+      visible_family: visibleFamily,
+      author,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "legacy_id" }
+  );
+
+  if (error) {
+    console.error("Error saving child note", error);
+    redirect(`/kenshis/${legacyId}?error=child-note`);
+  }
+
+  redirect(`/kenshis/${legacyId}?saved=child-note`);
+}
+
+export async function saveChildBehaviorAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  const reportDate = parseDateInput(String(formData.get("reportDate") ?? "")) ?? new Date().toISOString().slice(0, 10);
+  const attitude = String(formData.get("attitude") ?? "").trim() || null;
+  const attention = String(formData.get("attention") ?? "").trim() || null;
+  const respect = String(formData.get("respect") ?? "").trim() || null;
+  const effort = String(formData.get("effort") ?? "").trim() || null;
+  const companionship = String(formData.get("companionship") ?? "").trim() || null;
+  const observation = String(formData.get("observation") ?? "").trim() || null;
+
+  if (!memberId || !legacyId) {
+    redirect(`/kenshis/${legacyId || ""}?error=child-behavior`);
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("child_behavior_reports").upsert(
+    {
+      member_id: memberId,
+      legacy_id: `MANUAL-BEHAVIOR-${legacyId}`,
+      report_date: reportDate,
+      attitude,
+      attention,
+      respect,
+      effort,
+      companionship,
+      observation,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "legacy_id" }
+  );
+
+  if (error) {
+    console.error("Error saving child behavior", error);
+    redirect(`/kenshis/${legacyId}?error=child-behavior`);
+  }
+
+  redirect(`/kenshis/${legacyId}?saved=child-behavior`);
+}
+
 export async function addAdultRankingBonusAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -188,7 +189,8 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
         .maybeSingle<ChildBehavior>()
     ]);
 
-    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} ranking={childRanking} notices={childNotices ?? []} note={childNote} behavior={behavior} />;
+    const automaticNotices = buildAutomaticChildNotices(childRanking);
+    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} ranking={childRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} />;
   }
 
   const targetGrade = nextAdultGrade(member.grade);

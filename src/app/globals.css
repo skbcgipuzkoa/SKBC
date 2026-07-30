@@ -462,6 +462,17 @@ th {
   gap: 6px;
 }
 
+.form-grid .checkbox-line {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.form-grid .checkbox-line input {
+  min-height: auto;
+  width: auto;
+}
+
 .form-grid .wide {
   grid-column: 1 / -1;
 }
