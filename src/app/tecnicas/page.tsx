@@ -42,7 +42,8 @@ export default async function TecnicasPage({
   if (error) throw error;
 
   const techniques = (data ?? []).sort(compareTechniques);
-  const visibleTechniques = techniques.filter((tecnica) => matchesFilters(tecnica, params));
+  const review = buildTechnicalReview(techniques);
+  const visibleTechniques = techniques.filter((tecnica) => matchesFilters(tecnica, params, review));
   const categories = [...new Set(techniques.map((tecnica) => tecnica.category).filter(Boolean))].sort();
   const grades = adultGrades.filter((grade) => techniques.some((tecnica) => normalize(tecnica.grade) === normalize(grade)));
   const activeCount = techniques.filter((tecnica) => tecnica.active).length;
@@ -154,6 +155,9 @@ export default async function TecnicasPage({
               <option value="never">Sin repeticiones</option>
               <option value="missing-summary">Sin resumen</option>
               <option value="missing-variant">Sin variante</option>
+              <option value="duplicate-name">Nombre duplicado</option>
+              <option value="duplicate-base">Base sin variantes</option>
+              <option value="planning-non-core">Plan no goho/juho</option>
             </select>
             <button type="submit">Filtrar</button>
             <a className="secondary-link" href="/tecnicas">Limpiar</a>
@@ -169,6 +173,59 @@ export default async function TecnicasPage({
               <small>{item.pending} sin repetir - media {item.average}</small>
             </a>
           ))}
+        </section>
+
+        <h2 className="section-title">Revision tecnica</h2>
+        <section className="technical-review-grid">
+          <a className={missingSummary ? "review-card danger" : "review-card ok"} href="/tecnicas?status=missing-summary">
+            <strong>{missingSummary}</strong>
+            <span>Sin resumen</span>
+            <small>Faltan explicaciones para plan, PDF o sustituto.</small>
+          </a>
+          <a className={missingVariant ? "review-card danger" : "review-card ok"} href="/tecnicas?status=missing-variant">
+            <strong>{missingVariant}</strong>
+            <span>Variantes dudosas</span>
+            <small>Katate, Morote, Ryote, Ura u Omote sin metadato.</small>
+          </a>
+          <a className={review.duplicateNameRows.length ? "review-card warn" : "review-card ok"} href="/tecnicas?status=duplicate-name">
+            <strong>{review.duplicateNameRows.length}</strong>
+            <span>Nombres repetidos</span>
+            <small>Revisa si son variantes reales o duplicados.</small>
+          </a>
+          <a className={review.baseWithoutVariantRows.length ? "review-card warn" : "review-card ok"} href="/tecnicas?status=duplicate-base">
+            <strong>{review.baseWithoutVariantRows.length}</strong>
+            <span>Bases sin variante</span>
+            <small>Misma familia tecnica sin diferenciar agarre/lado.</small>
+          </a>
+          <a className={review.planningNonCoreRows.length ? "review-card warn" : "review-card ok"} href="/tecnicas?status=planning-non-core">
+            <strong>{review.planningNonCoreRows.length}</strong>
+            <span>Plan no goho/juho</span>
+            <small>Activas en planificacion fuera del nucleo Goho/Juho.</small>
+          </a>
+          <article className={review.unbalancedGrades.length ? "review-card warn" : "review-card ok"}>
+            <strong>{review.unbalancedGrades.length}</strong>
+            <span>Grados descompensados</span>
+            <small>Muy poco Goho o Juho para equilibrar planes.</small>
+          </article>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Equilibrio Goho/Juho por grado</h2>
+              <p className="muted">Ayuda a detectar grados donde el plan puede repetir demasiado por falta de material de una categoria.</p>
+            </div>
+          </div>
+          <div className="technical-balance-list">
+            {review.gradeBalance.map((item) => (
+              <a className={item.issue ? "balance-row issue" : "balance-row"} href={`/tecnicas?grade=${encodeURIComponent(item.grade)}`} key={item.grade}>
+                <strong>{item.grade}</strong>
+                <span>Goho {item.goho}</span>
+                <span>Juho {item.juho}</span>
+                <small>{item.issue ?? "Equilibrio suficiente"}</small>
+              </a>
+            ))}
+          </div>
         </section>
 
         <div className="section-heading-row">
@@ -278,7 +335,9 @@ export default async function TecnicasPage({
   );
 }
 
-function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; category?: string; status?: string }) {
+type TechnicalReview = ReturnType<typeof buildTechnicalReview>;
+
+function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; category?: string; status?: string }, review: TechnicalReview) {
   const q = normalize(params.q);
   if (q && !normalize(`${tecnica.name} ${tecnica.legacy_id ?? ""} ${tecnica.category}`).includes(q)) return false;
   if (params.grade && normalize(tecnica.grade) !== normalize(params.grade)) return false;
@@ -288,6 +347,9 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
   if (params.status === "never" && tecnica.last_trained_on && tecnica.repetitions > 0) return false;
   if (params.status === "missing-summary" && tecnica.summary_es) return false;
   if (params.status === "missing-variant" && (!needsVariant(tecnica.name) || tecnica.variant)) return false;
+  if (params.status === "duplicate-name" && !review.duplicateNameIds.has(rowKey(tecnica))) return false;
+  if (params.status === "duplicate-base" && !review.baseWithoutVariantIds.has(rowKey(tecnica))) return false;
+  if (params.status === "planning-non-core" && !isPlanningNonCore(tecnica)) return false;
   return true;
 }
 
@@ -310,4 +372,75 @@ function slugGrade(grade: string) {
 
 function needsVariant(name: string) {
   return /\b(katate|morote|ryote|ura|omote)\b/i.test(name);
+}
+
+function buildTechnicalReview(techniques: Tecnica[]) {
+  const duplicateNameIds = new Set<string>();
+  const baseWithoutVariantIds = new Set<string>();
+  const byName = groupBy(techniques, (item) => `${normalize(item.grade)}::${normalize(item.name)}`);
+  const byBase = groupBy(
+    techniques.filter((item) => item.base_name),
+    (item) => `${normalize(item.grade)}::${normalize(item.base_name)}`
+  );
+
+  byName.forEach((rows) => {
+    if (rows.length > 1) rows.forEach((row) => duplicateNameIds.add(rowKey(row)));
+  });
+
+  byBase.forEach((rows) => {
+    const activeRows = rows.filter((row) => row.active);
+    if (activeRows.length > 1) {
+      activeRows.filter((row) => !row.variant).forEach((row) => baseWithoutVariantIds.add(rowKey(row)));
+    }
+  });
+
+  const planningNonCoreRows = techniques.filter(isPlanningNonCore);
+  const duplicateNameRows = techniques.filter((row) => duplicateNameIds.has(rowKey(row)));
+  const baseWithoutVariantRows = techniques.filter((row) => baseWithoutVariantIds.has(rowKey(row)));
+  const gradeBalance = adultGrades
+    .map((grade) => {
+      const rows = techniques.filter((row) => normalize(row.grade) === normalize(grade) && row.active_in_planning);
+      const goho = rows.filter((row) => normalize(row.category) === "GOHO").length;
+      const juho = rows.filter((row) => normalize(row.category) === "JUHO").length;
+      const issue = balanceIssue(goho, juho);
+      return { grade, goho, juho, issue };
+    })
+    .filter((item) => item.goho || item.juho);
+
+  return {
+    duplicateNameIds,
+    baseWithoutVariantIds,
+    duplicateNameRows,
+    baseWithoutVariantRows,
+    planningNonCoreRows,
+    gradeBalance,
+    unbalancedGrades: gradeBalance.filter((item) => item.issue)
+  };
+}
+
+function groupBy<T>(items: T[], keyFor: (item: T) => string) {
+  const map = new Map<string, T[]>();
+  items.forEach((item) => {
+    const key = keyFor(item);
+    const rows = map.get(key) ?? [];
+    rows.push(item);
+    map.set(key, rows);
+  });
+  return map;
+}
+
+function rowKey(tecnica: Tecnica) {
+  return tecnica.legacy_id ?? `${tecnica.grade}:${tecnica.name}`;
+}
+
+function isPlanningNonCore(tecnica: Tecnica) {
+  return tecnica.active_in_planning && !["GOHO", "JUHO"].includes(normalize(tecnica.category));
+}
+
+function balanceIssue(goho: number, juho: number) {
+  if (goho === 0 && juho > 0) return "Sin Goho";
+  if (juho === 0 && goho > 0) return "Sin Juho";
+  if (goho === 1 && juho >= 4) return "Goho muy escaso";
+  if (juho === 1 && goho >= 4) return "Juho muy escaso";
+  return null;
 }
