@@ -155,8 +155,8 @@ async function renderDiplomaPdf({
   const white = rgb(1, 1, 1);
 
   page.drawRectangle({ x: 50, y: 294, width: 741, height: 76, color: white });
-  page.drawRectangle({ x: 48, y: 123, width: 350, height: 98, color: white });
-  page.drawRectangle({ x: 442, y: 123, width: 350, height: 98, color: white });
+  page.drawRectangle({ x: 112, y: 210, width: 325, height: 105, color: white });
+  page.drawRectangle({ x: 426, y: 210, width: 335, height: 105, color: white });
   page.drawRectangle({ x: 672, y: 52, width: 120, height: 18, color: white });
 
   drawCenteredText(page, name, {
@@ -168,12 +168,12 @@ async function renderDiplomaPdf({
     color: black
   });
 
-  drawWrappedText(page, `Ha realizado y culminado con exito el examen de ${grade}. Para que asi conste, hoy ${formatDateEs(examDate)}, hacemos entrega del presente certificado.`, {
+  drawWrappedText(page, `Ha realizado y culminado con éxito el examen de ${grade}. Para que así conste, hoy ${formatDateEs(examDate)}, hacemos entrega del presente certificado.`, {
     font: italic,
     size: 13,
-    x: 64,
-    y: 200,
-    width: 330,
+    x: 126,
+    y: 278,
+    width: 285,
     lineHeight: 16,
     color: black
   });
@@ -181,9 +181,9 @@ async function renderDiplomaPdf({
   drawWrappedText(page, `${translateGradeEu(grade)} azterketa egin eta gainditu du. Hala jakinarazten dugu gaur, ${formatDateEu(examDate)}, agiri honen bidez.`, {
     font: italic,
     size: 13,
-    x: 455,
-    y: 200,
-    width: 330,
+    x: 454,
+    y: 278,
+    width: 285,
     lineHeight: 16,
     color: black
   });
