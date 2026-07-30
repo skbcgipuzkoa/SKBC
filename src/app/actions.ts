@@ -1573,6 +1573,71 @@ export async function saveBlackBeltAttendanceAction(formData: FormData) {
   redirect("/clases-negras?saved=attendance");
 }
 
+export async function createShakujoClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const classDate = parseDateInput(String(formData.get("classDate") ?? ""));
+  if (!classDate) redirect("/shakujo?error=session");
+
+  const { error } = await createAdminClient()
+    .from("shakujo_classes")
+    .upsert({
+      class_date: classDate,
+      title: String(formData.get("title") ?? "").trim() || "Clase Shakujo",
+      instructor: String(formData.get("instructor") ?? "").trim() || null,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "class_date" });
+
+  if (error) {
+    console.error("Error creating shakujo class", error);
+    redirect("/shakujo?error=session");
+  }
+  redirect("/shakujo?saved=session");
+}
+
+export async function saveShakujoAttendanceAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const classId = String(formData.get("classId") ?? "").trim();
+  if (!classId) redirect("/shakujo?error=attendance");
+
+  const memberIds = formData.getAll("memberIds").map((value) => String(value).trim()).filter(Boolean);
+  const now = new Date().toISOString();
+  const supabase = createAdminClient();
+
+  const { error: deleteError } = await supabase
+    .from("shakujo_attendance")
+    .delete()
+    .eq("shakujo_class_id", classId);
+
+  if (deleteError) {
+    console.error("Error clearing shakujo attendance", deleteError);
+    redirect("/shakujo?error=attendance");
+  }
+
+  if (memberIds.length) {
+    const rows = memberIds.map((memberId) => ({
+      shakujo_class_id: classId,
+      member_id: memberId,
+      notes: String(formData.get(`notes:${memberId}`) ?? "").trim() || null,
+      updated_at: now
+    }));
+    const { error } = await supabase.from("shakujo_attendance").insert(rows);
+    if (error) {
+      console.error("Error saving shakujo attendance", error);
+      redirect("/shakujo?error=attendance");
+    }
+  }
+
+  if (formData.get("close") === "on") {
+    await supabase
+      .from("shakujo_classes")
+      .update({ closed: true, updated_at: now })
+      .eq("id", classId);
+  }
+
+  redirect("/shakujo?saved=attendance");
+}
+
 function normalizeClass(value: string) {
   return value === "kids" || value === "adults" ? value : null;
 }

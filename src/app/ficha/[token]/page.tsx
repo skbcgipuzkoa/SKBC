@@ -140,6 +140,15 @@ type BlackBeltSpecialRow = {
   } | null;
 };
 
+type ShakujoAttendanceRow = {
+  notes: string | null;
+  shakujo_classes: {
+    class_date: string;
+    title: string;
+    instructor: string | null;
+  } | null;
+};
+
 type FichaTone = "green" | "yellow" | "red" | "blue" | "neutral";
 
 export default async function PublicFichaPage({ params }: { params: Promise<{ token: string }> }) {
@@ -215,7 +224,7 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
 
   const targetGrade = nextAdultGrade(member.grade);
   const date180 = daysAgo(180);
-  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult] = await Promise.all([
+  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,grade,base_name,name,category,active,active_in_planning")
@@ -263,13 +272,20 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
       .eq("member_id", member.id)
       .order("created_at", { ascending: false })
       .returns<BlackBeltSpecialRow[]>()
+    ,
+    supabase
+      .from("shakujo_attendance")
+      .select("notes,shakujo_classes(class_date,title,instructor)")
+      .eq("member_id", member.id)
+      .order("created_at", { ascending: false })
+      .returns<ShakujoAttendanceRow[]>()
   ]);
 
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? []);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} />;
 }
 
 function AdultFicha({
@@ -281,7 +297,8 @@ function AdultFicha({
   technicalProgress,
   ranking,
   childTransition,
-  blackBeltSpecial
+  blackBeltSpecial,
+  shakujoAttendance
 }: {
   member: Member;
   attendance: Attendance[];
@@ -292,6 +309,7 @@ function AdultFicha({
   ranking: ReturnType<typeof buildAdultRanking>;
   childTransition: ChildAdultTransition | null;
   blackBeltSpecial: BlackBeltSpecialRow[];
+  shakujoAttendance: ShakujoAttendanceRow[];
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const nacionales = courses.filter((course) => course.kind === "national");
@@ -376,6 +394,27 @@ function AdultFicha({
               row.notes ?? "-"
             ])}
             empty="Sin clases especiales registradas."
+          />
+        </details>
+      </section>
+
+      <section className="ficha-section">
+        <details className="ficha-card">
+          <summary><strong>Shakujo</strong></summary>
+          <div className="ficha-fields small-fields">
+            <Field label="Clases realizadas" value={String(shakujoAttendance.length)} />
+            <Field label="Ultima clase" value={formatDate(shakujoAttendance[0]?.shakujo_classes?.class_date ?? null)} />
+            <Field label="Ranking" value="+2 puntos por clase en los ultimos 180 dias" />
+          </div>
+          <ResponsiveTable
+            columns={["Fecha", "Clase", "Instructor", "Notas"]}
+            rows={shakujoAttendance.map((row) => [
+              formatDate(row.shakujo_classes?.class_date ?? null),
+              row.shakujo_classes?.title ?? "-",
+              row.shakujo_classes?.instructor ?? "-",
+              row.notes ?? "-"
+            ])}
+            empty="Sin clases Shakujo registradas."
           />
         </details>
       </section>

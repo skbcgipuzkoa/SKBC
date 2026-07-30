@@ -7,6 +7,7 @@ import {
   Medal,
   NotebookTabs,
   ShieldCheck,
+  Sparkles,
   Trophy,
   UserPlus,
   Users
@@ -40,6 +41,7 @@ const moduleGroups = [
       { label: "Nueva clase", href: "/clases/nueva", icon: CalendarCheck, tone: "primary" },
       { label: "Calendario", href: "/clases", icon: NotebookTabs },
       { label: "Clases Busen", href: "/clases-negras", icon: ShieldCheck },
+      { label: "Shakujo", href: "/shakujo", icon: Sparkles },
       { label: "Kenshis", href: "/kenshis", icon: Users },
       { label: "Nuevo kenshi", href: "/kenshis/nuevo", icon: UserPlus }
     ]

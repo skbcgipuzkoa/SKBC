@@ -69,6 +69,7 @@ type AdultRankingRow = Member & {
   internationalCoursePoints: number;
   manualBonus: number;
   blackBeltPoints: number;
+  shakujoPoints: number;
   score: number;
 };
 
@@ -88,7 +89,7 @@ export default async function RankingsPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult] =
+  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, shakujoResult] =
     await Promise.all([
       supabase
         .from("members")
@@ -122,6 +123,11 @@ export default async function RankingsPage({
         .from("black_belt_special_attendance")
         .select("member_id,status,black_belt_special_classes(class_date)")
         .returns<any[]>()
+      ,
+      supabase
+        .from("shakujo_attendance")
+        .select("member_id,shakujo_classes(class_date)")
+        .returns<any[]>()
     ]);
 
   if (membersError) throw membersError;
@@ -149,7 +155,8 @@ export default async function RankingsPage({
   const recentBonuses = bonusTableReady ? recentBonusResult.data ?? [] : [];
 
   const blackBeltRows = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
-  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows).slice(0, 10);
+  const shakujoRows = shakujoResult.error ? [] : shakujoResult.data ?? [];
+  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, shakujoRows).slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const kids = (childRankings ?? []).filter((row) => row.members?.status === "active").slice(0, 10);
 
@@ -262,7 +269,7 @@ export default async function RankingsPage({
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>#</th><th>Kenshi</th><th>Grado</th><th>Asist. 30/90</th><th>Dias sin venir</th><th>Cursos</th><th>Busen</th><th>Bonus</th><th>Score</th></tr>
+                  <tr><th>#</th><th>Kenshi</th><th>Grado</th><th>Asist. 30/90</th><th>Dias sin venir</th><th>Cursos</th><th>Busen</th><th>Shakujo</th><th>Bonus</th><th>Score</th></tr>
                 </thead>
                 <tbody>
                   {adults.length ? adults.map((row, index) => (
@@ -277,11 +284,12 @@ export default async function RankingsPage({
                       <td data-label="Dias sin venir">{row.daysWithoutAttendance}</td>
                       <td data-label="Cursos">{row.nationalCoursePoints + row.internationalCoursePoints}</td>
                       <td data-label="Busen">{row.blackBeltPoints}</td>
+                      <td data-label="Shakujo">{row.shakujoPoints}</td>
                       <td data-label="Bonus">{row.manualBonus}</td>
                       <td data-label="Score"><strong>{row.score}</strong></td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={8} className="muted">Sin datos suficientes para ranking adulto.</td></tr>
+                    <tr><td colSpan={10} className="muted">Sin datos suficientes para ranking adulto.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -325,7 +333,7 @@ export default async function RankingsPage({
   );
 }
 
-function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[]): AdultRankingRow[] {
+function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], shakujoRows: any[]): AdultRankingRow[] {
   const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
@@ -342,6 +350,11 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       .filter((row) => row.black_belt_special_classes?.class_date >= date180)
       .map((row) => ({ member_id: row.member_id, points: row.status === "present" ? 3 : row.status === "absent" ? -2 : 0 }))
   );
+  const shakujoPoints = sumByMember(
+    shakujoRows
+      .filter((row) => row.shakujo_classes?.class_date >= date180)
+      .map((row) => ({ member_id: row.member_id, points: 2 }))
+  );
   const lastAttendance = latestAttendanceByMember(attendance);
 
   return adults
@@ -354,6 +367,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const bonus = manualBonus.get(member.id) ?? 0;
       const black = blackBeltPoints.get(member.id) ?? 0;
+      const shakujo = shakujoPoints.get(member.id) ?? 0;
       return {
         ...member,
         attendance30: a30,
@@ -364,7 +378,8 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         internationalCoursePoints: intl,
         manualBonus: bonus,
         blackBeltPoints: black,
-        score: a30 * 3 + a90 - daysWithoutAttendance + nac + intl + bonus + black
+        shakujoPoints: shakujo,
+        score: a30 * 3 + a90 - daysWithoutAttendance + nac + intl + bonus + black + shakujo
       };
     })
     .sort((a, b) => b.score - a.score || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));

@@ -124,6 +124,15 @@ type BlackBeltSpecialRow = {
   } | null;
 };
 
+type ShakujoAttendanceRow = {
+  notes: string | null;
+  shakujo_classes: {
+    class_date: string;
+    title: string;
+    instructor: string | null;
+  } | null;
+};
+
 export default async function KenshiDetailPage({
   params,
   searchParams
@@ -150,7 +159,7 @@ export default async function KenshiDetailPage({
   if (error || !member) notFound();
   const photoSrc = driveImageUrl(member.photo_url);
 
-  const [{ data: attendance }, { data: exams }, { data: courses }, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult] = await Promise.all([
+  const [{ data: attendance }, { data: exams }, { data: courses }, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("attended_on,official_grade,trained_grade,technical_role,classes(name)")
@@ -220,6 +229,13 @@ export default async function KenshiDetailPage({
       .eq("member_id", member.id)
       .order("created_at", { ascending: false })
       .returns<BlackBeltSpecialRow[]>()
+    ,
+    supabase
+      .from("shakujo_attendance")
+      .select("notes,shakujo_classes(class_date,title,instructor)")
+      .eq("member_id", member.id)
+      .order("created_at", { ascending: false })
+      .returns<ShakujoAttendanceRow[]>()
   ]);
   const childRanking = childRankingResult.data;
   const childNotes = childNotesResult.data ?? [];
@@ -228,6 +244,7 @@ export default async function KenshiDetailPage({
   const childTransition = childTransitionResult.data ?? null;
   const today = new Date().toISOString().slice(0, 10);
   const blackBeltSpecial = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
+  const shakujoAttendance = shakujoResult.error ? [] : shakujoResult.data ?? [];
 
   return (
     <div className="shell">
@@ -523,6 +540,33 @@ export default async function KenshiDetailPage({
                           <td>{row.notes ?? "-"}</td>
                         </tr>
                       )) : <tr><td colSpan={4} className="muted">Sin clases especiales registradas.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </section>
+
+            <h2 className="section-title">Shakujo</h2>
+            <section className="card">
+              <div className="grid stats compact">
+                <article className="card"><h2>Clases realizadas</h2><div className="metric">{shakujoAttendance.length}</div></article>
+                <article className="card"><h2>Ultima clase</h2><div className="metric small">{shakujoAttendance[0]?.shakujo_classes?.class_date ?? "-"}</div></article>
+                <article className="card"><h2>Ranking</h2><p className="muted">+2 puntos por clase durante 180 dias.</p></article>
+              </div>
+              <details className="advanced-details">
+                <summary>Ver historial Shakujo</summary>
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>Fecha</th><th>Clase</th><th>Instructor</th><th>Notas</th></tr></thead>
+                    <tbody>
+                      {shakujoAttendance.length ? shakujoAttendance.map((row) => (
+                        <tr key={`${row.shakujo_classes?.class_date}-${row.notes ?? ""}`}>
+                          <td>{row.shakujo_classes?.class_date ?? "-"}</td>
+                          <td>{row.shakujo_classes?.title ?? "-"}</td>
+                          <td>{row.shakujo_classes?.instructor ?? "-"}</td>
+                          <td>{row.notes ?? "-"}</td>
+                        </tr>
+                      )) : <tr><td colSpan={4} className="muted">Sin clases Shakujo registradas.</td></tr>}
                     </tbody>
                   </table>
                 </div>
