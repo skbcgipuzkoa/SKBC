@@ -8,7 +8,7 @@ import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
-import { syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
+import { syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -429,7 +429,7 @@ export async function addAttendanceAction(formData: FormData) {
   officialGrade = officialGrade || member?.grade || "";
   trainedGrade = trainedGrade || resolveWorkGrade(officialGrade);
 
-  const { error } = await supabase.from("attendance_logs").upsert(
+  const { data: attendanceRow, error } = await supabase.from("attendance_logs").upsert(
     {
       legacy_id: `NEW-ASIS-${classId}-${memberId}`,
       class_id: classId,
@@ -441,10 +441,16 @@ export async function addAttendanceAction(formData: FormData) {
       use_for_history: true
     },
     { onConflict: "legacy_id" }
-  );
+  ).select("id").single<{ id: string }>();
 
   if (error) {
     redirect(`/clases/${legacyId}?error=attendance`);
+  }
+
+  try {
+    if (attendanceRow?.id) await syncLegacyAttendance(attendanceRow.id);
+  } catch (syncError) {
+    console.error("Error syncing attendance to legacy sheet", syncError);
   }
 
   redirect(`/clases/${legacyId}?saved=attendance`);
@@ -496,10 +502,20 @@ export async function addBulkAttendanceAction(formData: FormData) {
     };
   });
 
-  const { error } = await supabase.from("attendance_logs").upsert(rows, { onConflict: "legacy_id" });
+  const { data: attendanceRows, error } = await supabase
+    .from("attendance_logs")
+    .upsert(rows, { onConflict: "legacy_id" })
+    .select("id")
+    .returns<Array<{ id: string }>>();
 
   if (error) {
     redirect(`/clases/${legacyId}?error=attendance`);
+  }
+
+  try {
+    await Promise.all((attendanceRows ?? []).map((row) => syncLegacyAttendance(row.id)));
+  } catch (syncError) {
+    console.error("Error syncing bulk attendance to legacy sheet", syncError);
   }
 
   redirect(`/clases/${legacyId}?saved=attendance`);

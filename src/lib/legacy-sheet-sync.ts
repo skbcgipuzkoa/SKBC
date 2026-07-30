@@ -34,6 +34,24 @@ type CourseSnapshot = {
   legacy_id: string | null;
 };
 
+type AttendanceSnapshot = {
+  id: string;
+  legacy_id: string | null;
+  class_id: string | null;
+  member_id: string;
+  attended_on: string;
+  official_grade: string | null;
+  trained_grade: string | null;
+  technical_role: string;
+  use_for_history: boolean | null;
+};
+
+type ClassSnapshot = {
+  id: string;
+  legacy_id: string | null;
+  class_group: "kids" | "adults";
+};
+
 export async function syncLegacyExam(examId: string) {
   const supabase = createAdminClient();
   const { data: exam, error } = await supabase
@@ -95,6 +113,38 @@ export async function syncLegacyCourse(courseId: string) {
     sourceId: course.id,
     payload: { course, member },
     values: row
+  });
+}
+
+export async function syncLegacyAttendance(attendanceId: string) {
+  const supabase = createAdminClient();
+  const { data: attendance, error } = await supabase
+    .from("attendance_logs")
+    .select("id,legacy_id,class_id,member_id,attended_on,official_grade,trained_grade,technical_role,use_for_history")
+    .eq("id", attendanceId)
+    .single<AttendanceSnapshot>();
+
+  if (error || !attendance) throw error ?? new Error("Asistencia no encontrada para sincronizar.");
+  const member = await getMemberSnapshot(attendance.member_id);
+  const clase = attendance.class_id ? await getClassSnapshot(attendance.class_id) : null;
+
+  await appendLegacyRow({
+    eventType: "attendance.saved",
+    targetSheet: "ASISTENCIAS_LOG",
+    sourceTable: "attendance_logs",
+    sourceId: attendance.id,
+    payload: { attendance, member, class: clase },
+    values: [
+      attendance.attended_on,
+      member.legacy_id ?? "",
+      clase?.class_group === "kids" ? "Niños" : "Adultos",
+      clase?.legacy_id ?? attendance.class_id ?? "",
+      attendance.official_grade ?? "",
+      attendance.trained_grade ?? "",
+      attendance.technical_role ?? "student",
+      "",
+      attendance.use_for_history ?? true
+    ]
   });
 }
 
@@ -237,6 +287,18 @@ async function getMemberSnapshot(memberId: string) {
     .single<MemberSnapshot>();
 
   if (error || !data) throw error ?? new Error("Kenshi no encontrado para sincronizar.");
+  return data;
+}
+
+async function getClassSnapshot(classId: string) {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("classes")
+    .select("id,legacy_id,class_group")
+    .eq("id", classId)
+    .single<ClassSnapshot>();
+
+  if (error || !data) throw error ?? new Error("Clase no encontrada para sincronizar.");
   return data;
 }
 
