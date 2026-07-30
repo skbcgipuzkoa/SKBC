@@ -162,9 +162,7 @@ export default async function RankingsPage({
           <a href="/pedidos-cinturones">Cinturones</a>
           <a href="/proximos-examenes">Proximos examenes</a>
           <a href="/rankings" aria-current="page">Rankings</a>
-          <a href="/auditoria">Auditoria</a>
-          <a href="/importacion">Importacion</a>
-          <a href="/novedades">Novedades</a>
+          <a href="/sistema">Sistema</a>
         </nav>
       </aside>
       <main className="main">

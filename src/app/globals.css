@@ -244,6 +244,15 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.system-card {
+  display: grid;
+  gap: 10px;
+}
+
+.system-card p {
+  margin: 0;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

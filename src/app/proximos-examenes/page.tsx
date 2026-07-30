@@ -90,9 +90,7 @@ export default async function ProximosExamenesPage({
           <a href="/pedidos-cinturones">Cinturones</a>
           <a href="/proximos-examenes" aria-current="page">Proximos examenes</a>
           <a href="/rankings">Rankings</a>
-          <a href="/auditoria">Auditoria</a>
-          <a href="/importacion">Importacion</a>
-          <a href="/novedades">Novedades</a>
+          <a href="/sistema">Sistema</a>
         </nav>
       </aside>
       <main className="main">

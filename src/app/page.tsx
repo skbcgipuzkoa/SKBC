@@ -50,7 +50,7 @@ export default async function Home({
           <a href="/kenshis">Kenshis</a>
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>
-          <a href="/auditoria">Auditoria</a>
+          <a href="/sistema">Sistema</a>
         </nav>
       </aside>
       <main className="main">
