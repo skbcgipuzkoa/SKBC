@@ -34,6 +34,7 @@ type PlanRow = {
   technique_name: string;
   category: string | null;
   proposal_type: string | null;
+  summary_es: string | null;
   completed: boolean;
 };
 
@@ -99,7 +100,7 @@ export default async function DelegateClassPage({
   const [{ data: plan }, { data: attendance }, { data: members }] = classIds.length ? await Promise.all([
     supabase
       .from("technical_plans")
-      .select("id,class_id,group_grade,target_grade,technique_name,category,proposal_type,completed")
+      .select("id,class_id,group_grade,target_grade,technique_name,category,proposal_type,summary_es,completed")
       .in("class_id", adultClasses.map((clase) => clase.id))
       .order("group_grade")
       .order("suggested_order")
@@ -187,6 +188,7 @@ export default async function DelegateClassPage({
                     <input name="planIds" type="checkbox" value={item.id} defaultChecked={item.completed} />
                     <span>
                       <strong>{item.technique_name}</strong>
+                      {item.summary_es ? <em>{item.summary_es}</em> : null}
                       <small>{item.category ?? "-"} · {item.proposal_type ?? item.target_grade ?? "-"}</small>
                     </span>
                   </label>

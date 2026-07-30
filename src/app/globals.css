@@ -750,6 +750,25 @@ tbody tr:hover {
   color: #ffffff;
 }
 
+.technique-summary {
+  background: #f8fbff;
+  border-left: 3px solid #8fb8e8;
+  border-radius: 6px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+}
+
+.technique-summary.compact {
+  background: transparent;
+  border-color: #d8e1ee;
+  color: var(--muted);
+  margin-top: 6px;
+  padding: 4px 0 4px 8px;
+}
+
 .text-link {
   color: var(--brand);
   display: inline-flex;
@@ -2043,6 +2062,13 @@ tbody tr:hover {
 
 .delegate-check small {
   color: var(--muted);
+}
+
+.delegate-check em {
+  color: #334155;
+  font-size: 13px;
+  font-style: normal;
+  line-height: 1.35;
 }
 
 .delegate-check:has(input:checked) {

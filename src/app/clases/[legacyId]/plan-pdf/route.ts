@@ -18,6 +18,7 @@ type PlanRow = {
   category: string | null;
   proposal_type: string | null;
   focus: string | null;
+  summary_es: string | null;
 };
 
 const pageSize: [number, number] = [842, 595];
@@ -45,7 +46,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ leg
 
   const { data: plan, error: planError } = await supabase
     .from("technical_plans")
-    .select("group_grade,target_grade,technique_name,category,proposal_type,focus")
+    .select("group_grade,target_grade,technique_name,category,proposal_type,focus,summary_es")
     .eq("class_id", clase.id)
     .order("suggested_order")
     .returns<PlanRow[]>();
@@ -132,14 +133,23 @@ function drawPlanCard(page: PDFPage, x: number, y: number, grade: string, items:
       font,
       color: rgb(0.38, 0.45, 0.55)
     });
-    rowY -= 27;
+    if (item.summary_es) {
+      page.drawText(fitText(item.summary_es, 58), {
+        x: x + 16,
+        y: rowY - 23,
+        size: 6.6,
+        font,
+        color: rgb(0.2, 0.25, 0.34)
+      });
+    }
+    rowY -= item.summary_es ? 39 : 27;
   }
 
   page.drawRectangle({ x, y: rowY - 4, width: columnWidth, height: 1, color: rgb(0.86, 0.9, 0.95) });
 }
 
 function planCardHeight(items: PlanRow[]) {
-  return 54 + items.length * 27;
+  return 54 + items.reduce((sum, item) => sum + (item.summary_es ? 39 : 27), 0);
 }
 
 function groupPlanByGrade(plan: PlanRow[]) {

@@ -74,6 +74,18 @@ async function normalizeTechniques() {
       name: clean(row.NOMBRE_TECNICA),
       category: normalizeTechniqueCategory(row.CATEGORIA),
       content_type: clean(row.TIPO_CONTENIDO) || null,
+      summary_es: firstClean(
+        row.RESUMEN_ES,
+        row.RESUMEN,
+        row.Resumen,
+        row.DESCRIPCION_ES,
+        row.DESCRIPCION,
+        row.Descripción,
+        row.EXPLICACION,
+        row.Explicacion,
+        row.DETALLE,
+        row.Detalle
+      ),
       program_order: parseInteger(row.ORDEN_PROGRAMA),
       curriculum_order: parseInteger(row.ORDEN_CURRICULAR),
       active: parseBool(row.ACTIVA, true),
@@ -214,6 +226,18 @@ async function normalizeTechnicalPlans() {
       technique_name: clean(row.NOMBRE_TECNICA),
       category: normalizeTechniqueCategory(row.CATEGORIA),
       content_type: clean(row.TIPO_CONTENIDO) || null,
+      summary_es: firstClean(
+        row.RESUMEN_ES,
+        row.RESUMEN,
+        row.Resumen,
+        row.DESCRIPCION_ES,
+        row.DESCRIPCION,
+        row.Descripción,
+        row.EXPLICACION,
+        row.Explicacion,
+        row.DETALLE,
+        row.Detalle
+      ),
       proposal_type: clean(row.TIPO_PROPUESTA) || null,
       focus: clean(row.ENFOQUE_TECNICO) || null,
       suggested_order: parseInteger(row.ORDEN_SUGERENCIA),
@@ -527,6 +551,11 @@ function parseDecimal(value) {
 
 function clean(value) {
   return String(value ?? "").trim();
+}
+
+function firstClean(...values) {
+  const value = values.map((item) => clean(item)).find(Boolean);
+  return value || null;
 }
 
 function normalizeLegacyKey(value) {

@@ -45,6 +45,7 @@ type Technique = {
   name: string;
   category: string | null;
   content_type: string | null;
+  summary_es: string | null;
   program_order: number | null;
   curriculum_order: number | null;
   active: boolean;
@@ -115,7 +116,7 @@ export async function generateAdultTechnicalPlan(classId: string) {
         .returns<TechnicalGroup[]>(),
       supabase
         .from("techniques")
-        .select("id,legacy_id,grade,base_name,name,category,content_type,program_order,curriculum_order,active,active_in_planning,force_next,score,repetitions,last_trained_on")
+        .select("id,legacy_id,grade,base_name,name,category,content_type,summary_es,program_order,curriculum_order,active,active_in_planning,force_next,score,repetitions,last_trained_on")
         .eq("active", true)
         .eq("active_in_planning", true)
         .returns<Technique[]>()
@@ -151,6 +152,7 @@ export async function generateAdultTechnicalPlan(classId: string) {
       technique_name: item.technique.name,
       category: categoryForDb(item.technique.category),
       content_type: item.technique.content_type,
+      summary_es: item.technique.summary_es,
       proposal_type: item.proposalType,
       focus: item.focus,
       suggested_order: index + 1,

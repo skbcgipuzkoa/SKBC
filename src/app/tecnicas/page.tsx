@@ -15,6 +15,7 @@ type Tecnica = {
   last_trained_on: string | null;
   active_in_planning: boolean;
   content_type: string | null;
+  summary_es: string | null;
 };
 
 export default async function TecnicasPage({
@@ -30,7 +31,7 @@ export default async function TecnicasPage({
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("techniques")
-    .select("legacy_id,grade,name,category,content_type,active,active_in_planning,repetitions,last_trained_on")
+    .select("legacy_id,grade,name,category,content_type,summary_es,active,active_in_planning,repetitions,last_trained_on")
     .order("name", { ascending: true })
     .limit(900)
     .returns<Tecnica[]>();
@@ -170,7 +171,10 @@ export default async function TecnicasPage({
                 <tr key={tecnica.legacy_id ?? tecnica.name}>
                   <td data-label="ID">{tecnica.legacy_id}</td>
                   <td data-label="Grado"><span className={`grade-chip grade-${slugGrade(tecnica.grade)}`}>{tecnica.grade}</span></td>
-                  <td data-label="Tecnica"><strong>{tecnica.name}</strong></td>
+                  <td data-label="Tecnica">
+                    <strong>{tecnica.name}</strong>
+                    {tecnica.summary_es ? <p className="technique-summary compact">{tecnica.summary_es}</p> : null}
+                  </td>
                   <td data-label="Categoria">{tecnica.category}{tecnica.content_type ? ` - ${tecnica.content_type}` : ""}</td>
                   <td data-label="Repeticiones">{tecnica.repetitions}</td>
                   <td data-label="Ultima vez">{tecnica.last_trained_on ?? "-"}</td>
