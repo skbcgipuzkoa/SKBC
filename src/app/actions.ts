@@ -71,6 +71,43 @@ export async function updateIkaIdAction(formData: FormData) {
   redirect(`/kenshis/${legacyId}?saved=ika`);
 }
 
+export async function updateTechniqueAction(formData: FormData) {
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  if (!(await hasInternalAccess()) || !legacyId) {
+    redirect("/tecnicas?error=technique");
+  }
+
+  const active = formData.get("active") === "on";
+  const activeInPlanning = active && formData.get("activeInPlanning") === "on";
+  const payload = {
+    name: String(formData.get("name") ?? "").trim(),
+    grade: String(formData.get("grade") ?? "").trim() || "SIN GRADO",
+    category: normalizeTechniqueCategoryInput(String(formData.get("category") ?? "")),
+    content_type: String(formData.get("contentType") ?? "").trim() || null,
+    summary_es: String(formData.get("summaryEs") ?? "").trim() || null,
+    active,
+    active_in_planning: activeInPlanning,
+    updated_at: new Date().toISOString()
+  };
+
+  if (!payload.name || !payload.category) {
+    redirect(`/tecnicas?error=technique&edit=${encodeURIComponent(legacyId)}`);
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("techniques")
+    .update(payload)
+    .eq("legacy_id", legacyId);
+
+  if (error) {
+    console.error("Error updating technique", error);
+    redirect(`/tecnicas?error=technique&edit=${encodeURIComponent(legacyId)}`);
+  }
+
+  redirect(`/tecnicas?saved=technique&edit=${encodeURIComponent(legacyId)}`);
+}
+
 export async function updateKenshiAction(formData: FormData) {
   const memberId = String(formData.get("memberId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
@@ -1458,6 +1495,12 @@ function normalizeStatus(value: string) {
 
 function normalizeBeltStatus(value: string) {
   return ["pending", "ordered", "received", "delivered"].includes(value) ? value : null;
+}
+
+function normalizeTechniqueCategoryInput(value: string) {
+  const normalized = value.trim().toLowerCase();
+  const allowed = ["goho", "juho", "seiho", "ukemi", "randori", "embu", "hokei", "kihon"];
+  return allowed.includes(normalized) ? normalized : null;
 }
 
 function parseDateInput(value: string) {

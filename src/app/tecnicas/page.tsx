@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { logoutAction } from "@/app/actions";
+import { logoutAction, updateTechniqueAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,7 +21,7 @@ type Tecnica = {
 export default async function TecnicasPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; grade?: string; category?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; grade?: string; category?: string; status?: string; edit?: string; saved?: string; error?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -45,6 +45,7 @@ export default async function TecnicasPage({
   const activeCount = techniques.filter((tecnica) => tecnica.active).length;
   const planningCount = techniques.filter((tecnica) => tecnica.active_in_planning).length;
   const neverTrained = techniques.filter((tecnica) => !tecnica.last_trained_on || tecnica.repetitions === 0).length;
+  const missingSummary = techniques.filter((tecnica) => !tecnica.summary_es).length;
   const gradeStats = grades.map((grade) => {
     const rows = techniques.filter((tecnica) => normalize(tecnica.grade) === normalize(grade));
     const totalRepetitions = rows.reduce((sum, tecnica) => sum + (tecnica.repetitions ?? 0), 0);
@@ -88,6 +89,9 @@ export default async function TecnicasPage({
           </form>
         </div>
 
+        {params.saved === "technique" ? <p className="save-ok">Tecnica guardada.</p> : null}
+        {params.error === "technique" ? <p className="form-error">No se ha podido guardar la tecnica.</p> : null}
+
         <section className="grid stats compact" aria-label="Resumen tecnicas">
           <article className="card">
             <BookOpenCheck aria-hidden="true" size={20} />
@@ -106,6 +110,12 @@ export default async function TecnicasPage({
             <h2>Sin repeticiones</h2>
             <div className="metric">{neverTrained}</div>
             <p className="muted">Candidatas naturales para priorizar.</p>
+          </article>
+          <article className={missingSummary ? "card attention-card" : "card"}>
+            <Filter aria-hidden="true" size={20} />
+            <h2>Sin resumen</h2>
+            <div className="metric">{missingSummary}</div>
+            <p className="muted">Tecnicas pendientes de explicacion en castellano.</p>
           </article>
         </section>
 
@@ -132,6 +142,7 @@ export default async function TecnicasPage({
               <option value="planning">En plan tecnico</option>
               <option value="inactive">Inactivas</option>
               <option value="never">Sin repeticiones</option>
+              <option value="missing-summary">Sin resumen</option>
             </select>
             <button type="submit">Filtrar</button>
             <a className="secondary-link" href="/tecnicas">Limpiar</a>
@@ -174,6 +185,48 @@ export default async function TecnicasPage({
                   <td data-label="Tecnica">
                     <strong>{tecnica.name}</strong>
                     {tecnica.summary_es ? <p className="technique-summary compact">{tecnica.summary_es}</p> : null}
+                    <details className="inline-edit-details" open={params.edit === tecnica.legacy_id}>
+                      <summary>Editar tecnica</summary>
+                      <form action={updateTechniqueAction} className="technique-edit-form">
+                        <input type="hidden" name="legacyId" value={tecnica.legacy_id ?? ""} />
+                        <label>
+                          Nombre
+                          <input name="name" defaultValue={tecnica.name} required />
+                        </label>
+                        <label>
+                          Grado
+                          <select name="grade" defaultValue={tecnica.grade}>
+                            {adultGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                            {!adultGrades.some((grade) => normalize(grade) === normalize(tecnica.grade)) ? <option value={tecnica.grade}>{tecnica.grade}</option> : null}
+                          </select>
+                        </label>
+                        <label>
+                          Categoria
+                          <select name="category" defaultValue={tecnica.category}>
+                            {["goho", "juho", "seiho", "ukemi", "randori", "embu", "hokei", "kihon"].map((category) => (
+                              <option key={category} value={category}>{category}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Tipo contenido
+                          <input name="contentType" defaultValue={tecnica.content_type ?? ""} />
+                        </label>
+                        <label className="checkbox-field">
+                          <input name="active" type="checkbox" defaultChecked={tecnica.active} />
+                          Activa
+                        </label>
+                        <label className="checkbox-field">
+                          <input name="activeInPlanning" type="checkbox" defaultChecked={tecnica.active_in_planning} />
+                          Entra en plan tecnico
+                        </label>
+                        <label className="wide">
+                          Resumen en castellano
+                          <textarea name="summaryEs" rows={4} defaultValue={tecnica.summary_es ?? ""} placeholder="Explicacion breve para el plan tecnico" />
+                        </label>
+                        <button type="submit">Guardar tecnica</button>
+                      </form>
+                    </details>
                   </td>
                   <td data-label="Categoria">{tecnica.category}{tecnica.content_type ? ` - ${tecnica.content_type}` : ""}</td>
                   <td data-label="Repeticiones">{tecnica.repetitions}</td>
@@ -205,6 +258,7 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
   if (params.status === "planning" && !tecnica.active_in_planning) return false;
   if (params.status === "inactive" && tecnica.active) return false;
   if (params.status === "never" && tecnica.last_trained_on && tecnica.repetitions > 0) return false;
+  if (params.status === "missing-summary" && tecnica.summary_es) return false;
   return true;
 }
 

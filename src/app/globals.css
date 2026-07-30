@@ -769,6 +769,82 @@ tbody tr:hover {
   padding: 4px 0 4px 8px;
 }
 
+.inline-edit-details {
+  margin-top: 10px;
+}
+
+.inline-edit-details summary {
+  color: var(--brand);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.technique-edit-form {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 10px;
+  padding: 12px;
+}
+
+.technique-edit-form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 5px;
+  text-transform: uppercase;
+}
+
+.technique-edit-form input,
+.technique-edit-form select,
+.technique-edit-form textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 38px;
+  padding: 8px 10px;
+  text-transform: none;
+}
+
+.technique-edit-form textarea {
+  resize: vertical;
+}
+
+.technique-edit-form .wide,
+.technique-edit-form button {
+  grid-column: 1 / -1;
+}
+
+.technique-edit-form .checkbox-field {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  text-transform: none;
+}
+
+.technique-edit-form .checkbox-field input {
+  min-height: 0;
+  width: 18px;
+}
+
+.technique-edit-form button {
+  background: var(--brand);
+  border: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 40px;
+}
+
 .text-link {
   color: var(--brand);
   display: inline-flex;
@@ -2827,6 +2903,10 @@ tbody tr:hover {
 
   .home-module-link {
     min-height: 54px;
+  }
+
+  .technique-edit-form {
+    grid-template-columns: 1fr;
   }
 
   .public-profile {
