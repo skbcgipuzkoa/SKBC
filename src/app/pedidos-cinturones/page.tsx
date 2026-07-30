@@ -1,6 +1,6 @@
 import { LogOut, PackageCheck, PlusCircle, Ruler, ShoppingBag } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createBeltOrderLineAction, logoutAction } from "@/app/actions";
+import { createBeltOrderLineAction, logoutAction, updateBeltOrderStatusAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -22,6 +22,10 @@ type BeltLine = {
   color: string | null;
   size: string | null;
   quantity: number;
+  status: "pending" | "ordered" | "received" | "delivered";
+  ordered_on: string | null;
+  received_on: string | null;
+  delivered_on: string | null;
   notes: string | null;
   created_at: string;
   members: {
@@ -41,7 +45,7 @@ type SummaryLine = {
 export default async function PedidosCinturonesPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; status?: string; q?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -59,7 +63,7 @@ export default async function PedidosCinturonesPage({
       .returns<Member[]>(),
     supabase
       .from("belt_order_lines")
-      .select("id,exam_title,program,grade,student_name,item,color,size,quantity,notes,created_at,members(legacy_id,display_name,class)")
+      .select("id,exam_title,program,grade,student_name,item,color,size,quantity,status,ordered_on,received_on,delivered_on,notes,created_at,members(legacy_id,display_name,class)")
       .order("created_at", { ascending: false })
       .limit(120)
       .returns<BeltLine[]>()
@@ -68,9 +72,14 @@ export default async function PedidosCinturonesPage({
   if (membersError) throw membersError;
   if (linesError) throw linesError;
 
-  const summary = buildSummary(lines ?? []);
+  const filteredLines = filterLines(lines ?? [], params);
+  const summary = buildSummary(filteredLines);
   const totalItems = summary.reduce((sum, line) => sum + line.quantity, 0);
-  const totalLines = (lines ?? []).length;
+  const totalLines = filteredLines.length;
+  const pendingCount = filteredLines.filter((line) => line.status === "pending").length;
+  const orderedCount = filteredLines.filter((line) => line.status === "ordered").length;
+  const receivedCount = filteredLines.filter((line) => line.status === "received").length;
+  const deliveredCount = filteredLines.filter((line) => line.status === "delivered").length;
 
   return (
     <div className="shell">
@@ -105,7 +114,9 @@ export default async function PedidosCinturonesPage({
         </div>
 
         {params.saved === "belt" ? <p className="save-ok">Linea de pedido guardada.</p> : null}
+        {params.saved === "belt-status" ? <p className="save-ok">Estado del pedido actualizado.</p> : null}
         {params.error === "belt" ? <p className="form-error">No se pudo guardar la linea de pedido.</p> : null}
+        {params.error === "belt-status" ? <p className="form-error">No se pudo actualizar el estado.</p> : null}
 
         <section className="grid stats compact" aria-label="Resumen pedido">
           <article className="card">
@@ -125,9 +136,16 @@ export default async function PedidosCinturonesPage({
           </article>
           <article className="card">
             <PlusCircle aria-hidden="true" size={19} />
-            <h2>Destino</h2>
-            <div className="metric small">Nuevo</div>
+            <h2>Entregados</h2>
+            <div className="metric">{deliveredCount}</div>
           </article>
+        </section>
+
+        <section className="grid stats compact" aria-label="Estado pedido">
+          <article className="card"><h2>Pendiente</h2><div className="metric small">{pendingCount}</div></article>
+          <article className="card"><h2>Pedido</h2><div className="metric small">{orderedCount}</div></article>
+          <article className="card"><h2>Recibido</h2><div className="metric small">{receivedCount}</div></article>
+          <article className="card"><h2>Entregado</h2><div className="metric small">{deliveredCount}</div></article>
         </section>
 
         <section className="split-section">
@@ -179,14 +197,32 @@ export default async function PedidosCinturonesPage({
           </article>
         </section>
 
+        <form className="filters" action="/pedidos-cinturones">
+          <label>
+            Buscar
+            <input name="q" defaultValue={params.q ?? ""} placeholder="Alumno, examen, color, medida..." />
+          </label>
+          <label>
+            Estado
+            <select name="status" defaultValue={params.status ?? ""}>
+              <option value="">Todos</option>
+              <option value="pending">Pendiente</option>
+              <option value="ordered">Pedido</option>
+              <option value="received">Recibido</option>
+              <option value="delivered">Entregado</option>
+            </select>
+          </label>
+          <button type="submit">Filtrar</button>
+        </form>
+
         <h2 className="section-title">Lineas recientes</h2>
         <section className="table-wrap">
           <table>
             <thead>
-              <tr><th>Fecha</th><th>Alumno</th><th>Examen</th><th>Articulo</th><th>Color</th><th>Medida</th><th>Cantidad</th><th>Notas</th></tr>
+              <tr><th>Fecha</th><th>Alumno</th><th>Examen</th><th>Articulo</th><th>Color</th><th>Medida</th><th>Cantidad</th><th>Estado</th><th>Notas</th><th>Gestion</th></tr>
             </thead>
             <tbody>
-              {(lines ?? []).length ? (lines ?? []).map((line) => (
+              {filteredLines.length ? filteredLines.map((line) => (
                 <tr key={line.id}>
                   <td data-label="Fecha">{line.created_at.slice(0, 10)}</td>
                   <td data-label="Alumno">
@@ -197,10 +233,12 @@ export default async function PedidosCinturonesPage({
                   <td data-label="Color">{line.color ?? "-"}</td>
                   <td data-label="Medida">{line.size ?? "-"}</td>
                   <td data-label="Cantidad"><strong>{line.quantity}</strong></td>
+                  <td data-label="Estado"><span className={`belt-status belt-${line.status}`}>{statusLabel(line.status)}</span></td>
                   <td data-label="Notas">{line.notes ?? "-"}</td>
+                  <td data-label="Gestion"><StatusActions line={line} /></td>
                 </tr>
               )) : (
-                <tr><td colSpan={8} className="muted">No hay lineas registradas.</td></tr>
+                <tr><td colSpan={10} className="muted">No hay lineas registradas.</td></tr>
               )}
             </tbody>
           </table>
@@ -208,6 +246,46 @@ export default async function PedidosCinturonesPage({
       </main>
     </div>
   );
+}
+
+function StatusActions({ line }: { line: BeltLine }) {
+  const next = nextStatus(line.status);
+  if (!next) return <span className="muted">Finalizado</span>;
+  return (
+    <form action={updateBeltOrderStatusAction}>
+      <input type="hidden" name="lineId" value={line.id} />
+      <input type="hidden" name="status" value={next} />
+      <button className="mini-action selected" type="submit">Marcar {statusLabel(next)}</button>
+    </form>
+  );
+}
+
+function nextStatus(status: BeltLine["status"]) {
+  if (status === "pending") return "ordered";
+  if (status === "ordered") return "received";
+  if (status === "received") return "delivered";
+  return null;
+}
+
+function statusLabel(status: BeltLine["status"]) {
+  if (status === "pending") return "Pendiente";
+  if (status === "ordered") return "Pedido";
+  if (status === "received") return "Recibido";
+  return "Entregado";
+}
+
+function filterLines(lines: BeltLine[], params: { status?: string; q?: string }) {
+  const q = normalize(params.q);
+  return lines.filter((line) => {
+    if (params.status && line.status !== params.status) return false;
+    if (!q) return true;
+    return [line.members?.display_name, line.student_name, line.exam_title, line.item, line.color, line.size, line.grade, line.program]
+      .some((value) => normalize(value).includes(q));
+  });
+}
+
+function normalize(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function buildSummary(lines: BeltLine[]): SummaryLine[] {

@@ -1404,6 +1404,34 @@ tbody tr:hover {
   gap: 6px;
 }
 
+.belt-status {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 9px;
+}
+
+.belt-pending {
+  background: #fff7db;
+  color: #8a5a00;
+}
+
+.belt-ordered {
+  background: #eef4fb;
+  color: var(--brand-strong);
+}
+
+.belt-received {
+  background: #e8f5ee;
+  color: var(--ok);
+}
+
+.belt-delivered {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
 .link-stack {
   display: inline-flex;
   flex-wrap: wrap;

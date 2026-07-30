@@ -1412,6 +1412,38 @@ export async function createBeltOrderLineAction(formData: FormData) {
   redirect("/pedidos-cinturones?saved=belt");
 }
 
+export async function updateBeltOrderStatusAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const lineId = String(formData.get("lineId") ?? "").trim();
+  const status = normalizeBeltStatus(String(formData.get("status") ?? ""));
+  if (!lineId || !status) {
+    redirect("/pedidos-cinturones?error=belt-status");
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dateFields =
+    status === "ordered" ? { ordered_on: today } :
+    status === "received" ? { received_on: today } :
+    status === "delivered" ? { delivered_on: today } :
+    {};
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("belt_order_lines")
+    .update({ status, ...dateFields, updated_at: new Date().toISOString() })
+    .eq("id", lineId);
+
+  if (error) {
+    console.error("Error updating belt order status", error);
+    redirect("/pedidos-cinturones?error=belt-status");
+  }
+
+  redirect("/pedidos-cinturones?saved=belt-status");
+}
+
 function normalizeClass(value: string) {
   return value === "kids" || value === "adults" ? value : null;
 }
@@ -1422,6 +1454,10 @@ function normalizeCourseKind(value: string) {
 
 function normalizeStatus(value: string) {
   return value === "active" || value === "inactive" ? value : null;
+}
+
+function normalizeBeltStatus(value: string) {
+  return ["pending", "ordered", "received", "delivered"].includes(value) ? value : null;
 }
 
 function parseDateInput(value: string) {
