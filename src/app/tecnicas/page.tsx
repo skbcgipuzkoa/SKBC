@@ -52,7 +52,7 @@ export default async function TecnicasPage() {
       <main className="main">
         <div className="topbar">
           <div>
-            <p className="eyebrow">Modulo en preparacion</p>
+            <p className="eyebrow">Programa tecnico adulto</p>
             <h1>Tecnicas</h1>
           </div>
           <form action={logoutAction}>
