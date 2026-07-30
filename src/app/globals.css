@@ -1395,6 +1395,15 @@ tbody tr:hover {
   min-height: 34px;
 }
 
+.exam-stats {
+  margin: 18px 0 0;
+}
+
+.exam-doc-stack {
+  display: grid;
+  gap: 6px;
+}
+
 .link-stack {
   display: inline-flex;
   flex-wrap: wrap;

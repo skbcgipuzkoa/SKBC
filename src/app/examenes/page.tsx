@@ -1,4 +1,4 @@
-import { LogOut } from "lucide-react";
+import { FileText, GraduationCap, LogOut, ScrollText, Trophy } from "lucide-react";
 import { redirect } from "next/navigation";
 import { deleteExamAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
@@ -22,13 +22,13 @@ type ExamRow = {
   report_url: string | null;
   report_type: string | null;
   report_file_name: string | null;
-  members: { display_name: string; class: "kids" | "adults" } | null;
+  members: { legacy_id: string | null; display_name: string; class: "kids" | "adults" } | null;
 };
 
 export default async function ExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; detail?: string; class?: string; status?: string; q?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -36,7 +36,13 @@ export default async function ExamenesPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data: members }, { data: exams }] = await Promise.all([
+  let examsQuery = supabase
+    .from("exams")
+    .select("id,exam_date,grade,cycle_attendance,examiner,diploma_url,report_url,report_type,report_file_name,members(legacy_id,display_name,class)")
+    .order("exam_date", { ascending: false })
+    .limit(80);
+
+  const [{ data: members }, { data: rawExams }] = await Promise.all([
     supabase
       .from("members")
       .select("id,display_name,class,grade")
@@ -44,15 +50,15 @@ export default async function ExamenesPage({
       .order("class")
       .order("display_name")
       .returns<MemberOption[]>(),
-    supabase
-      .from("exams")
-      .select("id,exam_date,grade,cycle_attendance,examiner,diploma_url,report_url,report_type,report_file_name,members(display_name,class)")
-      .order("exam_date", { ascending: false })
-      .limit(20)
-      .returns<ExamRow[]>()
+    examsQuery.returns<ExamRow[]>()
   ]);
 
+  const exams = filterExams(rawExams ?? [], params);
   const gradeOptions = [...new Set([...adultGrades, ...kidsGrades])];
+  const missingReport = exams.filter((exam) => !exam.report_url).length;
+  const missingDiploma = exams.filter((exam) => !exam.diploma_url).length;
+  const completeExams = exams.filter((exam) => exam.report_url && exam.diploma_url).length;
+  const visibleMembers = params.class === "kids" || params.class === "adults" ? (members ?? []).filter((member) => member.class === params.class) : (members ?? []);
 
   return (
     <div className="shell">
@@ -109,7 +115,7 @@ export default async function ExamenesPage({
                 Kenshi
                 <select name="memberId" required>
                   <option value="">Seleccionar</option>
-                  {(members ?? []).map((member) => (
+                  {visibleMembers.map((member) => (
                     <option key={member.id} value={member.id}>
                       {member.display_name} - {member.class === "kids" ? "Ninos" : "Adultos"} - {member.grade ?? "Sin grado"}
                     </option>
@@ -132,7 +138,55 @@ export default async function ExamenesPage({
           </form>
         </section>
 
-        <h2 className="section-title">Ultimos examenes</h2>
+        <section className="grid stats compact exam-stats" aria-label="Resumen examenes">
+          <article className="card">
+            <GraduationCap aria-hidden="true" size={19} />
+            <h2>Examenes visibles</h2>
+            <div className="metric">{exams.length}</div>
+          </article>
+          <article className="card">
+            <FileText aria-hidden="true" size={19} />
+            <h2>Informes pendientes</h2>
+            <div className="metric">{missingReport}</div>
+          </article>
+          <article className="card">
+            <Trophy aria-hidden="true" size={19} />
+            <h2>Diplomas pendientes</h2>
+            <div className="metric">{missingDiploma}</div>
+          </article>
+          <article className="card">
+            <ScrollText aria-hidden="true" size={19} />
+            <h2>Completos</h2>
+            <div className="metric">{completeExams}</div>
+          </article>
+        </section>
+
+        <form className="filters exam-filters" action="/examenes">
+          <label>
+            Buscar
+            <input name="q" defaultValue={params.q ?? ""} placeholder="Kenshi, grado, examinador..." />
+          </label>
+          <label>
+            Clase
+            <select name="class" defaultValue={params.class ?? ""}>
+              <option value="">Todas</option>
+              <option value="adults">Adultos</option>
+              <option value="kids">Ninos</option>
+            </select>
+          </label>
+          <label>
+            Estado
+            <select name="status" defaultValue={params.status ?? ""}>
+              <option value="">Todos</option>
+              <option value="pending-report">Sin informe</option>
+              <option value="pending-diploma">Sin diploma</option>
+              <option value="complete">Completo</option>
+            </select>
+          </label>
+          <button type="submit">Filtrar</button>
+        </form>
+
+        <h2 className="section-title">Seguimiento de examenes</h2>
         <section className="table-wrap">
           <table>
             <thead>
@@ -142,14 +196,16 @@ export default async function ExamenesPage({
               {(exams ?? []).map((exam) => (
                 <tr key={`${exam.exam_date}-${exam.members?.display_name}-${exam.grade}`}>
                   <td data-label="Fecha">{exam.exam_date}</td>
-                  <td data-label="Kenshi"><strong>{exam.members?.display_name ?? "-"}</strong></td>
+                  <td data-label="Kenshi">
+                    {exam.members?.legacy_id ? <a className="text-link" href={`/kenshis/${exam.members.legacy_id}`}><strong>{exam.members.display_name}</strong></a> : <strong>{exam.members?.display_name ?? "-"}</strong>}
+                  </td>
                   <td data-label="Clase">{exam.members?.class === "kids" ? "Ninos" : "Adultos"}</td>
                   <td data-label="Grado">{exam.grade}</td>
                   <td data-label="Asistencias">{exam.cycle_attendance ?? 0}</td>
                   <td data-label="Examinador">{exam.examiner ?? "-"}</td>
                   <td data-label="Informe">
                     {exam.report_url ? (
-                      <a className="text-link" href={exam.report_url} target="_blank">{exam.report_file_name || "Abrir informe"}</a>
+                      <span className="exam-doc-stack"><span className="state-badge state-completada">Informe OK</span><a className="text-link" href={exam.report_url} target="_blank">{exam.report_file_name || "Abrir informe"}</a></span>
                     ) : (
                       <form action={saveExamReportAction} className="inline-report-form">
                         <input type="hidden" name="examId" value={exam.id} />
@@ -162,7 +218,7 @@ export default async function ExamenesPage({
                   </td>
                   <td data-label="Diploma">
                     {exam.diploma_url ? (
-                      <a className="text-link" href={exam.diploma_url} target="_blank">Abrir diploma</a>
+                      <span className="exam-doc-stack"><span className="state-badge state-completada">Diploma OK</span><a className="text-link" href={exam.diploma_url} target="_blank">Abrir diploma</a></span>
                     ) : (
                       <form action={generateDiplomaAction}>
                         <input type="hidden" name="examId" value={exam.id} />
@@ -178,10 +234,32 @@ export default async function ExamenesPage({
                   </td>
                 </tr>
               ))}
+              {!exams.length ? (
+                <tr>
+                  <td colSpan={9} className="muted">No hay examenes con estos filtros.</td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </section>
       </main>
     </div>
   );
+}
+
+function filterExams(exams: ExamRow[], params: { class?: string; status?: string; q?: string }) {
+  const q = normalize(params.q);
+  return exams.filter((exam) => {
+    if ((params.class === "kids" || params.class === "adults") && exam.members?.class !== params.class) return false;
+    if (params.status === "pending-report" && exam.report_url) return false;
+    if (params.status === "pending-diploma" && exam.diploma_url) return false;
+    if (params.status === "complete" && (!exam.report_url || !exam.diploma_url)) return false;
+    if (!q) return true;
+    return [exam.members?.display_name, exam.members?.class, exam.grade, exam.examiner, exam.report_file_name]
+      .some((value) => normalize(value).includes(q));
+  });
+}
+
+function normalize(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase();
 }
