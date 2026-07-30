@@ -2961,6 +2961,14 @@ tbody tr:hover {
   .section-heading-row {
     align-items: flex-start;
     flex-direction: column;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .section-heading-row .secondary-link {
+    justify-content: center;
+    text-align: center;
+    width: 100%;
   }
 
   .mobile-close-bar {
@@ -2988,6 +2996,7 @@ tbody tr:hover {
   tbody,
   tr,
   td {
+    min-width: 0;
     display: block;
     width: 100%;
   }
@@ -3005,8 +3014,19 @@ tbody tr:hover {
     border-bottom: 0;
     display: grid;
     gap: 8px;
-    grid-template-columns: 104px minmax(0, 1fr);
+    grid-template-columns: minmax(82px, 32%) minmax(0, 1fr);
+    min-width: 0;
     padding: 7px 0;
+  }
+
+  td > * {
+    min-width: 0;
+  }
+
+  td a,
+  td strong,
+  td span {
+    overflow-wrap: anywhere;
   }
 
   td::before {
@@ -3059,6 +3079,19 @@ tbody tr:hover {
 
   .inline-report-form,
   .inline-report-stack {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .inline-report-form input,
+  .inline-report-form button,
+  .quick-form input,
+  .quick-form select,
+  .quick-form textarea,
+  .form-grid input,
+  .form-grid select,
+  .form-grid textarea {
+    max-width: 100%;
     min-width: 0;
     width: 100%;
   }
