@@ -48,6 +48,11 @@ type Exam = {
   report_url: string | null;
 };
 
+type LegacyExamRow = {
+  row_number: number;
+  row_data: Record<string, unknown>;
+};
+
 type Course = {
   kind: "national" | "international";
   course_date: string;
@@ -148,6 +153,9 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
       .returns<Course[]>()
   ]);
 
+  const legacyExams = await loadLegacyExams(supabase, member.legacy_id);
+  const fichaExams = mergeExams(exams ?? [], legacyExams);
+
   if (member.class === "kids") {
     const [{ data: childRanking }, { data: childNotices }, { data: childNote }, { data: behavior }] = await Promise.all([
       supabase
@@ -179,7 +187,7 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
         .maybeSingle<ChildBehavior>()
     ]);
 
-    return <KidsFicha member={member} attendance={attendance ?? []} exams={exams ?? []} ranking={childRanking} notices={childNotices ?? []} note={childNote} behavior={behavior} />;
+    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} ranking={childRanking} notices={childNotices ?? []} note={childNote} behavior={behavior} />;
   }
 
   const targetGrade = nextAdultGrade(member.grade);
@@ -224,7 +232,7 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? []);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={exams ?? []} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} />;
 }
 
 function AdultFicha({
@@ -544,6 +552,57 @@ function DocumentLinks({ exam }: { exam: Exam }) {
   );
 }
 
+async function loadLegacyExams(supabase: ReturnType<typeof createAdminClient>, legacyId: string | null) {
+  if (!legacyId) return [];
+  const { data, error } = await supabase
+    .from("legacy_rows")
+    .select("row_number,row_data")
+    .eq("sheet_name", "EXAMENES")
+    .order("row_number", { ascending: true })
+    .limit(500)
+    .returns<LegacyExamRow[]>();
+
+  if (error) return [];
+
+  return (data ?? [])
+    .map((row) => row.row_data)
+    .filter((row) => sameLegacyId(row.ID, legacyId))
+    .map((row) => ({
+      exam_date: parseLegacyDate(row.FechaExamen),
+      grade: cleanUnknown(row.Grado),
+      cycle_attendance: parseIntegerUnknown(row.AsistenciasCiclo),
+      examiner: cleanUnknown(row.Examinador) || null,
+      registered_by: cleanUnknown(row.RegistradoPor) || null,
+      diploma_url: cleanUnknown(row.URL_Diploma) || null,
+      report_url: cleanUnknown(row.InformePDF) || null
+    }))
+    .filter((exam) => exam.exam_date && exam.grade);
+}
+
+function mergeExams(primary: Exam[], legacy: Exam[]) {
+  const map = new Map<string, Exam>();
+  for (const exam of legacy) {
+    map.set(examKey(exam), exam);
+  }
+  for (const exam of primary) {
+    const key = examKey(exam);
+    const fallback = map.get(key);
+    map.set(key, {
+      ...exam,
+      diploma_url: exam.diploma_url ?? fallback?.diploma_url ?? null,
+      report_url: exam.report_url ?? fallback?.report_url ?? null,
+      cycle_attendance: exam.cycle_attendance ?? fallback?.cycle_attendance ?? null,
+      examiner: exam.examiner ?? fallback?.examiner ?? null,
+      registered_by: exam.registered_by ?? fallback?.registered_by ?? null
+    });
+  }
+  return Array.from(map.values()).sort((a, b) => b.exam_date.localeCompare(a.exam_date));
+}
+
+function examKey(exam: Pick<Exam, "exam_date" | "grade">) {
+  return `${exam.exam_date}::${normalize(exam.grade)}`;
+}
+
 function Footer() {
   return <footer className="ficha-footer">Datos del sistema nuevo SKBC. Ficha privada de consulta personal.</footer>;
 }
@@ -701,6 +760,37 @@ function countSince(attendance: Attendance[], days: number) {
     const date = parseDate(row.attended_on);
     return date && date >= limit;
   }).length;
+}
+
+function sameLegacyId(value: unknown, legacyId: string) {
+  return normalizeLegacyId(value) === normalizeLegacyId(legacyId);
+}
+
+function normalizeLegacyId(value: unknown) {
+  const text = cleanUnknown(value);
+  const numeric = Number(text);
+  if (Number.isFinite(numeric) && text !== "") return String(Math.trunc(numeric));
+  return text;
+}
+
+function cleanUnknown(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function parseIntegerUnknown(value: unknown) {
+  const parsed = Number.parseInt(cleanUnknown(value), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseLegacyDate(value: unknown) {
+  const text = cleanUnknown(value);
+  if (!text || text === "-") return "";
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const spanish = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (spanish) return `${spanish[3]}-${spanish[2].padStart(2, "0")}-${spanish[1].padStart(2, "0")}`;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
 function countByMember(rows: Array<{ member_id: string }>) {
