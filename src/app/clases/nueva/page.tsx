@@ -35,7 +35,7 @@ export default async function NuevaClasePage({
           <a href="/novedades">Novedades</a>
         </nav>
       </aside>
-      <main className="main">
+      <main className="main new-class-main">
         <div className="topbar">
           <div>
             <p className="eyebrow">
@@ -50,14 +50,14 @@ export default async function NuevaClasePage({
           </form>
         </div>
 
-        <section className="card">
+        <section className="card new-class-card">
           <form action={createClassAction} className="edit-form">
             <p className="muted">
               En clases de adultos se generaran automaticamente los grupos tecnicos y el plan tecnico al crear la clase.
             </p>
             <div className="form-grid">
               <label>Fecha<input name="classDate" type="date" required /></label>
-              <label>Nombre<input name="name" placeholder="Clase adultos" required /></label>
+              <label>Nombre<input name="name" placeholder="Clase adultos" defaultValue="Clase adultos" required /></label>
               <label>
                 Grupo
                 <select name="classGroup" defaultValue="adults">

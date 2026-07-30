@@ -63,7 +63,7 @@ export default async function ClasesPage({
             <p className="eyebrow">Gestion de clases</p>
             <h1>Clases</h1>
           </div>
-          <div className="top-actions">
+          <div className="top-actions compact-mobile-actions">
             <a className="primary-link" href="/clases/nueva">Nueva clase</a>
             <form action={logoutAction}>
               <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
@@ -73,7 +73,19 @@ export default async function ClasesPage({
           </div>
         </div>
         {params.saved === "deleted" ? <p className="save-ok">Clase eliminada del sistema nuevo.</p> : null}
-        <section className="table-wrap">
+        <section className="mobile-class-list" aria-label="Clases">
+          {data.length ? data.map((clase) => (
+            <a className="mobile-class-card" href={`/clases/${clase.legacy_id}`} key={`mobile-${clase.legacy_id ?? `${clase.class_date}-${clase.name}`}`}>
+              <span>
+                <strong>{clase.name}</strong>
+                <small>{clase.class_date} · {clase.class_group === "kids" ? "Ninos" : "Adultos"} · {clase.class_type ?? "-"}</small>
+              </span>
+              <b className={clase.closed ? "mobile-state done" : "mobile-state"}>{clase.closed ? "Cerrada" : "Abierta"}</b>
+            </a>
+          )) : <p className="muted">Pendiente de normalizar desde legacy_rows.</p>}
+        </section>
+
+        <section className="table-wrap desktop-class-table">
           <table>
             <thead>
               <tr>

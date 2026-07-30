@@ -785,6 +785,10 @@ th {
   display: contents;
 }
 
+.mobile-class-list {
+  display: none;
+}
+
 .plan-card.completed {
   background: #f2fbf6;
   border-color: #b9dec9;
@@ -1462,31 +1466,50 @@ th {
 
   .sidebar {
     border-right: 0;
-    padding: 14px;
+    padding: 10px;
     position: sticky;
     top: 0;
     z-index: 10;
   }
 
   .brand {
-    margin-bottom: 12px;
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .brand strong {
+    font-size: 15px;
+  }
+
+  .brand span {
+    font-size: 11px;
   }
 
   .nav {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .nav a {
-    flex: 0 0 auto;
-    min-height: 38px;
+    align-items: center;
+    display: flex;
+    font-size: 11px;
+    justify-content: center;
+    min-height: 34px;
+    overflow: hidden;
+    padding: 7px 5px;
+    text-align: center;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .main {
-    padding: 16px;
+    padding: 12px;
   }
 
   .class-detail-main {
@@ -1494,24 +1517,58 @@ th {
   }
 
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .topbar > div:first-child {
+    min-width: 0;
+  }
+
+  .topbar h1 {
+    font-size: 24px;
+    overflow-wrap: anywhere;
+  }
+
+  .topbar .eyebrow {
+    font-size: 12px;
   }
 
   .top-actions {
-    align-items: stretch;
-    flex-direction: column;
-    width: 100%;
+    align-items: center;
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 6px;
+    width: auto;
   }
 
   .top-actions form,
   .top-actions .primary-link,
   .top-actions button.primary-link {
-    width: 100%;
+    width: auto;
   }
 
   .primary-link {
+    border-radius: 999px;
+    font-size: 13px;
     justify-content: center;
+    min-height: 38px;
+    padding: 8px 11px;
+    white-space: nowrap;
+  }
+
+  .compact-mobile-actions .primary-link {
+    max-width: 126px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .icon-button {
+    flex: 0 0 38px;
+    height: 38px;
+    width: 38px;
   }
 
   .stats,
@@ -1635,6 +1692,106 @@ th {
     position: sticky;
     top: 0;
     z-index: 7;
+  }
+
+  .desktop-class-table {
+    display: none;
+  }
+
+  .mobile-class-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .mobile-class-card {
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 66px;
+    padding: 12px;
+  }
+
+  .mobile-class-card span {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .mobile-class-card strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-class-card small {
+    color: var(--muted);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-state {
+    background: #fff7db;
+    border-radius: 999px;
+    color: var(--warn);
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+
+  .mobile-state.done {
+    background: #e8f5ee;
+    color: var(--ok);
+  }
+
+  .new-class-main {
+    padding: 10px;
+  }
+
+  .new-class-card {
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .new-class-card .muted {
+    display: none;
+  }
+
+  .new-class-card .form-grid {
+    gap: 10px;
+  }
+
+  .new-class-card label {
+    font-size: 13px;
+  }
+
+  .new-class-card input,
+  .new-class-card select,
+  .new-class-card textarea {
+    font-size: 16px;
+    min-height: 46px;
+  }
+
+  .new-class-card textarea {
+    min-height: 78px;
+  }
+
+  .new-class-card .form-actions {
+    bottom: 0;
+    background: var(--bg);
+    margin: 12px -14px -14px;
+    padding: 10px 14px 14px;
+    position: sticky;
+  }
+
+  .new-class-card .form-actions button {
+    border-radius: 8px;
+    min-height: 48px;
+    width: 100%;
   }
 
   .class-summary-strip .card {
