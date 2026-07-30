@@ -1484,6 +1484,95 @@ export async function updateBeltOrderStatusAction(formData: FormData) {
   redirect("/pedidos-cinturones?saved=belt-status");
 }
 
+export async function saveBlackBeltEligibilityAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const active = formData.get("active") === "on";
+  const payload = {
+    member_id: memberId,
+    eligible_from: parseDateInput(String(formData.get("eligibleFrom") ?? "")) ?? new Date().toISOString().slice(0, 10),
+    eligible_until: parseDateInput(String(formData.get("eligibleUntil") ?? "")),
+    active,
+    reason: String(formData.get("reason") ?? "").trim() || null,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+    updated_at: new Date().toISOString()
+  };
+
+  if (!memberId) redirect("/clases-negras?error=eligibility");
+  const { error } = await createAdminClient()
+    .from("black_belt_class_eligibility")
+    .upsert(payload, { onConflict: "member_id" });
+
+  if (error) {
+    console.error("Error saving black belt eligibility", error);
+    redirect("/clases-negras?error=eligibility");
+  }
+  redirect("/clases-negras?saved=eligibility");
+}
+
+export async function createBlackBeltSpecialClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const classDate = parseDateInput(String(formData.get("classDate") ?? ""));
+  if (!classDate) redirect("/clases-negras?error=session");
+
+  const { error } = await createAdminClient()
+    .from("black_belt_special_classes")
+    .upsert({
+      class_date: classDate,
+      title: String(formData.get("title") ?? "").trim() || "Clase Busen",
+      instructor: String(formData.get("instructor") ?? "").trim() || null,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "class_date" });
+
+  if (error) {
+    console.error("Error creating black belt special class", error);
+    redirect("/clases-negras?error=session");
+  }
+  redirect("/clases-negras?saved=session");
+}
+
+export async function saveBlackBeltAttendanceAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const classId = String(formData.get("classId") ?? "").trim();
+  const statuses = ["present", "justified", "absent"];
+  if (!classId) redirect("/clases-negras?error=attendance");
+
+  const rows = Array.from(formData.entries())
+    .filter(([key]) => key.startsWith("status:"))
+    .map(([key, value]) => {
+      const memberId = key.replace("status:", "");
+      const status = statuses.includes(String(value)) ? String(value) : "absent";
+      return {
+        special_class_id: classId,
+        member_id: memberId,
+        status,
+        notes: String(formData.get(`notes:${memberId}`) ?? "").trim() || null,
+        updated_at: new Date().toISOString()
+      };
+    });
+
+  const supabase = createAdminClient();
+  if (rows.length) {
+    const { error } = await supabase
+      .from("black_belt_special_attendance")
+      .upsert(rows, { onConflict: "special_class_id,member_id" });
+    if (error) {
+      console.error("Error saving black belt attendance", error);
+      redirect("/clases-negras?error=attendance");
+    }
+  }
+
+  if (formData.get("close") === "on") {
+    await supabase
+      .from("black_belt_special_classes")
+      .update({ closed: true, updated_at: new Date().toISOString() })
+      .eq("id", classId);
+  }
+
+  redirect("/clases-negras?saved=attendance");
+}
+
 function normalizeClass(value: string) {
   return value === "kids" || value === "adults" ? value : null;
 }

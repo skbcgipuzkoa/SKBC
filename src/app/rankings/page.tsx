@@ -68,6 +68,7 @@ type AdultRankingRow = Member & {
   nationalCoursePoints: number;
   internationalCoursePoints: number;
   manualBonus: number;
+  blackBeltPoints: number;
   score: number;
 };
 
@@ -87,7 +88,7 @@ export default async function RankingsPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }] =
+  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult] =
     await Promise.all([
       supabase
         .from("members")
@@ -116,6 +117,11 @@ export default async function RankingsPage({
         .order("score", { ascending: false })
         .limit(10)
         .returns<ChildRanking[]>()
+      ,
+      supabase
+        .from("black_belt_special_attendance")
+        .select("member_id,status,black_belt_special_classes(class_date)")
+        .returns<any[]>()
     ]);
 
   if (membersError) throw membersError;
@@ -142,7 +148,8 @@ export default async function RankingsPage({
   const bonuses = bonusTableReady ? bonusResult.data ?? [] : [];
   const recentBonuses = bonusTableReady ? recentBonusResult.data ?? [] : [];
 
-  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? []).slice(0, 10);
+  const blackBeltRows = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
+  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows).slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const kids = (childRankings ?? []).filter((row) => row.members?.status === "active").slice(0, 10);
 
@@ -255,7 +262,7 @@ export default async function RankingsPage({
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>#</th><th>Kenshi</th><th>Grado</th><th>Asist. 30/90</th><th>Dias sin venir</th><th>Cursos</th><th>Bonus</th><th>Score</th></tr>
+                  <tr><th>#</th><th>Kenshi</th><th>Grado</th><th>Asist. 30/90</th><th>Dias sin venir</th><th>Cursos</th><th>Busen</th><th>Bonus</th><th>Score</th></tr>
                 </thead>
                 <tbody>
                   {adults.length ? adults.map((row, index) => (
@@ -269,6 +276,7 @@ export default async function RankingsPage({
                       <td data-label="Asist. 30/90">{row.attendance30}/{row.attendance90}</td>
                       <td data-label="Dias sin venir">{row.daysWithoutAttendance}</td>
                       <td data-label="Cursos">{row.nationalCoursePoints + row.internationalCoursePoints}</td>
+                      <td data-label="Busen">{row.blackBeltPoints}</td>
                       <td data-label="Bonus">{row.manualBonus}</td>
                       <td data-label="Score"><strong>{row.score}</strong></td>
                     </tr>
@@ -317,7 +325,7 @@ export default async function RankingsPage({
   );
 }
 
-function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[]): AdultRankingRow[] {
+function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[]): AdultRankingRow[] {
   const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
@@ -328,6 +336,11 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
     bonuses
       .filter((row) => (row.permanent && row.active) || (!row.permanent && row.bonus_date >= date180))
       .map((row) => ({ member_id: row.member_id, points: row.points }))
+  );
+  const blackBeltPoints = sumByMember(
+    blackBeltRows
+      .filter((row) => row.black_belt_special_classes?.class_date >= date180)
+      .map((row) => ({ member_id: row.member_id, points: row.status === "present" ? 3 : row.status === "absent" ? -2 : 0 }))
   );
   const lastAttendance = latestAttendanceByMember(attendance);
 
@@ -340,6 +353,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const nac = nationalCoursePoints.get(member.id) ?? 0;
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const bonus = manualBonus.get(member.id) ?? 0;
+      const black = blackBeltPoints.get(member.id) ?? 0;
       return {
         ...member,
         attendance30: a30,
@@ -349,7 +363,8 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         nationalCoursePoints: nac,
         internationalCoursePoints: intl,
         manualBonus: bonus,
-        score: a30 * 3 + a90 - daysWithoutAttendance + nac + intl + bonus
+        blackBeltPoints: black,
+        score: a30 * 3 + a90 - daysWithoutAttendance + nac + intl + bonus + black
       };
     })
     .sort((a, b) => b.score - a.score || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));

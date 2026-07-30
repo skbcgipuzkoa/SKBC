@@ -39,6 +39,7 @@ const moduleGroups = [
     items: [
       { label: "Nueva clase", href: "/clases/nueva", icon: CalendarCheck, tone: "primary" },
       { label: "Calendario", href: "/clases", icon: NotebookTabs },
+      { label: "Clases Busen", href: "/clases-negras", icon: ShieldCheck },
       { label: "Kenshis", href: "/kenshis", icon: Users },
       { label: "Nuevo kenshi", href: "/kenshis/nuevo", icon: UserPlus }
     ]

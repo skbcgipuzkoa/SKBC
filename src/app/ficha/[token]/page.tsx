@@ -130,6 +130,16 @@ type ChildAdultTransition = {
   notes: string | null;
 };
 
+type BlackBeltSpecialRow = {
+  status: "present" | "justified" | "absent";
+  notes: string | null;
+  black_belt_special_classes: {
+    class_date: string;
+    title: string;
+    instructor: string | null;
+  } | null;
+};
+
 type FichaTone = "green" | "yellow" | "red" | "blue" | "neutral";
 
 export default async function PublicFichaPage({ params }: { params: Promise<{ token: string }> }) {
@@ -205,7 +215,7 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
 
   const targetGrade = nextAdultGrade(member.grade);
   const date180 = daysAgo(180);
-  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }] = await Promise.all([
+  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,grade,base_name,name,category,active,active_in_planning")
@@ -246,13 +256,20 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
       .order("transitioned_on", { ascending: false })
       .limit(1)
       .maybeSingle<ChildAdultTransition>()
+    ,
+    supabase
+      .from("black_belt_special_attendance")
+      .select("status,notes,black_belt_special_classes(class_date,title,instructor)")
+      .eq("member_id", member.id)
+      .order("created_at", { ascending: false })
+      .returns<BlackBeltSpecialRow[]>()
   ]);
 
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? []);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} />;
 }
 
 function AdultFicha({
@@ -263,7 +280,8 @@ function AdultFicha({
   activity,
   technicalProgress,
   ranking,
-  childTransition
+  childTransition,
+  blackBeltSpecial
 }: {
   member: Member;
   attendance: Attendance[];
@@ -273,6 +291,7 @@ function AdultFicha({
   technicalProgress: ReturnType<typeof buildTechnicalProgress>;
   ranking: ReturnType<typeof buildAdultRanking>;
   childTransition: ChildAdultTransition | null;
+  blackBeltSpecial: BlackBeltSpecialRow[];
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const nacionales = courses.filter((course) => course.kind === "national");
@@ -338,6 +357,27 @@ function AdultFicha({
           <StatusBlock title="Implicación" value={activity.involvement} tone={involvementTone(activity.involvement)} />
         </div>
         {ranking ? <p className="ficha-ranking">{ranking.message} · Score {ranking.score}</p> : null}
+      </section>
+
+      <section className="ficha-section">
+        <details className="ficha-card">
+          <summary><strong>Clases Busen</strong></summary>
+          <div className="ficha-fields small-fields">
+            <Field label="Asistidas" value={String(blackBeltSpecial.filter((row) => row.status === "present").length)} />
+            <Field label="Justificadas" value={String(blackBeltSpecial.filter((row) => row.status === "justified").length)} />
+            <Field label="Ausencias" value={String(blackBeltSpecial.filter((row) => row.status === "absent").length)} />
+          </div>
+          <ResponsiveTable
+            columns={["Fecha", "Clase", "Estado", "Notas"]}
+            rows={blackBeltSpecial.map((row) => [
+              formatDate(row.black_belt_special_classes?.class_date ?? null),
+              row.black_belt_special_classes?.title ?? "-",
+              row.status === "present" ? "Presente" : row.status === "justified" ? "Justificado" : "Ausente",
+              row.notes ?? "-"
+            ])}
+            empty="Sin clases especiales registradas."
+          />
+        </details>
       </section>
 
       <section className="ficha-section">
