@@ -67,6 +67,7 @@ export default async function ShakujoPage({
       <aside className="sidebar">
         <div className="brand"><strong>SKBC Gipuzkoa</strong><span>Admin privado</span></div>
         <nav className="nav" aria-label="Principal">
+          <a href="/">Inicio</a>
           <a href="/kenshis">Kenshis</a>
           <a href="/clases">Clases</a>
           <a href="/clases-negras">Clases Busen</a>
@@ -113,6 +114,7 @@ export default async function ShakujoPage({
           </article>
           <article className="card">
             <h2>Sesiones recientes</h2>
+            <p className="muted">Todos los adultos activos pueden venir a Shakujo; solo marcas asistencia real de la sesion.</p>
             <div className="link-stack">
               {(sessions ?? []).map((session) => (
                 <a className={selectedSession?.id === session.id ? "mini-action selected" : "mini-action"} href={`/shakujo?classId=${session.id}`} key={session.id}>

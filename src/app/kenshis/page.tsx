@@ -82,6 +82,7 @@ export default async function KenshisPage({
           <span>Admin privado</span>
         </div>
         <nav className="nav" aria-label="Principal">
+          <a href="/">Inicio</a>
           <a href="/kenshis" aria-current="page">
             Kenshis
           </a>

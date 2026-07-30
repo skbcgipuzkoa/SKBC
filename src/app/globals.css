@@ -2011,6 +2011,86 @@ tbody tr:hover {
   padding: 8px 10px;
 }
 
+.busen-roster-form {
+  display: grid;
+  gap: 12px;
+}
+
+.busen-roster-list {
+  display: grid;
+  gap: 8px;
+}
+
+.busen-roster-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 58px minmax(170px, 1.1fr) minmax(130px, 0.8fr) minmax(160px, 1fr) 132px 132px;
+  min-height: 60px;
+  padding: 10px;
+}
+
+.busen-roster-row strong {
+  display: grid;
+  gap: 2px;
+}
+
+.busen-roster-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.busen-roster-row input:not([type="checkbox"]) {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 38px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.switch-field {
+  align-items: center;
+  display: inline-flex;
+  min-height: 36px;
+}
+
+.switch-field input {
+  opacity: 0;
+  position: absolute;
+}
+
+.switch-field span {
+  background: #d9e2ec;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  display: inline-flex;
+  height: 30px;
+  padding: 3px;
+  transition: background 160ms ease;
+  width: 52px;
+}
+
+.switch-field span::before {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.24);
+  content: "";
+  height: 24px;
+  transform: translateX(0);
+  transition: transform 160ms ease;
+  width: 24px;
+}
+
+.switch-field input:checked + span {
+  background: var(--blue);
+}
+
+.switch-field input:checked + span::before {
+  transform: translateX(22px);
+}
+
 .delegate-admin-box {
   background: #f8fafc;
   border: 1px solid var(--line);
@@ -3083,6 +3163,16 @@ tbody tr:hover {
 
   .black-belt-row {
     grid-template-columns: 1fr;
+  }
+
+  .busen-roster-row {
+    align-items: stretch;
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+
+  .busen-roster-row input:not([type="checkbox"]) {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .public-profile {

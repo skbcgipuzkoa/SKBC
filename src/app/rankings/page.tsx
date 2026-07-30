@@ -168,6 +168,7 @@ export default async function RankingsPage({
           <span>Admin privado</span>
         </div>
         <nav className="nav" aria-label="Principal">
+          <a href="/">Inicio</a>
           <a href="/kenshis">Kenshis</a>
           <a href="/clases">Clases</a>
           <a href="/tecnicas">Tecnicas</a>

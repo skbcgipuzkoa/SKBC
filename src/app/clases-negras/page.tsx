@@ -1,6 +1,6 @@
 import { Award, CheckCircle2, LogOut, Plus, ShieldAlert } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createBlackBeltSpecialClassAction, logoutAction, saveBlackBeltAttendanceAction, saveBlackBeltEligibilityAction } from "@/app/actions";
+import { createBlackBeltSpecialClassAction, logoutAction, saveBlackBeltAttendanceAction, saveBlackBeltEligibilityRosterAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -82,9 +82,11 @@ export default async function BlackBeltClassesPage({
       <aside className="sidebar">
         <div className="brand"><strong>SKBC Gipuzkoa</strong><span>Admin privado</span></div>
         <nav className="nav" aria-label="Principal">
+          <a href="/">Inicio</a>
           <a href="/kenshis">Kenshis</a>
           <a href="/clases">Clases</a>
           <a href="/clases-negras" aria-current="page">Clases Busen</a>
+          <a href="/shakujo">Shakujo</a>
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/cursos">Cursos</a>
@@ -116,7 +118,7 @@ export default async function BlackBeltClassesPage({
 
         <section className="split-section">
           <article className="card">
-            <h2>Crear sesion especial</h2>
+            <h2>Crear sesion Busen</h2>
             <form action={createBlackBeltSpecialClassAction} className="quick-form">
               <label>Fecha<input name="classDate" type="date" required /></label>
               <label>Titulo<input name="title" defaultValue="Clase Busen" /></label>
@@ -125,24 +127,43 @@ export default async function BlackBeltClassesPage({
               <button type="submit"><Plus size={16} /> Crear/actualizar sesion</button>
             </form>
           </article>
-          <article className="card">
-            <h2>Marcar kenshi apto</h2>
-            <form action={saveBlackBeltEligibilityAction} className="quick-form">
-              <label>
-                Kenshi
-                <select name="memberId" required>
-                  <option value="">Seleccionar</option>
-                  {(members ?? []).map((member) => <option key={member.id} value={member.id}>{member.display_name} - {member.grade ?? "-"}</option>)}
-                </select>
-              </label>
-              <label>Desde<input name="eligibleFrom" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label>
-              <label>Hasta<input name="eligibleUntil" type="date" /></label>
-              <label className="checkbox-field"><input name="active" type="checkbox" defaultChecked /> Apto activo</label>
-              <label>Motivo<input name="reason" placeholder="Cinturon negro / invitado proximo examen" /></label>
-              <label className="wide">Notas<textarea name="notes" rows={3} /></label>
-              <button type="submit">Guardar aptitud</button>
-            </form>
+          <article className="card busen-explain-card">
+            <h2>Area Busen</h2>
+            <p className="muted">Primero define quienes pertenecen al grupo Busen. Despues, cada sesion registra asistencia solo de ese grupo.</p>
+            <p className="muted">Las ausencias Busen son propias de Busen y no se mezclan con las asistencias normales de clase.</p>
           </article>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Kenshis del grupo Busen</h2>
+              <p className="muted">Activa el switch de quien puede asistir a Busen. Puedes dejar notas internas por kenshi.</p>
+            </div>
+            <span className="tag">{eligibleMembers.length} activos</span>
+          </div>
+          <form action={saveBlackBeltEligibilityRosterAction} className="busen-roster-form">
+            <div className="busen-roster-list">
+              {(members ?? []).map((member) => {
+                const eligibility = eligibilityByMember.get(member.id);
+                return (
+                  <div className="busen-roster-row" key={member.id}>
+                    <input type="hidden" name="memberIds" value={member.id} />
+                    <label className="switch-field">
+                      <input name="activeMemberIds" type="checkbox" value={member.id} defaultChecked={Boolean(eligibility?.active)} />
+                      <span aria-hidden="true" />
+                    </label>
+                    <strong>{member.display_name}<small>{member.grade ?? "-"}</small></strong>
+                    <input name={`reason:${member.id}`} defaultValue={eligibility?.reason ?? ""} placeholder="Motivo: Busen / invitado" />
+                    <input name={`notes:${member.id}`} defaultValue={eligibility?.notes ?? ""} placeholder="Nota interna" />
+                    <input name={`eligibleFrom:${member.id}`} type="date" defaultValue={eligibility?.eligible_from ?? new Date().toISOString().slice(0, 10)} />
+                    <input name={`eligibleUntil:${member.id}`} type="date" defaultValue={eligibility?.eligible_until ?? ""} />
+                  </div>
+                );
+              })}
+            </div>
+            <button type="submit">Guardar grupo Busen</button>
+          </form>
         </section>
 
         <section className="card">
@@ -167,7 +188,7 @@ export default async function BlackBeltClassesPage({
             <form action={saveBlackBeltAttendanceAction} className="black-belt-attendance-form">
               <input type="hidden" name="classId" value={selectedSession.id} />
               <div className="attendance-checklist">
-                {eligibleMembers.map((member) => {
+                {eligibleMembers.length ? eligibleMembers.map((member) => {
                   const row = attendanceByKey.get(`${selectedSession.id}:${member.id}`);
                   return (
                     <div className="black-belt-row" key={member.id}>
@@ -180,7 +201,7 @@ export default async function BlackBeltClassesPage({
                       <input name={`notes:${member.id}`} defaultValue={row?.notes ?? ""} placeholder="Nota / justificacion" />
                     </div>
                   );
-                })}
+                }) : <p className="muted">Primero activa kenshis en el grupo Busen.</p>}
               </div>
               <label className="checkbox-field"><input name="close" type="checkbox" defaultChecked={selectedSession.closed} /> Cerrar sesion</label>
               <button type="submit">Guardar asistencia especial</button>

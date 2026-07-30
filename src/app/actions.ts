@@ -1510,6 +1510,36 @@ export async function saveBlackBeltEligibilityAction(formData: FormData) {
   redirect("/clases-negras?saved=eligibility");
 }
 
+export async function saveBlackBeltEligibilityRosterAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const now = new Date().toISOString();
+  const today = now.slice(0, 10);
+  const memberIds = formData.getAll("memberIds").map((value) => String(value).trim()).filter(Boolean);
+  const activeIds = new Set(formData.getAll("activeMemberIds").map((value) => String(value).trim()).filter(Boolean));
+
+  if (!memberIds.length) redirect("/clases-negras?error=eligibility");
+
+  const rows = memberIds.map((memberId) => ({
+    member_id: memberId,
+    active: activeIds.has(memberId),
+    eligible_from: parseDateInput(String(formData.get(`eligibleFrom:${memberId}`) ?? "")) ?? today,
+    eligible_until: parseDateInput(String(formData.get(`eligibleUntil:${memberId}`) ?? "")),
+    reason: String(formData.get(`reason:${memberId}`) ?? "").trim() || null,
+    notes: String(formData.get(`notes:${memberId}`) ?? "").trim() || null,
+    updated_at: now
+  }));
+
+  const { error } = await createAdminClient()
+    .from("black_belt_class_eligibility")
+    .upsert(rows, { onConflict: "member_id" });
+
+  if (error) {
+    console.error("Error saving black belt eligibility roster", error);
+    redirect("/clases-negras?error=eligibility");
+  }
+  redirect("/clases-negras?saved=eligibility");
+}
+
 export async function createBlackBeltSpecialClassAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/");
   const classDate = parseDateInput(String(formData.get("classDate") ?? ""));
