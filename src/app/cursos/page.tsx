@@ -65,10 +65,10 @@ export default async function CursosPage({
   if (membersError) throw membersError;
   if (coursesError) throw coursesError;
 
-  const nationalCount = (courses ?? []).filter((course) => course.kind === "national").length;
-  const internationalCount = (courses ?? []).filter((course) => course.kind === "international").length;
-  const adultCount = (courses ?? []).filter((course) => course.members?.class === "adults").length;
-  const kidsCount = (courses ?? []).filter((course) => course.members?.class === "kids").length;
+  const courseGroups = groupCourses(courses ?? []);
+  const nationalGroups = courseGroups.filter((course) => course.kind === "national");
+  const internationalGroups = courseGroups.filter((course) => course.kind === "international");
+  const attendeeCount = courseGroups.reduce((sum, course) => sum + course.attendees.length, 0);
 
   return (
     <div className="shell">
@@ -111,22 +111,22 @@ export default async function CursosPage({
           <article className="card">
             <BookOpenCheck aria-hidden="true" size={19} />
             <h2>Nacionales</h2>
-            <div className="metric">{nationalCount}</div>
+            <div className="metric">{nationalGroups.length}</div>
           </article>
           <article className="card">
             <Globe2 aria-hidden="true" size={19} />
             <h2>Internacionales</h2>
-            <div className="metric">{internationalCount}</div>
+            <div className="metric">{internationalGroups.length}</div>
           </article>
           <article className="card">
             <Trophy aria-hidden="true" size={19} />
-            <h2>Adultos</h2>
-            <div className="metric">{adultCount}</div>
+            <h2>Cursos</h2>
+            <div className="metric">{courseGroups.length}</div>
           </article>
           <article className="card">
             <MapPin aria-hidden="true" size={19} />
-            <h2>Ninos</h2>
-            <div className="metric">{kidsCount}</div>
+            <h2>Asistencias</h2>
+            <div className="metric">{attendeeCount}</div>
           </article>
         </section>
 
@@ -192,33 +192,82 @@ export default async function CursosPage({
           </article>
         </section>
 
-        <h2 className="section-title">Ultimos cursos</h2>
-        <section className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Fecha</th><th>Tipo</th><th>Kenshi</th><th>Grado</th><th>Donde</th><th>Curso</th><th>Sensei</th><th>Notas</th></tr>
-            </thead>
-            <tbody>
-              {(courses ?? []).length ? (courses ?? []).map((course) => (
-                <tr key={course.id}>
-                  <td data-label="Fecha">{course.course_date}</td>
-                  <td data-label="Tipo">{course.kind === "national" ? "Nacional" : "Internacional"}</td>
-                  <td data-label="Kenshi">
-                    {course.members?.legacy_id ? <a className="text-link" href={`/kenshis/${course.members.legacy_id}`}>{course.members.display_name}</a> : <strong>{course.members?.display_name ?? "-"}</strong>}
-                  </td>
-                  <td data-label="Grado">{course.members?.grade ?? "-"}</td>
-                  <td data-label="Donde">{course.location ?? "-"}</td>
-                  <td data-label="Curso"><strong>{course.title ?? "-"}</strong></td>
-                  <td data-label="Sensei">{course.sensei ?? "-"}</td>
-                  <td data-label="Notas">{course.notes ?? "-"}</td>
-                </tr>
-              )) : (
-                <tr><td colSpan={8} className="muted">No hay cursos con este filtro.</td></tr>
-              )}
-            </tbody>
-          </table>
+        <section className="course-layers">
+          <CourseLayer title="Cursos nacionales" courses={nationalGroups} empty="No hay cursos nacionales con este filtro." />
+          <CourseLayer title="Cursos internacionales" courses={internationalGroups} empty="No hay cursos internacionales con este filtro." />
         </section>
       </main>
     </div>
   );
+}
+
+type CourseGroup = {
+  key: string;
+  kind: "national" | "international";
+  course_date: string;
+  location: string | null;
+  title: string | null;
+  sensei: string | null;
+  notes: string | null;
+  attendees: Array<NonNullable<Course["members"]>>;
+};
+
+function CourseLayer({ title, courses, empty }: { title: string; courses: CourseGroup[]; empty: string }) {
+  return (
+    <section>
+      <h2 className="section-title">{title}</h2>
+      <div className="course-event-list">
+        {courses.length ? courses.map((course) => (
+          <details className="course-event-card" key={course.key}>
+            <summary>
+              <span>
+                <strong>{course.title ?? "Curso sin nombre"}</strong>
+                <small>{course.course_date} · {course.location ?? "-"} · {course.sensei ?? "Sin sensei"}</small>
+              </span>
+              <b>{course.attendees.length} asistentes</b>
+            </summary>
+            <div className="course-attendee-list">
+              {course.attendees.map((attendee) => (
+                <a className="course-attendee" href={attendee.legacy_id ? `/kenshis/${attendee.legacy_id}` : "#"} key={`${course.key}-${attendee.legacy_id}-${attendee.display_name}`}>
+                  <strong>{attendee.display_name}</strong>
+                  <small>{attendee.class === "kids" ? "Ninos" : "Adultos"} · {attendee.grade ?? "Sin grado"} · ID {attendee.legacy_id ?? "-"}</small>
+                </a>
+              ))}
+              {course.notes ? <p className="muted">Notas: {course.notes}</p> : null}
+            </div>
+          </details>
+        )) : <article className="card"><p className="muted">{empty}</p></article>}
+      </div>
+    </section>
+  );
+}
+
+function groupCourses(courses: Course[]) {
+  const map = new Map<string, CourseGroup>();
+  for (const course of courses) {
+    const key = [
+      course.kind,
+      course.course_date,
+      normalizeCourseText(course.title),
+      normalizeCourseText(course.location),
+      normalizeCourseText(course.sensei)
+    ].join("::");
+    const current = map.get(key) ?? {
+      key,
+      kind: course.kind,
+      course_date: course.course_date,
+      location: course.location,
+      title: course.title,
+      sensei: course.sensei,
+      notes: course.notes,
+      attendees: []
+    };
+    if (course.members) current.attendees.push(course.members);
+    map.set(key, current);
+  }
+  return Array.from(map.values()).sort((a, b) => b.course_date.localeCompare(a.course_date));
+}
+
+function normalizeCourseText(value: string | null) {
+  return String(value ?? "").trim().toUpperCase();
 }

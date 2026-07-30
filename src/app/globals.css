@@ -631,6 +631,74 @@ th {
   border-color: #b9dec9;
 }
 
+.course-layers {
+  display: grid;
+  gap: 8px;
+}
+
+.course-event-list {
+  display: grid;
+  gap: 10px;
+}
+
+.course-event-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.course-event-card summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 68px;
+  padding: 13px 14px;
+}
+
+.course-event-card summary span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.course-event-card summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-event-card summary small,
+.course-attendee small {
+  color: var(--muted);
+}
+
+.course-event-card summary b {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 12px;
+  padding: 6px 9px;
+}
+
+.course-attendee-list {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.course-attendee {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+}
+
 .quick-form button:disabled {
   background: #cbd5e1;
   cursor: not-allowed;
@@ -787,6 +855,98 @@ th {
 
 .mobile-class-list {
   display: none;
+}
+
+.class-calendar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.calendar-head {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.calendar-head h2 {
+  font-size: 18px;
+  margin: 0;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekdays {
+  background: #f1f5f9;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.calendar-weekdays span {
+  padding: 8px 2px;
+}
+
+.calendar-day {
+  border-right: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  min-height: 104px;
+  padding: 7px;
+}
+
+.calendar-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.muted-day {
+  background: #f8fafc;
+  color: #a0aec0;
+}
+
+.calendar-number {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+.calendar-events {
+  display: grid;
+  gap: 4px;
+}
+
+.calendar-event {
+  border-radius: 6px;
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow: hidden;
+  padding: 5px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-event.adults {
+  background: #eef4fb;
+  color: var(--brand-strong);
+}
+
+.calendar-event.kids {
+  background: #fdf2f8;
+  color: #be185d;
 }
 
 .plan-card.completed {
@@ -1699,8 +1859,7 @@ th {
   }
 
   .mobile-class-list {
-    display: grid;
-    gap: 10px;
+    display: none;
   }
 
   .mobile-class-card {
@@ -1750,6 +1909,44 @@ th {
 
   .new-class-main {
     padding: 10px;
+  }
+
+  .class-calendar {
+    margin: 0 -2px 14px;
+  }
+
+  .calendar-head {
+    gap: 6px;
+    padding: 9px;
+  }
+
+  .calendar-head h2 {
+    font-size: 16px;
+  }
+
+  .calendar-head .mini-action {
+    font-size: 12px;
+    min-height: 34px;
+    padding: 6px 8px;
+  }
+
+  .calendar-weekdays span {
+    padding: 7px 1px;
+  }
+
+  .calendar-day {
+    min-height: 76px;
+    padding: 4px;
+  }
+
+  .calendar-number {
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+
+  .calendar-event {
+    font-size: 10px;
+    padding: 4px;
   }
 
   .new-class-card {

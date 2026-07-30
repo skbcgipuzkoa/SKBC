@@ -19,7 +19,7 @@ type Clase = {
 export default async function ClasesPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; month?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -35,6 +35,11 @@ export default async function ClasesPage({
     .returns<Clase[]>();
 
   if (error) throw error;
+  const selectedMonth = normalizeMonth(params.month) ?? (data[0]?.class_date.slice(0, 7) ?? new Date().toISOString().slice(0, 7));
+  const calendarDays = buildCalendar(selectedMonth, data ?? []);
+  const monthLabel = monthName(selectedMonth);
+  const previousMonth = shiftMonth(selectedMonth, -1);
+  const nextMonth = shiftMonth(selectedMonth, 1);
 
   return (
     <div className="shell">
@@ -73,7 +78,32 @@ export default async function ClasesPage({
           </div>
         </div>
         {params.saved === "deleted" ? <p className="save-ok">Clase eliminada del sistema nuevo.</p> : null}
-        <section className="mobile-class-list" aria-label="Clases">
+        <section className="class-calendar" aria-label="Calendario de clases">
+          <div className="calendar-head">
+            <a className="mini-action" href={`/clases?month=${previousMonth}`}>Anterior</a>
+            <h2>{monthLabel}</h2>
+            <a className="mini-action" href={`/clases?month=${nextMonth}`}>Siguiente</a>
+          </div>
+          <div className="calendar-weekdays" aria-hidden="true">
+            <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+          </div>
+          <div className="calendar-grid">
+            {calendarDays.map((day) => (
+              <article className={day.inMonth ? "calendar-day" : "calendar-day muted-day"} key={day.date}>
+                <span className="calendar-number">{Number(day.date.slice(8, 10))}</span>
+                <div className="calendar-events">
+                  {day.classes.map((clase) => (
+                    <a className={clase.class_group === "kids" ? "calendar-event kids" : "calendar-event adults"} href={`/clases/${clase.legacy_id}`} key={`${day.date}-${clase.legacy_id ?? clase.name}`}>
+                      {clase.name}
+                    </a>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="mobile-class-list" aria-label="Clases recientes">
           {data.length ? data.map((clase) => (
             <a className="mobile-class-card" href={`/clases/${clase.legacy_id}`} key={`mobile-${clase.legacy_id ?? `${clase.class_date}-${clase.name}`}`}>
               <span>
@@ -124,4 +154,43 @@ export default async function ClasesPage({
       </main>
     </div>
   );
+}
+
+function buildCalendar(month: string, classes: Clase[]) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const first = new Date(year, monthNumber - 1, 1);
+  const start = new Date(first);
+  const mondayIndex = (first.getDay() + 6) % 7;
+  start.setDate(first.getDate() - mondayIndex);
+  const byDate = new Map<string, Clase[]>();
+  classes.forEach((clase) => {
+    const current = byDate.get(clase.class_date) ?? [];
+    current.push(clase);
+    byDate.set(clase.class_date, current);
+  });
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const iso = date.toISOString().slice(0, 10);
+    return {
+      date: iso,
+      inMonth: iso.startsWith(month),
+      classes: byDate.get(iso) ?? []
+    };
+  });
+}
+
+function normalizeMonth(value: string | undefined) {
+  return value && /^\d{4}-\d{2}$/.test(value) ? value : null;
+}
+
+function shiftMonth(month: string, offset: number) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(year, monthNumber - 1 + offset, 1);
+  return date.toISOString().slice(0, 7);
+}
+
+function monthName(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(year, monthNumber - 1, 1).toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 }
