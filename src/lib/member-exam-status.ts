@@ -23,6 +23,34 @@ type TechniqueRow = {
   name: string;
 };
 
+type CalendarClosure = {
+  starts_on: string;
+  ends_on: string;
+  title: string;
+  applies_to: "all" | "kids" | "adults";
+};
+
+type ExamCall = {
+  call_date: string;
+  title: string;
+};
+
+type ExamRequirement = {
+  grade_pattern: string;
+  min_months: number;
+  attendance_ratio: number;
+  adult_required_repetitions: number;
+  technical_blocks_exam: boolean;
+};
+
+type TechnicalStatus = {
+  ok: boolean;
+  notice: string;
+  missingFirst: number;
+  missingRequired: number;
+  requiredRepetitions: number;
+};
+
 export async function recalculateMemberExamStatus(memberId: string) {
   const supabase = createAdminClient();
   const { data: member, error } = await supabase
@@ -84,10 +112,13 @@ async function calculateExamStatus(member: MemberRow) {
     return emptyStatus("", "Fecha de ciclo no valida.");
   }
 
-  const [cycleAttendance, totalCycleSessions, recent] = await Promise.all([
+  const requirement = await getExamRequirement(member);
+  const eligibilityDate = addEligibilityTime(cycleStartDate, member.grade, requirement.min_months);
+  const [cycleAttendance, totalCycleSessions, recent, examCalls] = await Promise.all([
     countAttendance(member.id, cycleStart, formatDate(today)),
-    countSessions(cycleStart, formatDate(addEligibilityTime(cycleStartDate, member.grade))),
-    getRecentAttendance(member.id)
+    countExpectedTrainingSessions(cycleStart, formatDate(eligibilityDate), member.class),
+    getRecentAttendance(member.id),
+    getExamCalls(cycleStartDate.getFullYear(), today.getFullYear() + 3)
   ]);
 
   if (recent.total180 === 0) {
@@ -105,10 +136,9 @@ async function calculateExamStatus(member: MemberRow) {
     };
   }
 
-  const eligibilityDate = addEligibilityTime(cycleStartDate, member.grade);
-  const nextExam = nextExamCall(eligibilityDate);
+  const nextExam = nextExamCall(eligibilityDate, examCalls);
   const warningDate = addMonths(nextExam, -2);
-  const minimumAttendance = Math.ceil(totalCycleSessions * 0.4);
+  const minimumAttendance = Math.ceil(totalCycleSessions * requirement.attendance_ratio);
   const missingAttendance = Math.max(0, minimumAttendance - cycleAttendance);
   const attendancePercentage = totalCycleSessions > 0 ? Math.min(100, Math.round((cycleAttendance / totalCycleSessions) * 1000) / 10) : 0;
   const eligibleByTime = today.getTime() >= eligibilityDate.getTime();
@@ -117,15 +147,18 @@ async function calculateExamStatus(member: MemberRow) {
   const hasMinimumAttendance = cycleAttendance >= minimumAttendance;
   const linkedOut = recent.total90 === 0;
   const reactivated = recent.total60 >= 6 && recent.total21 >= 1;
+  const technicalStatus = member.class === "adults"
+    ? await calculateTechnicalStatus(member, requirement.adult_required_repetitions)
+    : { ok: true, notice: "", missingFirst: 0, missingRequired: 0, requiredRepetitions: 0 };
 
   let semaphore = "AMARILLO";
   if (!eligibleByTime) semaphore = "AZUL";
   else if (!inWarningWindow) semaphore = "AMARILLO";
   else if (!hasMinimumAttendance) semaphore = "ROJO";
+  else if (requirement.technical_blocks_exam && !technicalStatus.ok) semaphore = "ROJO";
   else if ((linkedOut && (examCallExpired || hasMinimumAttendance)) || (examCallExpired && !reactivated)) semaphore = "GRIS";
   else semaphore = "VERDE";
 
-  const technicalNotice = member.class === "adults" ? await calculateTechnicalNotice(member) : "";
   const notice = buildNotice({
     semaphore,
     nextExam,
@@ -136,8 +169,10 @@ async function calculateExamStatus(member: MemberRow) {
     cycleAttendance,
     missingAttendance,
     attendancePercentage,
+    attendanceRatio: requirement.attendance_ratio,
     recent,
-    technicalNotice
+    technicalStatus,
+    technicalBlocksExam: requirement.technical_blocks_exam
   });
 
   return {
@@ -178,17 +213,36 @@ async function countAttendance(memberId: string, start: string, end: string) {
   return count ?? 0;
 }
 
-async function countSessions(start: string, end: string) {
+async function countExpectedTrainingSessions(start: string, end: string, memberClass: "kids" | "adults") {
+  const startDate = parseDate(start);
+  const endDate = parseDate(end);
+  if (!startDate || !endDate || endDate.getTime() <= startDate.getTime()) return 0;
+
+  const closures = await getCalendarClosures(start, end, memberClass);
+  let count = 0;
+  const cursor = addDays(startDate, 1);
+  while (cursor.getTime() <= endDate.getTime()) {
+    if (isTrainingWeekday(cursor) && !isDefaultClosed(cursor) && !isExplicitlyClosed(cursor, closures)) {
+      count += 1;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
+async function getCalendarClosures(start: string, end: string, memberClass: "kids" | "adults") {
   const supabase = createAdminClient();
-  const { count, error } = await supabase
-    .from("classes")
-    .select("id", { count: "exact", head: true })
-    .gte("class_date", start)
-    .lte("class_date", end)
-    .neq("status", "cancelled");
+  const { data, error } = await supabase
+    .from("skbc_calendar_closures")
+    .select("starts_on,ends_on,title,applies_to")
+    .eq("active", true)
+    .lte("starts_on", end)
+    .gte("ends_on", start)
+    .in("applies_to", ["all", memberClass])
+    .returns<CalendarClosure[]>();
 
   if (error) throw error;
-  return count ?? 0;
+  return data ?? [];
 }
 
 async function getRecentAttendance(memberId: string) {
@@ -213,8 +267,10 @@ async function getRecentAttendance(memberId: string) {
   };
 }
 
-async function calculateTechnicalNotice(member: MemberRow) {
-  if (!member.grade) return "";
+async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: number): Promise<TechnicalStatus> {
+  if (!member.grade || requiredRepetitions <= 0) {
+    return { ok: true, notice: "", missingFirst: 0, missingRequired: 0, requiredRepetitions };
+  }
 
   const supabase = createAdminClient();
   const [{ data: techniques, error: techniquesError }, { data: progress, error: progressError }] = await Promise.all([
@@ -223,6 +279,7 @@ async function calculateTechnicalNotice(member: MemberRow) {
       .select("id,name")
       .eq("grade", member.grade)
       .eq("active", true)
+      .eq("active_in_planning", true)
       .returns<TechniqueRow[]>(),
     supabase
       .from("member_technical_history")
@@ -234,7 +291,9 @@ async function calculateTechnicalNotice(member: MemberRow) {
 
   if (techniquesError) throw techniquesError;
   if (progressError) throw progressError;
-  if (!techniques?.length) return "";
+  if (!techniques?.length) {
+    return { ok: true, notice: "Tecnico: sin programa tecnico activo para este grado.", missingFirst: 0, missingRequired: 0, requiredRepetitions };
+  }
 
   const repetitions = new Map<string, number>();
   for (const row of progress ?? []) {
@@ -243,12 +302,23 @@ async function calculateTechnicalNotice(member: MemberRow) {
   }
 
   const counts = techniques.map((technique) => repetitions.get(technique.id) ?? repetitions.get(technique.name.trim().toUpperCase()) ?? 0);
-  const pendingSecondRep = counts.filter((count) => count < 2).length;
+  const missingRequired = counts.filter((count) => count < requiredRepetitions).length;
+  const missingFirst = counts.filter((count) => count === 0).length;
   const allOnce = counts.every((count) => count >= 1);
 
-  if (pendingSecondRep === 0) return "Tecnico: todas las tecnicas del grado con 2+ reps.";
-  if (allOnce) return `Tecnico: ${pendingSecondRep} tecnicas pendientes de segunda repeticion.`;
-  return `Tecnico: ${counts.filter((count) => count === 0).length} tecnicas aun sin registrar en este grado.`;
+  if (missingRequired === 0) {
+    return { ok: true, notice: `Tecnico: todas las tecnicas del grado con ${requiredRepetitions}+ reps.`, missingFirst, missingRequired, requiredRepetitions };
+  }
+  if (allOnce) {
+    return { ok: false, notice: `Tecnico: no convocar todavia, ${missingRequired} tecnicas pendientes de ${requiredRepetitions} repeticiones.`, missingFirst, missingRequired, requiredRepetitions };
+  }
+  return {
+    ok: false,
+    notice: `Tecnico: no convocar todavia, ${missingFirst} tecnicas aun sin registrar y ${missingRequired} por debajo de ${requiredRepetitions} reps.`,
+    missingFirst,
+    missingRequired,
+    requiredRepetitions
+  };
 }
 
 function buildNotice({
@@ -261,8 +331,10 @@ function buildNotice({
   cycleAttendance,
   missingAttendance,
   attendancePercentage,
+  attendanceRatio,
   recent,
-  technicalNotice
+  technicalStatus,
+  technicalBlocksExam
 }: {
   semaphore: string;
   nextExam: Date;
@@ -273,30 +345,74 @@ function buildNotice({
   cycleAttendance: number;
   missingAttendance: number;
   attendancePercentage: number;
+  attendanceRatio: number;
   recent: Awaited<ReturnType<typeof getRecentAttendance>>;
-  technicalNotice: string;
+  technicalStatus: TechnicalStatus;
+  technicalBlocksExam: boolean;
 }) {
+  const ratioLabel = `${Math.round(attendanceRatio * 100)}%`;
   let notice = "";
   if (semaphore === "AZUL") {
     notice = `AZUL: por tiempo no puede hasta ${formatDate(eligibilityDate)}. Convocatoria objetivo ${formatDate(nextExam)}.`;
   } else if (semaphore === "AMARILLO") {
-    notice = `AMARILLO: proxima convocatoria ${formatDate(nextExam)}. Aviso desde ${formatDate(warningDate)}. (${attendancePercentage}% - min ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}).`;
+    notice = `AMARILLO: proxima convocatoria ${formatDate(nextExam)}. Aviso desde ${formatDate(warningDate)}. (${attendancePercentage}% - min ${ratioLabel}: ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}).`;
   } else if (semaphore === "ROJO") {
-    notice = `ROJO: no apto por asistencia. Convocatoria ${formatDate(nextExam)}. Faltan ${missingAttendance} para el minimo ${minimumAttendance}/${totalCycleSessions}.`;
+    notice = missingAttendance > 0
+      ? `ROJO: no convocar por asistencia. Convocatoria ${formatDate(nextExam)}. Faltan ${missingAttendance} para el minimo ${minimumAttendance}/${totalCycleSessions}.`
+      : `ROJO: no convocar por progreso tecnico. Convocatoria ${formatDate(nextExam)}.`;
   } else if (semaphore === "GRIS") {
     notice = `GRIS: revisar reactivacion reciente (${recent.total60}/6 en 60 dias y ${recent.total21}/1 en 21 dias).`;
   } else {
-    notice = `VERDE: apto para valoracion. Convocatoria ${formatDate(nextExam)} (${attendancePercentage}% - min ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}).`;
+    notice = `VERDE: apto para valoracion. Convocatoria ${formatDate(nextExam)} (${attendancePercentage}% - min ${ratioLabel}: ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}).`;
   }
 
+  const technicalNotice = technicalStatus.notice
+    ? `${technicalBlocksExam && !technicalStatus.ok ? "BLOQUEO " : ""}${technicalStatus.notice}`
+    : "";
   return technicalNotice ? `${notice} | ${technicalNotice}` : notice;
 }
 
-function addEligibilityTime(date: Date, grade: string | null) {
+async function getExamRequirement(member: MemberRow): Promise<ExamRequirement> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("skbc_exam_requirements")
+    .select("grade_pattern,min_months,attendance_ratio,adult_required_repetitions,technical_blocks_exam")
+    .eq("member_class", member.class)
+    .eq("active", true)
+    .returns<ExamRequirement[]>();
+
+  if (error) throw error;
+  const rows = data ?? [];
+  return (
+    rows.find((row) => gradeMatches(member.grade, row.grade_pattern)) ??
+    defaultRequirement(member)
+  );
+}
+
+function defaultRequirement(member: MemberRow): ExamRequirement {
+  const danMonths = danYearsExact(member.grade) ? danYearsExact(member.grade)! * 12 : 12;
+  return {
+    grade_pattern: "*",
+    min_months: member.class === "adults" ? danMonths : 12,
+    attendance_ratio: 0.4,
+    adult_required_repetitions: member.class === "adults" ? 2 : 0,
+    technical_blocks_exam: member.class === "adults"
+  };
+}
+
+function gradeMatches(grade: string | null, pattern: string) {
+  const value = normalizeGrade(grade);
+  const normalizedPattern = normalizeGrade(pattern);
+  if (normalizedPattern === "*" || normalizedPattern === value) return true;
+  if (normalizedPattern === "* KYU") return value.endsWith(" KYU");
+  if (normalizedPattern === "* DAN") return value.endsWith(" DAN");
+  return false;
+}
+
+function addEligibilityTime(date: Date, grade: string | null, minMonths?: number) {
   const next = new Date(date);
-  const danYears = danYearsExact(grade);
-  if (danYears) next.setFullYear(next.getFullYear() + danYears);
-  else next.setMonth(next.getMonth() + 12);
+  const months = minMonths ?? (danYearsExact(grade) ? danYearsExact(grade)! * 12 : 12);
+  next.setMonth(next.getMonth() + months);
   return startOfDay(next);
 }
 
@@ -305,13 +421,35 @@ function danYearsExact(grade: string | null) {
   return match ? Number(match[1]) : null;
 }
 
-function nextExamCall(date: Date) {
+async function getExamCalls(fromYear: number, toYear: number) {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("skbc_exam_calls")
+    .select("call_date,title")
+    .eq("active", true)
+    .gte("call_date", `${fromYear}-01-01`)
+    .lte("call_date", `${toYear}-12-31`)
+    .order("call_date")
+    .returns<ExamCall[]>();
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+function nextExamCall(date: Date, calls: ExamCall[]) {
+  const nextConfigured = calls
+    .map((call) => parseDate(call.call_date))
+    .filter((callDate): callDate is Date => Boolean(callDate))
+    .find((callDate) => callDate.getTime() >= date.getTime());
+
+  if (nextConfigured) return nextConfigured;
+
   const year = date.getFullYear();
-  const summer = new Date(year, 5, 30);
-  const winter = new Date(year, 11, 31);
+  const summer = new Date(year, 5, 27);
+  const winter = new Date(year, 11, 7);
   if (date.getTime() <= summer.getTime()) return startOfDay(summer);
   if (date.getTime() <= winter.getTime()) return startOfDay(winter);
-  return startOfDay(new Date(year + 1, 5, 30));
+  return startOfDay(new Date(year + 1, 5, 27));
 }
 
 function addMonths(date: Date, months: number) {
@@ -332,10 +470,42 @@ function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return startOfDay(next);
+}
+
+function isTrainingWeekday(date: Date) {
+  const day = date.getDay();
+  return day === 2 || day === 4;
+}
+
+function isDefaultClosed(date: Date) {
+  const month = date.getMonth();
+  const day = date.getDate();
+  if (month === 6 || month === 7) return true;
+  if (month === 11 && day >= 24) return true;
+  if (month === 0 && day <= 6) return true;
+  return false;
+}
+
+function isExplicitlyClosed(date: Date, closures: CalendarClosure[]) {
+  return closures.some((closure) => {
+    const starts = parseDate(closure.starts_on);
+    const ends = parseDate(closure.ends_on);
+    return Boolean(starts && ends && date.getTime() >= starts.getTime() && date.getTime() <= ends.getTime());
+  });
+}
+
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
 function daysBetween(from: Date, to: Date) {
   return Math.floor((startOfDay(to).getTime() - startOfDay(from).getTime()) / 86400000);
+}
+
+function normalizeGrade(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
 }

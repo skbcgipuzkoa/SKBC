@@ -1897,6 +1897,21 @@ tbody tr:hover {
   color: var(--brand-strong);
 }
 
+.exam-rule-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.exam-rule-grid span {
+  background: #eef4fb;
+  border-radius: 8px;
+  color: var(--brand-strong);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
 .exam-filters button {
   align-items: center;
   display: inline-flex;

@@ -129,6 +129,23 @@ export default async function ProximosExamenesPage({
           </article>
         </section>
 
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Motor de convocatoria SKBC</h2>
+              <p className="muted">
+                Calcula martes/jueves reales, excluye verano, Navidad, cierres del calendario SKBC y bloquea adultos si falta progreso tecnico.
+              </p>
+            </div>
+          </div>
+          <div className="exam-rule-grid">
+            <span>Convocatorias configurables: junio y diciembre</span>
+            <span>Asistencia minima por defecto: 40%</span>
+            <span>Adultos: tecnica necesaria para VERDE</span>
+            <span>Cierres editables: festivos, Semana Santa, carnavales</span>
+          </div>
+        </section>
+
         <section className="semaphore-strip" aria-label="Semaforos">
           {counters.map((item) => (
             <a
