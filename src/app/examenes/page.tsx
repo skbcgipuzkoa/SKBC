@@ -19,6 +19,9 @@ type ExamRow = {
   cycle_attendance: number | null;
   examiner: string | null;
   diploma_url: string | null;
+  report_url: string | null;
+  report_type: string | null;
+  report_file_name: string | null;
   members: { display_name: string; class: "kids" | "adults" } | null;
 };
 
@@ -43,7 +46,7 @@ export default async function ExamenesPage({
       .returns<MemberOption[]>(),
     supabase
       .from("exams")
-      .select("id,exam_date,grade,cycle_attendance,examiner,diploma_url,members(display_name,class)")
+      .select("id,exam_date,grade,cycle_attendance,examiner,diploma_url,report_url,report_type,report_file_name,members(display_name,class)")
       .order("exam_date", { ascending: false })
       .limit(20)
       .returns<ExamRow[]>()
@@ -133,7 +136,7 @@ export default async function ExamenesPage({
         <section className="table-wrap">
           <table>
             <thead>
-              <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th><th>Gestion</th></tr>
+              <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th><th>Diploma</th><th>Gestion</th></tr>
             </thead>
             <tbody>
               {(exams ?? []).map((exam) => (
@@ -145,22 +148,26 @@ export default async function ExamenesPage({
                   <td data-label="Asistencias">{exam.cycle_attendance ?? 0}</td>
                   <td data-label="Examinador">{exam.examiner ?? "-"}</td>
                   <td data-label="Informe">
-                    {exam.diploma_url ? (
-                      <a className="text-link" href={exam.diploma_url} target="_blank">Abrir documento</a>
+                    {exam.report_url ? (
+                      <a className="text-link" href={exam.report_url} target="_blank">{exam.report_file_name || "Abrir informe"}</a>
                     ) : (
-                      <div className="inline-report-stack">
-                        <form action={generateDiplomaAction}>
-                          <input type="hidden" name="examId" value={exam.id} />
-                          <button className="mini-action selected" type="submit">Generar diploma</button>
-                        </form>
-                        <form action={saveExamReportAction} className="inline-report-form">
-                          <input type="hidden" name="examId" value={exam.id} />
-                          <input name="reportUrl" placeholder="URL informe PDF" required />
-                          <input name="reportType" placeholder="Tipo" defaultValue={exam.members?.class === "kids" ? "Ninos" : "Adultos"} />
-                          <input name="reportFileName" placeholder="Archivo" />
-                          <button type="submit">Guardar URL</button>
-                        </form>
-                      </div>
+                      <form action={saveExamReportAction} className="inline-report-form">
+                        <input type="hidden" name="examId" value={exam.id} />
+                        <input name="reportUrl" placeholder="URL informe PDF" required />
+                        <input name="reportType" placeholder="Tipo" defaultValue={exam.members?.class === "kids" ? "Ninos" : "Adultos"} />
+                        <input name="reportFileName" placeholder="Archivo" />
+                        <button type="submit">Guardar URL</button>
+                      </form>
+                    )}
+                  </td>
+                  <td data-label="Diploma">
+                    {exam.diploma_url ? (
+                      <a className="text-link" href={exam.diploma_url} target="_blank">Abrir diploma</a>
+                    ) : (
+                      <form action={generateDiplomaAction}>
+                        <input type="hidden" name="examId" value={exam.id} />
+                        <button className="mini-action selected" type="submit">Generar diploma</button>
+                      </form>
                     )}
                   </td>
                   <td data-label="Gestion">

@@ -177,7 +177,11 @@ export async function saveExamReport({
   const { error } = await supabase
     .from("exams")
     .update({
-      diploma_url: reportUrl
+      report_url: reportUrl,
+      report_created_at: new Date().toISOString(),
+      report_created_by: createdBy,
+      report_type: reportType,
+      report_file_name: reportFileName
     })
     .eq("id", examId);
 

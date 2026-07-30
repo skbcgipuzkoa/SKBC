@@ -65,12 +65,7 @@ export async function generateDiplomaForExam(examId: string) {
     const { error: updateError } = await supabase
       .from("exams")
       .update({
-        diploma_url: diploma.url,
-        report_url: diploma.url,
-        report_created_at: new Date().toISOString(),
-        report_created_by: "WEB SKBC",
-        report_type: "Diploma",
-        report_file_name: diploma.fileName
+        diploma_url: diploma.url
       })
       .eq("id", exam.id);
 

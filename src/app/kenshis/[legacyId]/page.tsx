@@ -47,6 +47,7 @@ type Exam = {
   grade: string;
   examiner: string | null;
   diploma_url: string | null;
+  report_url: string | null;
 };
 
 type Course = {
@@ -130,7 +131,7 @@ export default async function KenshiDetailPage({
       .returns<Attendance[]>(),
     supabase
       .from("exams")
-      .select("exam_date,grade,examiner,diploma_url")
+      .select("exam_date,grade,examiner,diploma_url,report_url")
       .eq("member_id", member.id)
       .order("exam_date", { ascending: false })
       .returns<Exam[]>(),
@@ -410,14 +411,15 @@ export default async function KenshiDetailPage({
             <h2 className="section-title">Examenes</h2>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Fecha</th><th>Grado</th><th>Examinador</th><th>Documento</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Grado</th><th>Examinador</th><th>Informe</th><th>Diploma</th></tr></thead>
                 <tbody>
                   {(exams ?? []).map((item) => (
                     <tr key={`${item.exam_date}-${item.grade}`}>
                       <td data-label="Fecha">{item.exam_date}</td>
                       <td data-label="Grado">{item.grade}</td>
                       <td data-label="Examinador">{item.examiner ?? "-"}</td>
-                      <td data-label="Documento">{item.diploma_url ? <a className="text-link" href={item.diploma_url} target="_blank">Abrir</a> : "-"}</td>
+                      <td data-label="Informe">{item.report_url ? <a className="text-link" href={item.report_url} target="_blank">Abrir informe</a> : "-"}</td>
+                      <td data-label="Diploma">{item.diploma_url ? <a className="text-link" href={item.diploma_url} target="_blank">Abrir diploma</a> : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
