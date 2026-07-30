@@ -531,6 +531,71 @@ th {
   font-weight: 700;
 }
 
+.quick-form .wide {
+  display: grid;
+  gap: 8px;
+}
+
+.form-help {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.legacy-single-course-label {
+  display: none !important;
+}
+
+.course-member-picker {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.course-member-option {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-height: 52px;
+  padding: 9px 10px;
+}
+
+.course-member-option input {
+  height: 20px;
+  width: 20px;
+}
+
+.course-member-option span {
+  display: grid;
+  gap: 2px;
+}
+
+.course-member-option small {
+  color: var(--muted);
+}
+
+.course-member-option.adults {
+  border-left: 4px solid var(--brand);
+}
+
+.course-member-option.kids {
+  border-left: 4px solid #db2777;
+}
+
+.course-member-option:has(input:checked),
+.check-row:has(input:checked) {
+  background: #e8f5ee;
+  border-color: #b9dec9;
+}
+
 .quick-form button:disabled {
   background: #cbd5e1;
   cursor: not-allowed;
@@ -675,6 +740,14 @@ th {
   grid-template-columns: minmax(0, 1fr) auto;
   min-height: 58px;
   padding: 10px;
+}
+
+.class-summary-strip {
+  margin-bottom: 18px;
+}
+
+.mobile-work-anchor {
+  display: contents;
 }
 
 .plan-card.completed {
@@ -1381,6 +1454,10 @@ th {
     padding: 16px;
   }
 
+  .class-detail-main {
+    padding: 12px;
+  }
+
   .topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -1443,26 +1520,132 @@ th {
   .class-stepper {
     display: flex;
     gap: 8px;
+    margin: 12px -2px 16px;
     overflow-x: auto;
     padding-bottom: 2px;
+    position: sticky;
+    top: 152px;
+    z-index: 6;
   }
 
   .step {
+    background: #ffffff;
     flex: 0 0 auto;
-    min-width: 104px;
+    min-width: 118px;
+    min-height: 48px;
+    padding: 14px 12px;
   }
 
   .attendance-checklist {
     max-height: none;
+    gap: 10px;
+  }
+
+  .check-row {
+    min-height: 62px;
+    padding: 11px 12px;
+  }
+
+  .check-row input {
+    height: 22px;
+    width: 22px;
   }
 
   .plan-card {
     grid-template-columns: 1fr;
+    min-height: 94px;
+    padding: 14px;
   }
 
   .plan-card .mini-action {
+    font-size: 15px;
+    min-height: 44px;
     justify-content: center;
     width: 100%;
+  }
+
+  .plan-card div {
+    gap: 6px;
+  }
+
+  .plan-card strong {
+    font-size: 16px;
+    line-height: 1.25;
+  }
+
+  .plan-reason {
+    font-size: 13px;
+  }
+
+  .plan-group {
+    gap: 10px;
+  }
+
+  .plan-group-head {
+    align-items: flex-start;
+  }
+
+  .plan-group-head h2 {
+    font-size: 16px;
+    margin-bottom: 0;
+  }
+
+  .class-summary-strip {
+    background: var(--bg);
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0 -4px 12px;
+    padding: 4px;
+    position: sticky;
+    top: 0;
+    z-index: 7;
+  }
+
+  .class-summary-strip .card {
+    min-height: 72px;
+    padding: 11px;
+  }
+
+  .class-summary-strip .card h2 {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  .class-summary-strip .metric {
+    font-size: 26px;
+  }
+
+  .class-summary-strip .metric.small {
+    font-size: 17px;
+  }
+
+  .class-workbench {
+    display: none;
+  }
+
+  .mobile-attendance-note {
+    display: none;
+  }
+
+  .mobile-plan-board {
+    gap: 12px;
+  }
+
+  .mobile-plan-board .card {
+    padding: 13px;
+  }
+
+  .quick-form button {
+    min-height: 48px;
+  }
+
+  .course-member-picker {
+    max-height: 48vh;
+  }
+
+  .course-member-option {
+    min-height: 60px;
   }
 
   .section-heading-row {

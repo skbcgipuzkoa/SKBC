@@ -141,9 +141,26 @@ export default async function CursosPage({
                   <option value="international">Internacional</option>
                 </select>
               </label>
-              <label>
+              <div className="wide">
+                <label>
+                  Participantes
+                  <span className="form-help">Selecciona uno o varios kenshis del curso.</span>
+                </label>
+                <div className="course-member-picker">
+                  {(members ?? []).map((member) => (
+                    <label className={`course-member-option ${member.class}`} key={member.id}>
+                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <span>
+                        <strong>{member.display_name}</strong>
+                        <small>{member.class === "kids" ? "Ninos" : "Adultos"} · {member.grade ?? "Sin grado"} · ID {member.legacy_id}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <label className="legacy-single-course-label">
                 Kenshi
-                <select name="memberId" required>
+                <select name="memberId" className="legacy-single-course-select">
                   <option value="">Seleccionar kenshi</option>
                   {(members ?? []).map((member) => (
                     <option value={member.id} key={member.id}>

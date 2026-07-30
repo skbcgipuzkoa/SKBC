@@ -212,7 +212,7 @@ export default async function ClaseDetailPage({
           <a href="/novedades">Novedades</a>
         </nav>
       </aside>
-      <main className="main">
+      <main className="main class-detail-main">
         <div className="topbar">
           <div>
             <p className="eyebrow">
@@ -313,7 +313,7 @@ export default async function ClaseDetailPage({
           <p className="form-error">No se ha podido cerrar la clase.</p>
         ) : null}
 
-        <section className="grid stats compact" aria-label="Resumen">
+        <section className="grid stats compact class-summary-strip" aria-label="Resumen">
           <article className="card"><h2>Fecha</h2><div className="metric small">{clase.class_date}</div></article>
           <article className="card"><h2>Tipo</h2><div className="metric small">{clase.class_type ?? "-"}</div></article>
           <article className="card"><h2>Estado</h2><div className="metric small">{clase.status}</div></article>
@@ -410,7 +410,7 @@ export default async function ClaseDetailPage({
               <h2 className="section-title">Plan tecnico</h2>
               <span className="status">{completedPlan}/{(plan ?? []).length} realizadas</span>
             </div>
-            <section className="plan-board">
+            <section className="plan-board mobile-plan-board">
               {groupedPlan.length ? groupedPlan.map(([grade, items]) => {
                 const groupCompleted = items.filter((item) => item.completed).length;
                 return (
@@ -485,7 +485,9 @@ export default async function ClaseDetailPage({
           )}
         </section>
 
-        {attendanceQuickPanel}
+        <section className="mobile-work-anchor" id="asistencia">
+          {attendanceQuickPanel}
+        </section>
 
         {readyToClose ? (
           <section className="mobile-close-bar" aria-label="Cerrar clase">

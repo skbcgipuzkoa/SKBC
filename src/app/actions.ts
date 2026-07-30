@@ -746,20 +746,23 @@ export async function createCourseAction(formData: FormData) {
     redirect("/");
   }
 
-  const memberId = String(formData.get("memberId") ?? "").trim();
+  const memberIds = formData.getAll("memberIds").map((value) => String(value).trim()).filter(Boolean);
+  const fallbackMemberId = String(formData.get("memberId") ?? "").trim();
   const kind = normalizeCourseKind(String(formData.get("kind") ?? ""));
   const courseDate = parseDateInput(String(formData.get("courseDate") ?? ""));
   const location = String(formData.get("location") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
   const sensei = String(formData.get("sensei") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const selectedMemberIds = memberIds.length ? memberIds : fallbackMemberId ? [fallbackMemberId] : [];
 
-  if (!memberId || !kind || !courseDate || !location || !title) {
+  if (!selectedMemberIds.length || !kind || !courseDate || !location || !title) {
     redirect("/cursos?error=course");
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("courses").insert({
+  const batchId = Date.now();
+  const rows = selectedMemberIds.map((memberId, index) => ({
     kind,
     course_date: courseDate,
     member_id: memberId,
@@ -767,8 +770,10 @@ export async function createCourseAction(formData: FormData) {
     title,
     sensei,
     notes,
-    legacy_id: `CURS-${Date.now()}`
-  });
+    legacy_id: `CURS-${batchId}-${index + 1}`
+  }));
+
+  const { error } = await supabase.from("courses").insert(rows);
 
   if (error) {
     console.error("Error creating course", error);
