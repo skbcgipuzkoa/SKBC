@@ -2269,12 +2269,73 @@ tbody tr:hover {
   margin: 0 0 16px;
 }
 
-.kid-badges span {
+.kid-badge {
+  align-items: center;
   background: #fff;
   border: 1px solid var(--ficha-line);
   border-radius: 999px;
+  display: inline-flex;
+  gap: 8px;
   font-weight: 800;
   padding: 9px 12px;
+}
+
+.kid-badge small {
+  color: var(--ficha-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.kid-badge strong {
+  font-size: 14px;
+}
+
+.kid-badge-green,
+.behavior-green {
+  background: #e8f5ee;
+  border-color: #b9dec9;
+  color: #18864b;
+}
+
+.kid-badge-yellow,
+.behavior-yellow {
+  background: #fff7db;
+  border-color: #f2d36b;
+  color: #8a5a00;
+}
+
+.kid-badge-red,
+.behavior-red {
+  background: #fff1f0;
+  border-color: #f1b7b2;
+  color: #b42318;
+}
+
+.kid-badge-blue,
+.behavior-blue {
+  background: #eef4fb;
+  border-color: #bed6f2;
+  color: #003f88;
+}
+
+.kid-badge-neutral,
+.behavior-neutral {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
+.behavior-fields .ficha-field {
+  background: #fff;
+}
+
+.behavior-pill {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 14px;
+  justify-content: center;
+  padding: 8px 10px;
 }
 
 .notice-stack,

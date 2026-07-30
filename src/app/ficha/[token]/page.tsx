@@ -122,6 +122,8 @@ type ChildBehavior = {
   observation: string | null;
 };
 
+type FichaTone = "green" | "yellow" | "red" | "blue" | "neutral";
+
 export default async function PublicFichaPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const supabase = createAdminClient();
@@ -388,9 +390,9 @@ function KidsFicha({
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="SKBC Gipuzkoa · Ficha infantil" />
 
       <section className="kid-badges">
-        <span>Grado: {member.grade ?? "-"}</span>
-        <span>Objetivo: {objective}</span>
-        <span>Antigüedad: {ageText(member.joined_on) || "-"}</span>
+        <KidBadge label="Grado" value={member.grade ?? "-"} tone={kidGradeTone(member.grade)} />
+        <KidBadge label="Objetivo" value={objective} tone={kidGradeTone(objective)} />
+        <KidBadge label="Antiguedad" value={ageText(member.joined_on) || "-"} tone="blue" />
       </section>
 
       <section className="ficha-actions">
@@ -400,20 +402,20 @@ function KidsFicha({
       <section className="ficha-section">
         <h2>Asistencia</h2>
         <div className="ficha-triple">
-          <StatusBlock title="Último entreno" value={formatDate(ranking?.last_attendance_on ?? attendance[0]?.attended_on ?? null)} />
-          <StatusBlock title="Últimos 30 días" value={String(ranking?.attendance_30d ?? countSince(attendance, 30))} />
-          <StatusBlock title="Últimos 90 días" value={String(ranking?.attendance_90d ?? countSince(attendance, 90))} />
-          <StatusBlock title="Días sin venir" value={ranking?.days_without_attendance === null || ranking?.days_without_attendance === undefined ? "-" : String(ranking.days_without_attendance)} />
+          <StatusBlock title="Último entreno" value={formatDate(ranking?.last_attendance_on ?? attendance[0]?.attended_on ?? null)} tone={daysWithoutTone(ranking?.days_without_attendance)} />
+          <StatusBlock title="Últimos 30 días" value={String(ranking?.attendance_30d ?? countSince(attendance, 30))} tone={attendanceCountTone(ranking?.attendance_30d ?? countSince(attendance, 30), 30)} />
+          <StatusBlock title="Últimos 90 días" value={String(ranking?.attendance_90d ?? countSince(attendance, 90))} tone={attendanceCountTone(ranking?.attendance_90d ?? countSince(attendance, 90), 90)} />
+          <StatusBlock title="Días sin venir" value={ranking?.days_without_attendance === null || ranking?.days_without_attendance === undefined ? "-" : String(ranking.days_without_attendance)} tone={daysWithoutTone(ranking?.days_without_attendance)} />
         </div>
       </section>
 
       <section className="ficha-section">
         <h2>Ranking</h2>
         <div className="ficha-triple">
-          <StatusBlock title="Posición" value={ranking?.position ? `#${ranking.position}` : "-"} />
-          <StatusBlock title="Nivel" value={ranking?.level ?? "-"} />
-          <StatusBlock title="Score" value={String(ranking?.score ?? 0)} />
-          <StatusBlock title="Constancia" value={ranking?.constancy_status ?? "-"} />
+          <StatusBlock title="Posición" value={ranking?.position ? `#${ranking.position}` : "-"} tone={rankingPositionTone(ranking?.position)} />
+          <StatusBlock title="Nivel" value={ranking?.level ?? "-"} tone={levelTone(ranking?.level)} />
+          <StatusBlock title="Score" value={String(ranking?.score ?? 0)} tone={scoreTone(ranking?.score)} />
+          <StatusBlock title="Constancia" value={ranking?.constancy_status ?? "-"} tone={constancyTone(ranking?.constancy_status)} />
         </div>
         {ranking?.motivational_message ? <p className="ficha-ranking">{ranking.motivational_message}</p> : null}
       </section>
@@ -436,7 +438,7 @@ function KidsFicha({
         <div className="exam-card-list">
           {exams.length ? exams.map((exam) => (
             <article className="ficha-card exam-card" key={`${exam.exam_date}-${exam.grade}`}>
-              <strong>{exam.grade}</strong>
+              <KidBadge label="Grado conseguido" value={exam.grade} tone={kidGradeTone(exam.grade)} />
               <span>APTO · {formatDate(exam.exam_date)}</span>
               <p>Examinador: {exam.examiner ?? "-"}</p>
               <p>Registrado por: {exam.registered_by ?? "-"}</p>
@@ -456,12 +458,12 @@ function KidsFicha({
 
       <section className="ficha-section">
         <h2>Comportamiento en clase</h2>
-        <div className="ficha-card ficha-fields">
-          <Field label="Actitud" value={behavior?.attitude} />
-          <Field label="Atención" value={behavior?.attention} />
-          <Field label="Respeto" value={behavior?.respect} />
-          <Field label="Esfuerzo" value={behavior?.effort} />
-          <Field label="Compañerismo" value={behavior?.companionship} />
+        <div className="ficha-card ficha-fields behavior-fields">
+          <BehaviorField label="Actitud" value={behavior?.attitude} />
+          <BehaviorField label="Atención" value={behavior?.attention} />
+          <BehaviorField label="Respeto" value={behavior?.respect} />
+          <BehaviorField label="Esfuerzo" value={behavior?.effort} />
+          <BehaviorField label="Compañerismo" value={behavior?.companionship} />
           <Field label="Observación" value={behavior?.observation} />
         </div>
       </section>
@@ -495,7 +497,26 @@ function Field({ label, value }: { label: string; value: string | number | null 
   );
 }
 
-function StatusBlock({ title, value, tone = "neutral" }: { title: string; value: string; tone?: "green" | "yellow" | "red" | "blue" | "neutral" }) {
+function KidBadge({ label, value, tone }: { label: string; value: string; tone: FichaTone }) {
+  return (
+    <span className={`kid-badge kid-badge-${tone}`}>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
+function BehaviorField({ label, value }: { label: string; value: string | null | undefined }) {
+  const display = value === null || value === undefined || value === "" ? "-" : value;
+  return (
+    <div className="ficha-field behavior-field">
+      <span>{label}</span>
+      <strong className={`behavior-pill behavior-${behaviorTone(value)}`}>{display}</strong>
+    </div>
+  );
+}
+
+function StatusBlock({ title, value, tone = "neutral" }: { title: string; value: string; tone?: FichaTone }) {
   return (
     <article className={`status-block status-${tone}`}>
       <span>{title}</span>
@@ -756,6 +777,77 @@ function nextKidGrade(grade: string | null) {
   return map.get(normalize(grade).replace(/\s|-/g, "")) ?? "SIGUIENTE ETAPA";
 }
 
+function kidGradeTone(grade: string | null): FichaTone {
+  const value = normalize(grade).replace(/\s|-/g, "");
+  if (!value || value === "SIGUIENTEETAPA") return "neutral";
+  if (value.includes("BLANCO") || value.includes("MINARAI")) return "blue";
+  if (value.includes("AMARILLO")) return "yellow";
+  if (value.includes("NARANJA")) return "yellow";
+  if (value.includes("VERDE")) return "green";
+  if (value.includes("AZUL")) return "blue";
+  if (value.includes("MARRON") || value.includes("KYU")) return "red";
+  return "neutral";
+}
+
+function daysWithoutTone(days: number | null | undefined): FichaTone {
+  if (days === null || days === undefined) return "neutral";
+  if (days <= 10) return "green";
+  if (days <= 21) return "yellow";
+  return "red";
+}
+
+function attendanceCountTone(count: number, windowDays: 30 | 90): FichaTone {
+  const green = windowDays === 30 ? 5 : 14;
+  const yellow = windowDays === 30 ? 2 : 7;
+  if (count >= green) return "green";
+  if (count >= yellow) return "yellow";
+  return "red";
+}
+
+function rankingPositionTone(position: number | null | undefined): FichaTone {
+  if (!position) return "neutral";
+  if (position <= 3) return "green";
+  if (position <= 10) return "blue";
+  if (position <= 20) return "yellow";
+  return "red";
+}
+
+function scoreTone(score: number | null | undefined): FichaTone {
+  const value = score ?? 0;
+  if (value >= 80) return "green";
+  if (value >= 45) return "blue";
+  if (value >= 20) return "yellow";
+  return "red";
+}
+
+function levelTone(level: string | null | undefined): FichaTone {
+  const value = normalize(level);
+  if (value.includes("TOP") || value.includes("ALTO") || value.includes("MUY")) return "green";
+  if (value.includes("BUEN") || value.includes("CONST")) return "blue";
+  if (value.includes("PROGRESO") || value.includes("MEDIO")) return "yellow";
+  if (!value || value === "-") return "neutral";
+  return "yellow";
+}
+
+function constancyTone(status: string | null | undefined): FichaTone {
+  const value = normalize(status);
+  if (value.includes("TOP") || value.includes("CONSTANTE") || value.includes("MUY")) return "green";
+  if (value.includes("BIEN") || value.includes("BUEN")) return "blue";
+  if (value.includes("PROGRESO") || value.includes("MEJOR")) return "yellow";
+  if (!value || value === "-") return "neutral";
+  return "red";
+}
+
+function behaviorTone(value: string | null | undefined): FichaTone {
+  const text = normalize(value);
+  if (!text || text === "-") return "neutral";
+  if (text.includes("10") || text.includes("EXCELENTE") || text.includes("MUY BUEN") || text.includes("MUY BIEN") || text.includes("GENIAL")) return "green";
+  if (text.includes("BUENA") || text.includes("BUENO") || text.includes("BIEN") || text.includes("8") || text.includes("9")) return "blue";
+  if (text.includes("POCO A POCO") || text.includes("MEJOR") || text.includes("REGULAR") || text.includes("6") || text.includes("7")) return "yellow";
+  if (text.includes("MAL") || text.includes("BAJA") || text.includes("FALTA") || text.includes("CUIDAR") || text.includes("4") || text.includes("5")) return "red";
+  return "blue";
+}
+
 function countSince(attendance: Attendance[], days: number) {
   const limit = startOfDay(new Date());
   limit.setDate(limit.getDate() - days);
@@ -897,3 +989,5 @@ function normalize(value: string | null | undefined) {
 function normalizeCss(value: string) {
   return normalize(value).toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
+
+
