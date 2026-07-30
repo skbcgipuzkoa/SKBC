@@ -288,9 +288,9 @@ function AdultFicha({
       <section className="ficha-section">
         <h2>Actividad e implicación</h2>
         <div className="ficha-triple">
-          <StatusBlock title="Estado" value={activity.visualStatus} />
-          <StatusBlock title="Esta semana" value={activity.activeThisWeek ? "SI" : "NO"} />
-          <StatusBlock title="Implicación" value={activity.involvement} />
+          <StatusBlock title="Estado" value={activity.visualStatus} tone={activityTone(activity.visualStatus)} />
+          <StatusBlock title="Esta semana" value={activity.activeThisWeek ? "SI" : "NO"} tone={activity.activeThisWeek ? "green" : "red"} />
+          <StatusBlock title="Implicación" value={activity.involvement} tone={involvementTone(activity.involvement)} />
         </div>
         {ranking ? <p className="ficha-ranking">{ranking.message} · Score {ranking.score}</p> : null}
       </section>
@@ -317,7 +317,7 @@ function AdultFicha({
             technique.category,
             `${technique.repetitions}/${REPETITION_GOAL}`,
             String(technique.missing),
-            technique.completed ? "COMPLETADA" : technique.repetitions > 0 ? "EN PROGRESO" : "PENDIENTE"
+            <StateBadge key={technique.id} state={technique.completed ? "COMPLETADA" : technique.repetitions > 0 ? "EN PROGRESO" : "PENDIENTE"} />
           ])}
           empty="Sin técnicas cargadas para el grado objetivo."
         />
@@ -484,13 +484,17 @@ function Field({ label, value }: { label: string; value: string | number | null 
   );
 }
 
-function StatusBlock({ title, value }: { title: string; value: string }) {
+function StatusBlock({ title, value, tone = "neutral" }: { title: string; value: string; tone?: "green" | "yellow" | "red" | "blue" | "neutral" }) {
   return (
-    <article className="status-block">
+    <article className={`status-block status-${tone}`}>
       <span>{title}</span>
       <strong>{value}</strong>
     </article>
   );
+}
+
+function StateBadge({ state }: { state: "COMPLETADA" | "EN PROGRESO" | "PENDIENTE" }) {
+  return <span className={`state-badge state-${normalizeCss(state)}`}>{state}</span>;
 }
 
 function Progress({ label, value }: { label: string; value: number }) {
@@ -639,6 +643,20 @@ function calculateInvolvement(attendance1m: number, attendance6m: number, course
   if (score >= 4) return "IMPLICACION MEDIA";
   if (score >= 2) return "POCA IMPLICACION";
   return "MUY BAJA IMPLICACION";
+}
+
+function activityTone(status: string) {
+  if (status === "A TOPE" || status === "MUY ACTIVO") return "green";
+  if (status === "ACTIVO") return "blue";
+  if (status === "POCO ACTIVO") return "yellow";
+  return "red";
+}
+
+function involvementTone(status: string) {
+  if (status === "MUY IMPLICADO" || status === "IMPLICADO") return "green";
+  if (status === "IMPLICACION MEDIA") return "yellow";
+  if (status === "POCA IMPLICACION") return "yellow";
+  return "red";
 }
 
 function rankingMessage(displayName: string, position: number) {

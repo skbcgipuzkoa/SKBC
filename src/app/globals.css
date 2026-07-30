@@ -988,7 +988,7 @@ th {
   color: #fff;
   display: grid;
   gap: 16px;
-  grid-template-columns: 120px minmax(0, 1fr) 120px;
+  grid-template-columns: 154px minmax(0, 1fr) 154px;
   margin-bottom: 16px;
   padding: 18px;
 }
@@ -1003,13 +1003,13 @@ th {
 .logo-box {
   background: #fff;
   border-radius: 14px;
-  min-height: 120px;
-  padding: 10px;
+  min-height: 154px;
+  padding: 8px;
 }
 
 .logo-box img {
-  max-height: 96px;
-  max-width: 96px;
+  max-height: 136px;
+  max-width: 136px;
   object-fit: contain;
 }
 
@@ -1185,6 +1185,42 @@ th {
   padding: 16px;
 }
 
+.status-green {
+  background: #e8f5ee;
+  border-color: #b9dec9;
+}
+
+.status-green strong {
+  color: #18864b;
+}
+
+.status-yellow {
+  background: #fff7db;
+  border-color: #f2d36b;
+}
+
+.status-yellow strong {
+  color: #8a5a00;
+}
+
+.status-red {
+  background: #fff1f0;
+  border-color: #f1b7b2;
+}
+
+.status-red strong {
+  color: #b42318;
+}
+
+.status-blue {
+  background: #eef4fb;
+  border-color: #bed6f2;
+}
+
+.status-blue strong {
+  color: #003f88;
+}
+
 .ficha-ranking {
   background: #eef4fb;
   border-radius: 999px;
@@ -1232,6 +1268,31 @@ th {
 
 .ficha-table {
   min-width: 760px;
+}
+
+.state-badge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.state-completada {
+  background: #e8f5ee;
+  color: #18864b;
+}
+
+.state-en-progreso {
+  background: #fff7db;
+  color: #8a5a00;
+}
+
+.state-pendiente {
+  background: #fff1f0;
+  color: #b42318;
 }
 
 .doc-links {
@@ -1480,8 +1541,8 @@ th {
   }
 
   .logo-box img {
-    max-height: 74px;
-    max-width: 74px;
+    max-height: 104px;
+    max-width: 104px;
   }
 
   .student-box img,
