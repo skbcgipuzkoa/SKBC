@@ -730,11 +730,37 @@ export async function addAdultRankingBonusAction(formData: FormData) {
     bonus_date: bonusDate,
     points,
     reason,
+    active: true,
+    permanent: true,
     created_by: "WEB SKBC"
   });
 
   if (error) {
     console.error("Error adding adult ranking bonus", error);
+    redirect("/rankings?error=bonus");
+  }
+
+  redirect("/rankings?saved=bonus");
+}
+
+export async function deactivateAdultRankingBonusAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const bonusId = String(formData.get("bonusId") ?? "").trim();
+  if (!bonusId) {
+    redirect("/rankings?error=bonus");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("adult_ranking_bonuses")
+    .update({ active: false, ended_at: new Date().toISOString() })
+    .eq("id", bonusId);
+
+  if (error) {
+    console.error("Error deactivating adult ranking bonus", error);
     redirect("/rankings?error=bonus");
   }
 

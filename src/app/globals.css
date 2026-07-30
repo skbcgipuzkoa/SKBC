@@ -1257,6 +1257,14 @@ th {
   margin: 0;
 }
 
+.bonus-row form {
+  grid-column: 2;
+}
+
+.bonus-row .mini-action {
+  min-height: 30px;
+}
+
 .legacy-ficha {
   --ficha-bg: #f4f6fa;
   --ficha-panel: #ffffff;

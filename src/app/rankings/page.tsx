@@ -1,6 +1,6 @@
 import { Award, Dumbbell, LogOut, Medal, Users } from "lucide-react";
 import { redirect } from "next/navigation";
-import { addAdultRankingBonusAction, logoutAction } from "@/app/actions";
+import { addAdultRankingBonusAction, deactivateAdultRankingBonusAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -31,10 +31,14 @@ type Course = {
 };
 
 type AdultBonus = {
+  id: string;
   member_id: string;
   bonus_date: string;
   points: number;
   reason: string;
+  active: boolean;
+  permanent: boolean;
+  ended_at: string | null;
   members: { display_name: string; legacy_id: string | null } | null;
 };
 
@@ -123,14 +127,15 @@ export default async function RankingsPage({
   const [bonusResult, recentBonusResult] = await Promise.all([
     supabase
       .from("adult_ranking_bonuses")
-      .select("member_id,bonus_date,points,reason,members(display_name,legacy_id)")
-      .gte("bonus_date", date180)
+      .select("id,member_id,bonus_date,points,reason,active,permanent,ended_at,members(display_name,legacy_id)")
+      .or(`active.eq.true,bonus_date.gte.${date180}`)
       .returns<AdultBonus[]>(),
     supabase
       .from("adult_ranking_bonuses")
-      .select("member_id,bonus_date,points,reason,members(display_name,legacy_id)")
+      .select("id,member_id,bonus_date,points,reason,active,permanent,ended_at,members(display_name,legacy_id)")
+      .eq("active", true)
       .order("bonus_date", { ascending: false })
-      .limit(8)
+      .limit(20)
       .returns<AdultBonus[]>()
   ]);
   const bonusTableReady = !bonusResult.error && !recentBonusResult.error;
@@ -206,7 +211,7 @@ export default async function RankingsPage({
 
         {bonusTableReady ? <section className="split-section">
           <article className="card">
-            <h2>Sumar bonus adulto</h2>
+            <h2>Bonus adulto permanente</h2>
             <form action={addAdultRankingBonusAction} className="quick-form">
               <label>
                 Kenshi
@@ -219,22 +224,26 @@ export default async function RankingsPage({
                   ))}
                 </select>
               </label>
-              <label>Fecha<input name="bonusDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label>
+              <label>Desde<input name="bonusDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label>
               <label>Puntos<input name="points" type="number" defaultValue="1" step="1" required /></label>
               <label className="wide">Motivo<input name="reason" placeholder="Ayuda en clase, tatami, apoyo a ninos..." required /></label>
-              <button type="submit">Guardar bonus</button>
+              <button type="submit">Activar bonus</button>
             </form>
           </article>
           <article className="card">
-            <h2>Ultimos bonus</h2>
+            <h2>Bonus activos</h2>
             <div className="stack-list compact-stack">
               {(recentBonuses ?? []).length ? (recentBonuses ?? []).map((bonus) => (
-                <div className="bonus-row" key={`${bonus.member_id}-${bonus.bonus_date}-${bonus.reason}`}>
+                <div className="bonus-row" key={bonus.id}>
                   <strong>{bonus.points > 0 ? `+${bonus.points}` : bonus.points}</strong>
                   <span>{bonus.members?.display_name ?? "-"} · {bonus.bonus_date}</span>
                   <p>{bonus.reason}</p>
+                  <form action={deactivateAdultRankingBonusAction}>
+                    <input type="hidden" name="bonusId" value={bonus.id} />
+                    <button className="mini-action danger" type="submit">Quitar</button>
+                  </form>
                 </div>
-              )) : <p className="muted">Sin bonus manuales todavia.</p>}
+              )) : <p className="muted">Sin bonus activos todavia.</p>}
             </div>
           </article>
         </section> : null}
@@ -317,7 +326,11 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const technical90 = countByMember(technical);
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national").map((row) => ({ member_id: row.member_id, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international").map((row) => ({ member_id: row.member_id, points: 3 })));
-  const manualBonus = sumByMember(bonuses.map((row) => ({ member_id: row.member_id, points: row.points })));
+  const manualBonus = sumByMember(
+    bonuses
+      .filter((row) => (row.permanent && row.active) || (!row.permanent && row.bonus_date >= date180))
+      .map((row) => ({ member_id: row.member_id, points: row.points }))
+  );
   const lastAttendance = latestAttendanceByMember(attendance);
 
   return adults
