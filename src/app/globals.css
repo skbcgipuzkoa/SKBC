@@ -1483,6 +1483,70 @@ th {
   padding: 10px;
 }
 
+.delegate-visible-panel {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 16px;
+}
+
+.delegate-visible-head,
+.delegate-copy-row {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.delegate-visible-head h2 {
+  margin: 0 0 4px;
+}
+
+.delegate-mode-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.delegate-mode-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.delegate-mode-card span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.delegate-mode-card button,
+.copy-link-button {
+  align-items: center;
+  background: var(--brand);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.copy-link-button {
+  white-space: nowrap;
+}
+
 .delegate-page {
   margin: 0 auto;
   max-width: 920px;
@@ -2642,6 +2706,23 @@ th {
   .delegate-page {
     max-width: none;
     padding: 10px;
+  }
+
+  .delegate-visible-head,
+  .delegate-copy-row,
+  .delegate-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .delegate-visible-panel {
+    margin: 12px 0;
+    padding: 12px;
+  }
+
+  .delegate-mode-card button,
+  .copy-link-button,
+  .delegate-visible-head .primary-link {
+    width: 100%;
   }
 
   .delegate-hero {

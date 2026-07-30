@@ -252,6 +252,7 @@ export async function createClassDelegateLinkAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const mode = normalizeDelegateMode(String(formData.get("mode") ?? ""));
   const hours = Math.min(168, Math.max(2, Number.parseInt(String(formData.get("hours") ?? "48"), 10) || 48));
 
   if (!classId || !legacyId) {
@@ -261,20 +262,33 @@ export async function createClassDelegateLinkAction(formData: FormData) {
   const supabase = createAdminClient();
   const { data: clase, error: classError } = await supabase
     .from("classes")
-    .select("id,class_group,closed")
+    .select("id,class_date,class_group,closed")
     .eq("id", classId)
-    .single<{ id: string; class_group: "kids" | "adults"; closed: boolean }>();
+    .single<{ id: string; class_date: string; class_group: "kids" | "adults"; closed: boolean }>();
 
   if (classError || !clase || clase.closed) {
     redirect(`/clases/${legacyId}?error=delegate`);
   }
 
+  let primaryClassId = clase.id;
+  if (mode === "adults" && clase.class_group !== "adults") {
+    primaryClassId = await findOpenClassIdForDelegate(supabase, clase.class_date, "adults", legacyId);
+  }
+  if (mode === "kids" && clase.class_group !== "kids") {
+    primaryClassId = await findOpenClassIdForDelegate(supabase, clase.class_date, "kids", legacyId);
+  }
+  if (mode === "combined") {
+    primaryClassId = await findOpenClassIdForDelegate(supabase, clase.class_date, "adults", legacyId);
+    await findOpenClassIdForDelegate(supabase, clase.class_date, "kids", legacyId);
+  }
+
   const token = createDelegateToken();
   const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
   const { error } = await supabase.from("class_delegate_links").insert({
-    class_id: classId,
+    class_id: primaryClassId,
     token,
-    expires_at: expiresAt
+    expires_at: expiresAt,
+    created_by: `WEB SKBC:${mode}`
   });
 
   if (error) {
@@ -282,11 +296,12 @@ export async function createClassDelegateLinkAction(formData: FormData) {
     redirect(`/clases/${legacyId}?error=delegate`);
   }
 
-  redirect(`/clases/${legacyId}?saved=delegate`);
+  redirect(`/clases/${legacyId}?saved=delegate&delegateMode=${mode}`);
 }
 
 export async function startDelegateClassAction(formData: FormData) {
   const token = String(formData.get("token") ?? "").trim();
+  const mode = normalizeDelegateMode(String(formData.get("mode") ?? ""));
   const delegateName = String(formData.get("delegateName") ?? "").trim() || null;
 
   if (!token) {
@@ -294,8 +309,8 @@ export async function startDelegateClassAction(formData: FormData) {
   }
 
   try {
-    const { link, clase } = await getValidDelegateClass(token);
-    if (clase.class_group === "adults") {
+    const { link, classes } = await getValidDelegateContext(token, mode);
+    for (const clase of classes.filter((item) => item.class_group === "adults")) {
       await ensureAdultClassPrepared(clase.id);
     }
     const supabase = createAdminClient();
@@ -305,43 +320,74 @@ export async function startDelegateClassAction(formData: FormData) {
       .eq("id", link.id);
   } catch (error) {
     console.error("Error starting delegate class", error);
-    redirect(`/delegado/${token}?error=start`);
+    redirect(`/delegado/${token}?mode=${mode}&error=start`);
   }
 
-  redirect(`/delegado/${token}?started=1`);
+  const nextStep = mode === "kids" ? "attendance" : "technical";
+  redirect(`/delegado/${token}?mode=${mode}&started=1&step=${nextStep}`);
+}
+
+export async function saveDelegateTechnicalStepAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  const mode = normalizeDelegateMode(String(formData.get("mode") ?? ""));
+  const delegateName = String(formData.get("delegateName") ?? "").trim() || null;
+  const planIds = formData.getAll("planIds").map((value) => String(value)).filter(Boolean);
+
+  if (!token) {
+    redirect("/delegado/error");
+  }
+
+  try {
+    const { link, classes } = await getValidDelegateContext(token, mode);
+    for (const clase of classes.filter((item) => item.class_group === "adults")) {
+      await ensureAdultClassPrepared(clase.id);
+      await setDelegatePlanCompleted(clase.id, planIds);
+    }
+    const supabase = createAdminClient();
+    await supabase
+      .from("class_delegate_links")
+      .update({ delegate_name: delegateName, started_at: link.started_at ?? new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", link.id);
+  } catch (error) {
+    console.error("Error saving delegate technical step", error);
+    redirect(`/delegado/${token}?mode=${mode}&step=technical&error=technical&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  redirect(`/delegado/${token}?mode=${mode}&started=1&step=attendance`);
 }
 
 export async function submitDelegateClassAction(formData: FormData) {
   const token = String(formData.get("token") ?? "").trim();
+  const mode = normalizeDelegateMode(String(formData.get("mode") ?? ""));
   const delegateName = String(formData.get("delegateName") ?? "").trim() || null;
-  const memberIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
-  const planIds = formData.getAll("planIds").map((value) => String(value)).filter(Boolean);
+  const memberIdsByClass = getDelegateMemberIdsByClass(formData);
+  const totalMembers = [...memberIdsByClass.values()].reduce((count, ids) => count + ids.length, 0);
 
-  if (!token || !memberIds.length) {
-    redirect(`/delegado/${token || "error"}?error=attendance`);
+  if (!token || !totalMembers) {
+    redirect(`/delegado/${token || "error"}?mode=${mode}&step=attendance&error=attendance`);
   }
 
   try {
-    const { link, clase } = await getValidDelegateClass(token);
-    if (clase.class_group === "adults") {
-      await ensureAdultClassPrepared(clase.id);
-      await setDelegatePlanCompleted(clase.id, planIds);
+    const { link, classes } = await getValidDelegateContext(token, mode);
+    for (const clase of classes) {
+      const memberIds = memberIdsByClass.get(clase.id) ?? [];
+      if (memberIds.length) {
+        await addAttendanceRows(clase.id, memberIds);
+      }
+      if (clase.class_group === "adults") {
+        await closeAdultClass(clase.id);
+      } else {
+        const supabase = createAdminClient();
+        const { error } = await supabase
+          .from("classes")
+          .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+          .eq("id", clase.id)
+          .eq("class_group", "kids");
+        if (error) throw error;
+      }
+      await recalculateClassExamStatus(clase.id);
     }
-    await addAttendanceRows(clase.id, memberIds);
 
-    if (clase.class_group === "adults") {
-      await closeAdultClass(clase.id);
-    } else {
-      const supabase = createAdminClient();
-      const { error } = await supabase
-        .from("classes")
-        .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
-        .eq("id", clase.id)
-        .eq("class_group", "kids");
-      if (error) throw error;
-    }
-
-    await recalculateClassExamStatus(clase.id);
     const supabase = createAdminClient();
     await supabase
       .from("class_delegate_links")
@@ -349,10 +395,10 @@ export async function submitDelegateClassAction(formData: FormData) {
       .eq("id", link.id);
   } catch (error) {
     console.error("Error submitting delegate class", error);
-    redirect(`/delegado/${token}?error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
+    redirect(`/delegado/${token}?mode=${mode}&step=attendance&error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
-  redirect(`/delegado/${token}?saved=sent`);
+  redirect(`/delegado/${token}?mode=${mode}&saved=sent`);
 }
 
 export async function createClassAction(formData: FormData) {
@@ -1260,6 +1306,123 @@ async function getValidDelegateClass(token: string) {
   if (clase.closed) throw new Error("Esta clase ya esta cerrada.");
 
   return { link, clase };
+}
+
+type DelegateMode = "adults" | "kids" | "combined";
+
+type DelegateClassRow = {
+  id: string;
+  legacy_id: string | null;
+  class_date: string;
+  name: string;
+  class_group: "kids" | "adults";
+  closed: boolean;
+};
+
+async function getValidDelegateContext(token: string, requestedMode: DelegateMode) {
+  const supabase = createAdminClient();
+  const { data: link, error: linkError } = await supabase
+    .from("class_delegate_links")
+    .select("id,class_id,expires_at,closed_at,revoked_at,started_at,created_by")
+    .eq("token", token)
+    .single<{
+      id: string;
+      class_id: string;
+      expires_at: string;
+      closed_at: string | null;
+      revoked_at: string | null;
+      started_at: string | null;
+      created_by: string | null;
+    }>();
+
+  if (linkError || !link) throw new Error("Enlace no encontrado.");
+  if (link.revoked_at) throw new Error("Este enlace ha sido anulado.");
+  if (link.closed_at) throw new Error("Esta clase ya fue enviada por el sustituto.");
+  if (new Date(link.expires_at).getTime() < Date.now()) throw new Error("Este enlace ha caducado.");
+
+  const { data: primary, error: classError } = await supabase
+    .from("classes")
+    .select("id,legacy_id,class_date,name,class_group,closed")
+    .eq("id", link.class_id)
+    .single<DelegateClassRow>();
+
+  if (classError || !primary) throw new Error("Clase no encontrada.");
+
+  const storedMode = delegateModeFromCreatedBy(link.created_by);
+  const mode = requestedMode || storedMode;
+  const classGroups: Array<"kids" | "adults"> =
+    mode === "combined" ? ["adults", "kids"] : [mode === "kids" ? "kids" : "adults"];
+
+  const { data: classes, error: classesError } = await supabase
+    .from("classes")
+    .select("id,legacy_id,class_date,name,class_group,closed")
+    .eq("class_date", primary.class_date)
+    .in("class_group", classGroups)
+    .order("class_group")
+    .returns<DelegateClassRow[]>();
+
+  if (classesError) throw classesError;
+  const openClasses = (classes ?? []).filter((clase) => !clase.closed);
+  if (!openClasses.length) throw new Error("No hay clases abiertas para este enlace.");
+  if (mode === "combined" && openClasses.length < 2) {
+    throw new Error("El enlace combinado necesita una clase de adultos y otra de ninos abiertas en el mismo dia.");
+  }
+
+  return { link, classes: openClasses, mode };
+}
+
+async function findOpenClassIdForDelegate(
+  supabase: ReturnType<typeof createAdminClient>,
+  classDate: string,
+  classGroup: "kids" | "adults",
+  legacyId: string
+) {
+  const { data, error } = await supabase
+    .from("classes")
+    .select("id")
+    .eq("class_date", classDate)
+    .eq("class_group", classGroup)
+    .eq("closed", false)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
+  if (error || !data?.id) {
+    redirect(`/clases/${legacyId}?error=delegate`);
+  }
+
+  return data.id;
+}
+
+function normalizeDelegateMode(value: string | null | undefined): DelegateMode {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["kids", "ninos", "niños"].includes(normalized)) return "kids";
+  if (["combined", "combinado"].includes(normalized)) return "combined";
+  return "adults";
+}
+
+function delegateModeFromCreatedBy(value: string | null | undefined): DelegateMode {
+  const [, mode] = String(value ?? "").split(":");
+  return normalizeDelegateMode(mode);
+}
+
+function getDelegateMemberIdsByClass(formData: FormData) {
+  const byClass = new Map<string, string[]>();
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("memberIds:")) continue;
+    const classId = key.slice("memberIds:".length);
+    const current = byClass.get(classId) ?? [];
+    current.push(String(value));
+    byClass.set(classId, current);
+  }
+
+  if (!byClass.size) {
+    const legacyIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
+    const classId = String(formData.get("classId") ?? "");
+    if (classId && legacyIds.length) byClass.set(classId, legacyIds);
+  }
+
+  return byClass;
 }
 
 async function setDelegatePlanCompleted(classId: string, planIds: string[]) {

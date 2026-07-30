@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, LogOut, Wand2, X } from "lucide-react";
+import { ArrowLeft, Check, FileText, LogOut, Wand2, X } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import {
   closeAdultClassAction,
@@ -14,6 +14,7 @@ import {
   updateClassAction,
   updatePlanTechniqueAction
 } from "@/app/actions";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -76,6 +77,7 @@ type DelegateLinkRow = {
   token: string;
   expires_at: string;
   created_at: string;
+  created_by: string | null;
 };
 
 export default async function ClaseDetailPage({
@@ -129,7 +131,7 @@ export default async function ClaseDetailPage({
       .returns<MemberOption[]>(),
     supabase
       .from("class_delegate_links")
-      .select("token,expires_at,created_at")
+      .select("token,expires_at,created_at,created_by")
       .eq("class_id", clase.id)
       .is("revoked_at", null)
       .is("closed_at", null)
@@ -148,7 +150,8 @@ export default async function ClaseDetailPage({
   const readyToClose = clase.class_group === "adults" && clase.plan_generated && !clase.closed;
   const readyToCloseKids = clase.class_group === "kids" && !clase.closed;
   const delegateLink = delegateLinks?.[0] ?? null;
-  const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}` : null;
+  const delegateMode = delegateModeFromCreatedBy(delegateLink?.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
+  const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}?mode=${delegateMode}` : null;
   const attendanceQuickPanel = (
     <article className="card">
       <h2>Asistencia final</h2>
@@ -341,38 +344,58 @@ export default async function ClaseDetailPage({
           <article className="card"><h2>Asistentes</h2><div className="metric">{attendance?.length ?? 0}</div></article>
         </section>
 
+        <section className="delegate-visible-panel">
+          <div className="delegate-visible-head">
+            <div>
+              <p className="eyebrow">Modo sustituto</p>
+              <h2>Enviar link para cubrir la clase</h2>
+              <p className="muted">
+                Elige adulto, ninos o combinado. El sustituto entrara por pantallas: iniciar, tecnica si aplica y asistencia.
+              </p>
+            </div>
+            {clase.class_group === "adults" && hasPlan ? (
+              <a className="primary-link secondary-link" href={`/clases/${legacyId}/plan-pdf`} target="_blank" rel="noreferrer">
+                <FileText aria-hidden="true" size={16} />
+                PDF plan tecnico
+              </a>
+            ) : null}
+          </div>
+          {delegateUrl ? (
+            <div className="copy-box delegate-copy-row">
+              <div>
+                <strong>Enlace activo {delegateMode === "combined" ? "combinado" : delegateMode === "kids" ? "ninos" : "adultos"}</strong>
+                <a className="text-link" href={delegateUrl}>{delegateUrl}</a>
+                <small className="muted">Caduca: {new Date(delegateLink?.expires_at ?? "").toLocaleString("es-ES")}</small>
+              </div>
+              <CopyLinkButton value={delegateUrl} />
+            </div>
+          ) : null}
+          {!clase.closed ? (
+            <div className="delegate-mode-grid">
+              {(["adults", "kids", "combined"] as const).map((mode) => (
+                <form action={createClassDelegateLinkAction} className="delegate-mode-card" key={mode}>
+                  <input type="hidden" name="classId" value={clase.id} />
+                  <input type="hidden" name="legacyId" value={legacyId} />
+                  <input type="hidden" name="mode" value={mode} />
+                  <input type="hidden" name="hours" value="48" />
+                  <strong>{mode === "combined" ? "Combinado" : mode === "kids" ? "Ninos" : "Adultos"}</strong>
+                  <span>
+                    {mode === "combined"
+                      ? "Tecnica adultos y asistencia adultos/ninos."
+                      : mode === "kids"
+                        ? "Solo asistencia infantil."
+                        : "Plan tecnico y asistencia adultos."}
+                  </span>
+                  <button type="submit">Generar link</button>
+                </form>
+              ))}
+            </div>
+          ) : <p className="muted">La clase ya esta cerrada.</p>}
+        </section>
+
         <details className="card maintenance-panel">
           <summary>Editar o eliminar clase</summary>
           <div className="split-section">
-            <article className="delegate-admin-box">
-              <h2>Modo sustituto</h2>
-              <p className="muted">
-                Genera un enlace temporal. Al entrar, el sustituto solo podra iniciar esta clase, marcar lo realizado y enviarla.
-              </p>
-              {delegateUrl ? (
-                <div className="copy-box">
-                  <strong>Enlace activo</strong>
-                  <a className="text-link" href={delegateUrl}>{delegateUrl}</a>
-                  <small className="muted">Caduca: {new Date(delegateLink?.expires_at ?? "").toLocaleString("es-ES")}</small>
-                </div>
-              ) : null}
-              {!clase.closed ? (
-                <form action={createClassDelegateLinkAction} className="quick-form">
-                  <input type="hidden" name="classId" value={clase.id} />
-                  <input type="hidden" name="legacyId" value={legacyId} />
-                  <label>
-                    Duracion del enlace
-                    <select name="hours" defaultValue="48">
-                      <option value="12">12 horas</option>
-                      <option value="24">24 horas</option>
-                      <option value="48">48 horas</option>
-                      <option value="72">72 horas</option>
-                    </select>
-                  </label>
-                  <button type="submit">{delegateUrl ? "Generar otro enlace" : "Generar enlace sustituto"}</button>
-                </form>
-              ) : <p className="muted">La clase ya esta cerrada.</p>}
-            </article>
             <form action={updateClassAction} className="edit-form">
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
@@ -605,4 +628,13 @@ function groupPlanByGrade(plan: PlanRow[]) {
     groups.set(key, current);
   });
   return [...groups.entries()];
+}
+
+function delegateModeFromCreatedBy(value: string | null | undefined) {
+  const [, mode] = String(value ?? "").split(":");
+  const normalized = String(mode ?? "").toLowerCase();
+  if (["kids", "ninos", "niños"].includes(normalized)) return "kids";
+  if (["combined", "combinado"].includes(normalized)) return "combined";
+  if (["adults", "adultos"].includes(normalized)) return "adults";
+  return null;
 }
