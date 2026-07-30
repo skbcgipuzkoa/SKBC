@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { syncLegacyExam } from "@/lib/legacy-sheet-sync";
 import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
 
 type MemberForExam = {
@@ -111,6 +112,12 @@ export async function registerExam({
   if (updateError) throw updateError;
 
   await recalculateMemberExamStatus(member.id);
+
+  try {
+    await syncLegacyExam(examId);
+  } catch (error) {
+    console.error("Error syncing exam to legacy sheet", error);
+  }
 
   return { examId, memberLegacyId: member.legacy_id, cycleAttendance };
 }

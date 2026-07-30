@@ -8,6 +8,7 @@ import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
+import { syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -747,6 +748,12 @@ export async function saveChildNoteAction(formData: FormData) {
     redirect(`/kenshis/${legacyId}?error=child-note`);
   }
 
+  try {
+    await syncLegacyChildNote({ memberId, legacyId, noteDate, noteType, note, visibleFamily, author });
+  } catch (syncError) {
+    console.error("Error syncing child note to legacy sheet", syncError);
+  }
+
   redirect(`/kenshis/${legacyId}?saved=child-note`);
 }
 
@@ -789,6 +796,12 @@ export async function saveChildBehaviorAction(formData: FormData) {
   if (error) {
     console.error("Error saving child behavior", error);
     redirect(`/kenshis/${legacyId}?error=child-behavior`);
+  }
+
+  try {
+    await syncLegacyChildBehavior({ memberId, legacyId, reportDate, attitude, attention, respect, effort, companionship, observation });
+  } catch (syncError) {
+    console.error("Error syncing child behavior to legacy sheet", syncError);
   }
 
   redirect(`/kenshis/${legacyId}?saved=child-behavior`);
@@ -883,11 +896,21 @@ export async function createCourseAction(formData: FormData) {
     legacy_id: `CURS-${batchId}-${index + 1}`
   }));
 
-  const { error } = await supabase.from("courses").insert(rows);
+  const { data: insertedCourses, error } = await supabase
+    .from("courses")
+    .insert(rows)
+    .select("id")
+    .returns<Array<{ id: string }>>();
 
   if (error) {
     console.error("Error creating course", error);
     redirect("/cursos?error=course");
+  }
+
+  try {
+    await Promise.all((insertedCourses ?? []).map((course) => syncLegacyCourse(course.id)));
+  } catch (syncError) {
+    console.error("Error syncing course to legacy sheet", syncError);
   }
 
   redirect("/cursos?saved=course");
