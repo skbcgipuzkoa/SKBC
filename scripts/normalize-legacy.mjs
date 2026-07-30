@@ -131,12 +131,17 @@ async function normalizeExams() {
     .map(({ row_data: row }, index) => ({
       legacy_row: index + 2,
       exam_date: parseDate(row.FechaExamen),
-      member_id: memberMap.get(clean(row.ID)),
+      member_id: memberMap.get(normalizeLegacyKey(row.ID)),
       grade: clean(row.Grado),
       cycle_attendance: parseInteger(row.AsistenciasCiclo),
       examiner: clean(row.Examinador) || null,
       registered_by: clean(row.RegistradoPor) || null,
-      diploma_url: clean(row.URL_Diploma) || null
+      diploma_url: clean(row.URL_Diploma) || null,
+      report_url: clean(row.InformePDF) || null,
+      report_created_at: parseTimestamp(row.InformeCreadoEl),
+      report_created_by: clean(row.InformeCreadoPor) || null,
+      report_type: clean(row.InformeTipo) || null,
+      report_file_name: clean(row.InformeNombreArchivo) || null
     }))
     .filter((item) => item.exam_date && item.member_id && item.grade);
 
@@ -376,7 +381,10 @@ async function getIdMap(table, legacyColumn) {
 
     if (error) throw error;
     data.forEach((row) => {
-      if (row[legacyColumn]) map.set(String(row[legacyColumn]), row.id);
+      if (row[legacyColumn]) {
+        map.set(String(row[legacyColumn]), row.id);
+        map.set(normalizeLegacyKey(row[legacyColumn]), row.id);
+      }
     });
     if (data.length < pageSize) break;
     from += pageSize;
@@ -519,6 +527,13 @@ function parseDecimal(value) {
 
 function clean(value) {
   return String(value ?? "").trim();
+}
+
+function normalizeLegacyKey(value) {
+  const text = clean(value);
+  const numeric = Number(text);
+  if (Number.isFinite(numeric) && text !== "") return String(Math.trunc(numeric));
+  return text;
 }
 
 function cleanEnv(value) {

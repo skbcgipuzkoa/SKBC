@@ -51,6 +51,7 @@ type Exam = {
 type LegacyExamRow = {
   row_number: number;
   row_data: Record<string, unknown>;
+  legacy_sheets: { title: string } | null;
 };
 
 type Course = {
@@ -556,8 +557,8 @@ async function loadLegacyExams(supabase: ReturnType<typeof createAdminClient>, l
   if (!legacyId) return [];
   const { data, error } = await supabase
     .from("legacy_rows")
-    .select("row_number,row_data")
-    .eq("sheet_name", "EXAMENES")
+    .select("row_number,row_data,legacy_sheets!inner(title)")
+    .eq("legacy_sheets.title", "EXAMENES")
     .order("row_number", { ascending: true })
     .limit(500)
     .returns<LegacyExamRow[]>();
