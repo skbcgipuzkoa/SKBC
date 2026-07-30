@@ -34,7 +34,7 @@ type Course = {
 export default async function CursosPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; error?: string; kind?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; kind?: string; q?: string; year?: string; memberId?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -53,6 +53,14 @@ export default async function CursosPage({
     courseQuery = courseQuery.eq("kind", params.kind);
   }
 
+  if (/^\d{4}$/.test(params.year ?? "")) {
+    courseQuery = courseQuery.gte("course_date", `${params.year}-01-01`).lte("course_date", `${params.year}-12-31`);
+  }
+
+  if (params.memberId) {
+    courseQuery = courseQuery.eq("member_id", params.memberId);
+  }
+
   const [{ data: members, error: membersError }, { data: courses, error: coursesError }] = await Promise.all([
     supabase
       .from("members")
@@ -67,7 +75,7 @@ export default async function CursosPage({
   if (membersError) throw membersError;
   if (coursesError) throw coursesError;
 
-  const courseGroups = groupCourses(courses ?? []);
+  const courseGroups = filterCourseGroups(groupCourses(courses ?? []), params);
   const nationalGroups = courseGroups.filter((course) => course.kind === "national");
   const internationalGroups = courseGroups.filter((course) => course.kind === "international");
   const attendeeCount = courseGroups.reduce((sum, course) => sum + course.attendees.length, 0);
@@ -192,6 +200,33 @@ export default async function CursosPage({
           </article>
         </section>
 
+        <form className="filters course-filters" action="/cursos">
+          <label>
+            Buscar
+            <input name="q" defaultValue={params.q ?? ""} placeholder="Curso, lugar, sensei, asistente..." />
+          </label>
+          <label>
+            Tipo
+            <select name="kind" defaultValue={params.kind ?? ""}>
+              <option value="">Todos</option>
+              <option value="national">Nacional</option>
+              <option value="international">Internacional</option>
+            </select>
+          </label>
+          <label>
+            Año
+            <input name="year" defaultValue={params.year ?? ""} placeholder="2026" inputMode="numeric" />
+          </label>
+          <label>
+            Kenshi
+            <select name="memberId" defaultValue={params.memberId ?? ""}>
+              <option value="">Todos</option>
+              {(members ?? []).map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}
+            </select>
+          </label>
+          <button type="submit">Filtrar</button>
+        </form>
+
         <section className="course-layers">
           <CourseLayer title="Cursos nacionales" courses={nationalGroups} members={members ?? []} empty="No hay cursos nacionales con este filtro." />
           <CourseLayer title="Cursos internacionales" courses={internationalGroups} members={members ?? []} empty="No hay cursos internacionales con este filtro." />
@@ -268,6 +303,7 @@ function CourseLayer({ title, courses, members, empty }: { title: string; course
                 <button type="submit">Guardar cambios del curso</button>
               </form>
               <h3 className="course-subtitle">Asistentes actuales</h3>
+              <textarea className="course-export-box" readOnly rows={Math.min(8, Math.max(3, course.attendees.length + 2))} value={buildAttendeeExport(course)} />
               {course.attendees.map((attendee) => (
                 <a className="course-attendee" href={attendee.legacy_id ? `/kenshis/${attendee.legacy_id}` : "#"} key={`${course.key}-${attendee.legacy_id}-${attendee.display_name}`}>
                   <strong>{attendee.display_name}</strong>
@@ -311,6 +347,25 @@ function groupCourses(courses: Course[]) {
   return Array.from(map.values()).sort((a, b) => b.course_date.localeCompare(a.course_date));
 }
 
-function normalizeCourseText(value: string | null) {
+function filterCourseGroups(courses: CourseGroup[], params: { q?: string }) {
+  const q = normalizeCourseText(params.q);
+  if (!q) return courses;
+  return courses.filter((course) => [
+    course.title,
+    course.location,
+    course.sensei,
+    course.course_date,
+    course.notes,
+    ...course.attendees.map((attendee) => attendee.display_name)
+  ].some((value) => normalizeCourseText(value).includes(q)));
+}
+
+function buildAttendeeExport(course: CourseGroup) {
+  const header = `${course.title ?? "Curso"} - ${course.course_date} - ${course.location ?? "-"}`;
+  const attendees = course.attendees.map((attendee, index) => `${index + 1}. ${attendee.display_name} (${attendee.class === "kids" ? "Ninos" : "Adultos"} - ${attendee.grade ?? "Sin grado"} - ID ${attendee.legacy_id ?? "-"})`);
+  return [header, `Sensei: ${course.sensei ?? "-"}`, `Asistentes: ${course.attendees.length}`, "", ...attendees].join("\n");
+}
+
+function normalizeCourseText(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase();
 }
