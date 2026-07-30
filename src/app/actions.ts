@@ -82,6 +82,9 @@ export async function updateTechniqueAction(formData: FormData) {
   const payload = {
     name: String(formData.get("name") ?? "").trim(),
     grade: String(formData.get("grade") ?? "").trim() || "SIN GRADO",
+    base_name: String(formData.get("baseName") ?? "").trim() || null,
+    variant: String(formData.get("variant") ?? "").trim() || null,
+    variant_note: String(formData.get("variantNote") ?? "").trim() || null,
     category: normalizeTechniqueCategoryInput(String(formData.get("category") ?? "")),
     content_type: String(formData.get("contentType") ?? "").trim() || null,
     summary_es: String(formData.get("summaryEs") ?? "").trim() || null,

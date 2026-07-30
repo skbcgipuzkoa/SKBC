@@ -769,6 +769,25 @@ tbody tr:hover {
   padding: 4px 0 4px 8px;
 }
 
+.technique-meta-line,
+.technique-variant-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.technique-meta-line span,
+.technique-variant-line {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 5px 8px;
+}
+
 .inline-edit-details {
   margin-top: 10px;
 }

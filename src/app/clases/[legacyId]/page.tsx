@@ -38,6 +38,8 @@ type PlanRow = {
   group_grade: string | null;
   target_grade: string | null;
   technique_name: string;
+  variant: string | null;
+  variant_note: string | null;
   category: string | null;
   proposal_type: string | null;
   focus: string | null;
@@ -106,7 +108,7 @@ export default async function ClaseDetailPage({
   const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }] = await Promise.all([
     supabase
       .from("technical_plans")
-      .select("id,legacy_id,group_grade,target_grade,technique_name,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score)")
+      .select("id,legacy_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score)")
       .eq("class_id", clase.id)
       .order("group_grade")
       .order("suggested_order")
@@ -501,6 +503,11 @@ export default async function ClaseDetailPage({
                         <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
                           <div>
                             <strong>{item.technique_name}</strong>
+                            {item.variant || item.variant_note ? (
+                              <span className="technique-variant-line">
+                                {[item.variant, item.variant_note].filter(Boolean).join(" - ")}
+                              </span>
+                            ) : null}
                             <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
                             <small className="plan-reason">
                               Rep: {item.techniques?.repetitions ?? 0} - Ultima: {item.techniques?.last_trained_on ?? "nunca"} - Score: {item.techniques?.score ?? item.score_at_that_moment ?? 0}

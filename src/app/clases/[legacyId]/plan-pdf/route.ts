@@ -15,6 +15,8 @@ type PlanRow = {
   group_grade: string | null;
   target_grade: string | null;
   technique_name: string;
+  variant: string | null;
+  variant_note: string | null;
   category: string | null;
   proposal_type: string | null;
   focus: string | null;
@@ -46,7 +48,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ leg
 
   const { data: plan, error: planError } = await supabase
     .from("technical_plans")
-    .select("group_grade,target_grade,technique_name,category,proposal_type,focus,summary_es")
+    .select("group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es")
     .eq("class_id", clase.id)
     .order("suggested_order")
     .returns<PlanRow[]>();
@@ -126,6 +128,7 @@ function drawPlanCard(page: PDFPage, x: number, y: number, grade: string, items:
   for (const item of items) {
     page.drawRectangle({ x, y: rowY - 2, width: 10, height: 10, borderColor: rgb(0.08, 0.18, 0.32), borderWidth: 1.1 });
     page.drawText(fitText(item.technique_name, 38), { x: x + 16, y: rowY, size: 9.2, font: bold, color: rgb(0.06, 0.11, 0.2) });
+    const variantLine = [item.variant, item.variant_note].filter(Boolean).join(" - ");
     page.drawText(fitText(`${item.category ?? "-"} - ${item.proposal_type ?? item.focus ?? "-"}`, 42), {
       x: x + 16,
       y: rowY - 12,
@@ -133,23 +136,39 @@ function drawPlanCard(page: PDFPage, x: number, y: number, grade: string, items:
       font,
       color: rgb(0.38, 0.45, 0.55)
     });
+    if (variantLine) {
+      page.drawText(fitText(variantLine, 50), {
+        x: x + 16,
+        y: rowY - 22,
+        size: 6.8,
+        font,
+        color: rgb(0.08, 0.18, 0.32)
+      });
+    }
     if (item.summary_es) {
       page.drawText(fitText(item.summary_es, 58), {
         x: x + 16,
-        y: rowY - 23,
+        y: rowY - (variantLine ? 32 : 23),
         size: 6.6,
         font,
         color: rgb(0.2, 0.25, 0.34)
       });
     }
-    rowY -= item.summary_es ? 39 : 27;
+    rowY -= rowHeight(item);
   }
 
   page.drawRectangle({ x, y: rowY - 4, width: columnWidth, height: 1, color: rgb(0.86, 0.9, 0.95) });
 }
 
 function planCardHeight(items: PlanRow[]) {
-  return 54 + items.reduce((sum, item) => sum + (item.summary_es ? 39 : 27), 0);
+  return 54 + items.reduce((sum, item) => sum + rowHeight(item), 0);
+}
+
+function rowHeight(item: PlanRow) {
+  const hasVariant = Boolean(item.variant || item.variant_note);
+  if (hasVariant && item.summary_es) return 49;
+  if (hasVariant || item.summary_es) return 39;
+  return 27;
 }
 
 function groupPlanByGrade(plan: PlanRow[]) {

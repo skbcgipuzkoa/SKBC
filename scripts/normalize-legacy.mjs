@@ -72,6 +72,8 @@ async function normalizeTechniques() {
       grade: clean(row.GRADO) || "SIN GRADO",
       base_name: clean(row.TECNICA_BASE) || null,
       name: clean(row.NOMBRE_TECNICA),
+      variant: firstClean(row.VARIANTE, row.VARIANTE_TECNICA) ?? detectTechniqueVariant(clean(row.NOMBRE_TECNICA)).variant,
+      variant_note: firstClean(row.NOTA_VARIANTE, row.DESCRIPCION_VARIANTE) ?? detectTechniqueVariant(clean(row.NOMBRE_TECNICA)).variantNote,
       category: normalizeTechniqueCategory(row.CATEGORIA),
       content_type: clean(row.TIPO_CONTENIDO) || null,
       summary_es: firstClean(
@@ -224,6 +226,8 @@ async function normalizeTechnicalPlans() {
       technique_grade: clean(row.GRADO_TECNICA) || null,
       technique_base: clean(row.TECNICA_BASE) || null,
       technique_name: clean(row.NOMBRE_TECNICA),
+      variant: firstClean(row.VARIANTE, row.VARIANTE_TECNICA) ?? detectTechniqueVariant(clean(row.NOMBRE_TECNICA)).variant,
+      variant_note: firstClean(row.NOTA_VARIANTE, row.DESCRIPCION_VARIANTE) ?? detectTechniqueVariant(clean(row.NOMBRE_TECNICA)).variantNote,
       category: normalizeTechniqueCategory(row.CATEGORIA),
       content_type: clean(row.TIPO_CONTENIDO) || null,
       summary_es: firstClean(
@@ -556,6 +560,16 @@ function clean(value) {
 function firstClean(...values) {
   const value = values.map((item) => clean(item)).find(Boolean);
   return value || null;
+}
+
+function detectTechniqueVariant(name) {
+  const normalized = clean(name).toLowerCase();
+  if (normalized.includes("katate")) return { variant: "Katate", variantNote: "Agarre 1 a 1." };
+  if (normalized.includes("morote")) return { variant: "Morote", variantNote: "Agarre 2 a 1." };
+  if (normalized.includes("ryote")) return { variant: "Ryote", variantNote: "Agarre 2 a 2." };
+  if (/\bura\b/.test(normalized)) return { variant: "Ura", variantNote: "Variante por fuera." };
+  if (/\bomote\b/.test(normalized)) return { variant: "Omote", variantNote: "Variante por dentro." };
+  return { variant: null, variantNote: null };
 }
 
 function normalizeLegacyKey(value) {

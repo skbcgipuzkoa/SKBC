@@ -8,7 +8,10 @@ import { BookOpenCheck, CheckCircle2, Filter, LogOut, RotateCcw } from "lucide-r
 type Tecnica = {
   legacy_id: string | null;
   grade: string;
+  base_name: string | null;
   name: string;
+  variant: string | null;
+  variant_note: string | null;
   category: string;
   active: boolean;
   repetitions: number;
@@ -31,7 +34,7 @@ export default async function TecnicasPage({
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("techniques")
-    .select("legacy_id,grade,name,category,content_type,summary_es,active,active_in_planning,repetitions,last_trained_on")
+    .select("legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,active,active_in_planning,repetitions,last_trained_on")
     .order("name", { ascending: true })
     .limit(900)
     .returns<Tecnica[]>();
@@ -46,6 +49,7 @@ export default async function TecnicasPage({
   const planningCount = techniques.filter((tecnica) => tecnica.active_in_planning).length;
   const neverTrained = techniques.filter((tecnica) => !tecnica.last_trained_on || tecnica.repetitions === 0).length;
   const missingSummary = techniques.filter((tecnica) => !tecnica.summary_es).length;
+  const missingVariant = techniques.filter((tecnica) => needsVariant(tecnica.name) && !tecnica.variant).length;
   const gradeStats = grades.map((grade) => {
     const rows = techniques.filter((tecnica) => normalize(tecnica.grade) === normalize(grade));
     const totalRepetitions = rows.reduce((sum, tecnica) => sum + (tecnica.repetitions ?? 0), 0);
@@ -117,6 +121,12 @@ export default async function TecnicasPage({
             <div className="metric">{missingSummary}</div>
             <p className="muted">Tecnicas pendientes de explicacion en castellano.</p>
           </article>
+          <article className={missingVariant ? "card attention-card" : "card"}>
+            <Filter aria-hidden="true" size={20} />
+            <h2>Sin variante</h2>
+            <div className="metric">{missingVariant}</div>
+            <p className="muted">Tecnicas tipo katate/morote/ryote/ura/omote por revisar.</p>
+          </article>
         </section>
 
         <section className="card">
@@ -143,6 +153,7 @@ export default async function TecnicasPage({
               <option value="inactive">Inactivas</option>
               <option value="never">Sin repeticiones</option>
               <option value="missing-summary">Sin resumen</option>
+              <option value="missing-variant">Sin variante</option>
             </select>
             <button type="submit">Filtrar</button>
             <a className="secondary-link" href="/tecnicas">Limpiar</a>
@@ -184,6 +195,11 @@ export default async function TecnicasPage({
                   <td data-label="Grado"><span className={`grade-chip grade-${slugGrade(tecnica.grade)}`}>{tecnica.grade}</span></td>
                   <td data-label="Tecnica">
                     <strong>{tecnica.name}</strong>
+                    <div className="technique-meta-line">
+                      {tecnica.base_name ? <span>Base: {tecnica.base_name}</span> : null}
+                      {tecnica.variant ? <span>Variante: {tecnica.variant}</span> : null}
+                      {tecnica.variant_note ? <span>{tecnica.variant_note}</span> : null}
+                    </div>
                     {tecnica.summary_es ? <p className="technique-summary compact">{tecnica.summary_es}</p> : null}
                     <details className="inline-edit-details" open={params.edit === tecnica.legacy_id}>
                       <summary>Editar tecnica</summary>
@@ -192,6 +208,18 @@ export default async function TecnicasPage({
                         <label>
                           Nombre
                           <input name="name" defaultValue={tecnica.name} required />
+                        </label>
+                        <label>
+                          Tecnica base / familia
+                          <input name="baseName" defaultValue={tecnica.base_name ?? ""} placeholder="Ej. Juji gote" />
+                        </label>
+                        <label>
+                          Variante
+                          <input name="variant" defaultValue={tecnica.variant ?? ""} placeholder="Katate, Morote, Ryote, Ura..." />
+                        </label>
+                        <label>
+                          Nota variante
+                          <input name="variantNote" defaultValue={tecnica.variant_note ?? ""} placeholder="Agarre 1 a 1, por fuera..." />
                         </label>
                         <label>
                           Grado
@@ -259,6 +287,7 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
   if (params.status === "inactive" && tecnica.active) return false;
   if (params.status === "never" && tecnica.last_trained_on && tecnica.repetitions > 0) return false;
   if (params.status === "missing-summary" && tecnica.summary_es) return false;
+  if (params.status === "missing-variant" && (!needsVariant(tecnica.name) || tecnica.variant)) return false;
   return true;
 }
 
@@ -277,4 +306,8 @@ function normalize(value: string | null | undefined) {
 
 function slugGrade(grade: string) {
   return normalize(grade).toLowerCase().replace(/\s+/g, "-");
+}
+
+function needsVariant(name: string) {
+  return /\b(katate|morote|ryote|ura|omote)\b/i.test(name);
 }

@@ -43,6 +43,8 @@ type Technique = {
   grade: string;
   base_name: string | null;
   name: string;
+  variant: string | null;
+  variant_note: string | null;
   category: string | null;
   content_type: string | null;
   summary_es: string | null;
@@ -116,7 +118,7 @@ export async function generateAdultTechnicalPlan(classId: string) {
         .returns<TechnicalGroup[]>(),
       supabase
         .from("techniques")
-        .select("id,legacy_id,grade,base_name,name,category,content_type,summary_es,program_order,curriculum_order,active,active_in_planning,force_next,score,repetitions,last_trained_on")
+        .select("id,legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,program_order,curriculum_order,active,active_in_planning,force_next,score,repetitions,last_trained_on")
         .eq("active", true)
         .eq("active_in_planning", true)
         .returns<Technique[]>()
@@ -150,6 +152,8 @@ export async function generateAdultTechnicalPlan(classId: string) {
       technique_grade: item.technique.grade,
       technique_base: item.technique.base_name,
       technique_name: item.technique.name,
+      variant: item.technique.variant,
+      variant_note: item.technique.variant_note,
       category: categoryForDb(item.technique.category),
       content_type: item.technique.content_type,
       summary_es: item.technique.summary_es,

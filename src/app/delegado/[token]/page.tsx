@@ -32,6 +32,8 @@ type PlanRow = {
   group_grade: string | null;
   target_grade: string | null;
   technique_name: string;
+  variant: string | null;
+  variant_note: string | null;
   category: string | null;
   proposal_type: string | null;
   summary_es: string | null;
@@ -100,7 +102,7 @@ export default async function DelegateClassPage({
   const [{ data: plan }, { data: attendance }, { data: members }] = classIds.length ? await Promise.all([
     supabase
       .from("technical_plans")
-      .select("id,class_id,group_grade,target_grade,technique_name,category,proposal_type,summary_es,completed")
+      .select("id,class_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,summary_es,completed")
       .in("class_id", adultClasses.map((clase) => clase.id))
       .order("group_grade")
       .order("suggested_order")
@@ -188,6 +190,7 @@ export default async function DelegateClassPage({
                     <input name="planIds" type="checkbox" value={item.id} defaultChecked={item.completed} />
                     <span>
                       <strong>{item.technique_name}</strong>
+                      {item.variant || item.variant_note ? <small>{[item.variant, item.variant_note].filter(Boolean).join(" - ")}</small> : null}
                       {item.summary_es ? <em>{item.summary_es}</em> : null}
                       <small>{item.category ?? "-"} · {item.proposal_type ?? item.target_grade ?? "-"}</small>
                     </span>
