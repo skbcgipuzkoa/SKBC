@@ -166,29 +166,29 @@ async function renderDiplomaPdf({
 
   drawWrappedText(page, `Ha realizado y culminado con éxito el examen de ${grade}. Para que así conste, hoy ${formatDateEs(examDate)}, hacemos entrega del presente certificado.`, {
     font: italic,
-    size: 14.5,
-    x: 118,
-    y: 280,
-    width: 286,
-    lineHeight: 17.5,
+    size: 16,
+    x: 112,
+    y: 282,
+    width: 310,
+    lineHeight: 19,
     color: black
   });
 
   drawWrappedText(page, `${translateGradeEu(grade)} azterketa egin eta gainditu du. Hala jakinarazten dugu gaur, ${formatDateEu(examDate)}, agiri honen bidez.`, {
     font: italic,
-    size: 14.5,
-    x: 466,
-    y: 280,
-    width: 282,
-    lineHeight: 17.5,
+    size: 16,
+    x: 464,
+    y: 282,
+    width: 300,
+    lineHeight: 19,
     color: black
   });
 
   page.drawText(`Reg.: ${registry}`, {
     font: bold,
-    size: 10.5,
-    x: 668,
-    y: 68,
+    size: 12,
+    x: 610,
+    y: 224,
     color: black
   });
 
