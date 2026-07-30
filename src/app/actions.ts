@@ -883,6 +883,131 @@ export async function ensureFichaTokenAction(formData: FormData) {
   redirect(`/kenshis/${legacyId}?saved=ficha`);
 }
 
+export async function transitionChildToAdultAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  const transitionedOn = parseDateInput(String(formData.get("transitionedOn") ?? "")) ?? new Date().toISOString().slice(0, 10);
+  const adultGrade = String(formData.get("adultGrade") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const createdBy = String(formData.get("createdBy") ?? "").trim() || "Alvaro";
+
+  if (!memberId || !legacyId || !adultGrade) {
+    redirect(`/kenshis/${legacyId || ""}?error=transition`);
+  }
+
+  const supabase = createAdminClient();
+  const [
+    { data: member, error: memberError },
+    { data: ranking },
+    { data: childNotes },
+    { data: childNotices },
+    { data: behavior },
+    { data: attendance },
+    { data: exams }
+  ] = await Promise.all([
+    supabase
+      .from("members")
+      .select("id,legacy_id,display_name,class,grade,joined_on,ficha_token")
+      .eq("id", memberId)
+      .single<{ id: string; legacy_id: string | null; display_name: string; class: "kids" | "adults"; grade: string | null; joined_on: string | null; ficha_token: string | null }>(),
+    supabase
+      .from("child_rankings")
+      .select("attendance_30d,attendance_90d,last_attendance_on,days_without_attendance,score,position,level,constancy_status,motivational_message")
+      .eq("member_id", memberId)
+      .maybeSingle(),
+    supabase
+      .from("child_notes")
+      .select("note_date,note_type,note,visible_family,author")
+      .eq("member_id", memberId)
+      .order("note_date", { ascending: false, nullsFirst: false })
+      .limit(20),
+    supabase
+      .from("child_notices")
+      .select("notice_date,title,body,color,active,source")
+      .eq("member_id", memberId)
+      .order("notice_date", { ascending: false, nullsFirst: false })
+      .limit(20),
+    supabase
+      .from("child_behavior_reports")
+      .select("report_date,attitude,attention,respect,effort,companionship,observation")
+      .eq("member_id", memberId)
+      .order("report_date", { ascending: false, nullsFirst: false })
+      .limit(10),
+    supabase
+      .from("attendance_logs")
+      .select("attended_on,official_grade,trained_grade,classes(name,class_group)")
+      .eq("member_id", memberId)
+      .order("attended_on", { ascending: false })
+      .limit(60),
+    supabase
+      .from("exams")
+      .select("exam_date,grade,cycle_attendance,examiner,registered_by,diploma_url,report_url")
+      .eq("member_id", memberId)
+      .order("exam_date", { ascending: false })
+  ]);
+
+  if (memberError || !member || member.class !== "kids") {
+    redirect(`/kenshis/${legacyId}?error=transition`);
+  }
+
+  const childSummary = {
+    member: {
+      legacy_id: member.legacy_id,
+      display_name: member.display_name,
+      ficha_token: member.ficha_token
+    },
+    ranking,
+    notes: childNotes ?? [],
+    notices: childNotices ?? [],
+    behavior: behavior ?? [],
+    attendance: attendance ?? [],
+    exams: exams ?? []
+  };
+
+  const { error: insertError } = await supabase.from("child_adult_transitions").insert({
+    member_id: memberId,
+    legacy_id: legacyId,
+    transitioned_on: transitionedOn,
+    child_grade: member.grade,
+    adult_grade: adultGrade,
+    child_joined_on: member.joined_on,
+    child_summary: childSummary,
+    notes,
+    created_by: createdBy
+  });
+
+  if (insertError) {
+    console.error("Error archiving child profile before adult transition", insertError);
+    redirect(`/kenshis/${legacyId}?error=transition`);
+  }
+
+  const { error: updateError } = await supabase
+    .from("members")
+    .update({
+      class: "adults",
+      grade: adultGrade,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", memberId);
+
+  if (updateError) {
+    console.error("Error transitioning child to adult", updateError);
+    redirect(`/kenshis/${legacyId}?error=transition`);
+  }
+
+  try {
+    await recalculateMemberExamStatus(memberId);
+  } catch (error) {
+    console.error("Error recalculating transitioned kenshi", error);
+  }
+
+  redirect(`/kenshis/${legacyId}?saved=transition`);
+}
+
 export async function saveChildNoteAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

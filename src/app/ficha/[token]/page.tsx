@@ -122,6 +122,14 @@ type ChildBehavior = {
   observation: string | null;
 };
 
+type ChildAdultTransition = {
+  transitioned_on: string;
+  child_grade: string | null;
+  adult_grade: string | null;
+  child_summary: { ranking?: ChildRanking | null } | null;
+  notes: string | null;
+};
+
 type FichaTone = "green" | "yellow" | "red" | "blue" | "neutral";
 
 export default async function PublicFichaPage({ params }: { params: Promise<{ token: string }> }) {
@@ -197,7 +205,7 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
 
   const targetGrade = nextAdultGrade(member.grade);
   const date180 = daysAgo(180);
-  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult] = await Promise.all([
+  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,grade,base_name,name,category,active,active_in_planning")
@@ -230,14 +238,21 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
       .from("adult_ranking_bonuses")
       .select("member_id,points")
       .gte("bonus_date", date180)
-      .returns<AdultBonus[]>()
+      .returns<AdultBonus[]>(),
+    supabase
+      .from("child_adult_transitions")
+      .select("transitioned_on,child_grade,adult_grade,child_summary,notes")
+      .eq("member_id", member.id)
+      .order("transitioned_on", { ascending: false })
+      .limit(1)
+      .maybeSingle<ChildAdultTransition>()
   ]);
 
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? []);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} />;
 }
 
 function AdultFicha({
@@ -247,7 +262,8 @@ function AdultFicha({
   courses,
   activity,
   technicalProgress,
-  ranking
+  ranking,
+  childTransition
 }: {
   member: Member;
   attendance: Attendance[];
@@ -256,6 +272,7 @@ function AdultFicha({
   activity: ReturnType<typeof buildAdultActivity>;
   technicalProgress: ReturnType<typeof buildTechnicalProgress>;
   ranking: ReturnType<typeof buildAdultRanking>;
+  childTransition: ChildAdultTransition | null;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const nacionales = courses.filter((course) => course.kind === "national");
@@ -297,6 +314,21 @@ function AdultFicha({
           <Field label="Semanas sin entrenar" value={activity.weeksSinceLast === null ? "-" : String(activity.weeksSinceLast)} />
         </div>
       </section>
+      {childTransition ? (
+        <section className="ficha-section">
+          <h2>Etapa infantil archivada</h2>
+          <div className="ficha-card ficha-fields small-fields">
+            <Field label="Paso a adultos" value={formatDate(childTransition.transitioned_on)} />
+            <Field label="Ultimo grado infantil" value={childTransition.child_grade} />
+            <Field label="Grado adulto inicial" value={childTransition.adult_grade} />
+            <Field label="Ranking infantil" value={childTransition.child_summary?.ranking?.position ? `#${childTransition.child_summary.ranking.position}` : "-"} />
+            <Field label="Score infantil" value={String(childTransition.child_summary?.ranking?.score ?? 0)} />
+            <Field label="Notas" value={childTransition.notes ?? "-"} />
+          </div>
+        </section>
+      ) : null}
+
+
 
       <section className="ficha-section">
         <h2>Actividad e implicación</h2>

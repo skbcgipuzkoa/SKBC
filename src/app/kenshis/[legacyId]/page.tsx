@@ -1,10 +1,11 @@
 import { ArrowLeft, LogOut } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, updateKenshiAction } from "@/app/actions";
+import { ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, transitionChildToAdultAction, updateKenshiAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
 import { hasInternalAccess } from "@/lib/auth";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
+import { adultGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Member = {
@@ -95,6 +96,24 @@ type ChildBehavior = {
   observation: string | null;
 };
 
+type ChildAdultTransition = {
+  id: string;
+  transitioned_on: string;
+  child_grade: string | null;
+  adult_grade: string | null;
+  child_joined_on: string | null;
+  child_summary: {
+    ranking?: ChildRanking | null;
+    notes?: ChildNote[];
+    notices?: ChildNotice[];
+    behavior?: ChildBehavior[];
+    attendance?: Attendance[];
+    exams?: Exam[];
+  } | null;
+  notes: string | null;
+  created_by: string | null;
+};
+
 export default async function KenshiDetailPage({
   params,
   searchParams
@@ -121,7 +140,7 @@ export default async function KenshiDetailPage({
   if (error || !member) notFound();
   const photoSrc = driveImageUrl(member.photo_url);
 
-  const [{ data: attendance }, { data: exams }, { data: courses }, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult] = await Promise.all([
+  const [{ data: attendance }, { data: exams }, { data: courses }, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("attended_on,official_grade,trained_grade,technical_role,classes(name)")
@@ -176,12 +195,20 @@ export default async function KenshiDetailPage({
           .order("report_date", { ascending: false, nullsFirst: false })
           .limit(1)
           .returns<ChildBehavior[]>()
-      : Promise.resolve({ data: [], error: null })
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("child_adult_transitions")
+      .select("id,transitioned_on,child_grade,adult_grade,child_joined_on,child_summary,notes,created_by")
+      .eq("member_id", member.id)
+      .order("transitioned_on", { ascending: false })
+      .limit(1)
+      .maybeSingle<ChildAdultTransition>()
   ]);
   const childRanking = childRankingResult.data;
   const childNotes = childNotesResult.data ?? [];
   const childNotices = [...buildAutomaticChildNotices(childRanking), ...(childNoticesResult.data ?? [])];
   const childBehavior = childBehaviorResult.data?.[0] ?? null;
+  const childTransition = childTransitionResult.data ?? null;
   const today = new Date().toISOString().slice(0, 10);
 
   return (
@@ -256,6 +283,8 @@ export default async function KenshiDetailPage({
             {notices.error === "photo" ? <p className="form-error">No se pudo subir la foto.</p> : null}
             {notices.saved === "ficha" ? <p className="save-ok">Enlace de ficha nueva creado.</p> : null}
             {notices.error === "ficha" ? <p className="form-error">No se pudo crear el enlace de ficha nueva.</p> : null}
+            {notices.saved === "transition" ? <p className="save-ok">Kenshi pasado a adultos y ficha infantil archivada.</p> : null}
+            {notices.error === "transition" ? <p className="form-error">No se pudo pasar a adultos. Revisa el grado adulto.</p> : null}
             <div className="profile-actions">
               {member.ficha_token ? <a className="text-link" href={`/ficha/${member.ficha_token}`} target="_blank">Abrir ficha nueva</a> : (
                 <form action={ensureFichaTokenAction}>
@@ -268,6 +297,66 @@ export default async function KenshiDetailPage({
             </div>
           </article>
         </section>
+
+        {member.class === "kids" ? (
+          <section className="card transition-card">
+            <div>
+              <h2>Pasar a clase de adultos</h2>
+              <p className="muted">Archiva la ficha infantil actual y cambia esta ficha publica a formato adulto manteniendo el mismo enlace.</p>
+            </div>
+            <form className="quick-form" action={transitionChildToAdultAction}>
+              <input type="hidden" name="memberId" value={member.id} />
+              <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
+              <label>Fecha de paso<input type="date" name="transitionedOn" defaultValue={today} required /></label>
+              <label>
+                Grado adulto inicial
+                <select name="adultGrade" defaultValue={member.grade === "MARRON" ? "5 KYU" : member.grade ?? "5 KYU"} required>
+                  <option value="">Seleccionar</option>
+                  {adultGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                </select>
+              </label>
+              <label>Responsable<input name="createdBy" defaultValue="Alvaro" /></label>
+              <label className="wide">Notas del paso<textarea name="notes" rows={3} placeholder="Motivo, edad, observaciones para conservar en el historial..." /></label>
+              <button type="submit">Archivar etapa infantil y pasar a adultos</button>
+            </form>
+          </section>
+        ) : childTransition ? (
+          <section className="card transition-card">
+            <div>
+              <h2>Historial infantil archivado</h2>
+              <p className="muted">Este kenshi viene de la clase infantil. La ficha publica actual es adulta, pero el resumen infantil queda conservado.</p>
+            </div>
+            <div className="grid stats compact">
+              <article className="card">
+                <h2>Fecha de paso</h2>
+                <div className="metric small">{childTransition.transitioned_on}</div>
+              </article>
+              <article className="card">
+                <h2>Grado infantil</h2>
+                <div className="metric small">{childTransition.child_grade ?? "-"}</div>
+              </article>
+              <article className="card">
+                <h2>Grado adulto</h2>
+                <div className="metric small">{childTransition.adult_grade ?? "-"}</div>
+              </article>
+              <article className="card">
+                <h2>Ranking infantil</h2>
+                <div className="metric small">{childTransition.child_summary?.ranking?.position ? `#${childTransition.child_summary.ranking.position}` : "-"}</div>
+              </article>
+            </div>
+            <div className="stack-list">
+              <div className="notice-row">
+                <strong>Resumen infantil</strong>
+                <p>
+                  Score {childTransition.child_summary?.ranking?.score ?? 0}
+                  {" · "}Nivel {childTransition.child_summary?.ranking?.level ?? "-"}
+                  {" · "}Constancia {childTransition.child_summary?.ranking?.constancy_status ?? "-"}
+                </p>
+                <span className="muted">{childTransition.notes ?? "Sin notas de transicion."}</span>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <h2 className="section-title">Datos calculados</h2>
         <section className="grid stats compact">
