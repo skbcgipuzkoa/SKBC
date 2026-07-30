@@ -668,6 +668,88 @@ tbody tr:hover {
   color: #667085;
 }
 
+.grade-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  margin-bottom: 18px;
+}
+
+.grade-summary-card,
+.grade-chip {
+  border: 1px solid #d8e1ee;
+  border-radius: 8px;
+}
+
+.grade-summary-card {
+  color: var(--ink);
+  display: grid;
+  gap: 5px;
+  min-height: 86px;
+  padding: 12px;
+}
+
+.grade-summary-card strong {
+  font-size: 16px;
+}
+
+.grade-summary-card span,
+.grade-summary-card small {
+  color: var(--muted);
+}
+
+.grade-chip {
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 9px;
+  white-space: nowrap;
+}
+
+.grade-minarai {
+  background: #ffffff;
+  color: #0f1b2d;
+}
+
+.grade-5-kyu {
+  background: #fff15a;
+  color: #172033;
+}
+
+.grade-4-kyu {
+  background: #ff9d2e;
+  color: #172033;
+}
+
+.grade-3-kyu {
+  background: #5ec77a;
+  color: #102817;
+}
+
+.grade-2-kyu {
+  background: #458bea;
+  color: #ffffff;
+}
+
+.grade-1-kyu {
+  background: #9a5a31;
+  color: #ffffff;
+}
+
+.grade-1-dan,
+.grade-2-dan,
+.grade-3-dan,
+.grade-4-dan,
+.grade-5-dan,
+.grade-6-dan,
+.grade-7-dan,
+.grade-8-dan,
+.grade-9-dan,
+.grade-10-dan {
+  background: #121a27;
+  color: #ffffff;
+}
+
 .text-link {
   color: var(--brand);
   display: inline-flex;
