@@ -1,6 +1,6 @@
 import { ArrowLeft, LogOut } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { logoutAction, updateKenshiAction } from "@/app/actions";
+import { ensureFichaTokenAction, logoutAction, updateKenshiAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
 import { hasInternalAccess } from "@/lib/auth";
 import { driveImageUrl } from "@/lib/drive";
@@ -29,6 +29,7 @@ type Member = {
   student_phone: string | null;
   address: string | null;
   photo_url: string | null;
+  ficha_token: string | null;
   legacy_ficha_url: string | null;
 };
 
@@ -110,7 +111,7 @@ export default async function KenshiDetailPage({
   const { data: member, error } = await supabase
     .from("members")
     .select(
-      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,legacy_ficha_url"
+      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,ficha_token,legacy_ficha_url"
     )
     .eq("legacy_id", legacyId)
     .single<Member>();
@@ -252,7 +253,18 @@ export default async function KenshiDetailPage({
               }}
             />
             {notices.error === "photo" ? <p className="form-error">No se pudo subir la foto.</p> : null}
-            {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank">Abrir ficha actual</a> : null}
+            {notices.saved === "ficha" ? <p className="save-ok">Enlace de ficha nueva creado.</p> : null}
+            {notices.error === "ficha" ? <p className="form-error">No se pudo crear el enlace de ficha nueva.</p> : null}
+            <div className="profile-actions">
+              {member.ficha_token ? <a className="text-link" href={`/ficha/${member.ficha_token}`} target="_blank">Abrir ficha nueva</a> : (
+                <form action={ensureFichaTokenAction}>
+                  <input type="hidden" name="memberId" value={member.id} />
+                  <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
+                  <button className="mini-action selected" type="submit">Crear enlace ficha nueva</button>
+                </form>
+              )}
+              {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank">Abrir ficha actual</a> : null}
+            </div>
           </article>
         </section>
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
 import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-groups";
@@ -138,7 +139,8 @@ export async function createKenshiAction(formData: FormData) {
     guardian_name: String(formData.get("guardianName") ?? "").trim() || null,
     guardian_phone: String(formData.get("guardianPhone") ?? "").trim() || null,
     student_phone: String(formData.get("studentPhone") ?? "").trim() || null,
-    address: String(formData.get("address") ?? "").trim() || null
+    address: String(formData.get("address") ?? "").trim() || null,
+    ficha_token: createFichaToken()
   };
 
   if (!payload.first_name || !payload.class || !payload.status) {
@@ -682,6 +684,32 @@ export async function deleteExamAction(formData: FormData) {
   redirect("/examenes?saved=delete");
 }
 
+export async function ensureFichaTokenAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  if (!memberId || !legacyId) {
+    redirect("/kenshis?error=ficha");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("members")
+    .update({ ficha_token: createFichaToken(), updated_at: new Date().toISOString() })
+    .eq("id", memberId)
+    .is("ficha_token", null);
+
+  if (error) {
+    console.error("Error creating ficha token", error);
+    redirect(`/kenshis/${legacyId}?error=ficha`);
+  }
+
+  redirect(`/kenshis/${legacyId}?saved=ficha`);
+}
+
 export async function addAdultRankingBonusAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -826,4 +854,8 @@ function errorMessage(error: unknown) {
     return JSON.stringify(record);
   }
   return String(error || "Error desconocido.");
+}
+
+function createFichaToken() {
+  return randomBytes(18).toString("base64url");
 }

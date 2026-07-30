@@ -399,6 +399,18 @@ th {
   width: 92px;
 }
 
+.profile-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.profile-actions form {
+  margin: 0;
+}
+
 .detail-list p {
   margin: 8px 0;
 }
