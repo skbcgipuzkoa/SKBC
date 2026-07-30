@@ -145,36 +145,31 @@ async function renderDiplomaPdf({
   examDate: Date;
   registry: string;
 }) {
-  const templatePath = path.join(process.cwd(), "private", "diploma-template.pdf");
-  const templateBytes = await readFile(templatePath);
-  const pdfDoc = await PDFDocument.load(templateBytes);
-  const page = pdfDoc.getPages()[0];
+  const backgroundPath = path.join(process.cwd(), "private", "diploma-background.png");
+  const backgroundBytes = await readFile(backgroundPath);
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([841, 595]);
+  const background = await pdfDoc.embedPng(backgroundBytes);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const italic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
   const black = rgb(0, 0, 0);
-  const white = rgb(1, 1, 1);
-
-  page.drawRectangle({ x: 50, y: 294, width: 741, height: 76, color: white });
-  page.drawRectangle({ x: 78, y: 185, width: 365, height: 135, color: white });
-  page.drawRectangle({ x: 420, y: 185, width: 320, height: 135, color: white });
-  page.drawRectangle({ x: 610, y: 164, width: 150, height: 24, color: white });
-  page.drawRectangle({ x: 672, y: 52, width: 120, height: 18, color: white });
+  page.drawImage(background, { x: 0, y: 0, width: 841, height: 595 });
 
   drawCenteredText(page, name, {
     font: bold,
-    size: fitFontSize(name, 44, 690, bold),
-    x: 50,
-    y: 318,
-    width: 741,
+    size: fitFontSize(name, 44, 640, bold),
+    x: 79,
+    y: 313,
+    width: 685,
     color: black
   });
 
   drawWrappedText(page, `Ha realizado y culminado con éxito el examen de ${grade}. Para que así conste, hoy ${formatDateEs(examDate)}, hacemos entrega del presente certificado.`, {
     font: italic,
     size: 13,
-    x: 126,
+    x: 120,
     y: 278,
-    width: 285,
+    width: 278,
     lineHeight: 16,
     color: black
   });
@@ -182,9 +177,9 @@ async function renderDiplomaPdf({
   drawWrappedText(page, `${translateGradeEu(grade)} azterketa egin eta gainditu du. Hala jakinarazten dugu gaur, ${formatDateEu(examDate)}, agiri honen bidez.`, {
     font: italic,
     size: 13,
-    x: 454,
+    x: 468,
     y: 278,
-    width: 285,
+    width: 270,
     lineHeight: 16,
     color: black
   });
@@ -192,7 +187,7 @@ async function renderDiplomaPdf({
   page.drawText(`Reg.: ${registry}`, {
     font: bold,
     size: 11,
-    x: 686,
+    x: 690,
     y: 57,
     color: black
   });
