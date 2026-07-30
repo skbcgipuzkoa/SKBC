@@ -17,6 +17,7 @@ type Kenshi = {
   guardian_phone: string | null;
   student_phone: string | null;
   photo_url: string | null;
+  ficha_token: string | null;
   legacy_ficha_url: string | null;
 };
 
@@ -34,7 +35,7 @@ export default async function KenshisPage({
   let query = supabase
     .from("members")
     .select(
-      "legacy_id,ika_id,first_name,last_name,class,status,grade,family_email,guardian_phone,student_phone,photo_url,legacy_ficha_url"
+      "legacy_id,ika_id,first_name,last_name,class,status,grade,family_email,guardian_phone,student_phone,photo_url,ficha_token,legacy_ficha_url"
     )
     .order("status", { ascending: true })
     .order("class", { ascending: true })
@@ -193,13 +194,11 @@ export default async function KenshisPage({
                   <td data-label="Grado">{kenshi.grade || <span className="muted">Sin grado</span>}</td>
                   <td data-label="Contacto">{kenshi.family_email || kenshi.guardian_phone || kenshi.student_phone || <span className="muted">-</span>}</td>
                   <td data-label="Ficha">
-                    {kenshi.legacy_ficha_url ? (
-                      <a className="text-link" href={kenshi.legacy_ficha_url} target="_blank">
-                        Abrir
-                      </a>
-                    ) : (
-                      <span className="muted">-</span>
-                    )}
+                    <span className="link-stack">
+                      {kenshi.ficha_token ? <a className="text-link" href={`/ficha/${kenshi.ficha_token}`} target="_blank">Nueva</a> : null}
+                      {kenshi.legacy_ficha_url ? <a className="text-link" href={kenshi.legacy_ficha_url} target="_blank">Actual</a> : null}
+                      {!kenshi.ficha_token && !kenshi.legacy_ficha_url ? <span className="muted">-</span> : null}
+                    </span>
                   </td>
                 </tr>
               ))}
