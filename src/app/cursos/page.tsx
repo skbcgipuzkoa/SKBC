@@ -141,11 +141,14 @@ export default async function CursosPage({
                   <option value="international">Internacional</option>
                 </select>
               </label>
-              <div className="wide">
-                <label>
-                  Participantes
-                  <span className="form-help">Selecciona uno o varios kenshis del curso.</span>
-                </label>
+              <details className="wide course-member-dropdown">
+                <summary>
+                  <span>
+                    <strong>Participantes</strong>
+                    <small>Selecciona uno o varios kenshis del curso</small>
+                  </span>
+                  <b>{members?.length ?? 0} disponibles</b>
+                </summary>
                 <div className="course-member-picker">
                   {(members ?? []).map((member) => (
                     <label className={`course-member-option ${member.class}`} key={member.id}>
@@ -157,7 +160,7 @@ export default async function CursosPage({
                     </label>
                   ))}
                 </div>
-              </div>
+              </details>
               <label className="legacy-single-course-label">
                 Kenshi
                 <select name="memberId" className="legacy-single-course-select">

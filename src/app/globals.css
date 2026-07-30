@@ -546,9 +546,44 @@ th {
   display: none !important;
 }
 
-.course-member-picker {
+.course-member-dropdown {
   border: 1px solid var(--line);
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.course-member-dropdown summary {
+  align-items: center;
+  background: #f8fafc;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 54px;
+  padding: 12px;
+}
+
+.course-member-dropdown summary span {
+  display: grid;
+  gap: 3px;
+}
+
+.course-member-dropdown summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.course-member-dropdown summary b {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  flex: 0 0 auto;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.course-member-picker {
+  border-top: 1px solid var(--line);
   display: grid;
   gap: 8px;
   max-height: 360px;
