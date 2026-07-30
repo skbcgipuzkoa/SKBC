@@ -245,6 +245,116 @@ export async function prepareAdultClassAction(formData: FormData) {
   redirect(`/clases/${legacyId}?saved=prepare`);
 }
 
+export async function createClassDelegateLinkAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const hours = Math.min(168, Math.max(2, Number.parseInt(String(formData.get("hours") ?? "48"), 10) || 48));
+
+  if (!classId || !legacyId) {
+    redirect("/clases");
+  }
+
+  const supabase = createAdminClient();
+  const { data: clase, error: classError } = await supabase
+    .from("classes")
+    .select("id,class_group,closed")
+    .eq("id", classId)
+    .single<{ id: string; class_group: "kids" | "adults"; closed: boolean }>();
+
+  if (classError || !clase || clase.closed) {
+    redirect(`/clases/${legacyId}?error=delegate`);
+  }
+
+  const token = createDelegateToken();
+  const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase.from("class_delegate_links").insert({
+    class_id: classId,
+    token,
+    expires_at: expiresAt
+  });
+
+  if (error) {
+    console.error("Error creating delegate link", error);
+    redirect(`/clases/${legacyId}?error=delegate`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=delegate`);
+}
+
+export async function startDelegateClassAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  const delegateName = String(formData.get("delegateName") ?? "").trim() || null;
+
+  if (!token) {
+    redirect("/delegado/error");
+  }
+
+  try {
+    const { link, clase } = await getValidDelegateClass(token);
+    if (clase.class_group === "adults") {
+      await ensureAdultClassPrepared(clase.id);
+    }
+    const supabase = createAdminClient();
+    await supabase
+      .from("class_delegate_links")
+      .update({ delegate_name: delegateName, started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", link.id);
+  } catch (error) {
+    console.error("Error starting delegate class", error);
+    redirect(`/delegado/${token}?error=start`);
+  }
+
+  redirect(`/delegado/${token}?started=1`);
+}
+
+export async function submitDelegateClassAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  const delegateName = String(formData.get("delegateName") ?? "").trim() || null;
+  const memberIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
+  const planIds = formData.getAll("planIds").map((value) => String(value)).filter(Boolean);
+
+  if (!token || !memberIds.length) {
+    redirect(`/delegado/${token || "error"}?error=attendance`);
+  }
+
+  try {
+    const { link, clase } = await getValidDelegateClass(token);
+    if (clase.class_group === "adults") {
+      await ensureAdultClassPrepared(clase.id);
+      await setDelegatePlanCompleted(clase.id, planIds);
+    }
+    await addAttendanceRows(clase.id, memberIds);
+
+    if (clase.class_group === "adults") {
+      await closeAdultClass(clase.id);
+    } else {
+      const supabase = createAdminClient();
+      const { error } = await supabase
+        .from("classes")
+        .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+        .eq("id", clase.id)
+        .eq("class_group", "kids");
+      if (error) throw error;
+    }
+
+    await recalculateClassExamStatus(clase.id);
+    const supabase = createAdminClient();
+    await supabase
+      .from("class_delegate_links")
+      .update({ delegate_name: delegateName, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", link.id);
+  } catch (error) {
+    console.error("Error submitting delegate class", error);
+    redirect(`/delegado/${token}?error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  redirect(`/delegado/${token}?saved=sent`);
+}
+
 export async function createClassAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -1106,4 +1216,117 @@ function errorMessage(error: unknown) {
 
 function createFichaToken() {
   return randomBytes(18).toString("base64url");
+}
+
+function createDelegateToken() {
+  return randomBytes(24).toString("base64url");
+}
+
+async function ensureAdultClassPrepared(classId: string) {
+  const supabase = createAdminClient();
+  const [{ data: groups }, { data: plan }] = await Promise.all([
+    supabase.from("class_technical_groups").select("id").eq("class_id", classId).limit(1),
+    supabase.from("technical_plans").select("id").eq("class_id", classId).limit(1)
+  ]);
+
+  if (!(groups?.length)) {
+    await generateAdultTechnicalGroups(classId);
+  }
+  if (!(plan?.length)) {
+    await generateAdultTechnicalPlan(classId);
+  }
+}
+
+async function getValidDelegateClass(token: string) {
+  const supabase = createAdminClient();
+  const { data: link, error: linkError } = await supabase
+    .from("class_delegate_links")
+    .select("id,class_id,expires_at,closed_at,revoked_at")
+    .eq("token", token)
+    .single<{ id: string; class_id: string; expires_at: string; closed_at: string | null; revoked_at: string | null }>();
+
+  if (linkError || !link) throw new Error("Enlace no encontrado.");
+  if (link.revoked_at) throw new Error("Este enlace ha sido anulado.");
+  if (link.closed_at) throw new Error("Esta clase ya fue enviada por el sustituto.");
+  if (new Date(link.expires_at).getTime() < Date.now()) throw new Error("Este enlace ha caducado.");
+
+  const { data: clase, error: classError } = await supabase
+    .from("classes")
+    .select("id,legacy_id,class_date,name,class_group,closed")
+    .eq("id", link.class_id)
+    .single<{ id: string; legacy_id: string | null; class_date: string; name: string; class_group: "kids" | "adults"; closed: boolean }>();
+
+  if (classError || !clase) throw new Error("Clase no encontrada.");
+  if (clase.closed) throw new Error("Esta clase ya esta cerrada.");
+
+  return { link, clase };
+}
+
+async function setDelegatePlanCompleted(classId: string, planIds: string[]) {
+  const supabase = createAdminClient();
+  const { error: resetError } = await supabase
+    .from("technical_plans")
+    .update({ completed: false, updated_at: new Date().toISOString() })
+    .eq("class_id", classId);
+
+  if (resetError) throw resetError;
+  if (!planIds.length) return;
+
+  const { error } = await supabase
+    .from("technical_plans")
+    .update({ completed: true, updated_at: new Date().toISOString() })
+    .eq("class_id", classId)
+    .in("id", planIds);
+
+  if (error) throw error;
+}
+
+async function addAttendanceRows(classId: string, memberIds: string[]) {
+  const supabase = createAdminClient();
+  const [{ data: clase, error: classError }, { data: members, error: membersError }] = await Promise.all([
+    supabase
+      .from("classes")
+      .select("class_date,class_group")
+      .eq("id", classId)
+      .single<{ class_date: string; class_group: "kids" | "adults" }>(),
+    supabase
+      .from("members")
+      .select("id,grade")
+      .in("id", memberIds)
+      .returns<{ id: string; grade: string | null }[]>()
+  ]);
+
+  if (classError || !clase || membersError || !members?.length) {
+    throw new Error("No se ha podido guardar la asistencia.");
+  }
+
+  const rows = members.map((member) => {
+    const officialGrade = member.grade || "";
+    const trainedGrade = clase.class_group === "adults" ? resolveWorkGrade(officialGrade) : officialGrade;
+    return {
+      legacy_id: `NEW-ASIS-${classId}-${member.id}`,
+      class_id: classId,
+      member_id: member.id,
+      attended_on: clase.class_date,
+      official_grade: officialGrade || null,
+      trained_grade: trainedGrade || null,
+      technical_role: "student",
+      technical_note: "REGISTRADO POR SUSTITUTO",
+      use_for_history: true
+    };
+  });
+
+  const { data: attendanceRows, error } = await supabase
+    .from("attendance_logs")
+    .upsert(rows, { onConflict: "legacy_id" })
+    .select("id")
+    .returns<Array<{ id: string }>>();
+
+  if (error) throw error;
+
+  try {
+    await Promise.all((attendanceRows ?? []).map((row) => syncLegacyAttendance(row.id)));
+  } catch (syncError) {
+    console.error("Error syncing delegate attendance to legacy sheet", syncError);
+  }
 }

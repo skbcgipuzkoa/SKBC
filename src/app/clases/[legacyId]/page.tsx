@@ -5,6 +5,7 @@ import {
   addAttendanceAction,
   addBulkAttendanceAction,
   closeKidsClassAction,
+  createClassDelegateLinkAction,
   deleteClassAction,
   generateAdultGroupsAction,
   generateAdultPlanAction,
@@ -71,6 +72,12 @@ type MemberOption = {
   grade: string | null;
 };
 
+type DelegateLinkRow = {
+  token: string;
+  expires_at: string;
+  created_at: string;
+};
+
 export default async function ClaseDetailPage({
   params,
   searchParams
@@ -93,7 +100,7 @@ export default async function ClaseDetailPage({
 
   if (error || !clase) notFound();
 
-  const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }] = await Promise.all([
+  const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }] = await Promise.all([
     supabase
       .from("technical_plans")
       .select("id,legacy_id,group_grade,target_grade,technique_name,category,proposal_type,focus,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score)")
@@ -119,7 +126,17 @@ export default async function ClaseDetailPage({
       .eq("class", clase.class_group)
       .eq("status", "active")
       .order("display_name")
-      .returns<MemberOption[]>()
+      .returns<MemberOption[]>(),
+    supabase
+      .from("class_delegate_links")
+      .select("token,expires_at,created_at")
+      .eq("class_id", clase.id)
+      .is("revoked_at", null)
+      .is("closed_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .returns<DelegateLinkRow[]>()
   ]);
 
   const attendanceMemberIds = new Set((attendance ?? []).map((item) => item.member_id));
@@ -130,6 +147,8 @@ export default async function ClaseDetailPage({
   const hasPlan = Boolean((plan ?? []).length);
   const readyToClose = clase.class_group === "adults" && clase.plan_generated && !clase.closed;
   const readyToCloseKids = clase.class_group === "kids" && !clase.closed;
+  const delegateLink = delegateLinks?.[0] ?? null;
+  const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}` : null;
   const attendanceQuickPanel = (
     <article className="card">
       <h2>Asistencia final</h2>
@@ -286,6 +305,7 @@ export default async function ClaseDetailPage({
         {query.saved === "attendance" ? <p className="save-ok">Asistencia anadida.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
+        {query.saved === "delegate" ? <p className="save-ok">Enlace de sustituto generado.</p> : null}
         {query.error === "plan" ? (
           <p className="form-error">No se ha podido generar el plan tecnico{query.detail ? `: ${query.detail}` : " para esta clase."}</p>
         ) : null}
@@ -310,6 +330,9 @@ export default async function ClaseDetailPage({
         {query.error === "close" ? (
           <p className="form-error">No se ha podido cerrar la clase.</p>
         ) : null}
+        {query.error === "delegate" ? (
+          <p className="form-error">No se ha podido generar el enlace de sustituto.</p>
+        ) : null}
 
         <section className="grid stats compact class-summary-strip" aria-label="Resumen">
           <article className="card"><h2>Fecha</h2><div className="metric small">{clase.class_date}</div></article>
@@ -321,6 +344,35 @@ export default async function ClaseDetailPage({
         <details className="card maintenance-panel">
           <summary>Editar o eliminar clase</summary>
           <div className="split-section">
+            <article className="delegate-admin-box">
+              <h2>Modo sustituto</h2>
+              <p className="muted">
+                Genera un enlace temporal. Al entrar, el sustituto solo podra iniciar esta clase, marcar lo realizado y enviarla.
+              </p>
+              {delegateUrl ? (
+                <div className="copy-box">
+                  <strong>Enlace activo</strong>
+                  <a className="text-link" href={delegateUrl}>{delegateUrl}</a>
+                  <small className="muted">Caduca: {new Date(delegateLink?.expires_at ?? "").toLocaleString("es-ES")}</small>
+                </div>
+              ) : null}
+              {!clase.closed ? (
+                <form action={createClassDelegateLinkAction} className="quick-form">
+                  <input type="hidden" name="classId" value={clase.id} />
+                  <input type="hidden" name="legacyId" value={legacyId} />
+                  <label>
+                    Duracion del enlace
+                    <select name="hours" defaultValue="48">
+                      <option value="12">12 horas</option>
+                      <option value="24">24 horas</option>
+                      <option value="48">48 horas</option>
+                      <option value="72">72 horas</option>
+                    </select>
+                  </label>
+                  <button type="submit">{delegateUrl ? "Generar otro enlace" : "Generar enlace sustituto"}</button>
+                </form>
+              ) : <p className="muted">La clase ya esta cerrada.</p>}
+            </article>
             <form action={updateClassAction} className="edit-form">
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
