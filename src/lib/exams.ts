@@ -177,6 +177,64 @@ export async function saveExamReport({
   if (error) throw error;
 }
 
+export async function deleteExam(examId: string) {
+  const supabase = createAdminClient();
+  const { data: exam, error: examError } = await supabase
+    .from("exams")
+    .select("id,member_id")
+    .eq("id", examId)
+    .single<{ id: string; member_id: string }>();
+
+  if (examError || !exam) throw new Error("Examen no encontrado.");
+
+  const { error: deleteError } = await supabase
+    .from("exams")
+    .delete()
+    .eq("id", exam.id);
+
+  if (deleteError) throw deleteError;
+
+  await rebuildMemberExamSummary(exam.member_id);
+  await recalculateMemberExamStatus(exam.member_id);
+}
+
+async function rebuildMemberExamSummary(memberId: string) {
+  const supabase = createAdminClient();
+  const { data: exams, error } = await supabase
+    .from("exams")
+    .select("exam_date,grade,cycle_attendance")
+    .eq("member_id", memberId)
+    .order("exam_date", { ascending: true })
+    .returns<{ exam_date: string; grade: string; cycle_attendance: number | null }[]>();
+
+  if (error) throw error;
+
+  const lastExam = exams?.at(-1) ?? null;
+  const update: {
+    last_exam_on: string | null;
+    exam_history: string | null;
+    attendance_history: string | null;
+    next_exam_on: null;
+    updated_at: string;
+    grade?: string;
+  } = {
+    last_exam_on: lastExam?.exam_date ?? null,
+    exam_history: exams?.length ? exams.map((item) => `${item.exam_date} (${item.grade})`).join(" | ") : null,
+    attendance_history: exams?.length ? exams.map((item) => `${item.grade}: ${item.cycle_attendance ?? 0}`).join(" | ") : null,
+    next_exam_on: null,
+    updated_at: new Date().toISOString()
+  };
+
+  if (lastExam?.grade) update.grade = lastExam.grade;
+
+  const { error: updateError } = await supabase
+    .from("members")
+    .update(update)
+    .eq("id", memberId);
+
+  if (updateError) throw updateError;
+}
+
 async function countCycleAttendance(memberId: string, cycleStart: string | null, examDate: string) {
   const supabase = createAdminClient();
   let query = supabase

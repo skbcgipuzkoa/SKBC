@@ -1,6 +1,6 @@
 import { LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
-import { generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
+import { deleteExamAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -88,11 +88,20 @@ export default async function ExamenesPage({
         {params.saved === "exam" ? <p className="save-ok">Examen registrado.</p> : null}
         {params.saved === "report" ? <p className="save-ok">Informe guardado en la linea de examen.</p> : null}
         {params.saved === "diploma" ? <p className="save-ok">Diploma generado y guardado.</p> : null}
+        {params.saved === "delete" ? <p className="save-ok">Examen eliminado y ficha recalculada.</p> : null}
         {params.error === "exam" ? <p className="form-error">No se pudo registrar el examen.</p> : null}
         {params.error === "report" ? <p className="form-error">No se pudo guardar el informe.</p> : null}
         {params.error === "diploma" ? <p className="form-error">No se pudo generar el diploma{params.detail ? `: ${params.detail}` : "."}</p> : null}
+        {params.error === "delete" ? <p className="form-error">No se pudo eliminar el examen{params.detail ? `: ${params.detail}` : "."}</p> : null}
 
         <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Registrar examen real</h2>
+              <p className="muted">Esto actualiza la ficha del kenshi, su grado y el calculo de proximos examenes.</p>
+            </div>
+            <a className="secondary-link" href="/diplomas-verificacion">Generar diploma de prueba</a>
+          </div>
           <form action={registerExamAction} className="edit-form">
             <div className="form-grid">
               <label className="wide">
@@ -126,7 +135,7 @@ export default async function ExamenesPage({
         <section className="table-wrap">
           <table>
             <thead>
-              <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th></tr>
+              <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th><th>Gestion</th></tr>
             </thead>
             <tbody>
               {(exams ?? []).map((exam) => (
@@ -155,6 +164,12 @@ export default async function ExamenesPage({
                         </form>
                       </div>
                     )}
+                  </td>
+                  <td data-label="Gestion">
+                    <form action={deleteExamAction}>
+                      <input type="hidden" name="examId" value={exam.id} />
+                      <button className="mini-action danger" type="submit">Eliminar</button>
+                    </form>
                   </td>
                 </tr>
               ))}

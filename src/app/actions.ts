@@ -6,7 +6,7 @@ import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-grou
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { generateDiplomaForExam } from "@/lib/diplomas";
-import { registerExam, saveExamReport } from "@/lib/exams";
+import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -660,6 +660,26 @@ export async function generateDiplomaAction(formData: FormData) {
   }
 
   redirect("/examenes?saved=diploma");
+}
+
+export async function deleteExamAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const examId = String(formData.get("examId") ?? "").trim();
+  if (!examId) {
+    redirect("/examenes?error=delete");
+  }
+
+  try {
+    await deleteExam(examId);
+  } catch (error) {
+    console.error("Error deleting exam", error);
+    redirect(`/examenes?error=delete&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  redirect("/examenes?saved=delete");
 }
 
 export async function addAdultRankingBonusAction(formData: FormData) {

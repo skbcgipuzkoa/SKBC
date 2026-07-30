@@ -293,6 +293,13 @@ h1 {
   font-weight: 700;
 }
 
+.mini-action.danger {
+  background: #fff5f5;
+  border-color: #f1b6b2;
+  color: var(--danger);
+  font-weight: 700;
+}
+
 .filters {
   align-items: end;
   display: grid;

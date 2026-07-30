@@ -30,6 +30,7 @@ export default async function DiplomaVerificationPage() {
         {result.ok ? (
           <>
             <h2>Diploma de prueba creado</h2>
+            <p className="muted">Esta prueba no crea examen real ni modifica ningun kenshi. Solo genera un PDF de prueba en Drive.</p>
             <p>{result.fileName}</p>
             <a className="primary-link" href={result.url} target="_blank" rel="noreferrer">
               Abrir PDF en Drive
