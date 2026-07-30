@@ -783,6 +783,80 @@ export async function createCourseAction(formData: FormData) {
   redirect("/cursos?saved=course");
 }
 
+export async function updateCourseGroupAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const courseIds = String(formData.get("courseIds") ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  const memberIds = formData.getAll("memberIds").map((value) => String(value).trim()).filter(Boolean);
+  const kind = normalizeCourseKind(String(formData.get("kind") ?? ""));
+  const courseDate = parseDateInput(String(formData.get("courseDate") ?? ""));
+  const location = String(formData.get("location") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const sensei = String(formData.get("sensei") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!courseIds.length || !memberIds.length || !kind || !courseDate || !location || !title) {
+    redirect("/cursos?error=course");
+  }
+
+  const supabase = createAdminClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("courses")
+    .select("id,member_id")
+    .in("id", courseIds)
+    .returns<Array<{ id: string; member_id: string }>>();
+
+  if (existingError || !existing?.length) {
+    redirect("/cursos?error=course");
+  }
+
+  const selected = new Set(memberIds);
+  const existingMemberIds = new Set(existing.map((row) => row.member_id));
+  const removeIds = existing.filter((row) => !selected.has(row.member_id)).map((row) => row.id);
+  const addMemberIds = memberIds.filter((memberId) => !existingMemberIds.has(memberId));
+
+  const { error: updateError } = await supabase
+    .from("courses")
+    .update({ kind, course_date: courseDate, location, title, sensei, notes })
+    .in("id", courseIds);
+
+  if (updateError) {
+    console.error("Error updating course group", updateError);
+    redirect("/cursos?error=course");
+  }
+
+  if (removeIds.length) {
+    const { error: deleteError } = await supabase.from("courses").delete().in("id", removeIds);
+    if (deleteError) {
+      console.error("Error removing course attendees", deleteError);
+      redirect("/cursos?error=course");
+    }
+  }
+
+  if (addMemberIds.length) {
+    const batchId = Date.now();
+    const rows = addMemberIds.map((memberId, index) => ({
+      kind,
+      course_date: courseDate,
+      member_id: memberId,
+      location,
+      title,
+      sensei,
+      notes,
+      legacy_id: `CURS-EDIT-${batchId}-${index + 1}`
+    }));
+    const { error: insertError } = await supabase.from("courses").insert(rows);
+    if (insertError) {
+      console.error("Error adding course attendees", insertError);
+      redirect("/cursos?error=course");
+    }
+  }
+
+  redirect("/cursos?saved=course");
+}
+
 export async function createBeltOrderLineAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

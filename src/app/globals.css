@@ -690,6 +690,30 @@ th {
   padding: 10px;
 }
 
+.course-edit-form {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.course-edit-form button {
+  background: var(--brand);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 42px;
+}
+
+.course-subtitle {
+  font-size: 14px;
+  margin: 8px 0 0;
+}
+
 .course-attendee {
   background: #f8fafc;
   border: 1px solid var(--line);

@@ -1,6 +1,6 @@
 import { BookOpenCheck, Globe2, LogOut, MapPin, Trophy } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createCourseAction, logoutAction } from "@/app/actions";
+import { createCourseAction, logoutAction, updateCourseGroupAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -15,6 +15,7 @@ type Member = {
 
 type Course = {
   id: string;
+  member_id: string;
   kind: "national" | "international";
   course_date: string;
   location: string | null;
@@ -22,6 +23,7 @@ type Course = {
   sensei: string | null;
   notes: string | null;
   members: {
+    id: string;
     legacy_id: string | null;
     display_name: string;
     class: "kids" | "adults";
@@ -43,7 +45,7 @@ export default async function CursosPage({
 
   let courseQuery = supabase
     .from("courses")
-    .select("id,kind,course_date,location,title,sensei,notes,members(legacy_id,display_name,class,grade)")
+    .select("id,member_id,kind,course_date,location,title,sensei,notes,members(id,legacy_id,display_name,class,grade)")
     .order("course_date", { ascending: false })
     .limit(80);
 
@@ -193,8 +195,8 @@ export default async function CursosPage({
         </section>
 
         <section className="course-layers">
-          <CourseLayer title="Cursos nacionales" courses={nationalGroups} empty="No hay cursos nacionales con este filtro." />
-          <CourseLayer title="Cursos internacionales" courses={internationalGroups} empty="No hay cursos internacionales con este filtro." />
+          <CourseLayer title="Cursos nacionales" courses={nationalGroups} members={members ?? []} empty="No hay cursos nacionales con este filtro." />
+          <CourseLayer title="Cursos internacionales" courses={internationalGroups} members={members ?? []} empty="No hay cursos internacionales con este filtro." />
         </section>
       </main>
     </div>
@@ -209,10 +211,11 @@ type CourseGroup = {
   title: string | null;
   sensei: string | null;
   notes: string | null;
+  rowIds: string[];
   attendees: Array<NonNullable<Course["members"]>>;
 };
 
-function CourseLayer({ title, courses, empty }: { title: string; courses: CourseGroup[]; empty: string }) {
+function CourseLayer({ title, courses, members, empty }: { title: string; courses: CourseGroup[]; members: Member[]; empty: string }) {
   return (
     <section>
       <h2 className="section-title">{title}</h2>
@@ -227,6 +230,46 @@ function CourseLayer({ title, courses, empty }: { title: string; courses: Course
               <b>{course.attendees.length} asistentes</b>
             </summary>
             <div className="course-attendee-list">
+              <form action={updateCourseGroupAction} className="course-edit-form">
+                <input type="hidden" name="courseIds" value={course.rowIds.join(",")} />
+                <input type="hidden" name="previousKey" value={course.key} />
+                <div className="form-grid">
+                  <label>
+                    Tipo
+                    <select name="kind" defaultValue={course.kind} required>
+                      <option value="national">Nacional</option>
+                      <option value="international">Internacional</option>
+                    </select>
+                  </label>
+                  <label>Fecha<input name="courseDate" type="date" defaultValue={course.course_date} required /></label>
+                  <label>Donde<input name="location" defaultValue={course.location ?? ""} required /></label>
+                  <label>Curso<input name="title" defaultValue={course.title ?? ""} required /></label>
+                  <label>Sensei<input name="sensei" defaultValue={course.sensei ?? ""} /></label>
+                  <label className="wide">Notas<textarea name="notes" rows={2} defaultValue={course.notes ?? ""} /></label>
+                </div>
+                <details className="course-member-dropdown">
+                  <summary>
+                    <span>
+                      <strong>Editar asistentes</strong>
+                      <small>Marca quienes asistieron realmente</small>
+                    </span>
+                    <b>{course.attendees.length} actuales</b>
+                  </summary>
+                  <div className="course-member-picker">
+                    {members.map((member) => (
+                      <label className={`course-member-option ${member.class}`} key={`${course.key}-${member.id}`}>
+                        <input name="memberIds" type="checkbox" value={member.id} defaultChecked={course.attendees.some((attendee) => attendee.id === member.id)} />
+                        <span>
+                          <strong>{member.display_name}</strong>
+                          <small>{member.class === "kids" ? "Ninos" : "Adultos"} · {member.grade ?? "Sin grado"} · ID {member.legacy_id}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+                <button type="submit">Guardar cambios del curso</button>
+              </form>
+              <h3 className="course-subtitle">Asistentes actuales</h3>
               {course.attendees.map((attendee) => (
                 <a className="course-attendee" href={attendee.legacy_id ? `/kenshis/${attendee.legacy_id}` : "#"} key={`${course.key}-${attendee.legacy_id}-${attendee.display_name}`}>
                   <strong>{attendee.display_name}</strong>
@@ -260,8 +303,10 @@ function groupCourses(courses: Course[]) {
       title: course.title,
       sensei: course.sensei,
       notes: course.notes,
+      rowIds: [],
       attendees: []
     };
+    current.rowIds.push(course.id);
     if (course.members) current.attendees.push(course.members);
     map.set(key, current);
   }
