@@ -322,7 +322,7 @@ async function calculateEngagementStatus(member: MemberRow, cycleStart: string):
     .reduce((sum, row) => sum + row.points, 0);
   const busenPoints = blackBeltResult.error ? 0 : (blackBeltResult.data ?? [])
     .filter((row) => row.black_belt_special_classes?.class_date && row.black_belt_special_classes.class_date >= date180)
-    .reduce((sum, row) => sum + (row.status === "present" ? 3 : row.status === "absent" ? -2 : 0), 0);
+    .reduce((sum, row) => sum + (row.status === "present" ? 2 : row.status === "absent" ? -4 : 0), 0);
   const shakujoPoints = shakujoResult.error ? 0 : (shakujoResult.data ?? [])
     .filter((row) => row.shakujo_classes?.class_date && row.shakujo_classes.class_date >= date180)
     .length * 2;

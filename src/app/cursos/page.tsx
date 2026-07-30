@@ -193,6 +193,7 @@ export default async function CursosPage({
             <h2>Como suma al ranking</h2>
             <p className="muted">Los cursos se guardan en Supabase nuevo y aparecen en la ficha del kenshi.</p>
             <p className="muted">Para ranking adulto, en los ultimos 180 dias: curso nacional +1, curso internacional +3.</p>
+            <p className="muted">En grados KYU, los cursos internacionales tambien pueden adelantar la convocatoria de examen de forma controlada.</p>
             <div className="chip-list">
               <a className="tag" href="/cursos">Todos</a>
               <a className="tag" href="/cursos?kind=national">Nacionales</a>

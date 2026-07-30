@@ -349,7 +349,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const blackBeltPoints = sumByMember(
     blackBeltRows
       .filter((row) => row.black_belt_special_classes?.class_date >= date180)
-      .map((row) => ({ member_id: row.member_id, points: row.status === "present" ? 3 : row.status === "absent" ? -2 : 0 }))
+      .map((row) => ({ member_id: row.member_id, points: row.status === "present" ? 2 : row.status === "absent" ? -4 : 0 }))
   );
   const shakujoPoints = sumByMember(
     shakujoRows

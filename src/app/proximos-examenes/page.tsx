@@ -147,6 +147,7 @@ export default async function ProximosExamenesPage({
             <span>Asistencia minima por defecto: 40%</span>
             <span>Adultos: tecnica necesaria para VERDE</span>
             <span>Cursos e implicacion reciente pueden bonificar convocatoria</span>
+            <span>Busen: presente +2, ausencia -4, justificado 0</span>
             <span>Cierres editables: festivos, Semana Santa, carnavales</span>
           </div>
           <form action={recalculateAllExamStatusesAction} className="form-actions">
