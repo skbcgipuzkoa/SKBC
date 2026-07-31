@@ -107,6 +107,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ lega
 
 function planViewerResponse(legacyId: string) {
   const rawUrl = `/clases/${encodeURIComponent(legacyId)}/plan-pdf?raw=1`;
+  const fileName = `plan-tecnico-${escapeHtml(legacyId)}.pdf`;
   const html = `<!doctype html>
 <html lang="es">
 <head>
@@ -114,13 +115,42 @@ function planViewerResponse(legacyId: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Plan tecnico ${escapeHtml(legacyId)}</title>
   <style>
+    * { box-sizing: border-box; }
     body { margin: 0; background: #eef2f7; color: #0f172a; font-family: Arial, sans-serif; }
     .bar { align-items: center; background: #0f1b2d; color: white; display: flex; gap: 10px; justify-content: space-between; padding: 10px; position: sticky; top: 0; z-index: 10; }
     .bar strong { font-size: 14px; }
-    .actions { display: flex; gap: 8px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
     a, button { background: white; border: 0; border-radius: 10px; color: #0f1b2d; cursor: pointer; font-size: 14px; font-weight: 800; padding: 9px 11px; text-decoration: none; }
-    iframe { border: 0; display: block; height: calc(100vh - 56px); width: 100%; }
-    @media print { .bar { display: none; } iframe { height: 100vh; } }
+    .mobile-panel { display: none; }
+    iframe { border: 0; display: block; height: calc(100dvh - 56px); width: 100%; }
+    @media (max-width: 720px) {
+      body { background: #f8fafc; }
+      .bar { align-items: flex-start; display: grid; gap: 10px; }
+      .bar strong { font-size: 16px; }
+      .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+      .actions a, .actions button { min-height: 44px; text-align: center; width: 100%; }
+      .mobile-panel {
+        background: #ffffff;
+        border: 1px solid #dbe5f0;
+        border-radius: 14px;
+        display: grid;
+        gap: 12px;
+        margin: 12px;
+        padding: 14px;
+      }
+      .mobile-panel h1 { font-size: 18px; margin: 0; }
+      .mobile-panel p { color: #64748b; line-height: 1.4; margin: 0; }
+      .mobile-panel .primary { background: #0057b8; color: white; display: block; text-align: center; }
+      .mobile-panel .grid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      iframe {
+        height: 58vh;
+        margin: 0 12px 18px;
+        width: calc(100% - 24px);
+        border: 1px solid #dbe5f0;
+        border-radius: 12px;
+      }
+    }
+    @media print { .bar, .mobile-panel { display: none; } iframe { height: 100vh; margin: 0; width: 100%; } }
   </style>
 </head>
 <body>
@@ -128,11 +158,37 @@ function planViewerResponse(legacyId: string) {
     <strong>Plan tecnico SKBC</strong>
     <div class="actions">
       <a href="/clases/${encodeURIComponent(legacyId)}">Volver</a>
-      <button onclick="document.getElementById('pdf').contentWindow.print()">Imprimir</button>
-      <a href="${rawUrl}" download="plan-tecnico-${escapeHtml(legacyId)}.pdf">Descargar</a>
+      <button onclick="printPdf()">Imprimir</button>
+      <a href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF</a>
+      <a href="${rawUrl}" download="${fileName}">Descargar</a>
     </div>
   </div>
+  <section class="mobile-panel">
+    <h1>PDF completo del plan tecnico</h1>
+    <p>En movil el visor integrado puede mostrar solo la primera hoja. Abre el PDF completo para ver todas las paginas, imprimir o compartir.</p>
+    <a class="primary" href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF completo</a>
+    <div class="grid">
+      <a href="${rawUrl}" download="${fileName}">Descargar</a>
+      <button onclick="printPdf()">Imprimir</button>
+    </div>
+  </section>
   <iframe id="pdf" src="${rawUrl}" title="PDF plan tecnico"></iframe>
+  <script>
+    function printPdf() {
+      const frame = document.getElementById('pdf');
+      try {
+        if (frame && frame.contentWindow) {
+          frame.contentWindow.focus();
+          frame.contentWindow.print();
+          return;
+        }
+      } catch (error) {}
+      const win = window.open('${rawUrl}', '_blank');
+      if (win) {
+        win.addEventListener('load', function () { win.print(); }, { once: true });
+      }
+    }
+  </script>
 </body>
 </html>`;
 
