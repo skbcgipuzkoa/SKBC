@@ -407,7 +407,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international").map((row) => ({ member_id: row.member_id, points: 3 })));
   const manualBonus = sumByMember(
     bonuses
-      .filter((row) => (row.permanent && row.active) || (!row.permanent && row.bonus_date >= date180))
+      .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
       .map((row) => ({ member_id: row.member_id, points: row.points }))
   );
   const blackBeltPoints = sumByMember(

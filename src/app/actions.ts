@@ -50,6 +50,7 @@ export async function recalculateAllExamStatusesAction() {
   for (const member of data ?? []) {
     await recalculateMemberExamStatus(member.id);
   }
+  await recalculateChildRankings();
 
   redirect("/proximos-examenes?saved=recalculate");
 }

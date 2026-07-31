@@ -101,6 +101,9 @@ type TechnicalHistory = {
 type AdultBonus = {
   member_id: string;
   points: number;
+  bonus_date: string;
+  active: boolean;
+  permanent: boolean;
 };
 
 type CalendarClosure = {
@@ -288,8 +291,8 @@ export default async function PublicFichaPage({
       .returns<Array<{ member_id: string; course_date: string; kind: "national" | "international" }>>(),
     supabase
       .from("adult_ranking_bonuses")
-      .select("member_id,points")
-      .gte("bonus_date", date180)
+      .select("member_id,points,bonus_date,active,permanent")
+      .or(`active.eq.true,bonus_date.gte.${date180}`)
       .returns<AdultBonus[]>(),
     supabase
       .from("child_adult_transitions")
@@ -1049,7 +1052,8 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
   const lastAttendance = latestByMember(attendance);
   const coursePoints = countCoursePoints(courses);
-  const bonusPoints = sumByMember(bonuses);
+  const date180 = daysAgo(180);
+  const bonusPoints = sumByMember(bonuses.filter((row) => row.active && (row.permanent || row.bonus_date >= date180)));
   const ranked = members
     .filter((member) => member.legacy_id !== "13")
     .map((member) => {

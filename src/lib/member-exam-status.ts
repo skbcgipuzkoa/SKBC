@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const ADULT_GRADES = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
+
 type MemberRow = {
   id: string;
   class: "kids" | "adults";
@@ -318,7 +320,7 @@ async function calculateEngagementStatus(member: MemberRow, cycleStart: string):
   const recentCourses = (courses ?? []).filter((row) => row.course_date >= date180);
   const coursePoints = recentCourses.reduce((sum, row) => sum + (row.kind === "international" ? 3 : 1), 0);
   const bonusPoints = bonusResult.error ? 0 : (bonusResult.data ?? [])
-    .filter((row) => (row.permanent && row.active) || row.bonus_date >= date180)
+    .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
     .reduce((sum, row) => sum + row.points, 0);
   const busenPoints = blackBeltResult.error ? 0 : (blackBeltResult.data ?? [])
     .filter((row) => row.black_belt_special_classes?.class_date && row.black_belt_special_classes.class_date >= date180)
@@ -348,11 +350,12 @@ async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: 
   }
 
   const supabase = createAdminClient();
+  const targetGrade = member.class === "adults" ? nextAdultGrade(member.grade) : member.grade;
   const [{ data: techniques, error: techniquesError }, { data: progress, error: progressError }] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,name")
-      .eq("grade", member.grade)
+      .eq("grade", targetGrade)
       .returns<TechniqueRow[]>(),
     supabase
       .from("member_technical_history")
@@ -588,4 +591,11 @@ function daysBetween(from: Date, to: Date) {
 
 function normalizeGrade(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function nextAdultGrade(grade: string | null) {
+  const normalized = normalizeGrade(grade);
+  const index = ADULT_GRADES.findIndex((item) => normalizeGrade(item) === normalized);
+  if (index === -1) return grade ?? "";
+  return ADULT_GRADES[Math.min(index + 1, ADULT_GRADES.length - 1)];
 }
