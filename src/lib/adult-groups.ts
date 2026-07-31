@@ -48,16 +48,15 @@ export async function generateAdultTechnicalGroups(classId: string) {
 
   const normalMemberGrades = new Set(
     members
-      .map((member) => normalizeGrade(member.grade))
-      .filter((grade) => grade && !isFifthDanOrAbove(grade))
+      .map((member) => resolveTrainingGroupGrade(member.grade))
+      .filter(Boolean)
   );
-  const hasSeniorReview = members.some((member) => isFifthDanOrAbove(normalizeGrade(member.grade)));
 
   const normalGroups = adultGrades
     .filter((grade) => normalMemberGrades.has(grade))
     .filter((grade) => techniqueGrades.has(grade));
 
-  const groupGrades = hasSeniorReview ? [...normalGroups, "REPASO"] : normalGroups;
+  const groupGrades = normalGroups;
   if (!groupGrades.length) throw new Error("No hay grupos tecnicos que generar.");
 
   const inserts = groupGrades.map((grade, index) => ({
@@ -78,11 +77,15 @@ export function resolveWorkGrade(grade: string | null | undefined) {
   return normalized === "MINARAI" ? "5 KYU" : normalized;
 }
 
-export function normalizeGrade(grade: string | null | undefined) {
-  return String(grade ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+export function resolveTrainingGroupGrade(grade: string | null | undefined) {
+  const normalized = normalizeGrade(grade);
+  if (!normalized) return "";
+  if (normalized === "MINARAI") return "MINARAI";
+  const index = adultGrades.findIndex((item) => item === normalized);
+  if (index <= 0) return normalized;
+  return adultGrades[index - 1];
 }
 
-function isFifthDanOrAbove(grade: string) {
-  const match = grade.match(/^(\d+)\s*DAN$/);
-  return match ? Number.parseInt(match[1], 10) >= 5 : false;
+export function normalizeGrade(grade: string | null | undefined) {
+  return String(grade ?? "").trim().toUpperCase().replace(/\s+/g, " ");
 }

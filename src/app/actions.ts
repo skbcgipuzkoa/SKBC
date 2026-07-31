@@ -3,7 +3,7 @@
 import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
-import { generateAdultTechnicalGroups, resolveWorkGrade } from "@/lib/adult-groups";
+import { generateAdultTechnicalGroups, resolveTrainingGroupGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { generateDiplomaForExam } from "@/lib/diplomas";
@@ -647,7 +647,7 @@ export async function addAttendanceAction(formData: FormData) {
   }
 
   officialGrade = officialGrade || member?.grade || "";
-  trainedGrade = trainedGrade || resolveWorkGrade(officialGrade);
+  trainedGrade = trainedGrade || resolveTrainingGroupGrade(officialGrade);
 
   const { data: attendanceRow, error } = await supabase.from("attendance_logs").upsert(
     {
@@ -709,7 +709,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
 
   const rows = members.map((member) => {
     const officialGrade = member.grade || "";
-    const trainedGrade = clase.class_group === "adults" ? resolveWorkGrade(officialGrade) : officialGrade;
+    const trainedGrade = clase.class_group === "adults" ? resolveTrainingGroupGrade(officialGrade) : officialGrade;
     return {
       legacy_id: `NEW-ASIS-${classId}-${member.id}`,
       class_id: classId,
@@ -2124,7 +2124,7 @@ async function addAttendanceRows(classId: string, memberIds: string[]) {
 
   const rows = members.map((member) => {
     const officialGrade = member.grade || "";
-    const trainedGrade = clase.class_group === "adults" ? resolveWorkGrade(officialGrade) : officialGrade;
+    const trainedGrade = clase.class_group === "adults" ? resolveTrainingGroupGrade(officialGrade) : officialGrade;
     return {
       legacy_id: `NEW-ASIS-${classId}-${member.id}`,
       class_id: classId,
