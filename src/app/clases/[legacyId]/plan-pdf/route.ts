@@ -38,6 +38,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ lega
 
   const { legacyId } = await params;
   const url = new URL(request.url);
+  const forceDownload = url.searchParams.get("download") === "1";
   if (url.searchParams.get("print") === "1") {
     return planPrintResponse(legacyId);
   }
@@ -103,7 +104,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ lega
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       "content-type": "application/pdf",
-      "content-disposition": `inline; filename="plan-tecnico-${legacyId}.pdf"`
+      "content-disposition": `${forceDownload ? "attachment" : "inline"}; filename="plan-tecnico-${legacyId}.pdf"`
     }
   });
 }
@@ -160,7 +161,7 @@ function planViewerResponse(legacyId: string) {
       <a href="/clases/${encodeURIComponent(legacyId)}">Volver</a>
       <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf?print=1">Imprimir</a>
       <a href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF</a>
-      <a href="${rawUrl}" download="${fileName}">Descargar</a>
+      <a href="${rawUrl}&download=1" download="${fileName}">Descargar</a>
     </div>
   </div>
   <section class="mobile-panel">
@@ -169,7 +170,7 @@ function planViewerResponse(legacyId: string) {
     <a class="back" href="/clases/${encodeURIComponent(legacyId)}">Volver al sistema</a>
     <a class="primary" href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF completo</a>
     <div class="grid">
-      <a href="${rawUrl}" download="${fileName}">Descargar</a>
+      <a href="${rawUrl}&download=1" download="${fileName}">Descargar</a>
       <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf?print=1">Imprimir</a>
     </div>
   </section>
@@ -216,6 +217,7 @@ async function planPrintResponse(legacyId: string) {
     .bar { align-items: center; background: #0f1b2d; color: white; display: flex; gap: 10px; justify-content: space-between; padding: 10px; position: sticky; top: 0; z-index: 10; }
     .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
     a, button { background: white; border: 0; border-radius: 10px; color: #0f1b2d; cursor: pointer; font-size: 14px; font-weight: 800; padding: 9px 11px; text-decoration: none; }
+    .mobile-help { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; color: #9a3412; display: none; font-size: 14px; line-height: 1.35; margin: 0 0 18px; padding: 10px; }
     main { display: grid; gap: 18px; padding: 18px; }
     .sheet { background: white; box-shadow: 0 8px 24px rgba(15, 23, 42, .12); padding: 28px; }
     h1 { font-size: 26px; margin: 0 0 8px; }
@@ -255,8 +257,8 @@ async function planPrintResponse(legacyId: string) {
     <div class="actions">
       <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf">Volver</a>
       <a href="/clases/${encodeURIComponent(legacyId)}">Sistema</a>
-      <button onclick="window.print()">Imprimir ahora</button>
-      <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf?raw=1" download="plan-tecnico-${escapeHtml(legacyId)}.pdf">PDF</a>
+      <button onclick="shareOrPrint()">Imprimir / compartir</button>
+      <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf?raw=1&download=1" download="plan-tecnico-${escapeHtml(legacyId)}.pdf">Descargar PDF</a>
     </div>
   </div>
   <main>
@@ -264,11 +266,33 @@ async function planPrintResponse(legacyId: string) {
       <h1>SKBC Gipuzkoa - Plan tecnico de clase</h1>
       <p class="subtitle">${escapeHtml(clase.name)} - ${escapeHtml(clase.class_date)}</p>
       <p class="hint">Marca en papel y despues pasalo al sistema si no se usa el movil en clase.</p>
+      <p id="mobile-help" class="mobile-help">Si no aparece la ventana de imprimir, usa el menu de compartir del movil y elige Imprimir. En modo app instalada algunos moviles no permiten imprimir directamente desde un boton web.</p>
       <div class="grid">
         ${groups.map(([grade, items]) => renderPrintGroup(grade, items)).join("")}
       </div>
     </section>
   </main>
+  <script>
+    async function shareOrPrint() {
+      const help = document.getElementById('mobile-help');
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'Plan tecnico SKBC',
+            text: 'Plan tecnico de clase SKBC Gipuzkoa',
+            url: window.location.href
+          });
+          return;
+        } catch (error) {
+          if (error && error.name === 'AbortError') return;
+        }
+      }
+      window.print();
+      window.setTimeout(function () {
+        if (help) help.style.display = 'block';
+      }, 700);
+    }
+  </script>
 </body>
 </html>`;
 
