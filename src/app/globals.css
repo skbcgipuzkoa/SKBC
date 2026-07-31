@@ -3102,6 +3102,30 @@ tbody tr:hover {
   color: #003f88;
 }
 
+.kid-badge-white {
+  background: #ffffff;
+  border-color: #d9c07a;
+  color: #334155;
+}
+
+.kid-badge-orange {
+  background: #ffedd5;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.kid-badge-brown {
+  background: #8b5a35;
+  border-color: #654024;
+  color: #ffffff;
+}
+
+.kid-badge-black {
+  background: #111827;
+  border-color: #d9c07a;
+  color: #ffffff;
+}
+
 .kid-badge-neutral,
 .behavior-neutral {
   background: #f3f4f6;

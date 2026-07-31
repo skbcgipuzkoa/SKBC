@@ -169,7 +169,7 @@ type ShakujoAttendanceRow = {
   } | null;
 };
 
-type FichaTone = "green" | "yellow" | "red" | "blue" | "neutral";
+type FichaTone = "green" | "yellow" | "red" | "blue" | "neutral" | "white" | "orange" | "brown" | "black";
 
 export default async function PublicFichaPage({
   params,
@@ -1010,12 +1010,13 @@ function nextKidGrade(grade: string | null) {
 function kidGradeTone(grade: string | null): FichaTone {
   const value = normalizeGradeKey(grade);
   if (!value || value === "SIGUIENTEETAPA") return "neutral";
-  if (value.includes("BLANCO") || value.includes("MINARAI")) return "blue";
-  if (value.includes("AMARILLO")) return "yellow";
-  if (value.includes("NARANJA")) return "yellow";
+  if (value.includes("DAN")) return "black";
+  if (value.includes("MARRON") || value.includes("1KYU")) return "brown";
+  if (value.includes("AZUL") || value.includes("2KYU")) return "blue";
   if (value.includes("VERDE")) return "green";
-  if (value.includes("AZUL")) return "blue";
-  if (value.includes("MARRON") || value.includes("KYU")) return "red";
+  if (value.includes("NARANJA") || value.includes("4KYU")) return "orange";
+  if (value.includes("AMARILLO") || value.includes("5KYU")) return "yellow";
+  if (value.includes("BLANCO") || value.includes("MINARAI")) return "white";
   return "neutral";
 }
 
