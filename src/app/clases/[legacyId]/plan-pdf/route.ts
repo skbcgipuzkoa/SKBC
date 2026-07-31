@@ -21,6 +21,7 @@ type PlanRow = {
   proposal_type: string | null;
   focus: string | null;
   summary_es: string | null;
+  techniques: { summary_es: string | null } | null;
 };
 
 const pageSize: [number, number] = [842, 595];
@@ -29,12 +30,17 @@ const columnWidth = 248;
 const columnGap = 16;
 const rowGap = 18;
 
-export async function GET(_request: Request, { params }: { params: Promise<{ legacyId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ legacyId: string }> }) {
   if (!(await hasInternalAccess())) {
     return new NextResponse("No autorizado", { status: 401 });
   }
 
   const { legacyId } = await params;
+  const url = new URL(request.url);
+  if (url.searchParams.get("raw") !== "1") {
+    return planViewerResponse(legacyId);
+  }
+
   const supabase = createAdminClient();
   const { data: clase, error: classError } = await supabase
     .from("classes")
@@ -48,7 +54,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ leg
 
   const { data: plan, error: planError } = await supabase
     .from("technical_plans")
-    .select("group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es")
+    .select("group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,techniques(summary_es)")
     .eq("class_id", clase.id)
     .order("suggested_order")
     .returns<PlanRow[]>();
@@ -98,6 +104,40 @@ export async function GET(_request: Request, { params }: { params: Promise<{ leg
   });
 }
 
+function planViewerResponse(legacyId: string) {
+  const rawUrl = `/clases/${encodeURIComponent(legacyId)}/plan-pdf?raw=1`;
+  const html = `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plan tecnico ${escapeHtml(legacyId)}</title>
+  <style>
+    body { margin: 0; background: #eef2f7; color: #0f172a; font-family: Arial, sans-serif; }
+    .bar { align-items: center; background: #0f1b2d; color: white; display: flex; gap: 10px; justify-content: space-between; padding: 10px; position: sticky; top: 0; z-index: 10; }
+    .bar strong { font-size: 14px; }
+    .actions { display: flex; gap: 8px; }
+    a, button { background: white; border: 0; border-radius: 10px; color: #0f1b2d; cursor: pointer; font-size: 14px; font-weight: 800; padding: 9px 11px; text-decoration: none; }
+    iframe { border: 0; display: block; height: calc(100vh - 56px); width: 100%; }
+    @media print { .bar { display: none; } iframe { height: 100vh; } }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <strong>Plan tecnico SKBC</strong>
+    <div class="actions">
+      <a href="/clases/${encodeURIComponent(legacyId)}">Volver</a>
+      <button onclick="document.getElementById('pdf').contentWindow.print()">Imprimir</button>
+      <a href="${rawUrl}" download="plan-tecnico-${escapeHtml(legacyId)}.pdf">Descargar</a>
+    </div>
+  </div>
+  <iframe id="pdf" src="${rawUrl}" title="PDF plan tecnico"></iframe>
+</body>
+</html>`;
+
+  return new NextResponse(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
 function drawHeader(page: PDFPage, clase: ClassRow, height: number, font: PDFFont, bold: PDFFont, italic: PDFFont) {
   page.drawText("SKBC Gipuzkoa - Plan tecnico de clase", {
     x: margin,
@@ -126,6 +166,7 @@ function drawPlanCard(page: PDFPage, x: number, y: number, grade: string, items:
 
   let rowY = y - 46;
   for (const item of items) {
+    const summary = effectiveSummary(item);
     page.drawRectangle({ x, y: rowY - 2, width: 10, height: 10, borderColor: rgb(0.08, 0.18, 0.32), borderWidth: 1.1 });
     page.drawText(fitText(item.technique_name, 38), { x: x + 16, y: rowY, size: 9.2, font: bold, color: rgb(0.06, 0.11, 0.2) });
     page.drawText(fitText(`${item.category ?? "-"} - ${item.proposal_type ?? item.focus ?? "-"}`, 42), {
@@ -135,14 +176,15 @@ function drawPlanCard(page: PDFPage, x: number, y: number, grade: string, items:
       font,
       color: rgb(0.38, 0.45, 0.55)
     });
-    if (item.summary_es) {
-      page.drawText(fitText(item.summary_es, 58), {
+    if (summary) {
+      const lines = wrapText(summary, 58, 2);
+      lines.forEach((line, index) => page.drawText(line, {
         x: x + 16,
-        y: rowY - 23,
+        y: rowY - 23 - index * 8,
         size: 6.6,
         font,
         color: rgb(0.2, 0.25, 0.34)
-      });
+      }));
     }
     rowY -= rowHeight(item);
   }
@@ -155,8 +197,12 @@ function planCardHeight(items: PlanRow[]) {
 }
 
 function rowHeight(item: PlanRow) {
-  if (item.summary_es) return 39;
+  if (effectiveSummary(item)) return 47;
   return 27;
+}
+
+function effectiveSummary(item: PlanRow) {
+  return item.summary_es || item.techniques?.summary_es || "";
 }
 
 function groupPlanByGrade(plan: PlanRow[]) {
@@ -212,4 +258,30 @@ function normalizeGrade(grade: string | null | undefined) {
 
 function fitText(value: string, max: number) {
   return value.length <= max ? value : `${value.slice(0, max - 1)}...`;
+}
+
+function wrapText(value: string, max: number, maxLines: number) {
+  const words = value.trim().split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > max) {
+      if (current) lines.push(current);
+      current = word;
+      if (lines.length === maxLines) break;
+    } else {
+      current = next;
+    }
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+  if (lines.length > maxLines) return lines.slice(0, maxLines);
+  if (lines.length === maxLines && words.join(" ").length > lines.join(" ").length) {
+    lines[maxLines - 1] = fitText(lines[maxLines - 1], max);
+  }
+  return lines;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char] ?? char));
 }
