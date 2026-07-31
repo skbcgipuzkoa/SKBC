@@ -128,7 +128,6 @@ function drawPlanCard(page: PDFPage, x: number, y: number, grade: string, items:
   for (const item of items) {
     page.drawRectangle({ x, y: rowY - 2, width: 10, height: 10, borderColor: rgb(0.08, 0.18, 0.32), borderWidth: 1.1 });
     page.drawText(fitText(item.technique_name, 38), { x: x + 16, y: rowY, size: 9.2, font: bold, color: rgb(0.06, 0.11, 0.2) });
-    const variantLine = [item.variant, item.variant_note].filter(Boolean).join(" - ");
     page.drawText(fitText(`${item.category ?? "-"} - ${item.proposal_type ?? item.focus ?? "-"}`, 42), {
       x: x + 16,
       y: rowY - 12,
@@ -136,19 +135,10 @@ function drawPlanCard(page: PDFPage, x: number, y: number, grade: string, items:
       font,
       color: rgb(0.38, 0.45, 0.55)
     });
-    if (variantLine) {
-      page.drawText(fitText(variantLine, 50), {
-        x: x + 16,
-        y: rowY - 22,
-        size: 6.8,
-        font,
-        color: rgb(0.08, 0.18, 0.32)
-      });
-    }
     if (item.summary_es) {
       page.drawText(fitText(item.summary_es, 58), {
         x: x + 16,
-        y: rowY - (variantLine ? 32 : 23),
+        y: rowY - 23,
         size: 6.6,
         font,
         color: rgb(0.2, 0.25, 0.34)
@@ -165,9 +155,7 @@ function planCardHeight(items: PlanRow[]) {
 }
 
 function rowHeight(item: PlanRow) {
-  const hasVariant = Boolean(item.variant || item.variant_note);
-  if (hasVariant && item.summary_es) return 49;
-  if (hasVariant || item.summary_es) return 39;
+  if (item.summary_es) return 39;
   return 27;
 }
 

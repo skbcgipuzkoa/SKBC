@@ -81,9 +81,9 @@ export function resolveTrainingGroupGrade(grade: string | null | undefined) {
   const normalized = normalizeGrade(grade);
   if (!normalized) return "";
   if (normalized === "MINARAI") return "MINARAI";
-  const index = adultGrades.findIndex((item) => item === normalized);
-  if (index <= 0) return normalized;
-  return adultGrades[index - 1];
+  const dan = normalized.match(/^(\d+)\s*DAN$/);
+  if (dan && Number.parseInt(dan[1], 10) >= 5) return "4 DAN";
+  return normalized;
 }
 
 export function normalizeGrade(grade: string | null | undefined) {

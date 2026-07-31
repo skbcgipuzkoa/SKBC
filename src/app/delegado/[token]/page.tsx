@@ -190,7 +190,6 @@ export default async function DelegateClassPage({
                     <input name="planIds" type="checkbox" value={item.id} defaultChecked={item.completed} />
                     <span>
                       <strong>{item.technique_name}</strong>
-                      {item.variant || item.variant_note ? <small>{[item.variant, item.variant_note].filter(Boolean).join(" - ")}</small> : null}
                       {item.summary_es ? <em>{item.summary_es}</em> : null}
                       <small>{item.category ?? "-"} · {item.proposal_type ?? item.target_grade ?? "-"}</small>
                     </span>

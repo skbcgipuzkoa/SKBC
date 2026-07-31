@@ -513,11 +513,6 @@ export default async function ClaseDetailPage({
                         <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
                           <div>
                             <strong>{item.technique_name}</strong>
-                            {item.variant || item.variant_note ? (
-                              <span className="technique-variant-line">
-                                {[item.variant, item.variant_note].filter(Boolean).join(" - ")}
-                              </span>
-                            ) : null}
                             <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
                             <small className="plan-reason">
                               Rep: {item.techniques?.repetitions ?? 0} - Ultima: {item.techniques?.last_trained_on ?? "nunca"} - Score: {item.techniques?.score ?? item.score_at_that_moment ?? 0}
