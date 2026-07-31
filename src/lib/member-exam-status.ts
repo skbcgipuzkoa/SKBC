@@ -353,8 +353,6 @@ async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: 
       .from("techniques")
       .select("id,name")
       .eq("grade", member.grade)
-      .eq("active", true)
-      .eq("active_in_planning", true)
       .returns<TechniqueRow[]>(),
     supabase
       .from("member_technical_history")
