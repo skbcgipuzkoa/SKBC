@@ -181,7 +181,7 @@ export default async function ClaseDetailPage({
   const delegateLink = delegateLinks?.[0] ?? null;
   const delegateMode = delegateModeFromCreatedBy(delegateLink?.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
   const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}?mode=${delegateMode}` : null;
-  const activeStep = clase.class_group === "adults" && query.step === "asistencia" ? "attendance" : "techniques";
+  const activeStep = clase.class_group === "adults" ? (query.step === "asistencia" ? "attendance" : "techniques") : "attendance";
   const techniqueStepHref = `/clases/${legacyId}`;
   const attendanceStepHref = `/clases/${legacyId}?step=asistencia`;
   if (clase.class_group === "adults" && activeStep === "attendance" && !(dayClasses ?? []).some((item) => item.class_group === "kids")) {
@@ -227,6 +227,7 @@ export default async function ClaseDetailPage({
                 <strong>{title}</strong>
                 <span>{membersForGroup.length - pendingMembers.length}/{membersForGroup.length} registrados</span>
               </summary>
+              <input type="hidden" name="groupClassIds" value={dayClass.id} />
               {!dayClass.closed ? (
                 <div className="attendance-checklist">
                   {pendingMembers.length ? pendingMembers.map((member) => (
@@ -684,7 +685,7 @@ export default async function ClaseDetailPage({
         </section>
 
         <section className="mobile-work-anchor" id="asistencia">
-          {clase.class_group === "adults" ? attendancePanel : attendanceQuickPanel}
+          {attendanceClasses.length > 1 ? attendancePanel : attendanceQuickPanel}
         </section>
         </> : null}
 

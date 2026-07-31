@@ -686,16 +686,17 @@ export async function addBulkAttendanceAction(formData: FormData) {
   const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
   const memberIdsByClass = getDelegateMemberIdsByClass(formData);
   const hasGroupedMembers = memberIdsByClass.size > 0;
+  const groupedClassIds = formData.getAll("groupClassIds").map((value) => String(value)).filter(Boolean);
   const memberIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
   const closeAfter = String(formData.get("closeAfter") ?? "") === "true";
 
-  if (!classId || !legacyId || (!memberIds.length && !hasGroupedMembers)) {
+  if (!classId || !legacyId || (!memberIds.length && !hasGroupedMembers && !(closeAfter && groupedClassIds.length))) {
     redirect(`/clases/${returnLegacyId || legacyId || ""}?error=attendance&step=asistencia`);
   }
 
-  if (hasGroupedMembers) {
+  if (hasGroupedMembers || (closeAfter && groupedClassIds.length)) {
     const supabase = createAdminClient();
-    const classIds = [...memberIdsByClass.keys()];
+    const classIds = [...new Set([...memberIdsByClass.keys(), ...groupedClassIds])];
     const { data: classes, error: classesError } = await supabase
       .from("classes")
       .select("id,class_group")
