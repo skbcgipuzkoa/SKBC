@@ -533,6 +533,12 @@ export async function updateClassAction(formData: FormData) {
   }
 
   const supabase = createAdminClient();
+  const { data: currentClass } = await supabase
+    .from("classes")
+    .select("class_date")
+    .eq("id", classId)
+    .maybeSingle<{ class_date: string }>();
+
   const { error } = await supabase
     .from("classes")
     .update({
@@ -549,6 +555,25 @@ export async function updateClassAction(formData: FormData) {
 
   if (error) {
     redirect(`/clases/${legacyId}?error=class`);
+  }
+
+  if (currentClass?.class_date && currentClass.class_date !== classDate) {
+    const relatedUpdates = await Promise.all([
+      supabase.from("attendance_logs").update({ attended_on: classDate }).eq("class_id", classId),
+      supabase.from("technical_plans").update({ class_date: classDate, updated_at: new Date().toISOString() }).eq("class_id", classId),
+      supabase.from("dojo_technical_history").update({ class_date: classDate }).eq("class_id", classId),
+      supabase.from("member_technical_history").update({ class_date: classDate }).eq("class_id", classId),
+      supabase.from("member_technique_assignments").update({ assigned_on: classDate }).eq("class_id", classId)
+    ]);
+
+    const updateError = relatedUpdates.find((result) => result.error)?.error;
+    if (updateError) {
+      console.error("Error updating related class dates", updateError);
+      redirect(`/clases/${legacyId}?error=class`);
+    }
+
+    await recalculateClassExamStatus(classId);
+    await recalculateChildRankings();
   }
 
   redirect(`/clases/${legacyId}?saved=class-updated`);
@@ -568,6 +593,12 @@ export async function deleteClassAction(formData: FormData) {
   }
 
   const supabase = createAdminClient();
+  const { data: affectedRows } = await supabase
+    .from("attendance_logs")
+    .select("member_id")
+    .eq("class_id", classId)
+    .returns<Array<{ member_id: string }>>();
+  const affectedMemberIds = Array.from(new Set((affectedRows ?? []).map((row) => row.member_id).filter(Boolean)));
   const deletions = [
     supabase.from("member_technical_history").delete().eq("class_id", classId),
     supabase.from("dojo_technical_history").delete().eq("class_id", classId),
@@ -587,6 +618,9 @@ export async function deleteClassAction(formData: FormData) {
   if (error) {
     redirect(`/clases/${legacyId}?error=delete`);
   }
+
+  await Promise.all(affectedMemberIds.map((memberId) => recalculateMemberExamStatus(memberId)));
+  await recalculateChildRankings();
 
   redirect("/clases?saved=deleted");
 }
@@ -728,6 +762,9 @@ export async function addBulkAttendanceAction(formData: FormData) {
           await recalculateClassExamStatus(dayClass.id);
         }
       }
+      if (classes.some((dayClass) => dayClass.class_group === "kids")) {
+        await recalculateChildRankings();
+      }
     } catch (error) {
       console.error("Error saving grouped attendance", error);
       redirect(`/clases/${returnLegacyId || legacyId}?error=${closeAfter ? "close" : "attendance"}&step=asistencia`);
@@ -785,6 +822,10 @@ export async function addBulkAttendanceAction(formData: FormData) {
     console.error("Error syncing bulk attendance to legacy sheet", syncError);
   }
 
+  if (clase.class_group === "kids") {
+    await recalculateChildRankings();
+  }
+
   if (closeAfter) {
     try {
       if (clase.class_group === "adults") {
@@ -798,6 +839,9 @@ export async function addBulkAttendanceAction(formData: FormData) {
         if (closeError) throw closeError;
       }
       await recalculateClassExamStatus(classId);
+      if (clase.class_group === "kids") {
+        await recalculateChildRankings();
+      }
     } catch (closeError) {
       console.error("Error closing class after bulk attendance", closeError);
       redirect(`/clases/${returnLegacyId || legacyId}?error=close&step=asistencia`);
@@ -1370,6 +1414,8 @@ export async function addAdultRankingBonusAction(formData: FormData) {
     redirect("/rankings?error=bonus");
   }
 
+  await recalculateMemberExamStatus(memberId);
+
   redirect("/rankings?saved=bonus");
 }
 
@@ -1392,6 +1438,15 @@ export async function deactivateAdultRankingBonusAction(formData: FormData) {
   if (error) {
     console.error("Error deactivating adult ranking bonus", error);
     redirect("/rankings?error=bonus");
+  }
+
+  const { data: bonus } = await supabase
+    .from("adult_ranking_bonuses")
+    .select("member_id")
+    .eq("id", bonusId)
+    .maybeSingle<{ member_id: string }>();
+  if (bonus?.member_id) {
+    await recalculateMemberExamStatus(bonus.member_id);
   }
 
   redirect("/rankings?saved=bonus");
@@ -1428,6 +1483,8 @@ export async function createClubClosureAction(formData: FormData) {
     redirect("/calendario?error=closure");
   }
 
+  await recalculateActiveExamStatuses();
+
   redirect("/calendario?saved=closure");
 }
 
@@ -1451,6 +1508,8 @@ export async function deactivateClubClosureAction(formData: FormData) {
     console.error("Error deactivating club closure", error);
     redirect("/calendario?error=closure");
   }
+
+  await recalculateActiveExamStatuses();
 
   redirect("/calendario?saved=closure");
 }
@@ -1519,6 +1578,8 @@ export async function duplicateClubCalendarYearAction(formData: FormData) {
     console.error("Error duplicating club calendar", error);
     redirect("/calendario?error=duplicate");
   }
+
+  await recalculateActiveExamStatuses();
 
   redirect("/calendario?saved=duplicate");
 }
@@ -1661,10 +1722,19 @@ export async function updateCourseGroupAction(formData: FormData) {
       notes,
       legacy_id: `CURS-EDIT-${batchId}-${index + 1}`
     }));
-    const { error: insertError } = await supabase.from("courses").insert(rows);
+    const { data: insertedCourses, error: insertError } = await supabase
+      .from("courses")
+      .insert(rows)
+      .select("id")
+      .returns<Array<{ id: string }>>();
     if (insertError) {
       console.error("Error adding course attendees", insertError);
       redirect("/cursos?error=course");
+    }
+    try {
+      await Promise.all((insertedCourses ?? []).map((course) => syncLegacyCourse(course.id)));
+    } catch (syncError) {
+      console.error("Error syncing edited course additions to legacy sheet", syncError);
     }
   }
 
@@ -1900,6 +1970,16 @@ export async function saveShakujoAttendanceAction(formData: FormData) {
   const memberIds = formData.getAll("memberIds").map((value) => String(value).trim()).filter(Boolean);
   const now = new Date().toISOString();
   const supabase = createAdminClient();
+  const { data: previousRows, error: previousError } = await supabase
+    .from("shakujo_attendance")
+    .select("member_id")
+    .eq("shakujo_class_id", classId)
+    .returns<Array<{ member_id: string }>>();
+
+  if (previousError) {
+    console.error("Error loading previous shakujo attendance", previousError);
+    redirect("/shakujo?error=attendance");
+  }
 
   const { error: deleteError } = await supabase
     .from("shakujo_attendance")
@@ -1932,9 +2012,133 @@ export async function saveShakujoAttendanceAction(formData: FormData) {
       .eq("id", classId);
   }
 
-  await Promise.all(memberIds.map((memberId) => recalculateMemberExamStatus(memberId)));
+  const affectedMemberIds = Array.from(new Set([...(previousRows ?? []).map((row) => row.member_id), ...memberIds]));
+  await Promise.all(affectedMemberIds.map((memberId) => recalculateMemberExamStatus(memberId)));
 
   redirect("/shakujo?saved=attendance");
+}
+
+async function recalculateActiveExamStatuses() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("members")
+    .select("id")
+    .eq("status", "active")
+    .returns<Array<{ id: string }>>();
+
+  if (error) throw error;
+
+  for (const member of data ?? []) {
+    await recalculateMemberExamStatus(member.id);
+  }
+}
+
+async function recalculateChildRankings() {
+  const supabase = createAdminClient();
+  const [{ data: kids, error: kidsError }, { data: attendance, error: attendanceError }] = await Promise.all([
+    supabase
+      .from("members")
+      .select("id,legacy_id")
+      .eq("class", "kids")
+      .eq("status", "active")
+      .returns<Array<{ id: string; legacy_id: string | null }>>(),
+    supabase
+      .from("attendance_logs")
+      .select("member_id,attended_on")
+      .returns<Array<{ member_id: string; attended_on: string }>>()
+  ]);
+
+  if (kidsError) throw kidsError;
+  if (attendanceError) throw attendanceError;
+
+  const today = startOfLocalDay(new Date());
+  const byMember = new Map<string, string[]>();
+  for (const row of attendance ?? []) {
+    const current = byMember.get(row.member_id) ?? [];
+    current.push(row.attended_on);
+    byMember.set(row.member_id, current);
+  }
+
+  const rows = (kids ?? []).map((member) => {
+    const dates = (byMember.get(member.id) ?? []).sort((a, b) => b.localeCompare(a));
+    const attendance30d = countIsoDatesSince(dates, today, 30);
+    const attendance90d = countIsoDatesSince(dates, today, 90);
+    const lastAttendanceOn = dates[0] ?? null;
+    const daysWithoutAttendance = lastAttendanceOn ? daysBetweenLocal(parseLocalDate(lastAttendanceOn), today) : null;
+    const score = attendance30d * 3 + attendance90d;
+    return {
+      member_id: member.id,
+      legacy_id: member.legacy_id,
+      attendance_30d: attendance30d,
+      attendance_90d: attendance90d,
+      last_attendance_on: lastAttendanceOn,
+      days_without_attendance: daysWithoutAttendance,
+      score,
+      position: null as number | null,
+      level: null as string | null,
+      constancy_status: childConstancyStatus(attendance30d, daysWithoutAttendance),
+      motivational_message: "",
+      calculated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+  });
+
+  rows
+    .sort((a, b) => b.score - a.score || (a.days_without_attendance ?? 9999) - (b.days_without_attendance ?? 9999))
+    .forEach((row, index) => {
+      row.position = index + 1;
+      row.level = childRankingLevel(row.position, row.score);
+      row.motivational_message = childMotivationalMessage(row.level, row.position, row.attendance_30d, row.days_without_attendance);
+    });
+
+  if (!rows.length) return;
+
+  const { error } = await supabase
+    .from("child_rankings")
+    .upsert(rows, { onConflict: "legacy_id" });
+
+  if (error) throw error;
+}
+
+function countIsoDatesSince(dates: string[], today: Date, days: number) {
+  return dates.filter((value) => daysBetweenLocal(parseLocalDate(value), today) <= days).length;
+}
+
+function parseLocalDate(value: string) {
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  return startOfLocalDay(new Date(year, (month || 1) - 1, day || 1));
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function daysBetweenLocal(start: Date, end: Date) {
+  return Math.floor((startOfLocalDay(end).getTime() - startOfLocalDay(start).getTime()) / 86400000);
+}
+
+function childConstancyStatus(attendance30d: number, daysWithoutAttendance: number | null) {
+  if (attendance30d >= 8) return "Excelente";
+  if (attendance30d >= 4) return "Regular";
+  if (attendance30d >= 1) return "En progreso";
+  if (daysWithoutAttendance !== null && daysWithoutAttendance >= 30) return "Sin actividad reciente";
+  return "Pendiente";
+}
+
+function childRankingLevel(position: number | null, score: number) {
+  if (position !== null && position <= 3) return "TOP";
+  if (score >= 25) return "ALTA";
+  if (score >= 10) return "MEDIA";
+  return "INICIO";
+}
+
+function childMotivationalMessage(level: string | null, position: number | null, attendance30d: number, daysWithoutAttendance: number | null) {
+  if (position === 1) return "Esta liderando el ranking infantil con una constancia excelente.";
+  if (level === "TOP") return "Esta entre los alumnos mas constantes del grupo.";
+  if (attendance30d >= 4) return "Esta entrenando de forma regular. Buen trabajo.";
+  if (attendance30d >= 1) return "Va mejorando poco a poco. La constancia es la clave.";
+  if (daysWithoutAttendance !== null && daysWithoutAttendance >= 30) return "Lleva tiempo sin entrenar. Es importante volver poco a poco.";
+  return "Seguimos construyendo constancia paso a paso.";
 }
 
 function normalizeClass(value: string) {

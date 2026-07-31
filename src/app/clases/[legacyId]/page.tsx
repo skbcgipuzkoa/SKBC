@@ -210,6 +210,9 @@ export default async function ClaseDetailPage({
       rows: (dayAttendance ?? []).filter((item) => item.class_id === dayClass.id)
     })).filter((group) => group.rows.length)
     : [{ title: clase.class_group === "kids" ? "Ninos" : "Adultos", rows: attendance ?? [] }];
+  const totalDayAttendance = attendanceClasses.length > 1
+    ? (dayAttendance ?? []).filter((item) => attendanceClasses.some((dayClass) => dayClass.id === item.class_id)).length
+    : (attendance?.length ?? 0);
   const attendancePanel = (
     <form action={addBulkAttendanceAction} className="attendance-day-form">
       <input type="hidden" name="classId" value={clase.id} />
@@ -450,7 +453,7 @@ export default async function ClaseDetailPage({
           <article className="card"><h2>Fecha</h2><div className="metric small">{clase.class_date}</div></article>
           <article className="card"><h2>Tipo</h2><div className="metric small">{clase.class_type ?? "-"}</div></article>
           <article className="card"><h2>Estado</h2><div className="metric small">{clase.status}</div></article>
-          <article className="card"><h2>Asistentes</h2><div className="metric">{attendance?.length ?? 0}</div></article>
+          <article className="card"><h2>Asistentes</h2><div className="metric">{totalDayAttendance}</div></article>
         </section>
 
         <section className="delegate-visible-panel">
