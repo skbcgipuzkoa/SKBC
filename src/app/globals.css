@@ -3102,6 +3102,39 @@ tbody tr:hover {
   color: #003f88;
 }
 
+.kid-badge-white-yellow {
+  background: linear-gradient(90deg, #ffffff 0 50%, #fff15a 50% 100%);
+  border-color: #d9c07a;
+  color: #2f2a14;
+}
+
+.kid-badge-yellow-orange {
+  background: linear-gradient(90deg, #fff15a 0 50%, #ff9b2f 50% 100%);
+  border-color: #deaa17;
+  color: #3f2800;
+}
+
+.kid-badge-orange-green {
+  background: linear-gradient(90deg, #ff9b2f 0 50%, #22a767 50% 100%);
+  border-color: #997a20;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+.kid-badge-green-blue {
+  background: linear-gradient(90deg, #22a767 0 50%, #2d7fe8 50% 100%);
+  border-color: #1f7d91;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+.kid-badge-blue-brown {
+  background: linear-gradient(90deg, #2d7fe8 0 50%, #8b5a35 50% 100%);
+  border-color: #5b628f;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
 .kid-badge-white {
   background: #ffffff;
   border-color: #d9c07a;
