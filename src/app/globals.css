@@ -1476,15 +1476,70 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.plan-group[open] {
+  align-content: start;
+}
+
 .plan-group-head {
   align-items: center;
+  cursor: pointer;
   display: flex;
   gap: 12px;
   justify-content: space-between;
+  list-style: none;
+  min-height: 56px;
+}
+
+.plan-group-head::-webkit-details-marker {
+  display: none;
 }
 
 .plan-group-head h2 {
+  font-size: 16px;
   margin-top: 8px;
+}
+
+.plan-group-head::after {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  content: "+";
+  display: grid;
+  flex: 0 0 28px;
+  font-size: 18px;
+  font-weight: 900;
+  height: 28px;
+  place-items: center;
+  width: 28px;
+}
+
+.plan-group[open] .plan-group-head::after {
+  content: "-";
+}
+
+.grade-route {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.route-arrow {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.plan-group-count {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--brand-strong);
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 7px 10px;
 }
 
 .plan-card-list {
@@ -3791,15 +3846,37 @@ tbody tr:hover {
 
   .plan-group {
     gap: 10px;
+    padding: 10px;
   }
 
   .plan-group-head {
-    align-items: flex-start;
+    align-items: center;
+    gap: 8px;
+    min-height: 50px;
   }
 
   .plan-group-head h2 {
-    font-size: 16px;
+    font-size: 14px;
     margin-bottom: 0;
+    margin-top: 6px;
+  }
+
+  .grade-route {
+    gap: 5px;
+  }
+
+  .grade-route .grade-chip {
+    font-size: 12px;
+    padding: 7px 9px;
+  }
+
+  .route-arrow {
+    font-size: 10px;
+  }
+
+  .plan-group-count {
+    font-size: 12px;
+    padding: 6px 9px;
   }
 
   .class-summary-strip {

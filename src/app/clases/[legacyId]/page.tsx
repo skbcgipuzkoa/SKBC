@@ -497,17 +497,22 @@ export default async function ClaseDetailPage({
                 </div>
               ) : null}
               <section className="plan-board mobile-plan-board">
-              {groupedPlan.length ? groupedPlan.map(([grade, items]) => {
+              {groupedPlan.length ? groupedPlan.map(([grade, items], index) => {
                 const groupCompleted = items.filter((item) => item.completed).length;
+                const targetGrade = items[0]?.target_grade ?? null;
                 return (
-                  <article className="card plan-group" key={grade}>
-                    <div className="plan-group-head">
+                  <details className="card plan-group" key={grade} open={index === 0 || groupCompleted > 0}>
+                    <summary className="plan-group-head">
                       <div>
-                        <span className="tag">{grade}</span>
-                        <h2>{items[0]?.target_grade ? `Objetivo ${items[0].target_grade}` : "Grupo tecnico"}</h2>
+                        <div className="grade-route">
+                          <span className={`grade-chip grade-${slugGrade(grade)}`}>{grade}</span>
+                          <span className="route-arrow">para</span>
+                          {targetGrade ? <span className={`grade-chip grade-${slugGrade(targetGrade)}`}>{targetGrade}</span> : <span className="grade-chip">Objetivo</span>}
+                        </div>
+                        <h2>{grade} para {targetGrade ?? "objetivo"}</h2>
                       </div>
-                      <strong>{groupCompleted}/{items.length}</strong>
-                    </div>
+                      <span className="plan-group-count">{groupCompleted}/{items.length}</span>
+                    </summary>
                     <div className="plan-card-list">
                       {items.map((item) => (
                         <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
@@ -533,7 +538,7 @@ export default async function ClaseDetailPage({
                         </div>
                       ))}
                     </div>
-                  </article>
+                  </details>
                 );
               }) : (
                 <article className="card">
@@ -648,4 +653,8 @@ function delegateModeFromCreatedBy(value: string | null | undefined) {
   if (["combined", "combinado"].includes(normalized)) return "combined";
   if (["adults", "adultos"].includes(normalized)) return "adults";
   return null;
+}
+
+function slugGrade(grade: string | null | undefined) {
+  return String(grade ?? "grado").trim().toLowerCase().replace(/\s+/g, "-");
 }
