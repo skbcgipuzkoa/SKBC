@@ -764,6 +764,47 @@ export async function updatePlanTechniqueAction(formData: FormData) {
   redirect(`/clases/${legacyId}?saved=plan-technique`);
 }
 
+export async function updateClassPlanTechniquesAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const planIds = formData.getAll("planIds").map((value) => String(value)).filter(Boolean);
+
+  if (!classId || !legacyId) {
+    redirect("/clases");
+  }
+
+  const supabase = createAdminClient();
+  const now = new Date().toISOString();
+
+  try {
+    const { error: resetError } = await supabase
+      .from("technical_plans")
+      .update({ completed: false, updated_at: now })
+      .eq("class_id", classId);
+
+    if (resetError) throw resetError;
+
+    if (planIds.length) {
+      const { error: updateError } = await supabase
+        .from("technical_plans")
+        .update({ completed: true, updated_at: now })
+        .eq("class_id", classId)
+        .in("id", planIds);
+
+      if (updateError) throw updateError;
+    }
+  } catch (error) {
+    console.error("Error updating class plan techniques", error);
+    redirect(`/clases/${legacyId}?error=plan-technique`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=plan-technique`);
+}
+
 export async function closeAdultClassAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

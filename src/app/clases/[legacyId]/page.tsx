@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, FileText, LogOut, Wand2, X } from "lucide-react";
+import { ArrowLeft, Check, FileText, LogOut, Wand2 } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import {
   closeAdultClassAction,
@@ -12,7 +12,7 @@ import {
   logoutAction,
   prepareAdultClassAction,
   updateClassAction,
-  updatePlanTechniqueAction
+  updateClassPlanTechniquesAction
 } from "@/app/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { hasInternalAccess } from "@/lib/auth";
@@ -487,7 +487,16 @@ export default async function ClaseDetailPage({
               <h2 className="section-title">Plan tecnico</h2>
               <span className="status">{completedPlan}/{(plan ?? []).length} realizadas</span>
             </div>
-            <section className="plan-board mobile-plan-board">
+            <form action={updateClassPlanTechniquesAction} className="class-plan-form">
+              <input type="hidden" name="classId" value={clase.id} />
+              <input type="hidden" name="legacyId" value={legacyId} />
+              {!clase.closed && groupedPlan.length ? (
+                <div className="plan-save-row">
+                  <p className="muted">Marca todas las tecnicas realizadas y guarda una sola vez antes de pasar asistencia.</p>
+                  <button type="submit">Guardar tecnicas realizadas</button>
+                </div>
+              ) : null}
+              <section className="plan-board mobile-plan-board">
               {groupedPlan.length ? groupedPlan.map(([grade, items]) => {
                 const groupCompleted = items.filter((item) => item.completed).length;
                 return (
@@ -520,20 +529,11 @@ export default async function ClaseDetailPage({
                               {item.completed ? "Si" : "No"}
                             </span>
                           ) : (
-                            <form action={updatePlanTechniqueAction}>
-                              <input type="hidden" name="planId" value={item.id} />
-                              <input type="hidden" name="legacyId" value={legacyId} />
-                              <input type="hidden" name="completed" value={item.completed ? "false" : "true"} />
-                              <button
-                                className={item.completed ? "mini-action selected" : "mini-action"}
-                                type="submit"
-                                title={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
-                                aria-label={item.completed ? "Marcar como no realizada" : "Marcar como realizada"}
-                              >
-                                {item.completed ? <Check aria-hidden="true" size={15} /> : <X aria-hidden="true" size={15} />}
-                                {item.completed ? "Hecha" : "Marcar"}
-                              </button>
-                            </form>
+                            <label className="mini-action">
+                              <input name="planIds" type="checkbox" value={item.id} defaultChecked={item.completed} />
+                              <Check aria-hidden="true" size={15} />
+                              Hecha
+                            </label>
                           )}
                         </div>
                       ))}
@@ -544,9 +544,15 @@ export default async function ClaseDetailPage({
                 <article className="card">
                   <h2>Sin plan tecnico</h2>
                   <p className="muted">Pulsa Preparar clase para crear grupos y plan tecnico adulto.</p>
-              </article>
-            )}
-            </section>
+                </article>
+              )}
+              </section>
+              {!clase.closed && groupedPlan.length ? (
+                <div className="plan-save-row bottom">
+                  <button type="submit">Guardar tecnicas realizadas</button>
+                </div>
+              ) : null}
+            </form>
           </>
         ) : null}
 

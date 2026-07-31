@@ -263,7 +263,6 @@ export default async function PublicFichaPage({
       .select("id,grade,base_name,name,category,active,active_in_planning")
       .eq("grade", targetGrade)
       .eq("active", true)
-      .eq("active_in_planning", true)
       .returns<Technique[]>(),
     supabase
       .from("member_technical_history")

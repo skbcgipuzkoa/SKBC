@@ -1613,6 +1613,43 @@ tbody tr:hover {
   border-color: #b9dec9;
 }
 
+.class-plan-form {
+  display: grid;
+  gap: 14px;
+}
+
+.plan-save-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.plan-save-row p {
+  margin: 0;
+}
+
+.plan-save-row.bottom {
+  justify-content: flex-end;
+}
+
+.plan-card .mini-action input {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.plan-card .mini-action:has(input:checked) {
+  background: #e6f7ec;
+  border-color: #22c55e;
+  color: #15803d;
+}
+
 .plan-card div {
   display: grid;
   gap: 4px;
