@@ -762,7 +762,14 @@ function groupPlanByGrade(plan: PlanRow[]) {
     current.push(item);
     groups.set(key, current);
   });
-  return [...groups.entries()];
+  return [...groups.entries()].sort(([gradeA], [gradeB]) => gradeSortValue(gradeA) - gradeSortValue(gradeB));
+}
+
+function gradeSortValue(grade: string) {
+  const normalized = String(grade ?? "").trim().toUpperCase();
+  const order = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
+  const index = order.indexOf(normalized);
+  return index === -1 ? 999 : index;
 }
 
 function delegateModeFromCreatedBy(value: string | null | undefined) {
