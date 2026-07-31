@@ -16,7 +16,7 @@ type CalendarClosure = {
 export default async function CalendarioPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; year?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -33,6 +33,10 @@ export default async function CalendarioPage({
     .returns<CalendarClosure[]>();
 
   const closures = error ? [] : data ?? [];
+  const currentYear = new Date().getFullYear();
+  const years = buildCalendarYears(closures, currentYear);
+  const selectedYear = years.some((item) => item.year === params.year) ? params.year : String(currentYear);
+  const selectedClosures = closures.filter((closure) => closure.starts_on.startsWith(`${selectedYear}-`));
 
   return (
     <div className="shell">
@@ -75,6 +79,24 @@ export default async function CalendarioPage({
         {params.error === "closure" ? <p className="form-error">No se pudo guardar el cierre. Revisa fechas y titulo.</p> : null}
         {params.error === "duplicate" ? <p className="form-error">No se pudo duplicar el calendario. Revisa los anos origen y destino.</p> : null}
 
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Anos preparados</h2>
+              <p className="muted">Elige un ano para revisar sus festivos y cierres activos.</p>
+            </div>
+            <span className="tag">{selectedYear}</span>
+          </div>
+          <div className="year-chip-list">
+            {years.map((item) => (
+              <a className={item.year === selectedYear ? "year-chip selected" : "year-chip"} href={`/calendario?year=${item.year}`} key={item.year}>
+                <strong>{item.year}</strong>
+                <span>{item.count} cierres</span>
+              </a>
+            ))}
+          </div>
+        </section>
+
         <section className="split-section">
           <article className="card">
             <CalendarDays aria-hidden="true" size={22} />
@@ -110,9 +132,9 @@ export default async function CalendarioPage({
 
         <section className="split-section">
           <article className="card">
-            <h2>Cierres activos</h2>
+            <h2>Cierres activos {selectedYear}</h2>
             <div className="stack-list compact-stack">
-              {closures.length ? closures.map((closure) => (
+              {selectedClosures.length ? selectedClosures.map((closure) => (
                 <div className="closure-row" key={closure.id}>
                   <strong>{closure.title}</strong>
                   <span>{closure.starts_on === closure.ends_on ? closure.starts_on : `${closure.starts_on} - ${closure.ends_on}`} - {closure.applies_to === "all" ? "Todos" : closure.applies_to === "kids" ? "Ninos" : "Adultos"}</span>
@@ -122,11 +144,24 @@ export default async function CalendarioPage({
                     <button className="mini-action danger" type="submit">Desactivar</button>
                   </form>
                 </div>
-              )) : <p className="muted">Sin cierres activos.</p>}
+              )) : <p className="muted">Sin cierres activos para este ano.</p>}
             </div>
           </article>
         </section>
       </main>
     </div>
   );
+}
+
+function buildCalendarYears(closures: CalendarClosure[], currentYear: number) {
+  const counts = new Map<string, number>();
+  closures.forEach((closure) => {
+    const year = closure.starts_on.slice(0, 4);
+    counts.set(year, (counts.get(year) ?? 0) + 1);
+  });
+  counts.set(String(currentYear), counts.get(String(currentYear)) ?? 0);
+  counts.set(String(currentYear + 1), counts.get(String(currentYear + 1)) ?? 0);
+  return Array.from(counts.entries())
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => Number(a.year) - Number(b.year));
 }

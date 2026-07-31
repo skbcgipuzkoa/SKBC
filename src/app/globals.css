@@ -2140,6 +2140,45 @@ tbody tr:hover {
   min-height: 30px;
 }
 
+.year-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.year-chip {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: grid;
+  gap: 2px;
+  min-width: 104px;
+  padding: 10px 12px;
+  text-decoration: none;
+}
+
+.year-chip strong {
+  font-size: 18px;
+}
+
+.year-chip span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.year-chip.selected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #ffffff;
+}
+
+.year-chip.selected span {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .black-belt-attendance-form {
   display: grid;
   gap: 12px;
