@@ -243,7 +243,7 @@ function selectTechniquesForGroup(
   }
 
   const ownGohoJuho = techniques
-    .filter((technique) => normalize(technique.grade) === normalize(gradeWork))
+    .filter((technique) => isProgramGradeMatch(technique.grade, gradeWork))
     .filter((technique) => ["GOHO", "JUHO"].includes(normalize(technique.category)))
     .sort(compareTechniques);
 
@@ -404,8 +404,15 @@ function resolveTargetGrade(grade: string) {
 function resolveProgramGrade(targetGrade: string) {
   const normalized = normalize(targetGrade);
   const dan = normalized.match(/^(\d+)\s*DAN$/);
-  if (dan && Number.parseInt(dan[1], 10) > 5) return "5 DAN";
+  if (dan && Number.parseInt(dan[1], 10) > 5) return "GLOBAL";
   return normalized;
+}
+
+function isProgramGradeMatch(techniqueGrade: string, gradeWork: string) {
+  const normalizedWork = normalize(gradeWork);
+  const normalizedTechnique = normalize(techniqueGrade);
+  if (normalizedWork === "GLOBAL") return nextGrade.has(normalizedTechnique);
+  return normalizedTechnique === normalizedWork;
 }
 
 function normalize(value: string | null | undefined) {
