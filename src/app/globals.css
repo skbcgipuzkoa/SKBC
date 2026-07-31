@@ -199,6 +199,207 @@ h1 {
   white-space: nowrap;
 }
 
+.control-day-main {
+  display: grid;
+  gap: 18px;
+}
+
+.control-hero {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--muted);
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 18px;
+}
+
+.control-hero h2 {
+  font-size: 24px;
+  margin: 8px 0;
+}
+
+.control-ok {
+  border-color: rgba(24, 134, 75, 0.32);
+}
+
+.control-warn {
+  border-color: rgba(183, 121, 31, 0.32);
+}
+
+.control-danger {
+  border-color: rgba(194, 65, 58, 0.32);
+}
+
+.control-neutral {
+  border-color: var(--line);
+}
+
+.control-hero.control-ok {
+  border-left-color: var(--ok);
+}
+
+.control-hero.control-warn {
+  border-left-color: var(--warn);
+}
+
+.control-hero.control-danger {
+  border-left-color: var(--danger);
+}
+
+.control-date-form {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(150px, 1fr) auto;
+}
+
+.control-date-form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.control-date-form input,
+.control-date-form button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
+.control-date-form button {
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.control-summary-grid,
+.control-check-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.control-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.control-check-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.control-metric {
+  display: grid;
+  gap: 8px;
+}
+
+.control-metric span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.control-metric strong {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.control-check {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.control-check svg {
+  color: var(--muted);
+}
+
+.control-check.control-ok svg {
+  color: var(--ok);
+}
+
+.control-check.control-warn svg {
+  color: var(--warn);
+}
+
+.control-check.control-danger svg {
+  color: var(--danger);
+}
+
+.control-check strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.control-check p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.control-check a {
+  align-items: center;
+  background: #eef4fb;
+  border: 1px solid #d6e6f7;
+  border-radius: 8px;
+  color: var(--brand-strong);
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.quick-action-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quick-action-grid form,
+.quick-action-grid button,
+.quick-action-grid a {
+  width: 100%;
+}
+
+.control-attendance-list {
+  display: grid;
+  gap: 8px;
+}
+
+.control-person-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 10px;
+}
+
+.control-person-row span {
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-person-row small {
+  color: var(--muted);
+}
+
+.control-person-row a {
+  color: var(--brand);
+  font-weight: 700;
+}
+
 .login-panel {
   align-items: center;
   background:
@@ -4522,6 +4723,36 @@ tbody tr:hover {
   .attendance-day-actions button {
     justify-content: center;
     width: 100%;
+  }
+
+  .control-hero,
+  .control-date-form,
+  .control-summary-grid,
+  .control-check-grid,
+  .quick-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .control-hero {
+    padding: 14px;
+  }
+
+  .control-hero h2 {
+    font-size: 21px;
+  }
+
+  .control-check {
+    align-items: start;
+    grid-template-columns: 26px minmax(0, 1fr) 36px;
+    padding: 12px;
+  }
+
+  .control-person-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .control-person-row a {
+    grid-column: 1 / -1;
   }
 }
 

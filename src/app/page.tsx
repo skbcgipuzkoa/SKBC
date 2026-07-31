@@ -1,6 +1,7 @@
 import {
   BarChart3,
   CalendarCheck,
+  ClipboardCheck,
   GraduationCap,
   KeyRound,
   LockKeyhole,
@@ -39,6 +40,7 @@ const moduleGroups = [
     title: "Trabajo diario",
     items: [
       { label: "Nueva clase", href: "/clases/nueva", icon: CalendarCheck, tone: "primary" },
+      { label: "Control del dia", href: "/control-dia", icon: ClipboardCheck, tone: "primary" },
       { label: "Calendario", href: "/clases", icon: NotebookTabs },
       { label: "Clases Busen", href: "/clases-negras", icon: ShieldCheck },
       { label: "Shakujo", href: "/shakujo", icon: Sparkles },
@@ -139,6 +141,7 @@ export default async function Home({
         </div>
         <nav className="nav" aria-label="Principal">
           <a href="/" aria-current="page">Inicio</a>
+          <a href="/control-dia">Control dia</a>
           <a href="/kenshis">Kenshis</a>
           <a href="/clases">Clases</a>
           <a href="/clases-negras">Busen</a>
