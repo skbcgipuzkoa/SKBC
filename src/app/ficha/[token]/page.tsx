@@ -100,6 +100,12 @@ type AdultBonus = {
   points: number;
 };
 
+type CalendarClosure = {
+  starts_on: string;
+  ends_on: string;
+  applies_to: "all" | "kids" | "adults";
+};
+
 type ChildRanking = {
   attendance_30d: number;
   attendance_90d: number;
@@ -245,7 +251,7 @@ export default async function PublicFichaPage({
 
   const targetGrade = nextAdultGrade(member.grade);
   const date180 = daysAgo(180);
-  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult] = await Promise.all([
+  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,grade,base_name,name,category,active,active_in_planning")
@@ -300,11 +306,20 @@ export default async function PublicFichaPage({
       .eq("member_id", member.id)
       .order("created_at", { ascending: false })
       .returns<ShakujoAttendanceRow[]>()
+    ,
+    supabase
+      .from("skbc_calendar_closures")
+      .select("starts_on,ends_on,applies_to")
+      .eq("active", true)
+      .lte("starts_on", new Date().toISOString().slice(0, 10))
+      .gte("ends_on", "2000-01-01")
+      .in("applies_to", ["all", "adults"])
+      .returns<CalendarClosure[]>()
   ]);
 
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? []);
-  const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? []);
+  const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
   return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} adminBackUrl={adminBackUrl} />;
 }
@@ -830,7 +845,7 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
   };
 }
 
-function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" }>, bonuses: AdultBonus[]) {
+function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" }>, bonuses: AdultBonus[], closures: CalendarClosure[]) {
   const date30 = daysAgo(30);
   const date90 = daysAgo(90);
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
@@ -843,7 +858,7 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
     .map((member) => {
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
-      const daysWithoutAttendance = lastAttendance.get(member.id) ? trainingDaysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10)) : 999;
+      const daysWithoutAttendance = lastAttendance.get(member.id) ? trainingDaysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10), closures) : 999;
       const activityScore = a30 * 4 + a90 + (coursePoints.get(member.id) ?? 0) + (bonusPoints.get(member.id) ?? 0);
       const score = Math.max(0, activityScore - adultInactivityPenalty(daysWithoutAttendance));
       return { ...member, score };
@@ -907,7 +922,7 @@ function adultInactivityPenalty(daysWithoutAttendance: number) {
   return 35;
 }
 
-function trainingDaysBetween(from: string, to: string) {
+function trainingDaysBetween(from: string, to: string, closures: CalendarClosure[]) {
   const totalDays = daysBetween(from, to);
   if (totalDays <= 0) return 0;
   let count = 0;
@@ -915,10 +930,18 @@ function trainingDaysBetween(from: string, to: string) {
   const end = new Date(`${to}T00:00:00`);
   cursor.setDate(cursor.getDate() + 1);
   while (cursor <= end) {
-    if (!isSummerBreak(cursor)) count += 1;
+    if (!isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) count += 1;
     cursor.setDate(cursor.getDate() + 1);
   }
   return count;
+}
+
+function isExplicitlyClosed(date: Date, closures: CalendarClosure[]) {
+  return closures.some((closure) => {
+    const starts = new Date(`${closure.starts_on}T00:00:00`);
+    const ends = new Date(`${closure.ends_on}T00:00:00`);
+    return starts <= date && date <= ends;
+  });
 }
 
 function isSummerBreak(date: Date) {

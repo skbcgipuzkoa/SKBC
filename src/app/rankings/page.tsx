@@ -73,6 +73,12 @@ type AdultRankingRow = Member & {
   score: number;
 };
 
+type CalendarClosure = {
+  starts_on: string;
+  ends_on: string;
+  applies_to: "all" | "kids" | "adults";
+};
+
 const today = new Date();
 const date30 = daysAgo(30);
 const date90 = daysAgo(90);
@@ -89,7 +95,7 @@ export default async function RankingsPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, shakujoResult] =
+  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, shakujoResult, closuresResult] =
     await Promise.all([
       supabase
         .from("members")
@@ -128,6 +134,15 @@ export default async function RankingsPage({
         .from("shakujo_attendance")
         .select("member_id,shakujo_classes(class_date)")
         .returns<any[]>()
+      ,
+      supabase
+        .from("skbc_calendar_closures")
+        .select("starts_on,ends_on,applies_to")
+        .eq("active", true)
+        .lte("starts_on", new Date().toISOString().slice(0, 10))
+        .gte("ends_on", "2000-01-01")
+        .in("applies_to", ["all", "adults"])
+        .returns<CalendarClosure[]>()
     ]);
 
   if (membersError) throw membersError;
@@ -156,7 +171,8 @@ export default async function RankingsPage({
 
   const blackBeltRows = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
   const shakujoRows = shakujoResult.error ? [] : shakujoResult.data ?? [];
-  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, shakujoRows).slice(0, 10);
+  const closures = closuresResult.error ? [] : closuresResult.data ?? [];
+  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, shakujoRows, closures).slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const kids = (childRankings ?? []).filter((row) => row.members?.status === "active").slice(0, 10);
   const selectedView = params.view === "kids" ? "kids" : "adults";
@@ -382,7 +398,7 @@ export default async function RankingsPage({
   );
 }
 
-function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], shakujoRows: any[]): AdultRankingRow[] {
+function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], shakujoRows: any[], closures: CalendarClosure[]): AdultRankingRow[] {
   const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
@@ -412,7 +428,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const a90 = attendance90.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
       const last = lastAttendance.get(member.id);
-      const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10)) : 999;
+      const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10), closures) : 999;
       const nac = nationalCoursePoints.get(member.id) ?? 0;
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const bonus = manualBonus.get(member.id) ?? 0;
@@ -464,7 +480,7 @@ function daysBetween(from: string, to: string) {
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.floor((end - start) / 86400000)) : 0;
 }
 
-function trainingDaysBetween(from: string, to: string) {
+function trainingDaysBetween(from: string, to: string, closures: CalendarClosure[]) {
   const totalDays = daysBetween(from, to);
   if (totalDays <= 0) return 0;
   let count = 0;
@@ -472,10 +488,18 @@ function trainingDaysBetween(from: string, to: string) {
   const end = new Date(`${to}T00:00:00`);
   cursor.setDate(cursor.getDate() + 1);
   while (cursor <= end) {
-    if (!isSummerBreak(cursor)) count += 1;
+    if (!isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) count += 1;
     cursor.setDate(cursor.getDate() + 1);
   }
   return count;
+}
+
+function isExplicitlyClosed(date: Date, closures: CalendarClosure[]) {
+  return closures.some((closure) => {
+    const starts = new Date(`${closure.starts_on}T00:00:00`);
+    const ends = new Date(`${closure.ends_on}T00:00:00`);
+    return starts <= date && date <= ends;
+  });
 }
 
 function isSummerBreak(date: Date) {
