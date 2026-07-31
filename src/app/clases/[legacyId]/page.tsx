@@ -211,10 +211,10 @@ export default async function ClaseDetailPage({
         const pendingMembers = membersForGroup.filter((member) => !attendedIds.has(member.id));
         const title = dayClass.class_group === "kids" ? "Ninos" : "Adultos";
         return (
-          <details className="card attendance-group-panel" key={dayClass.id} open={dayClass.id === clase.id}>
+          <details className="card attendance-group-panel" key={dayClass.id} open>
             <summary>
               <strong>{title}</strong>
-              <span>{membersForGroup.length - pendingMembers.length}/{membersForGroup.length} asistentes</span>
+              <span>{membersForGroup.length - pendingMembers.length}/{membersForGroup.length} registrados</span>
             </summary>
             {!dayClass.closed ? (
               <form action={addBulkAttendanceAction} className="quick-form">
@@ -238,6 +238,9 @@ export default async function ClaseDetailPage({
                     Guardar asistencia y cerrar {title.toLowerCase()}
                   </button>
                 </div>
+                <p className="muted">
+                  El contador sube despues de guardar. Para cerrar correctamente desde aqui, marca asistentes y pulsa Guardar asistencia y cerrar.
+                </p>
               </form>
             ) : <p className="muted">Clase de {title.toLowerCase()} cerrada.</p>}
           </details>
@@ -370,7 +373,7 @@ export default async function ClaseDetailPage({
                 </button>
               </form>
             ) : null}
-            {clase.class_group === "adults" && clase.plan_generated && !clase.closed ? (
+            {clase.class_group === "adults" && clase.plan_generated && !clase.closed && activeStep !== "attendance" ? (
               <form action={closeAdultClassAction}>
                 <input type="hidden" name="classId" value={clase.id} />
                 <input type="hidden" name="legacyId" value={legacyId} />
@@ -679,18 +682,18 @@ export default async function ClaseDetailPage({
         </section>
         </> : null}
 
-        {readyToClose && activeStep === "attendance" ? (
+        {readyToClose && activeStep === "attendance" && (attendance ?? []).length ? (
           <section className="mobile-close-bar" aria-label="Cerrar clase">
             <div>
               <strong>{completedPlan}/{(plan ?? []).length}</strong>
-              <span>tecnicas realizadas</span>
+              <span>tecnicas realizadas. Usa solo si la asistencia ya esta guardada.</span>
             </div>
             <form action={closeAdultClassAction}>
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
               <button className="primary-link button-reset" type="submit">
                 <Check aria-hidden="true" size={16} />
-                Cerrar clase
+                Cerrar clase ya guardada
               </button>
             </form>
           </section>
