@@ -80,9 +80,6 @@ export function resolveWorkGrade(grade: string | null | undefined) {
 export function resolveTrainingGroupGrade(grade: string | null | undefined) {
   const normalized = normalizeGrade(grade);
   if (!normalized) return "";
-  if (normalized === "MINARAI") return "MINARAI";
-  const dan = normalized.match(/^(\d+)\s*DAN$/);
-  if (dan && Number.parseInt(dan[1], 10) >= 5) return "4 DAN";
   return normalized;
 }
 

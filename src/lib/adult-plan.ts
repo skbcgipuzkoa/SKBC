@@ -137,7 +137,8 @@ export async function generateAdultTechnicalPlan(classId: string) {
   const inserts = groups.flatMap((group) => {
     const gradeWork = resolveWorkGrade(group.grade);
     const targetGrade = resolveTargetGrade(group.grade);
-    const selected = selectTechniquesForGroup(gradeWork, clase.class_type, enrichedTechniques);
+    const programGrade = resolveProgramGrade(targetGrade);
+    const selected = selectTechniquesForGroup(programGrade, clase.class_type, enrichedTechniques);
 
     return selected.map((item, index) => ({
       legacy_id: `${legacyPrefix}_${String(legacyCounter++).padStart(3, "0")}`,
@@ -398,6 +399,13 @@ function resolveWorkGrade(grade: string) {
 
 function resolveTargetGrade(grade: string) {
   return nextGrade.get(normalize(grade)) ?? grade;
+}
+
+function resolveProgramGrade(targetGrade: string) {
+  const normalized = normalize(targetGrade);
+  const dan = normalized.match(/^(\d+)\s*DAN$/);
+  if (dan && Number.parseInt(dan[1], 10) > 5) return "5 DAN";
+  return normalized;
 }
 
 function normalize(value: string | null | undefined) {
