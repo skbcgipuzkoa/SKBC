@@ -436,7 +436,7 @@ export async function submitDelegateClassAction(formData: FormData) {
     for (const clase of classes) {
       const memberIds = memberIdsByClass.get(clase.id) ?? [];
       if (memberIds.length) {
-        await addAttendanceRows(clase.id, memberIds);
+        await addAttendanceRows(clase.id, memberIds, "REGISTRADO POR SUSTITUTO");
       }
       if (clase.class_group === "adults") {
         await closeAdultClass(clase.id);
@@ -684,11 +684,55 @@ export async function addBulkAttendanceAction(formData: FormData) {
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
   const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
+  const memberIdsByClass = getDelegateMemberIdsByClass(formData);
+  const hasGroupedMembers = memberIdsByClass.size > 0;
   const memberIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
   const closeAfter = String(formData.get("closeAfter") ?? "") === "true";
 
-  if (!classId || !legacyId || !memberIds.length) {
+  if (!classId || !legacyId || (!memberIds.length && !hasGroupedMembers)) {
     redirect(`/clases/${returnLegacyId || legacyId || ""}?error=attendance&step=asistencia`);
+  }
+
+  if (hasGroupedMembers) {
+    const supabase = createAdminClient();
+    const classIds = [...memberIdsByClass.keys()];
+    const { data: classes, error: classesError } = await supabase
+      .from("classes")
+      .select("id,class_group")
+      .in("id", classIds)
+      .returns<Array<{ id: string; class_group: "kids" | "adults" }>>();
+
+    if (classesError || !classes?.length) {
+      redirect(`/clases/${returnLegacyId || legacyId}?error=attendance&step=asistencia`);
+    }
+
+    try {
+      for (const dayClass of classes) {
+        const ids = memberIdsByClass.get(dayClass.id) ?? [];
+        if (ids.length) await addAttendanceRows(dayClass.id, ids, "WEB SKBC");
+      }
+
+      if (closeAfter) {
+        for (const dayClass of classes) {
+          if (dayClass.class_group === "adults") {
+            await closeAdultClass(dayClass.id);
+          } else {
+            const { error: closeError } = await supabase
+              .from("classes")
+              .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+              .eq("id", dayClass.id)
+              .eq("class_group", "kids");
+            if (closeError) throw closeError;
+          }
+          await recalculateClassExamStatus(dayClass.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving grouped attendance", error);
+      redirect(`/clases/${returnLegacyId || legacyId}?error=${closeAfter ? "close" : "attendance"}&step=asistencia`);
+    }
+
+    redirect(`/clases/${returnLegacyId || legacyId}?saved=${closeAfter ? "close" : "attendance"}&step=asistencia`);
   }
 
   const supabase = createAdminClient();
@@ -2127,7 +2171,7 @@ async function setDelegatePlanCompleted(classId: string, planIds: string[]) {
   if (error) throw error;
 }
 
-async function addAttendanceRows(classId: string, memberIds: string[]) {
+async function addAttendanceRows(classId: string, memberIds: string[], technicalNote = "WEB SKBC") {
   const supabase = createAdminClient();
   const [{ data: clase, error: classError }, { data: members, error: membersError }] = await Promise.all([
     supabase
@@ -2157,7 +2201,7 @@ async function addAttendanceRows(classId: string, memberIds: string[]) {
       official_grade: officialGrade || null,
       trained_grade: trainedGrade || null,
       technical_role: "student",
-      technical_note: "REGISTRADO POR SUSTITUTO",
+      technical_note: technicalNote,
       use_for_history: true
     };
   });

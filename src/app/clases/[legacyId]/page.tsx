@@ -211,27 +211,27 @@ export default async function ClaseDetailPage({
     })).filter((group) => group.rows.length)
     : [{ title: clase.class_group === "kids" ? "Ninos" : "Adultos", rows: attendance ?? [] }];
   const attendancePanel = (
-    <div className="attendance-group-stack">
-      {attendanceClasses.map((dayClass) => {
-        const attendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === dayClass.id).map((item) => item.member_id));
-        const membersForGroup = (dayMembers ?? []).filter((member) => member.class === dayClass.class_group);
-        const pendingMembers = membersForGroup.filter((member) => !attendedIds.has(member.id));
-        const title = dayClass.class_group === "kids" ? "Ninos" : "Adultos";
-        return (
-          <details className="card attendance-group-panel" key={dayClass.id} open>
-            <summary>
-              <strong>{title}</strong>
-              <span>{membersForGroup.length - pendingMembers.length}/{membersForGroup.length} registrados</span>
-            </summary>
-            {!dayClass.closed ? (
-              <form action={addBulkAttendanceAction} className="quick-form">
-                <input type="hidden" name="classId" value={dayClass.id} />
-                <input type="hidden" name="legacyId" value={dayClass.legacy_id ?? legacyId} />
-                <input type="hidden" name="returnLegacyId" value={legacyId} />
+    <form action={addBulkAttendanceAction} className="attendance-day-form">
+      <input type="hidden" name="classId" value={clase.id} />
+      <input type="hidden" name="legacyId" value={legacyId} />
+      <input type="hidden" name="returnLegacyId" value={legacyId} />
+      <div className="attendance-group-stack">
+        {attendanceClasses.map((dayClass) => {
+          const attendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === dayClass.id).map((item) => item.member_id));
+          const membersForGroup = (dayMembers ?? []).filter((member) => member.class === dayClass.class_group);
+          const pendingMembers = membersForGroup.filter((member) => !attendedIds.has(member.id));
+          const title = dayClass.class_group === "kids" ? "Ninos" : "Adultos";
+          return (
+            <details className="card attendance-group-panel" key={dayClass.id} open>
+              <summary>
+                <strong>{title}</strong>
+                <span>{membersForGroup.length - pendingMembers.length}/{membersForGroup.length} registrados</span>
+              </summary>
+              {!dayClass.closed ? (
                 <div className="attendance-checklist">
                   {pendingMembers.length ? pendingMembers.map((member) => (
                     <label className="check-row" key={member.id}>
-                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <input name={`memberIds:${dayClass.id}`} type="checkbox" value={member.id} />
                       <span>
                         <strong>{member.display_name}</strong>
                         <small>{member.grade ?? "Sin grado"}</small>
@@ -239,21 +239,20 @@ export default async function ClaseDetailPage({
                     </label>
                   )) : <p className="muted">Todos los kenshis activos de {title.toLowerCase()} estan ya en asistencia.</p>}
                 </div>
-                <div className="form-actions">
-                  <button type="submit" disabled={!pendingMembers.length}>Anadir seleccionados de {title.toLowerCase()}</button>
-                  <button className="secondary-button" type="submit" name="closeAfter" value="true" disabled={!pendingMembers.length}>
-                    Guardar asistencia y cerrar {title.toLowerCase()}
-                  </button>
-                </div>
-                <p className="muted">
-                  El contador sube despues de guardar. Para cerrar correctamente desde aqui, marca asistentes y pulsa Guardar asistencia y cerrar.
-                </p>
-              </form>
-            ) : <p className="muted">Clase de {title.toLowerCase()} cerrada.</p>}
-          </details>
-        );
-      })}
-    </div>
+              ) : <p className="muted">Clase de {title.toLowerCase()} cerrada.</p>}
+            </details>
+          );
+        })}
+      </div>
+      <div className="attendance-day-actions">
+        <p className="muted">Marca adultos y ninos si corresponde. El contador sube despues de guardar.</p>
+        <button type="submit">Guardar asistencia</button>
+        <button className="primary-link button-reset" type="submit" name="closeAfter" value="true">
+          <Check aria-hidden="true" size={16} />
+          Guardar todo y cerrar clase
+        </button>
+      </div>
+    </form>
   );
   const attendanceQuickPanel = (
     <article className="card">
