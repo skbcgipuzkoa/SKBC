@@ -38,6 +38,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ lega
 
   const { legacyId } = await params;
   const url = new URL(request.url);
+  if (url.searchParams.get("print") === "1") {
+    return planPrintResponse(legacyId);
+  }
   if (url.searchParams.get("raw") !== "1") {
     return planViewerResponse(legacyId);
   }
@@ -155,7 +158,7 @@ function planViewerResponse(legacyId: string) {
     <strong>Plan tecnico SKBC</strong>
     <div class="actions">
       <a href="/clases/${encodeURIComponent(legacyId)}">Volver</a>
-      <a href="${rawUrl}" target="_blank" rel="noreferrer">Imprimir</a>
+      <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf?print=1">Imprimir</a>
       <a href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF</a>
       <a href="${rawUrl}" download="${fileName}">Descargar</a>
     </div>
@@ -167,10 +170,105 @@ function planViewerResponse(legacyId: string) {
     <a class="primary" href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF completo</a>
     <div class="grid">
       <a href="${rawUrl}" download="${fileName}">Descargar</a>
-      <a href="${rawUrl}" target="_blank" rel="noreferrer">Imprimir</a>
+      <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf?print=1">Imprimir</a>
     </div>
   </section>
   <iframe id="pdf" src="${rawUrl}" title="PDF plan tecnico"></iframe>
+</body>
+</html>`;
+
+  return new NextResponse(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
+async function planPrintResponse(legacyId: string) {
+  const supabase = createAdminClient();
+  const { data: clase, error: classError } = await supabase
+    .from("classes")
+    .select("id,legacy_id,class_date,name,class_group")
+    .eq("legacy_id", legacyId)
+    .single<ClassRow>();
+
+  if (classError || !clase || clase.class_group !== "adults") {
+    return new NextResponse("Clase no encontrada", { status: 404 });
+  }
+
+  const { data: plan, error: planError } = await supabase
+    .from("technical_plans")
+    .select("group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,techniques(summary_es)")
+    .eq("class_id", clase.id)
+    .order("suggested_order")
+    .returns<PlanRow[]>();
+
+  if (planError) {
+    return new NextResponse("No se ha podido cargar el plan", { status: 500 });
+  }
+
+  const groups = groupPlanByGrade(plan ?? []);
+  const html = `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Imprimir plan ${escapeHtml(legacyId)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #eef2f7; color: #0f172a; font-family: Arial, sans-serif; margin: 0; }
+    .bar { align-items: center; background: #0f1b2d; color: white; display: flex; gap: 10px; justify-content: space-between; padding: 10px; position: sticky; top: 0; z-index: 10; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+    a, button { background: white; border: 0; border-radius: 10px; color: #0f1b2d; cursor: pointer; font-size: 14px; font-weight: 800; padding: 9px 11px; text-decoration: none; }
+    main { display: grid; gap: 18px; padding: 18px; }
+    .sheet { background: white; box-shadow: 0 8px 24px rgba(15, 23, 42, .12); padding: 28px; }
+    h1 { font-size: 26px; margin: 0 0 8px; }
+    .subtitle { color: #53627a; margin: 0 0 8px; }
+    .hint { color: #53627a; font-style: italic; margin: 0 0 26px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .group { break-inside: avoid; border-bottom: 1px solid #dbe5f0; padding-bottom: 12px; }
+    .head { color: white; font-size: 15px; font-weight: 900; margin-bottom: 12px; padding: 10px; }
+    .item { align-items: start; display: grid; gap: 8px; grid-template-columns: 14px minmax(0, 1fr); margin: 8px 0; }
+    .box { border: 2px solid #183456; height: 14px; width: 14px; }
+    strong { display: block; font-size: 14px; }
+    small { color: #53627a; display: block; font-size: 11px; margin-top: 2px; }
+    p.summary { color: #334155; font-size: 11px; line-height: 1.25; margin: 4px 0 0; }
+    .grade-minarai, .grade-5-kyu { color: #0f172a; }
+    @media (max-width: 760px) {
+      .bar { align-items: stretch; display: grid; }
+      .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .actions a, .actions button { min-height: 44px; text-align: center; width: 100%; }
+      main { padding: 10px; }
+      .sheet { padding: 18px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+    @media print {
+      @page { margin: 12mm; size: A4 landscape; }
+      body { background: white; }
+      .bar { display: none; }
+      main { padding: 0; }
+      .sheet { box-shadow: none; padding: 0; }
+      .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      h1 { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <strong>Imprimir plan tecnico SKBC</strong>
+    <div class="actions">
+      <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf">Volver</a>
+      <a href="/clases/${encodeURIComponent(legacyId)}">Sistema</a>
+      <button onclick="window.print()">Imprimir ahora</button>
+      <a href="/clases/${encodeURIComponent(legacyId)}/plan-pdf?raw=1" download="plan-tecnico-${escapeHtml(legacyId)}.pdf">PDF</a>
+    </div>
+  </div>
+  <main>
+    <section class="sheet">
+      <h1>SKBC Gipuzkoa - Plan tecnico de clase</h1>
+      <p class="subtitle">${escapeHtml(clase.name)} - ${escapeHtml(clase.class_date)}</p>
+      <p class="hint">Marca en papel y despues pasalo al sistema si no se usa el movil en clase.</p>
+      <div class="grid">
+        ${groups.map(([grade, items]) => renderPrintGroup(grade, items)).join("")}
+      </div>
+    </section>
+  </main>
 </body>
 </html>`;
 
@@ -193,6 +291,38 @@ function drawHeader(page: PDFPage, clase: ClassRow, height: number, font: PDFFon
     font: italic,
     color: rgb(0.36, 0.42, 0.52)
   });
+}
+
+function renderPrintGroup(grade: string, items: PlanRow[]) {
+  const target = items[0]?.target_grade ?? "";
+  const color = gradeHex(target || grade);
+  const textColor = ["2 KYU", "1 KYU"].includes(normalizeGrade(target || grade)) || normalizeGrade(target || grade).includes("DAN") ? "#ffffff" : "#0f172a";
+  return `<section class="group">
+    <div class="head" style="background:${color};color:${textColor}">${escapeHtml(grade)} (${escapeHtml(gradeColorName(grade))}) -> ${escapeHtml(target)} (${escapeHtml(gradeColorName(target))})</div>
+    ${items.map((item) => {
+      const summary = effectiveSummary(item);
+      return `<div class="item">
+        <span class="box"></span>
+        <div>
+          <strong>${escapeHtml(item.technique_name)}</strong>
+          <small>${escapeHtml(item.category ?? "-")} - ${escapeHtml(item.proposal_type ?? item.focus ?? "-")}</small>
+          ${summary ? `<p class="summary">${escapeHtml(summary)}</p>` : ""}
+        </div>
+      </div>`;
+    }).join("")}
+  </section>`;
+}
+
+function gradeHex(grade: string | null | undefined) {
+  const normalized = normalizeGrade(grade);
+  if (normalized === "MINARAI") return "#ffffff";
+  if (normalized === "5 KYU") return "#fff05a";
+  if (normalized === "4 KYU") return "#ff9f38";
+  if (normalized === "3 KYU") return "#5fc279";
+  if (normalized === "2 KYU") return "#4285f4";
+  if (normalized === "1 KYU") return "#8c542e";
+  if (normalized.includes("DAN")) return "#141923";
+  return "#eef4ff";
 }
 
 function drawPlanCard(page: PDFPage, x: number, y: number, grade: string, items: PlanRow[], font: PDFFont, bold: PDFFont) {
