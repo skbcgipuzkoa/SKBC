@@ -685,6 +685,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
   const legacyId = String(formData.get("legacyId") ?? "");
   const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
   const memberIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
+  const closeAfter = String(formData.get("closeAfter") ?? "") === "true";
 
   if (!classId || !legacyId || !memberIds.length) {
     redirect(`/clases/${returnLegacyId || legacyId || ""}?error=attendance&step=asistencia`);
@@ -737,6 +738,27 @@ export async function addBulkAttendanceAction(formData: FormData) {
     await Promise.all((attendanceRows ?? []).map((row) => syncLegacyAttendance(row.id)));
   } catch (syncError) {
     console.error("Error syncing bulk attendance to legacy sheet", syncError);
+  }
+
+  if (closeAfter) {
+    try {
+      if (clase.class_group === "adults") {
+        await closeAdultClass(classId);
+      } else {
+        const { error: closeError } = await supabase
+          .from("classes")
+          .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+          .eq("id", classId)
+          .eq("class_group", "kids");
+        if (closeError) throw closeError;
+      }
+      await recalculateClassExamStatus(classId);
+    } catch (closeError) {
+      console.error("Error closing class after bulk attendance", closeError);
+      redirect(`/clases/${returnLegacyId || legacyId}?error=close&step=asistencia`);
+    }
+
+    redirect(`/clases/${returnLegacyId || legacyId}?saved=close&step=asistencia`);
   }
 
   redirect(`/clases/${returnLegacyId || legacyId}?saved=attendance&step=asistencia`);

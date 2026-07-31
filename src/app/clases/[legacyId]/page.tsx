@@ -232,7 +232,12 @@ export default async function ClaseDetailPage({
                     </label>
                   )) : <p className="muted">Todos los kenshis activos de {title.toLowerCase()} estan ya en asistencia.</p>}
                 </div>
-                <button type="submit" disabled={!pendingMembers.length}>Anadir seleccionados de {title.toLowerCase()}</button>
+                <div className="form-actions">
+                  <button type="submit" disabled={!pendingMembers.length}>Anadir seleccionados de {title.toLowerCase()}</button>
+                  <button className="secondary-button" type="submit" name="closeAfter" value="true" disabled={!pendingMembers.length}>
+                    Guardar asistencia y cerrar {title.toLowerCase()}
+                  </button>
+                </div>
               </form>
             ) : <p className="muted">Clase de {title.toLowerCase()} cerrada.</p>}
           </details>
@@ -259,7 +264,12 @@ export default async function ClaseDetailPage({
                 </label>
               )) : <p className="muted">Todos los kenshis activos de esta clase estan ya en asistencia.</p>}
             </div>
-            <button type="submit" disabled={!pendingClassMembers.length}>Anadir seleccionados</button>
+            <div className="form-actions">
+              <button type="submit" disabled={!pendingClassMembers.length}>Anadir seleccionados</button>
+              <button className="secondary-button" type="submit" name="closeAfter" value="true" disabled={!pendingClassMembers.length}>
+                Guardar asistencia y cerrar clase
+              </button>
+            </div>
           </form>
           {clase.class_group === "adults" ? <details className="advanced-details">
             <summary>Anadir uno con grado entrenado manual</summary>
