@@ -1,4 +1,4 @@
-import { Award, Dumbbell, LogOut, Medal, Users } from "lucide-react";
+import { Award, LogOut, Medal } from "lucide-react";
 import { redirect } from "next/navigation";
 import { addAdultRankingBonusAction, deactivateAdultRankingBonusAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
@@ -81,7 +81,7 @@ const date180 = daysAgo(180);
 export default async function RankingsPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; view?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -159,6 +159,7 @@ export default async function RankingsPage({
   const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, shakujoRows).slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const kids = (childRankings ?? []).filter((row) => row.members?.status === "active").slice(0, 10);
+  const selectedView = params.view === "kids" ? "kids" : "adults";
 
   return (
     <div className="shell">
@@ -185,7 +186,7 @@ export default async function RankingsPage({
       <main className="main">
         <div className="topbar">
           <div>
-            <p className="eyebrow">Top 10 adultos y top 10 ninos</p>
+            <p className="eyebrow">Top 10 por categoria</p>
             <h1>Rankings SKBC</h1>
           </div>
           <form action={logoutAction}>
@@ -195,36 +196,81 @@ export default async function RankingsPage({
           </form>
         </div>
 
-        <section className="grid stats compact" aria-label="Resumen rankings">
-          <article className="card">
-            <Medal aria-hidden="true" size={19} />
-            <h2>Lider adulto</h2>
-            <div className="metric small">{adults[0]?.display_name ?? "-"}</div>
-            <p className="muted">{adults[0] ? `${adults[0].score} puntos` : "Sin datos"}</p>
-          </article>
-          <article className="card">
-            <Award aria-hidden="true" size={19} />
-            <h2>Lider ninos</h2>
-            <div className="metric small">{kids[0]?.members?.display_name ?? "-"}</div>
-            <p className="muted">{kids[0] ? `${kids[0].score} puntos` : "Sin datos"}</p>
-          </article>
-          <article className="card">
-            <Dumbbell aria-hidden="true" size={19} />
-            <h2>Tecnicas 90 dias</h2>
-            <div className="metric">{adults.reduce((sum, row) => sum + row.technical90, 0)}</div>
-          </article>
-          <article className="card">
-            <Users aria-hidden="true" size={19} />
-            <h2>En ranking</h2>
-            <div className="metric">{adults.length + kids.length}</div>
-          </article>
+        <section className="ranking-switch" aria-label="Seleccionar ranking">
+          <a className={selectedView === "adults" ? "selected" : ""} href="/rankings?view=adults">
+            <Medal aria-hidden="true" size={17} />
+            Adultos
+          </a>
+          <a className={selectedView === "kids" ? "selected" : ""} href="/rankings?view=kids">
+            <Award aria-hidden="true" size={17} />
+            Ninos
+          </a>
+        </section>
+
+        <section className="ranking-board">
+          <div className="section-heading-row">
+            <div>
+              <h2 className="section-title">{selectedView === "adults" ? "Top 10 adultos" : "Top 10 ninos"}</h2>
+              <p className="muted">
+                {selectedView === "adults"
+                  ? "Pulsa un kenshi para ver su detalle. Se premian asistencia reciente, tecnicas, cursos, Busen, Shakujo y bonus."
+                  : "Pulsa un kenshi para ver su ficha y detalle infantil."}
+              </p>
+            </div>
+            <span className="tag">{selectedView === "adults" ? `${adults.length}/10` : `${kids.length}/10`}</span>
+          </div>
+
+          <div className="ranking-focus-list">
+            {selectedView === "adults" ? (
+              adults.length ? adults.map((row, index) => (
+                <a className={`ranking-card top-${index + 1}`} href={row.legacy_id ? `/kenshis/${row.legacy_id}` : "#"} key={row.id}>
+                  <span className="ranking-position">{index + 1}</span>
+                  <span className="ranking-main">
+                    <span className="ranking-name">
+                      <strong>{row.display_name}</strong>
+                      <span className="ranking-score">{row.score} pts</span>
+                    </span>
+                    <span className="ranking-id">ID {row.legacy_id ?? "-"} - IKA {row.ika_id ?? "pendiente"} - {row.grade ?? "-"}</span>
+                    <span className="ranking-chip-grid">
+                      <span className="ranking-chip">30/90: {row.attendance30}/{row.attendance90}</span>
+                      <span className="ranking-chip">{formatDaysWithout(row.daysWithoutAttendance)}</span>
+                      <span className="ranking-chip">Tecnicas {row.technical90}</span>
+                      <span className="ranking-chip">Cursos {row.nationalCoursePoints + row.internationalCoursePoints}</span>
+                      <span className="ranking-chip">Busen {row.blackBeltPoints}</span>
+                      <span className="ranking-chip">Shakujo {row.shakujoPoints}</span>
+                      {row.manualBonus ? <span className="ranking-chip">Bonus {row.manualBonus}</span> : null}
+                    </span>
+                  </span>
+                </a>
+              )) : <p className="ranking-empty">Sin datos suficientes para ranking adulto.</p>
+            ) : (
+              kids.length ? kids.map((row, index) => (
+                <a className={`ranking-card top-${index + 1}`} href={row.members?.legacy_id ? `/kenshis/${row.members.legacy_id}` : "#"} key={row.member_id}>
+                  <span className="ranking-position">{row.position ?? index + 1}</span>
+                  <span className="ranking-main">
+                    <span className="ranking-name">
+                      <strong>{row.members?.display_name ?? "-"}</strong>
+                      <span className="ranking-score">{row.score} pts</span>
+                    </span>
+                    <span className="ranking-id">ID {row.members?.legacy_id ?? "-"} - IKA {row.members?.ika_id ?? "pendiente"} - {row.members?.grade ?? "-"}</span>
+                    <span className="ranking-chip-grid">
+                      <span className="ranking-chip">30/90: {row.attendance_30d}/{row.attendance_90d}</span>
+                      <span className="ranking-chip">Ultima {row.last_attendance_on ?? "-"}</span>
+                      <span className="ranking-chip">{formatDaysWithout(row.days_without_attendance)}</span>
+                      <span className="ranking-chip">Nivel {row.level ?? "-"}</span>
+                    </span>
+                  </span>
+                </a>
+              )) : <p className="ranking-empty">Sin ranking infantil calculado.</p>
+            )}
+          </div>
         </section>
 
         {params.saved === "bonus" ? <p className="save-ok">Bonus manual guardado.</p> : null}
         {params.error === "bonus" ? <p className="form-error">No se pudo guardar el bonus manual.</p> : null}
         {!bonusTableReady ? <p className="form-error">Bonus manual pendiente de activar: falta aplicar la migracion de Supabase.</p> : null}
 
-        {bonusTableReady ? <section className="split-section">
+        {selectedView === "adults" && bonusTableReady ? <section className="split-section">
           <article className="card">
             <h2>Bonus adulto permanente</h2>
             <form action={addAdultRankingBonusAction} className="quick-form">
@@ -414,6 +460,11 @@ function daysBetween(from: string, to: string) {
   const start = new Date(`${from}T00:00:00`).getTime();
   const end = new Date(`${to}T00:00:00`).getTime();
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.floor((end - start) / 86400000)) : 0;
+}
+
+function formatDaysWithout(days: number | null | undefined) {
+  if (days === null || days === undefined || days >= 999) return "Sin asistencia";
+  return days === 1 ? "1 dia sin venir" : `${days} dias sin venir`;
 }
 
 function daysAgo(days: number) {
