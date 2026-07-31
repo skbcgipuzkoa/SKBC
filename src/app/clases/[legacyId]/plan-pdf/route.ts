@@ -155,7 +155,7 @@ function planViewerResponse(legacyId: string) {
     <strong>Plan tecnico SKBC</strong>
     <div class="actions">
       <a href="/clases/${encodeURIComponent(legacyId)}">Volver</a>
-      <button onclick="printPdf()">Imprimir</button>
+      <a href="${rawUrl}" target="_blank" rel="noreferrer">Imprimir</a>
       <a href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF</a>
       <a href="${rawUrl}" download="${fileName}">Descargar</a>
     </div>
@@ -167,26 +167,10 @@ function planViewerResponse(legacyId: string) {
     <a class="primary" href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF completo</a>
     <div class="grid">
       <a href="${rawUrl}" download="${fileName}">Descargar</a>
-      <button onclick="printPdf()">Imprimir</button>
+      <a href="${rawUrl}" target="_blank" rel="noreferrer">Imprimir</a>
     </div>
   </section>
   <iframe id="pdf" src="${rawUrl}" title="PDF plan tecnico"></iframe>
-  <script>
-    function printPdf() {
-      const frame = document.getElementById('pdf');
-      try {
-        if (frame && frame.contentWindow) {
-          frame.contentWindow.focus();
-          frame.contentWindow.print();
-          return;
-        }
-      } catch (error) {}
-      const win = window.open('${rawUrl}', '_blank');
-      if (win) {
-        win.addEventListener('load', function () { win.print(); }, { once: true });
-      }
-    }
-  </script>
 </body>
 </html>`;
 
