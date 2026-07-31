@@ -376,7 +376,7 @@ function AdultFicha({
       <section className={`ficha-alert ficha-${normalizeCss(member.semaphore ?? "gris")}`}>
         <span className="ficha-alert-label">Semaforo proximo examen</span>
         <strong>{examSemaphoreTitle(member.semaphore)}</strong>
-        <span>{member.exam_notice ?? "Sin aviso de examen registrado."}</span>
+        <span>{publicExamNotice(member.semaphore, member.exam_notice)}</span>
       </section>
 
       <section className="ficha-actions">
@@ -707,6 +707,51 @@ function examSemaphoreTitle(semaphore: string | null) {
   if (value === "AMARILLO") return "En seguimiento para proximo examen";
   if (value === "GRIS" || value === "INACTIVO") return "Sin convocatoria activa por inactividad";
   return "Estado de examen sin datos";
+}
+
+function publicExamNotice(semaphore: string | null, notice: string | null) {
+  const value = normalize(semaphore);
+  const raw = notice ?? "";
+  const callDate = raw.match(/Convocatoria(?: objetivo)?\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
+  const callText = callDate ? ` Proxima convocatoria de referencia: ${formatDate(callDate)}.` : "";
+  const hasAttendancePending = /asistencia|Faltan\s+\d+/i.test(raw);
+  const hasTechnicalPending = /Tecnico|tecnic|BLOQUEO/i.test(raw);
+  const hasEngagement = /Implicacion/i.test(raw);
+
+  if (value === "VERDE") {
+    return `Tiene buena situacion para que el equipo tecnico valore su proximo examen.${callText}`;
+  }
+
+  if (value === "AZUL") {
+    const eligibleDate = raw.match(/hasta\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
+    return eligibleDate
+      ? `Aun esta fuera de la ventana minima de tiempo. Se podra valorar a partir de ${formatDate(eligibleDate)}.${callText}`
+      : `Aun esta fuera de la ventana minima de tiempo para valorar el proximo examen.${callText}`;
+  }
+
+  if (value === "AMARILLO") {
+    return `Esta en seguimiento para proxima convocatoria. Mantener regularidad en clase ayudara a llegar en mejores condiciones.${callText}`;
+  }
+
+  if (value === "ROJO") {
+    const reasons = [];
+    if (hasAttendancePending) reasons.push("sumar mas asistencia");
+    if (hasTechnicalPending) reasons.push("completar mas trabajo tecnico de su grado");
+    const reasonText = reasons.length ? ` Por ahora necesita ${joinSpanish(reasons)}.` : " Por ahora necesita seguir acumulando trabajo y regularidad.";
+    const engagementText = hasEngagement ? " La implicacion y los cursos registrados tambien se tienen en cuenta." : "";
+    return `Todavia no esta listo para ser convocado al proximo examen.${reasonText}${engagementText}${callText}`;
+  }
+
+  if (value === "GRIS" || value === "INACTIVO") {
+    return "Antes de valorar un examen hace falta recuperar regularidad de entrenamiento.";
+  }
+
+  return "Sin aviso de examen registrado.";
+}
+
+function joinSpanish(items: string[]) {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} y ${items.at(-1)}`;
 }
 
 function BehaviorField({ label, value }: { label: string; value: string | null | undefined }) {
