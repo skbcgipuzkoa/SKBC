@@ -266,7 +266,7 @@ async function planPrintResponse(legacyId: string) {
       <h1>SKBC Gipuzkoa - Plan tecnico de clase</h1>
       <p class="subtitle">${escapeHtml(clase.name)} - ${escapeHtml(clase.class_date)}</p>
       <p class="hint">Marca en papel y despues pasalo al sistema si no se usa el movil en clase.</p>
-      <p id="mobile-help" class="mobile-help">Si no aparece la ventana de imprimir, usa el menu de compartir del movil y elige Imprimir. En modo app instalada algunos moviles no permiten imprimir directamente desde un boton web.</p>
+      <p id="mobile-help" class="mobile-help">Si el movil no abre imprimir, pulsa Descargar PDF y despues abre/imprime el archivo desde Descargas o Archivos.</p>
       <div class="grid">
         ${groups.map(([grade, items]) => renderPrintGroup(grade, items)).join("")}
       </div>
@@ -275,14 +275,22 @@ async function planPrintResponse(legacyId: string) {
   <script>
     async function shareOrPrint() {
       const help = document.getElementById('mobile-help');
-      if (navigator.share) {
+      const pdfUrl = '/clases/${encodeURIComponent(legacyId)}/plan-pdf?raw=1';
+      if (navigator.share && window.File) {
         try {
-          await navigator.share({
-            title: 'Plan tecnico SKBC',
-            text: 'Plan tecnico de clase SKBC Gipuzkoa',
-            url: window.location.href
-          });
-          return;
+          const response = await fetch(pdfUrl, { credentials: 'same-origin' });
+          if (response.ok) {
+            const blob = await response.blob();
+            const file = new File([blob], 'plan-tecnico-${escapeHtml(legacyId)}.pdf', { type: 'application/pdf' });
+            if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                title: 'Plan tecnico SKBC',
+                text: 'Plan tecnico de clase SKBC Gipuzkoa',
+                files: [file]
+              });
+              return;
+            }
+          }
         } catch (error) {
           if (error && error.name === 'AbortError') return;
         }
