@@ -754,8 +754,20 @@ function publicExamCallText(callDate: string | null) {
   const parsed = parseDate(callDate);
   if (!parsed) return "";
   const today = startOfDay(new Date());
-  const label = parsed.getTime() < today.getTime() ? "Convocatoria pasada" : "Proxima convocatoria prevista";
+  if (parsed.getTime() < today.getTime()) {
+    return ` Convocatoria pasada: ${formatDate(callDate)}. Proxima convocatoria teorica: ${formatDate(formatDateObject(nextTheoreticalExamCall(today)))}.`;
+  }
+  const label = "Proxima convocatoria prevista";
   return ` ${label}: ${formatDate(callDate)}.`;
+}
+
+function nextTheoreticalExamCall(date: Date) {
+  const year = date.getFullYear();
+  const summer = startOfDay(new Date(year, 5, 27));
+  const winter = startOfDay(new Date(year, 11, 7));
+  if (date.getTime() <= summer.getTime()) return summer;
+  if (date.getTime() <= winter.getTime()) return winter;
+  return startOfDay(new Date(year + 1, 5, 27));
 }
 
 function joinSpanish(items: string[]) {
