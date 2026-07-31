@@ -62,6 +62,7 @@ type GroupRow = {
 };
 
 type AttendanceRow = {
+  class_id?: string;
   attended_on: string;
   member_id: string;
   official_grade: string | null;
@@ -164,9 +165,9 @@ export default async function ClaseDetailPage({
       .returns<Array<MemberOption & { class: "kids" | "adults" }>>(),
     supabase
       .from("attendance_logs")
-      .select("class_id,member_id")
+      .select("class_id,attended_on,member_id,official_grade,trained_grade,members(first_name,last_name,legacy_id,class)")
       .in("class_id", (await supabase.from("classes").select("id").eq("class_date", clase.class_date).in("class_group", ["adults", "kids"]).returns<Array<{ id: string }>>()).data?.map((item) => item.id) ?? [])
-      .returns<Array<{ class_id: string; member_id: string }>>()
+      .returns<Array<AttendanceRow & { class_id: string }>>()
   ]);
 
   const attendanceMemberIds = new Set((attendance ?? []).map((item) => item.member_id));
@@ -203,6 +204,12 @@ export default async function ClaseDetailPage({
     console.error("Error auto creating kids attendance class", autoKidsError);
   }
   const attendanceClasses = ["adults", "kids"].map((group) => (dayClasses ?? []).find((item) => item.class_group === group)).filter(Boolean) as AttendanceClassOption[];
+  const registeredAttendanceGroups = clase.class_group === "adults" && activeStep === "attendance"
+    ? attendanceClasses.map((dayClass) => ({
+      title: dayClass.class_group === "kids" ? "Ninos" : "Adultos",
+      rows: (dayAttendance ?? []).filter((item) => item.class_id === dayClass.id)
+    })).filter((group) => group.rows.length)
+    : [{ title: clase.class_group === "kids" ? "Ninos" : "Adultos", rows: attendance ?? [] }];
   const attendancePanel = (
     <div className="attendance-group-stack">
       {attendanceClasses.map((dayClass) => {
@@ -718,23 +725,26 @@ export default async function ClaseDetailPage({
 
         {clase.class_group !== "adults" || activeStep === "attendance" ? <>
         <h2 className="section-title">Asistencia registrada</h2>
-        <section className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Kenshi</th><th>Grado oficial</th><th>Grado entrenado</th><th>Ficha</th></tr>
-            </thead>
-            <tbody>
-              {(attendance ?? []).map((item) => (
-                <tr key={`${item.members?.first_name}-${item.members?.last_name}-${item.trained_grade}`}>
-                  <td data-label="Kenshi"><strong>{item.members?.first_name} {item.members?.last_name}</strong></td>
-                  <td data-label="Grado oficial">{item.official_grade ?? "-"}</td>
-                  <td data-label="Grado entrenado">{item.trained_grade ?? "-"}</td>
-                  <td data-label="Ficha">{item.members?.legacy_id ? <a className="text-link" href={`/kenshis/${item.members.legacy_id}`}>Abrir ficha</a> : "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+        {registeredAttendanceGroups.length ? registeredAttendanceGroups.map((group) => (
+          <section className="table-wrap attendance-registered-table" key={group.title}>
+            <h3>{group.title}</h3>
+            <table>
+              <thead>
+                <tr><th>Kenshi</th><th>Grado oficial</th><th>Grado entrenado</th><th>Ficha</th></tr>
+              </thead>
+              <tbody>
+                {group.rows.map((item) => (
+                  <tr key={`${item.class_id ?? clase.id}-${item.member_id}`}>
+                    <td data-label="Kenshi"><strong>{item.members?.first_name} {item.members?.last_name}</strong></td>
+                    <td data-label="Grado oficial">{item.official_grade ?? "-"}</td>
+                    <td data-label="Grado entrenado">{item.trained_grade ?? "-"}</td>
+                    <td data-label="Ficha">{item.members?.legacy_id ? <a className="text-link" href={`/kenshis/${item.members.legacy_id}`}>Abrir ficha</a> : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )) : <p className="muted">Aun no hay asistencia registrada.</p>}
         </> : null}
       </main>
     </div>

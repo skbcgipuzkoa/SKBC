@@ -1800,6 +1800,16 @@ tbody tr:hover {
   content: "-";
 }
 
+.attendance-registered-table {
+  margin-bottom: 18px;
+}
+
+.attendance-registered-table h3 {
+  margin: 0;
+  padding: 14px 18px 0;
+  font-size: 1rem;
+}
+
 .inline-report-form {
   display: grid;
   gap: 6px;
