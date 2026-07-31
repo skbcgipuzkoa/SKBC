@@ -161,6 +161,10 @@ type BlackBeltSpecialRow = {
   } | null;
 };
 
+type BlackBeltEligibility = {
+  active: boolean;
+};
+
 type ShakujoAttendanceRow = {
   notes: string | null;
   shakujo_classes: {
@@ -252,7 +256,7 @@ export default async function PublicFichaPage({
 
   const targetGrade = nextAdultGrade(member.grade);
   const date180 = daysAgo(180);
-  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult] = await Promise.all([
+  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,grade,base_name,name,category,active,active_in_planning")
@@ -316,13 +320,21 @@ export default async function PublicFichaPage({
       .gte("ends_on", "2000-01-01")
       .in("applies_to", ["all", "adults"])
       .returns<CalendarClosure[]>()
+    ,
+    supabase
+      .from("black_belt_class_eligibility")
+      .select("active")
+      .eq("member_id", member.id)
+      .eq("active", true)
+      .limit(1)
+      .maybeSingle<BlackBeltEligibility>()
   ]);
 
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? []);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} adminBackUrl={adminBackUrl} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} adminBackUrl={adminBackUrl} />;
 }
 
 function AdultFicha({
@@ -335,6 +347,7 @@ function AdultFicha({
   ranking,
   childTransition,
   blackBeltSpecial,
+  showBusen,
   shakujoAttendance,
   adminBackUrl
 }: {
@@ -347,6 +360,7 @@ function AdultFicha({
   ranking: ReturnType<typeof buildAdultRanking>;
   childTransition: ChildAdultTransition | null;
   blackBeltSpecial: BlackBeltSpecialRow[];
+  showBusen: boolean;
   shakujoAttendance: ShakujoAttendanceRow[];
   adminBackUrl: string | null;
 }) {
@@ -422,26 +436,28 @@ function AdultFicha({
         {ranking ? <p className="ficha-ranking">{ranking.message} · Score {ranking.score}</p> : null}
       </section>
 
-      <section className="ficha-section">
-        <details className="ficha-card">
-          <summary><strong>Clases Busen</strong></summary>
-          <div className="ficha-fields small-fields">
-            <Field label="Asistidas" value={String(blackBeltSpecial.filter((row) => row.status === "present").length)} />
-            <Field label="Justificadas" value={String(blackBeltSpecial.filter((row) => row.status === "justified").length)} />
-            <Field label="Ausencias" value={String(blackBeltSpecial.filter((row) => row.status === "absent").length)} />
-          </div>
-          <ResponsiveTable
-            columns={["Fecha", "Clase", "Estado", "Notas"]}
-            rows={blackBeltSpecial.map((row) => [
-              formatDate(row.black_belt_special_classes?.class_date ?? null),
-              row.black_belt_special_classes?.title ?? "-",
-              row.status === "present" ? "Presente" : row.status === "justified" ? "Justificado" : "Ausente",
-              row.notes ?? "-"
-            ])}
-            empty="Sin clases especiales registradas."
-          />
-        </details>
-      </section>
+      {showBusen ? (
+        <section className="ficha-section">
+          <details className="ficha-card">
+            <summary><strong>Clases Busen</strong></summary>
+            <div className="ficha-fields small-fields">
+              <Field label="Asistidas" value={String(blackBeltSpecial.filter((row) => row.status === "present").length)} />
+              <Field label="Justificadas" value={String(blackBeltSpecial.filter((row) => row.status === "justified").length)} />
+              <Field label="Ausencias" value={String(blackBeltSpecial.filter((row) => row.status === "absent").length)} />
+            </div>
+            <ResponsiveTable
+              columns={["Fecha", "Clase", "Estado", "Notas"]}
+              rows={blackBeltSpecial.map((row) => [
+                formatDate(row.black_belt_special_classes?.class_date ?? null),
+                row.black_belt_special_classes?.title ?? "-",
+                row.status === "present" ? "Presente" : row.status === "justified" ? "Justificado" : "Ausente",
+                row.notes ?? "-"
+              ])}
+              empty="Sin clases especiales registradas."
+            />
+          </details>
+        </section>
+      ) : null}
 
       <section className="ficha-section">
         <details className="ficha-card">
