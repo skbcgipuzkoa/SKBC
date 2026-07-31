@@ -460,6 +460,10 @@ export async function submitDelegateClassAction(formData: FormData) {
       await recalculateClassExamStatus(clase.id);
     }
 
+    if (classes.some((clase) => clase.class_group === "kids")) {
+      await recalculateChildRankings();
+    }
+
     const supabase = createAdminClient();
     await supabase
       .from("class_delegate_links")
