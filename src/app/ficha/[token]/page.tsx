@@ -1,5 +1,6 @@
 import { ExternalLink, Gamepad2, Library, NotebookTabs } from "lucide-react";
 import { notFound } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
@@ -184,6 +185,7 @@ export default async function PublicFichaPage({
   params: Promise<{ token: string }>;
   searchParams: Promise<{ admin?: string; returnTo?: string }>;
 }) {
+  noStore();
   const [{ token }, queryParams] = await Promise.all([params, searchParams]);
   const adminBackUrl = queryParams.admin === "1" ? safeInternalReturnUrl(queryParams.returnTo) : null;
   const supabase = createAdminClient();
@@ -983,7 +985,10 @@ function Footer() {
 
 function buildAdultActivity(attendance: Attendance[], courses: Course[]) {
   const today = startOfDay(new Date());
-  const dates = attendance.map((row) => parseDate(row.attended_on)).filter((date): date is Date => Boolean(date));
+  const dates = attendance
+    .map((row) => parseDate(row.attended_on))
+    .filter((date): date is Date => Boolean(date))
+    .sort((a, b) => b.getTime() - a.getTime());
   const last = dates[0] ?? null;
   const weeksSinceLast = last ? Math.floor(daysBetweenDates(last, today) / 7) : null;
   const attendance12m = dates.filter((date) => date >= addMonths(today, -12)).length;
