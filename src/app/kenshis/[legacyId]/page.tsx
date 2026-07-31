@@ -326,14 +326,14 @@ export default async function KenshiDetailPage({
             {notices.saved === "transition-undo" ? <p className="save-ok">Paso a adultos deshecho. Kenshi restaurado a ninos.</p> : null}
             {notices.error === "transition-undo" ? <p className="form-error">No se pudo deshacer el paso a adultos.</p> : null}
             <div className="profile-actions">
-              {member.ficha_token ? <a className="text-link" href={`/ficha/${member.ficha_token}`} target="_blank">Abrir ficha nueva</a> : (
+              {member.ficha_token ? <a className="text-link" href={`/ficha/${member.ficha_token}`} target="_blank" rel="noopener noreferrer external">Abrir ficha nueva</a> : (
                 <form action={ensureFichaTokenAction}>
                   <input type="hidden" name="memberId" value={member.id} />
                   <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
                   <button className="mini-action selected" type="submit">Crear enlace ficha nueva</button>
                 </form>
               )}
-              {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank">Abrir ficha actual</a> : null}
+              {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank" rel="noopener noreferrer external">Abrir ficha actual</a> : null}
             </div>
           </article>
         </section>

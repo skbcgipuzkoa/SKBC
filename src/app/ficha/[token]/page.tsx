@@ -5,7 +5,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const LOGO_IKA_URL = "https://lh3.googleusercontent.com/d/1F1VTa2ygk4PRG4wEukoeRWkBAt_vKORy=w300";
 const LOGO_SKBC_URL = "https://lh3.googleusercontent.com/d/1HL7qwSkhxFsHdwg6lpidBe5EjGE-W1GI=w300";
-const ADULT_GRADES = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN"];
+const ADULT_GRADES = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
+const KID_GRADES = [
+  "MINARAI",
+  "BLANCO Y AMARILLO",
+  "5 KYU",
+  "AMARILLO Y NARANJA",
+  "4 KYU",
+  "NARANJA Y VERDE",
+  "3 KYU",
+  "VERDE Y AZUL",
+  "2 KYU",
+  "AZUL Y MARRON",
+  "1 KYU",
+  "1 DAN"
+];
 const REPETITION_GOAL = 3;
 
 type Member = {
@@ -865,31 +879,29 @@ function rankingMessage(displayName: string, position: number) {
 }
 
 function nextAdultGrade(grade: string | null) {
-  const normalized = normalize(grade);
-  const index = ADULT_GRADES.indexOf(normalized);
+  const normalized = normalizeGradeKey(grade);
+  const index = ADULT_GRADES.findIndex((item) => normalizeGradeKey(item) === normalized);
   if (index === -1) return grade ?? "";
   return ADULT_GRADES[Math.min(index + 1, ADULT_GRADES.length - 1)];
 }
 
 function nextKidGrade(grade: string | null) {
-  const map = new Map([
-    ["MINARAI", "BLANCO-AMARILLO"],
-    ["BLANCOAMARILLO", "AMARILLO"],
-    ["AMARILLO", "AMARILLO-NARANJA"],
-    ["AMARILLONARANJA", "NARANJA"],
-    ["NARANJA", "NARANJA-VERDE"],
-    ["NARANJAVERDE", "VERDE"],
-    ["VERDE", "VERDE-AZUL"],
-    ["VERDEAZUL", "AZUL"],
-    ["AZUL", "AZUL-MARRON"],
-    ["AZULMARRON", "MARRON"],
-    ["MARRON", "1 KYU"]
+  const aliases = new Map([
+    ["AMARILLO", "5KYU"],
+    ["NARANJA", "4KYU"],
+    ["VERDE", "3KYU"],
+    ["AZUL", "2KYU"],
+    ["MARRON", "1KYU"]
   ]);
-  return map.get(normalize(grade).replace(/\s|-/g, "")) ?? "SIGUIENTE ETAPA";
+  const key = normalizeGradeKey(grade);
+  const normalized = aliases.get(key) ?? key;
+  const index = KID_GRADES.findIndex((item) => normalizeGradeKey(item) === normalized);
+  if (index === -1) return grade ?? "-";
+  return KID_GRADES[Math.min(index + 1, KID_GRADES.length - 1)];
 }
 
 function kidGradeTone(grade: string | null): FichaTone {
-  const value = normalize(grade).replace(/\s|-/g, "");
+  const value = normalizeGradeKey(grade);
   if (!value || value === "SIGUIENTEETAPA") return "neutral";
   if (value.includes("BLANCO") || value.includes("MINARAI")) return "blue";
   if (value.includes("AMARILLO")) return "yellow";
@@ -898,6 +910,13 @@ function kidGradeTone(grade: string | null): FichaTone {
   if (value.includes("AZUL")) return "blue";
   if (value.includes("MARRON") || value.includes("KYU")) return "red";
   return "neutral";
+}
+
+function normalizeGradeKey(grade: string | null | undefined) {
+  return normalize(grade)
+    .replace(/\bY\b/g, "")
+    .replace(/\bAND\b/g, "")
+    .replace(/[\s\-_()]/g, "");
 }
 
 function daysWithoutTone(days: number | null | undefined): FichaTone {
