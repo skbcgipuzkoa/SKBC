@@ -713,7 +713,7 @@ function publicExamNotice(semaphore: string | null, notice: string | null) {
   const value = normalize(semaphore);
   const raw = notice ?? "";
   const callDate = raw.match(/Convocatoria(?: objetivo)?\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
-  const callText = callDate ? ` Proxima convocatoria de referencia: ${formatDate(callDate)}.` : "";
+  const callText = publicExamCallText(callDate);
   const hasAttendancePending = /asistencia|Faltan\s+\d+/i.test(raw);
   const hasTechnicalPending = /Tecnico|tecnic|BLOQUEO/i.test(raw);
   const hasEngagement = /Implicacion/i.test(raw);
@@ -747,6 +747,15 @@ function publicExamNotice(semaphore: string | null, notice: string | null) {
   }
 
   return "Sin aviso de examen registrado.";
+}
+
+function publicExamCallText(callDate: string | null) {
+  if (!callDate) return "";
+  const parsed = parseDate(callDate);
+  if (!parsed) return "";
+  const today = startOfDay(new Date());
+  const label = parsed.getTime() < today.getTime() ? "Convocatoria pasada" : "Proxima convocatoria prevista";
+  return ` ${label}: ${formatDate(callDate)}.`;
 }
 
 function joinSpanish(items: string[]) {
