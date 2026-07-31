@@ -376,7 +376,7 @@ function AdultFicha({
       <section className={`ficha-alert ficha-${normalizeCss(member.semaphore ?? "gris")}`}>
         <span className="ficha-alert-label">Semaforo proximo examen</span>
         <strong>{examSemaphoreTitle(member.semaphore)}</strong>
-        <span>{publicExamNotice(member.semaphore, member.exam_notice)}</span>
+        <span>{publicExamNotice(member)}</span>
       </section>
 
       <section className="ficha-actions">
@@ -709,34 +709,32 @@ function examSemaphoreTitle(semaphore: string | null) {
   return "Estado de examen sin datos";
 }
 
-function publicExamNotice(semaphore: string | null, notice: string | null) {
-  const value = normalize(semaphore);
-  const raw = notice ?? "";
+function publicExamNotice(member: Member) {
+  const value = normalize(member.semaphore);
+  const raw = member.exam_notice ?? "";
   const callDate = raw.match(/Convocatoria(?: objetivo)?\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
   const callText = publicExamCallText(callDate);
-  const requirements = publicExamRequirements(raw);
-  const requirementText = requirements.length ? ` Para llegar al semaforo verde necesita ${joinSpanish(requirements)}.` : "";
+  const progressText = publicExamProgress(member, raw);
   const hasEngagement = /Implicacion/i.test(raw);
 
   if (value === "VERDE") {
-    return `Tiene buena situacion para que el equipo tecnico valore su proximo examen.${callText}`;
+    return `Tiene buena situacion para que el equipo tecnico valore su proximo examen.${progressText}${callText}`;
   }
 
   if (value === "AZUL") {
     const eligibleDate = raw.match(/hasta\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
     return eligibleDate
-      ? `Aun esta fuera de la ventana minima de tiempo. Se podra valorar a partir de ${formatDate(eligibleDate)}.${requirementText || " Para llegar al semaforo verde debe mantener regularidad y completar el trabajo tecnico de su grado."}${callText}`
-      : `Aun esta fuera de la ventana minima de tiempo para valorar el proximo examen.${requirementText || " Para llegar al semaforo verde debe mantener regularidad y completar el trabajo tecnico de su grado."}${callText}`;
+      ? `Aun esta fuera de la ventana minima de tiempo. Se podra valorar a partir de ${formatDate(eligibleDate)}.${progressText}${callText}`
+      : `Aun esta fuera de la ventana minima de tiempo para valorar el proximo examen.${progressText}${callText}`;
   }
 
   if (value === "AMARILLO") {
-    return `Esta en seguimiento para proxima convocatoria.${requirementText || " Para llegar al semaforo verde debe mantener regularidad hasta la convocatoria."}${callText}`;
+    return `Esta en seguimiento para proxima convocatoria.${progressText}${callText}`;
   }
 
   if (value === "ROJO") {
-    const reasonText = requirementText || " Para llegar al semaforo verde necesita seguir acumulando trabajo y regularidad.";
     const engagementText = hasEngagement ? " La implicacion y los cursos registrados tambien se tienen en cuenta." : "";
-    return `Todavia no esta listo para ser convocado al proximo examen.${reasonText}${engagementText}${callText}`;
+    return `Todavia no esta listo para ser convocado al proximo examen.${progressText}${engagementText}${callText}`;
   }
 
   if (value === "GRIS" || value === "INACTIVO") {
@@ -746,31 +744,51 @@ function publicExamNotice(semaphore: string | null, notice: string | null) {
   return "Sin aviso de examen registrado.";
 }
 
-function publicExamRequirements(notice: string) {
-  const requirements: string[] = [];
-  const attendanceMatch = notice.match(/Faltan\s+(\d+)\s+para el minimo/i);
-  const missingAttendance = Number(attendanceMatch?.[1] ?? 0);
-  if (missingAttendance > 0) {
-    requirements.push(`${missingAttendance} asistencia${missingAttendance === 1 ? "" : "s"} mas`);
+function publicExamProgress(member: Member, notice: string) {
+  const parts: string[] = [];
+  const attendance = member.attendance_count ?? null;
+  const minimum = member.minimum_attendance ?? null;
+  const totalSessions = member.total_cycle_sessions ?? null;
+  if (attendance !== null && minimum !== null && minimum > 0) {
+    const sessionText = totalSessions && totalSessions > 0 ? ` en una convocatoria con ${totalSessions} clases computables` : "";
+    const missing = Math.max(0, minimum - attendance);
+    parts.push(missing > 0
+      ? `llevas ${attendance} asistencia${attendance === 1 ? "" : "s"} de ${minimum} necesarias${sessionText}; faltan ${missing} asistencia${missing === 1 ? "" : "s"}`
+      : `asistencia minima cubierta: ${attendance} de ${minimum}${sessionText}`);
   }
 
+  const techniqueText = publicTechniqueProgress(notice);
+  if (techniqueText) parts.push(techniqueText);
+
+  if (!parts.length) {
+    return " Para llegar al semaforo verde debe mantener regularidad y completar el trabajo tecnico de su grado.";
+  }
+  return ` Para llegar al semaforo verde: ${parts.join(". ")}.`;
+}
+
+function publicTechniqueProgress(notice: string) {
   const missingFirst = Number(notice.match(/(\d+)\s+tecnicas aun sin registrar/i)?.[1] ?? 0);
   const missingRequired = Number(
     notice.match(/(\d+)\s+por debajo de/i)?.[1] ??
     notice.match(/(\d+)\s+tecnicas pendientes/i)?.[1] ??
     0
   );
+  if (!missingFirst && !missingRequired && !/Tecnico: todas las tecnicas/i.test(notice)) return "";
+
+  if (/Tecnico: todas las tecnicas/i.test(notice)) return "trabajo tecnico minimo cubierto";
+
+  const pieces = [];
   if (missingFirst > 0) {
-    requirements.push(`registrar ${missingFirst} tecnica${missingFirst === 1 ? "" : "s"} de su grado`);
+    pieces.push(`faltan ${missingFirst} tecnica${missingFirst === 1 ? "" : "s"} por entrenar`);
   }
   const reinforcement = Math.max(0, missingRequired - missingFirst);
   if (reinforcement > 0) {
-    requirements.push(`reforzar ${reinforcement} tecnica${reinforcement === 1 ? "" : "s"} ya trabajada${reinforcement === 1 ? "" : "s"}`);
+    pieces.push(`${reinforcement} tecnica${reinforcement === 1 ? "" : "s"} necesitan mas practica`);
   } else if (missingRequired > 0 && missingFirst === 0) {
-    requirements.push(`reforzar ${missingRequired} tecnica${missingRequired === 1 ? "" : "s"} de su grado`);
+    pieces.push(`${missingRequired} tecnica${missingRequired === 1 ? "" : "s"} necesitan mas practica`);
   }
 
-  return requirements;
+  return pieces.join(" y ");
 }
 
 function publicReactivationNotice(notice: string) {
