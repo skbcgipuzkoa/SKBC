@@ -132,6 +132,12 @@ export async function updateTechniqueAction(formData: FormData) {
     redirect(`/tecnicas?error=technique&edit=${encodeURIComponent(legacyId)}`);
   }
 
+  try {
+    await recalculateActiveExamStatuses();
+  } catch (recalculateError) {
+    console.error("Error recalculating exam statuses after technique update", recalculateError);
+  }
+
   redirect(`/tecnicas?saved=technique&edit=${encodeURIComponent(legacyId)}`);
 }
 
@@ -182,6 +188,7 @@ export async function updateKenshiAction(formData: FormData) {
 
   try {
     await recalculateMemberExamStatus(memberId);
+    await recalculateChildRankings();
   } catch (error) {
     console.error("Error recalculating kenshi exam status", error);
   }
@@ -247,6 +254,7 @@ export async function createKenshiAction(formData: FormData) {
 
   try {
     await recalculateMemberExamStatus(data.id);
+    await recalculateChildRankings();
   } catch (error) {
     console.error("Error recalculating new kenshi exam status", error);
   }
@@ -707,6 +715,9 @@ export async function addAttendanceAction(formData: FormData) {
     console.error("Error syncing attendance to legacy sheet", syncError);
   }
 
+  await recalculateClassExamStatus(classId);
+  await recalculateChildRankings();
+
   redirect(`/clases/${legacyId}?saved=attendance`);
 }
 
@@ -966,6 +977,7 @@ export async function closeKidsClassAction(formData: FormData) {
 
   try {
     await recalculateClassExamStatus(classId);
+    await recalculateChildRankings();
   } catch (error) {
     console.error("Error recalculating kids class exam status", error);
   }
@@ -1219,6 +1231,7 @@ export async function transitionChildToAdultAction(formData: FormData) {
 
   try {
     await recalculateMemberExamStatus(memberId);
+    await recalculateChildRankings();
   } catch (error) {
     console.error("Error recalculating transitioned kenshi", error);
   }
@@ -1281,6 +1294,7 @@ export async function undoChildToAdultTransitionAction(formData: FormData) {
 
   try {
     await recalculateMemberExamStatus(memberId);
+    await recalculateChildRankings();
   } catch (error) {
     console.error("Error recalculating restored child kenshi", error);
   }
@@ -2091,11 +2105,18 @@ async function recalculateChildRankings() {
       row.motivational_message = childMotivationalMessage(row.level, row.position, row.attendance_30d, row.days_without_attendance);
     });
 
+  const { error: deleteError } = await supabase
+    .from("child_rankings")
+    .delete()
+    .not("id", "is", null);
+
+  if (deleteError) throw deleteError;
+
   if (!rows.length) return;
 
   const { error } = await supabase
     .from("child_rankings")
-    .upsert(rows, { onConflict: "legacy_id" });
+    .insert(rows.map((row) => ({ ...row, legacy_id: row.legacy_id ?? row.member_id })));
 
   if (error) throw error;
 }
