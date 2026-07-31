@@ -1,5 +1,6 @@
 import { ExternalLink, Gamepad2, Library, NotebookTabs } from "lucide-react";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -480,8 +481,7 @@ function AdultFicha({
         </details>
       </section>
 
-      <section className="ficha-section">
-        <h2>Progreso técnico</h2>
+      <FoldableSection title="Progreso tecnico" meta={`${technicalProgress.completed}/${technicalProgress.total} completadas`}>
         <div className="ficha-card">
           <div className="progress-grid">
             <Progress label="GOHO" value={technicalProgress.pctGoho} />
@@ -506,10 +506,9 @@ function AdultFicha({
           ])}
           empty="Sin técnicas cargadas para el grado objetivo."
         />
-      </section>
+      </FoldableSection>
 
-      <section className="ficha-section">
-        <h2>Exámenes</h2>
+      <FoldableSection title="Examenes" meta={`${exams.length} registros`}>
         <ResponsiveTable
           columns={["Fecha", "Grado", "Nota/asistencias", "Sensei", "Informe"]}
           rows={exams.map((exam) => [
@@ -521,17 +520,15 @@ function AdultFicha({
           ])}
           empty="Sin exámenes registrados."
         />
-      </section>
+      </FoldableSection>
 
-      <section className="ficha-section">
-        <h2>Cursos nacionales</h2>
+      <FoldableSection title="Cursos nacionales" meta={`${nacionales.length} registros`}>
         <CourseTable courses={nacionales} />
-      </section>
+      </FoldableSection>
 
-      <section className="ficha-section">
-        <h2>Cursos internacionales</h2>
+      <FoldableSection title="Cursos internacionales" meta={`${internacionales.length} registros`}>
         <CourseTable courses={internacionales} />
-      </section>
+      </FoldableSection>
 
       <Footer />
     </main>
@@ -595,8 +592,7 @@ function KidsFicha({
         {ranking?.motivational_message ? <p className="ficha-ranking">{ranking.motivational_message}</p> : null}
       </section>
 
-      <section className="ficha-section">
-        <h2>Avisos importantes</h2>
+      <FoldableSection title="Avisos importantes" meta={`${notices.length} activos`}>
         <div className="notice-stack">
           {notices.length ? notices.map((notice) => (
             <article className="ficha-notice" key={`${notice.notice_date}-${notice.title}`} style={{ borderLeftColor: notice.color ?? "#e5e7eb" }}>
@@ -606,10 +602,9 @@ function KidsFicha({
             </article>
           )) : <div className="ficha-card">Sin avisos activos.</div>}
         </div>
-      </section>
+      </FoldableSection>
 
-      <section className="ficha-section">
-        <h2>Historial de exámenes</h2>
+      <FoldableSection title="Historial de examenes" meta={`${exams.length} registros`}>
         <div className="exam-card-list">
           {exams.length ? exams.map((exam) => (
             <article className="ficha-card exam-card" key={`${exam.exam_date}-${exam.grade}`}>
@@ -621,18 +616,16 @@ function KidsFicha({
             </article>
           )) : <div className="ficha-card">Sin exámenes registrados.</div>}
         </div>
-      </section>
+      </FoldableSection>
 
-      <section className="ficha-section">
-        <h2>Nota del Sensei</h2>
+      <FoldableSection title="Nota del Sensei" meta={note?.note ? "Visible" : "Sin nota"}>
         <div className="ficha-card">
           <p>{note?.note ?? "Sin nota visible para familia."}</p>
           <span className="ficha-muted">{note?.note_date ? `${formatDate(note.note_date)} · ${note.note_type ?? "Nota"}` : ""}</span>
         </div>
-      </section>
+      </FoldableSection>
 
-      <section className="ficha-section">
-        <h2>Comportamiento en clase</h2>
+      <FoldableSection title="Comportamiento en clase" meta={behavior ? "Ver detalle" : "Sin detalle"}>
         <div className="ficha-card ficha-fields behavior-fields">
           <BehaviorField label="Actitud" value={behavior?.attitude} />
           <BehaviorField label="Atención" value={behavior?.attention} />
@@ -641,7 +634,7 @@ function KidsFicha({
           <BehaviorField label="Compañerismo" value={behavior?.companionship} />
           <Field label="Observación" value={behavior?.observation} />
         </div>
-      </section>
+      </FoldableSection>
 
       <Footer />
     </main>
@@ -678,6 +671,23 @@ function Field({ label, value }: { label: string; value: string | number | null 
       <span>{label}</span>
       <strong>{value === null || value === undefined || value === "" ? "-" : value}</strong>
     </div>
+  );
+}
+
+function FoldableSection({ title, meta, children }: { title: string; meta: string; children: ReactNode }) {
+  return (
+    <section className="ficha-section">
+      <details className="ficha-foldable">
+        <summary>
+          <span>
+            <strong>{title}</strong>
+            <small>{meta}</small>
+          </span>
+          <b>Ver detalle</b>
+        </summary>
+        <div className="ficha-foldable-body">{children}</div>
+      </details>
+    </section>
   );
 }
 

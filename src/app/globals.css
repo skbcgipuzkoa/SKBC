@@ -2875,6 +2875,76 @@ tbody tr:hover {
   padding: 16px;
 }
 
+.ficha-foldable {
+  background: var(--ficha-panel);
+  border: 1px solid var(--ficha-line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.ficha-foldable summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 16px;
+}
+
+.ficha-foldable summary::-webkit-details-marker {
+  display: none;
+}
+
+.ficha-foldable summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.ficha-foldable summary strong {
+  color: var(--ficha-text);
+  font-size: 19px;
+}
+
+.ficha-foldable summary small {
+  color: var(--ficha-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ficha-foldable summary b {
+  align-items: center;
+  border: 1px solid var(--ficha-line);
+  border-radius: 999px;
+  color: var(--ficha-blue);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.ficha-foldable summary b::after {
+  content: "v";
+  font-size: 18px;
+  line-height: 1;
+  margin-left: 8px;
+}
+
+.ficha-foldable[open] summary {
+  border-bottom: 1px solid var(--ficha-line);
+}
+
+.ficha-foldable[open] summary b::after {
+  content: "^";
+}
+
+.ficha-foldable-body {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
 .ficha-fields {
   display: grid;
   gap: 10px;
