@@ -359,7 +359,8 @@ function AdultFicha({
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="FICHA PRO · SKBC GIPUZKOA" />
 
       <section className={`ficha-alert ficha-${normalizeCss(member.semaphore ?? "gris")}`}>
-        <strong>{member.semaphore ?? "SIN DATOS"}</strong>
+        <span className="ficha-alert-label">Semaforo proximo examen</span>
+        <strong>{examSemaphoreTitle(member.semaphore)}</strong>
         <span>{member.exam_notice ?? "Sin aviso de examen registrado."}</span>
       </section>
 
@@ -679,6 +680,16 @@ function AdultGradeBadge({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </span>
   );
+}
+
+function examSemaphoreTitle(semaphore: string | null) {
+  const value = normalize(semaphore);
+  if (value === "VERDE") return "Apto para valorar en proximo examen";
+  if (value === "ROJO") return "No apto todavia para proximo examen";
+  if (value === "AZUL") return "Aun fuera de ventana de examen";
+  if (value === "AMARILLO") return "En seguimiento para proximo examen";
+  if (value === "GRIS" || value === "INACTIVO") return "Sin convocatoria activa por inactividad";
+  return "Estado de examen sin datos";
 }
 
 function BehaviorField({ label, value }: { label: string; value: string | null | undefined }) {

@@ -2763,11 +2763,19 @@ tbody tr:hover {
 }
 
 .ficha-alert strong {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .ficha-alert span {
   line-height: 1.45;
+}
+
+.ficha-alert-label {
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0;
+  opacity: 0.78;
+  text-transform: uppercase;
 }
 
 .ficha-verde {
