@@ -714,8 +714,8 @@ function publicExamNotice(semaphore: string | null, notice: string | null) {
   const raw = notice ?? "";
   const callDate = raw.match(/Convocatoria(?: objetivo)?\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
   const callText = publicExamCallText(callDate);
-  const hasAttendancePending = /asistencia|Faltan\s+\d+/i.test(raw);
-  const hasTechnicalPending = /Tecnico|tecnic|BLOQUEO/i.test(raw);
+  const requirements = publicExamRequirements(raw);
+  const requirementText = requirements.length ? ` Para llegar al semaforo verde necesita ${joinSpanish(requirements)}.` : "";
   const hasEngagement = /Implicacion/i.test(raw);
 
   if (value === "VERDE") {
@@ -725,19 +725,16 @@ function publicExamNotice(semaphore: string | null, notice: string | null) {
   if (value === "AZUL") {
     const eligibleDate = raw.match(/hasta\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
     return eligibleDate
-      ? `Aun esta fuera de la ventana minima de tiempo. Se podra valorar a partir de ${formatDate(eligibleDate)}.${callText}`
-      : `Aun esta fuera de la ventana minima de tiempo para valorar el proximo examen.${callText}`;
+      ? `Aun esta fuera de la ventana minima de tiempo. Se podra valorar a partir de ${formatDate(eligibleDate)}.${requirementText || " Para llegar al semaforo verde debe mantener regularidad y completar el trabajo tecnico de su grado."}${callText}`
+      : `Aun esta fuera de la ventana minima de tiempo para valorar el proximo examen.${requirementText || " Para llegar al semaforo verde debe mantener regularidad y completar el trabajo tecnico de su grado."}${callText}`;
   }
 
   if (value === "AMARILLO") {
-    return `Esta en seguimiento para proxima convocatoria. Mantener regularidad en clase ayudara a llegar en mejores condiciones.${callText}`;
+    return `Esta en seguimiento para proxima convocatoria.${requirementText || " Para llegar al semaforo verde debe mantener regularidad hasta la convocatoria."}${callText}`;
   }
 
   if (value === "ROJO") {
-    const reasons = [];
-    if (hasAttendancePending) reasons.push("sumar mas asistencia");
-    if (hasTechnicalPending) reasons.push("completar mas trabajo tecnico de su grado");
-    const reasonText = reasons.length ? ` Por ahora necesita ${joinSpanish(reasons)}.` : " Por ahora necesita seguir acumulando trabajo y regularidad.";
+    const reasonText = requirementText || " Para llegar al semaforo verde necesita seguir acumulando trabajo y regularidad.";
     const engagementText = hasEngagement ? " La implicacion y los cursos registrados tambien se tienen en cuenta." : "";
     return `Todavia no esta listo para ser convocado al proximo examen.${reasonText}${engagementText}${callText}`;
   }
@@ -747,6 +744,33 @@ function publicExamNotice(semaphore: string | null, notice: string | null) {
   }
 
   return "Sin aviso de examen registrado.";
+}
+
+function publicExamRequirements(notice: string) {
+  const requirements: string[] = [];
+  const attendanceMatch = notice.match(/Faltan\s+(\d+)\s+para el minimo/i);
+  const missingAttendance = Number(attendanceMatch?.[1] ?? 0);
+  if (missingAttendance > 0) {
+    requirements.push(`${missingAttendance} asistencia${missingAttendance === 1 ? "" : "s"} mas`);
+  }
+
+  const missingFirst = Number(notice.match(/(\d+)\s+tecnicas aun sin registrar/i)?.[1] ?? 0);
+  const missingRequired = Number(
+    notice.match(/(\d+)\s+por debajo de/i)?.[1] ??
+    notice.match(/(\d+)\s+tecnicas pendientes/i)?.[1] ??
+    0
+  );
+  if (missingFirst > 0) {
+    requirements.push(`registrar ${missingFirst} tecnica${missingFirst === 1 ? "" : "s"} de su grado`);
+  }
+  const reinforcement = Math.max(0, missingRequired - missingFirst);
+  if (reinforcement > 0) {
+    requirements.push(`reforzar ${reinforcement} tecnica${reinforcement === 1 ? "" : "s"} ya trabajada${reinforcement === 1 ? "" : "s"}`);
+  } else if (missingRequired > 0 && missingFirst === 0) {
+    requirements.push(`reforzar ${missingRequired} tecnica${missingRequired === 1 ? "" : "s"} de su grado`);
+  }
+
+  return requirements;
 }
 
 function publicReactivationNotice(notice: string) {
