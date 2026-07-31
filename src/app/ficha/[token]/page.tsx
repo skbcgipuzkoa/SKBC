@@ -376,7 +376,7 @@ function AdultFicha({
       <section className={`ficha-alert ficha-${normalizeCss(member.semaphore ?? "gris")}`}>
         <span className="ficha-alert-label">Semaforo proximo examen</span>
         <strong>{examSemaphoreTitle(member.semaphore)}</strong>
-        <span>{publicExamNotice(member)}</span>
+        <span>{publicExamNotice(member, attendance)}</span>
       </section>
 
       <section className="ficha-actions">
@@ -709,7 +709,7 @@ function examSemaphoreTitle(semaphore: string | null) {
   return "Estado de examen sin datos";
 }
 
-function publicExamNotice(member: Member) {
+function publicExamNotice(member: Member, attendance: Attendance[]) {
   const value = normalize(member.semaphore);
   const raw = member.exam_notice ?? "";
   const callDate = raw.match(/Convocatoria(?: objetivo)?\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
@@ -738,7 +738,7 @@ function publicExamNotice(member: Member) {
   }
 
   if (value === "GRIS" || value === "INACTIVO") {
-    return publicReactivationNotice(raw);
+    return publicReactivationNotice(raw, attendance);
   }
 
   return "Sin aviso de examen registrado.";
@@ -791,25 +791,35 @@ function publicTechniqueProgress(notice: string) {
   return pieces.join(" y ");
 }
 
-function publicReactivationNotice(notice: string) {
+function publicReactivationNotice(notice: string, attendance: Attendance[]) {
   const match = notice.match(/\((\d+)\/6 en 60 dias y (\d+)\/1 en 21 dias\)/i);
-  if (!match) {
-    return "Antes de valorar un examen hace falta recuperar regularidad de entrenamiento. Como guia, vuelve a entrenar de forma constante durante las proximas semanas.";
-  }
-
-  const total60 = Number(match[1] ?? 0);
-  const total21 = Number(match[2] ?? 0);
+  const recent = recentAttendanceCounts(attendance);
+  const total60 = match ? Number(match[1] ?? 0) : recent.total60;
+  const total21 = match ? Number(match[2] ?? 0) : recent.total21;
   const missing60 = Math.max(0, 6 - total60);
   const missing21 = Math.max(0, 1 - total21);
   const requirements = [];
-  if (missing60 > 0) requirements.push(`${missing60} entreno${missing60 === 1 ? "" : "s"} mas dentro de 60 dias`);
-  if (missing21 > 0) requirements.push(`${missing21} entreno reciente dentro de 21 dias`);
+  if (missing60 > 0) requirements.push(`${missing60} asistencia${missing60 === 1 ? "" : "s"} mas dentro de una ventana de 60 dias`);
+  if (missing21 > 0) requirements.push(`${missing21} asistencia reciente dentro de 21 dias`);
 
   if (!requirements.length) {
     return "Ya ha recuperado la regularidad minima. El equipo tecnico puede revisar de nuevo su proxima convocatoria.";
   }
 
-  return `Antes de valorar un examen hace falta reactivar la regularidad. Necesita ${joinSpanish(requirements)} para volver al seguimiento normal de convocatoria.`;
+  return `Para reactivar la convocatoria necesita ${joinSpanish(requirements)}. Ahora lleva ${total60}/6 asistencias en 60 dias y ${total21}/1 asistencia reciente en 21 dias.`;
+}
+
+function recentAttendanceCounts(attendance: Attendance[]) {
+  const today = startOfDay(new Date());
+  const uniqueDates = new Set(attendance.map((item) => item.attended_on?.slice(0, 10)).filter(Boolean));
+  const dates = Array.from(uniqueDates)
+    .map((value) => parseDate(value))
+    .filter((date): date is Date => Boolean(date));
+
+  return {
+    total60: dates.filter((date) => daysBetweenDates(date, today) <= 60).length,
+    total21: dates.filter((date) => daysBetweenDates(date, today) <= 21).length
+  };
 }
 
 function publicExamCallText(callDate: string | null) {
