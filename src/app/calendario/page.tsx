@@ -1,0 +1,117 @@
+import { CalendarDays, LogOut } from "lucide-react";
+import { redirect } from "next/navigation";
+import { createClubClosureAction, deactivateClubClosureAction, logoutAction } from "@/app/actions";
+import { hasInternalAccess } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+type CalendarClosure = {
+  id: string;
+  starts_on: string;
+  ends_on: string;
+  title: string;
+  applies_to: "all" | "kids" | "adults";
+  notes: string | null;
+};
+
+export default async function CalendarioPage({
+  searchParams
+}: {
+  searchParams: Promise<{ saved?: string; error?: string }>;
+}) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const params = await searchParams;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("skbc_calendar_closures")
+    .select("id,starts_on,ends_on,title,applies_to,notes")
+    .eq("active", true)
+    .order("starts_on", { ascending: true })
+    .limit(80)
+    .returns<CalendarClosure[]>();
+
+  const closures = error ? [] : data ?? [];
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <strong>SKBC Gipuzkoa</strong>
+          <span>Admin privado</span>
+        </div>
+        <nav className="nav" aria-label="Principal">
+          <a href="/">Inicio</a>
+          <a href="/kenshis">Kenshis</a>
+          <a href="/clases">Clases</a>
+          <a href="/clases-negras">Busen</a>
+          <a href="/shakujo">Shakujo</a>
+          <a href="/tecnicas">Tecnicas</a>
+          <a href="/examenes">Examenes</a>
+          <a href="/cursos">Cursos</a>
+          <a href="/calendario" aria-current="page">Calendario</a>
+          <a href="/pedidos-cinturones">Cinturones</a>
+          <a href="/proximos-examenes">Proximos examenes</a>
+          <a href="/rankings">Rankings</a>
+          <a href="/sistema">Sistema</a>
+        </nav>
+      </aside>
+      <main className="main">
+        <div className="topbar">
+          <div>
+            <p className="eyebrow">Festivos y cierres</p>
+            <h1>Calendario del club</h1>
+          </div>
+          <form action={logoutAction}>
+            <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
+              <LogOut aria-hidden="true" size={18} />
+            </button>
+          </form>
+        </div>
+
+        {params.saved === "closure" ? <p className="save-ok">Cierre o festivo guardado.</p> : null}
+        {params.error === "closure" ? <p className="form-error">No se pudo guardar el cierre. Revisa fechas y titulo.</p> : null}
+
+        <section className="split-section">
+          <article className="card">
+            <CalendarDays aria-hidden="true" size={22} />
+            <h2>Anadir festivo o cierre</h2>
+            <p className="muted">Estos dias no penalizan ranking adulto ni calculo de proximos examenes.</p>
+            <form action={createClubClosureAction} className="quick-form">
+              <label className="wide">Titulo<input name="title" placeholder="Carnavales Tolosa, festivo, cierre dojo..." required /></label>
+              <label>Desde<input name="startsOn" type="date" required /></label>
+              <label>Hasta<input name="endsOn" type="date" required /></label>
+              <label>
+                Aplica a
+                <select name="appliesTo" defaultValue="all">
+                  <option value="all">Todos</option>
+                  <option value="adults">Solo adultos</option>
+                  <option value="kids">Solo ninos</option>
+                </select>
+              </label>
+              <label className="wide">Notas<input name="notes" placeholder="Opcional" /></label>
+              <button type="submit">Guardar cierre</button>
+            </form>
+          </article>
+          <article className="card">
+            <h2>Cierres activos</h2>
+            <div className="stack-list compact-stack">
+              {closures.length ? closures.map((closure) => (
+                <div className="closure-row" key={closure.id}>
+                  <strong>{closure.title}</strong>
+                  <span>{closure.starts_on === closure.ends_on ? closure.starts_on : `${closure.starts_on} - ${closure.ends_on}`} - {closure.applies_to === "all" ? "Todos" : closure.applies_to === "kids" ? "Ninos" : "Adultos"}</span>
+                  {closure.notes ? <p>{closure.notes}</p> : null}
+                  <form action={deactivateClubClosureAction}>
+                    <input type="hidden" name="closureId" value={closure.id} />
+                    <button className="mini-action danger" type="submit">Desactivar</button>
+                  </form>
+                </div>
+              )) : <p className="muted">Sin cierres activos.</p>}
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+  );
+}

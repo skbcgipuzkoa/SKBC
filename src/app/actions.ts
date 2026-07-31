@@ -1287,6 +1287,64 @@ export async function deactivateAdultRankingBonusAction(formData: FormData) {
   redirect("/rankings?saved=bonus");
 }
 
+export async function createClubClosureAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const startsOn = parseDateInput(String(formData.get("startsOn") ?? ""));
+  const endsOn = parseDateInput(String(formData.get("endsOn") ?? "")) ?? startsOn;
+  const title = String(formData.get("title") ?? "").trim();
+  const appliesToRaw = String(formData.get("appliesTo") ?? "all").trim();
+  const appliesTo = ["all", "kids", "adults"].includes(appliesToRaw) ? appliesToRaw : "all";
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!startsOn || !endsOn || !title || endsOn < startsOn) {
+    redirect("/calendario?error=closure");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("skbc_calendar_closures").insert({
+    starts_on: startsOn,
+    ends_on: endsOn,
+    title,
+    applies_to: appliesTo,
+    notes,
+    active: true
+  });
+
+  if (error) {
+    console.error("Error creating club closure", error);
+    redirect("/calendario?error=closure");
+  }
+
+  redirect("/calendario?saved=closure");
+}
+
+export async function deactivateClubClosureAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const closureId = String(formData.get("closureId") ?? "").trim();
+  if (!closureId) {
+    redirect("/calendario?error=closure");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("skbc_calendar_closures")
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq("id", closureId);
+
+  if (error) {
+    console.error("Error deactivating club closure", error);
+    redirect("/calendario?error=closure");
+  }
+
+  redirect("/calendario?saved=closure");
+}
+
 export async function retryLegacySheetSyncAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

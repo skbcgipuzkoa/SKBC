@@ -60,6 +60,7 @@ const moduleGroups = [
     items: [
       { label: "Tecnicas", href: "/tecnicas", icon: GraduationCap },
       { label: "Cinturones", href: "/pedidos-cinturones", icon: Medal },
+      { label: "Calendario club", href: "/calendario", icon: CalendarCheck },
       { label: "Sistema", href: "/sistema", icon: ShieldCheck }
     ]
   }
@@ -145,6 +146,7 @@ export default async function Home({
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/cursos">Cursos</a>
+          <a href="/calendario">Calendario</a>
           <a href="/proximos-examenes">Examenes prox.</a>
           <a href="/rankings">Rankings</a>
           <a href="/sistema">Sistema</a>
@@ -305,6 +307,7 @@ function LoginHome({ error }: { error?: string }) {
           <a href="/clases-negras">Busen</a>
           <a href="/shakujo">Shakujo</a>
           <a href="/tecnicas">Tecnicas</a>
+          <a href="/calendario">Calendario</a>
           <a href="/sistema">Sistema</a>
         </nav>
       </aside>

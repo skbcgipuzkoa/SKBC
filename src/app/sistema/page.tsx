@@ -82,6 +82,7 @@ export default async function SistemaPage() {
           <a href="/tecnicas">Tecnicas</a>
           <a href="/examenes">Examenes</a>
           <a href="/cursos">Cursos</a>
+          <a href="/calendario">Calendario</a>
           <a href="/pedidos-cinturones">Cinturones</a>
           <a href="/proximos-examenes">Proximos examenes</a>
           <a href="/rankings">Rankings</a>
@@ -159,6 +160,12 @@ export default async function SistemaPage() {
             <h2>Sincronizacion legacy</h2>
             <p className="muted">{failedLegacySync} fallidas - {pendingLegacySync} pendientes. Controla la copia al archivo viejo.</p>
             <span className="text-link">Abrir auditoria</span>
+          </a>
+          <a className="card system-card" href="/calendario">
+            <CalendarDays aria-hidden="true" size={22} />
+            <h2>Calendario del club</h2>
+            <p className="muted">Festivos y cierres que no penalizan rankings ni proximos examenes.</p>
+            <span className="text-link">Editar calendario</span>
           </a>
         </section>
 

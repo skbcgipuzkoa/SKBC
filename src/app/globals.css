@@ -2113,6 +2113,33 @@ tbody tr:hover {
   min-height: 30px;
 }
 
+.closure-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.closure-row strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.closure-row span,
+.closure-row p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.closure-row form {
+  margin-top: 4px;
+}
+
+.closure-row .mini-action {
+  min-height: 30px;
+}
+
 .black-belt-attendance-form {
   display: grid;
   gap: 12px;
