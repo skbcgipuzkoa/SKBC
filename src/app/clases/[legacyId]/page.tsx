@@ -183,6 +183,25 @@ export default async function ClaseDetailPage({
   const activeStep = clase.class_group === "adults" && query.step === "asistencia" ? "attendance" : "techniques";
   const techniqueStepHref = `/clases/${legacyId}`;
   const attendanceStepHref = `/clases/${legacyId}?step=asistencia`;
+  if (clase.class_group === "adults" && activeStep === "attendance" && !(dayClasses ?? []).some((item) => item.class_group === "kids")) {
+    const autoKidsLegacyId = `AUTO-KIDS-${clase.class_date}-${Date.now()}`;
+    const { error: autoKidsError } = await supabase.from("classes").insert({
+      legacy_id: autoKidsLegacyId,
+      class_date: clase.class_date,
+      name: `NIÑOS ${clase.class_date}`,
+      class_group: "kids",
+      class_type: clase.class_type ?? "NORMAL",
+      responsible: clase.responsible,
+      notes: "Clase infantil paralela creada automaticamente para asistencia del dia.",
+      status: "pending"
+    });
+
+    if (!autoKidsError) {
+      redirect(attendanceStepHref);
+    }
+
+    console.error("Error auto creating kids attendance class", autoKidsError);
+  }
   const attendanceClasses = ["adults", "kids"].map((group) => (dayClasses ?? []).find((item) => item.class_group === group)).filter(Boolean) as AttendanceClassOption[];
   const attendancePanel = (
     <div className="attendance-group-stack">
