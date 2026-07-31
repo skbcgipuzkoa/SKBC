@@ -743,10 +743,31 @@ function publicExamNotice(semaphore: string | null, notice: string | null) {
   }
 
   if (value === "GRIS" || value === "INACTIVO") {
-    return "Antes de valorar un examen hace falta recuperar regularidad de entrenamiento.";
+    return publicReactivationNotice(raw);
   }
 
   return "Sin aviso de examen registrado.";
+}
+
+function publicReactivationNotice(notice: string) {
+  const match = notice.match(/\((\d+)\/6 en 60 dias y (\d+)\/1 en 21 dias\)/i);
+  if (!match) {
+    return "Antes de valorar un examen hace falta recuperar regularidad de entrenamiento. Como guia, vuelve a entrenar de forma constante durante las proximas semanas.";
+  }
+
+  const total60 = Number(match[1] ?? 0);
+  const total21 = Number(match[2] ?? 0);
+  const missing60 = Math.max(0, 6 - total60);
+  const missing21 = Math.max(0, 1 - total21);
+  const requirements = [];
+  if (missing60 > 0) requirements.push(`${missing60} entreno${missing60 === 1 ? "" : "s"} mas dentro de 60 dias`);
+  if (missing21 > 0) requirements.push(`${missing21} entreno reciente dentro de 21 dias`);
+
+  if (!requirements.length) {
+    return "Ya ha recuperado la regularidad minima. El equipo tecnico puede revisar de nuevo su proxima convocatoria.";
+  }
+
+  return `Antes de valorar un examen hace falta reactivar la regularidad. Necesita ${joinSpanish(requirements)} para volver al seguimiento normal de convocatoria.`;
 }
 
 function publicExamCallText(callDate: string | null) {
