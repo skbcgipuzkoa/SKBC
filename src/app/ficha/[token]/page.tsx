@@ -843,8 +843,9 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
     .map((member) => {
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
-      const daysWithoutAttendance = lastAttendance.get(member.id) ? daysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10)) : 0;
-      const score = a30 * 3 + a90 - daysWithoutAttendance + (coursePoints.get(member.id) ?? 0) + (bonusPoints.get(member.id) ?? 0);
+      const daysWithoutAttendance = lastAttendance.get(member.id) ? trainingDaysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10)) : 999;
+      const activityScore = a30 * 4 + a90 + (coursePoints.get(member.id) ?? 0) + (bonusPoints.get(member.id) ?? 0);
+      const score = Math.max(0, activityScore - adultInactivityPenalty(daysWithoutAttendance));
       return { ...member, score };
     })
     .sort((a, b) => b.score - a.score || a.display_name.localeCompare(b.display_name));
@@ -894,6 +895,35 @@ function rankingMessage(displayName: string, position: number) {
   if (position <= 10) return `Top 10: ${firstName}, estas en el top 10. Vas muy bien, no pares.`;
   if (position <= 15) return `Puesto ${position}: ${firstName}, estas en la mitad alta, puedes subir mas.`;
   return `Puesto ${position}: ${firstName}, mas asistencias y cursos te haran subir rapido en el ranking.`;
+}
+
+function adultInactivityPenalty(daysWithoutAttendance: number) {
+  if (daysWithoutAttendance >= 999) return 40;
+  if (daysWithoutAttendance <= 7) return 0;
+  if (daysWithoutAttendance <= 14) return 3;
+  if (daysWithoutAttendance <= 30) return 8;
+  if (daysWithoutAttendance <= 60) return 15;
+  if (daysWithoutAttendance <= 90) return 25;
+  return 35;
+}
+
+function trainingDaysBetween(from: string, to: string) {
+  const totalDays = daysBetween(from, to);
+  if (totalDays <= 0) return 0;
+  let count = 0;
+  const cursor = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  cursor.setDate(cursor.getDate() + 1);
+  while (cursor <= end) {
+    if (!isSummerBreak(cursor)) count += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
+function isSummerBreak(date: Date) {
+  const month = date.getMonth() + 1;
+  return month === 7 || month === 8;
 }
 
 function nextAdultGrade(grade: string | null) {

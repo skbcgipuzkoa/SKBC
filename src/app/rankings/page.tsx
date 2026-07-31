@@ -412,12 +412,14 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const a90 = attendance90.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
       const last = lastAttendance.get(member.id);
-      const daysWithoutAttendance = last ? daysBetween(last, new Date().toISOString().slice(0, 10)) : 999;
+      const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10)) : 999;
       const nac = nationalCoursePoints.get(member.id) ?? 0;
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const bonus = manualBonus.get(member.id) ?? 0;
       const black = blackBeltPoints.get(member.id) ?? 0;
       const shakujo = shakujoPoints.get(member.id) ?? 0;
+      const activityScore = a30 * 4 + a90 + t90 + nac + intl + bonus + black + shakujo;
+      const inactivityPenalty = adultInactivityPenalty(daysWithoutAttendance);
       return {
         ...member,
         attendance30: a30,
@@ -429,7 +431,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         manualBonus: bonus,
         blackBeltPoints: black,
         shakujoPoints: shakujo,
-        score: a30 * 3 + a90 - daysWithoutAttendance + nac + intl + bonus + black + shakujo
+        score: Math.max(0, activityScore - inactivityPenalty)
       };
     })
     .sort((a, b) => b.score - a.score || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));
@@ -462,9 +464,38 @@ function daysBetween(from: string, to: string) {
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.floor((end - start) / 86400000)) : 0;
 }
 
+function trainingDaysBetween(from: string, to: string) {
+  const totalDays = daysBetween(from, to);
+  if (totalDays <= 0) return 0;
+  let count = 0;
+  const cursor = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  cursor.setDate(cursor.getDate() + 1);
+  while (cursor <= end) {
+    if (!isSummerBreak(cursor)) count += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
+function isSummerBreak(date: Date) {
+  const month = date.getMonth() + 1;
+  return month === 7 || month === 8;
+}
+
 function formatDaysWithout(days: number | null | undefined) {
   if (days === null || days === undefined || days >= 999) return "Sin asistencia";
   return days === 1 ? "1 dia sin venir" : `${days} dias sin venir`;
+}
+
+function adultInactivityPenalty(daysWithoutAttendance: number) {
+  if (daysWithoutAttendance >= 999) return 40;
+  if (daysWithoutAttendance <= 7) return 0;
+  if (daysWithoutAttendance <= 14) return 3;
+  if (daysWithoutAttendance <= 30) return 8;
+  if (daysWithoutAttendance <= 60) return 15;
+  if (daysWithoutAttendance <= 90) return 25;
+  return 35;
 }
 
 function daysAgo(days: number) {
