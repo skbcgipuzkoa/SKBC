@@ -76,6 +76,13 @@ type MemberOption = {
   grade: string | null;
 };
 
+type AttendanceClassOption = {
+  id: string;
+  legacy_id: string | null;
+  class_group: "kids" | "adults";
+  closed: boolean;
+};
+
 type DelegateLinkRow = {
   token: string;
   expires_at: string;
@@ -88,7 +95,7 @@ export default async function ClaseDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -105,7 +112,7 @@ export default async function ClaseDetailPage({
 
   if (error || !clase) notFound();
 
-  const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }] = await Promise.all([
+  const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }, { data: dayClasses }, { data: dayMembers }, { data: dayAttendance }] = await Promise.all([
     supabase
       .from("technical_plans")
       .select("id,legacy_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score)")
@@ -141,7 +148,25 @@ export default async function ClaseDetailPage({
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
-      .returns<DelegateLinkRow[]>()
+      .returns<DelegateLinkRow[]>(),
+    supabase
+      .from("classes")
+      .select("id,legacy_id,class_group,closed")
+      .eq("class_date", clase.class_date)
+      .in("class_group", ["adults", "kids"])
+      .returns<AttendanceClassOption[]>(),
+    supabase
+      .from("members")
+      .select("id,legacy_id,display_name,grade,class")
+      .eq("status", "active")
+      .in("class", ["adults", "kids"])
+      .order("display_name")
+      .returns<Array<MemberOption & { class: "kids" | "adults" }>>(),
+    supabase
+      .from("attendance_logs")
+      .select("class_id,member_id")
+      .in("class_id", (await supabase.from("classes").select("id").eq("class_date", clase.class_date).in("class_group", ["adults", "kids"]).returns<Array<{ id: string }>>()).data?.map((item) => item.id) ?? [])
+      .returns<Array<{ class_id: string; member_id: string }>>()
   ]);
 
   const attendanceMemberIds = new Set((attendance ?? []).map((item) => item.member_id));
@@ -155,6 +180,47 @@ export default async function ClaseDetailPage({
   const delegateLink = delegateLinks?.[0] ?? null;
   const delegateMode = delegateModeFromCreatedBy(delegateLink?.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
   const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}?mode=${delegateMode}` : null;
+  const activeStep = clase.class_group === "adults" && query.step === "asistencia" ? "attendance" : "techniques";
+  const techniqueStepHref = `/clases/${legacyId}`;
+  const attendanceStepHref = `/clases/${legacyId}?step=asistencia`;
+  const attendanceClasses = ["adults", "kids"].map((group) => (dayClasses ?? []).find((item) => item.class_group === group)).filter(Boolean) as AttendanceClassOption[];
+  const attendancePanel = (
+    <div className="attendance-group-stack">
+      {attendanceClasses.map((dayClass) => {
+        const attendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === dayClass.id).map((item) => item.member_id));
+        const membersForGroup = (dayMembers ?? []).filter((member) => member.class === dayClass.class_group);
+        const pendingMembers = membersForGroup.filter((member) => !attendedIds.has(member.id));
+        const title = dayClass.class_group === "kids" ? "Ninos" : "Adultos";
+        return (
+          <details className="card attendance-group-panel" key={dayClass.id} open={dayClass.id === clase.id}>
+            <summary>
+              <strong>{title}</strong>
+              <span>{membersForGroup.length - pendingMembers.length}/{membersForGroup.length} asistentes</span>
+            </summary>
+            {!dayClass.closed ? (
+              <form action={addBulkAttendanceAction} className="quick-form">
+                <input type="hidden" name="classId" value={dayClass.id} />
+                <input type="hidden" name="legacyId" value={dayClass.legacy_id ?? legacyId} />
+                <input type="hidden" name="returnLegacyId" value={legacyId} />
+                <div className="attendance-checklist">
+                  {pendingMembers.length ? pendingMembers.map((member) => (
+                    <label className="check-row" key={member.id}>
+                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <span>
+                        <strong>{member.display_name}</strong>
+                        <small>{member.grade ?? "Sin grado"}</small>
+                      </span>
+                    </label>
+                  )) : <p className="muted">Todos los kenshis activos de {title.toLowerCase()} estan ya en asistencia.</p>}
+                </div>
+                <button type="submit" disabled={!pendingMembers.length}>Anadir seleccionados de {title.toLowerCase()}</button>
+              </form>
+            ) : <p className="muted">Clase de {title.toLowerCase()} cerrada.</p>}
+          </details>
+        );
+      })}
+    </div>
+  );
   const attendanceQuickPanel = (
     <article className="card">
       <h2>Asistencia final</h2>
@@ -446,8 +512,8 @@ export default async function ClaseDetailPage({
           <section className="class-stepper" aria-label="Flujo de clase">
             <span className={(groups ?? []).length ? "step done" : "step"}>1 Grupos</span>
             <span className={hasPlan ? "step done" : "step"}>2 Plan</span>
-            <span className={completedPlan ? "step done" : "step"}>3 Tecnicas</span>
-            <span className={(attendance ?? []).length ? "step done" : "step"}>4 Asistencia</span>
+            <a className={activeStep === "techniques" ? "step current" : completedPlan ? "step done" : "step"} href={techniqueStepHref}>3 Tecnicas</a>
+            <a className={activeStep === "attendance" ? "step current" : (attendance ?? []).length ? "step done" : "step"} href={attendanceStepHref}>4 Asistencia</a>
             <span className={clase.closed ? "step done" : "step"}>5 Cierre</span>
           </section>
         ) : (
@@ -458,7 +524,7 @@ export default async function ClaseDetailPage({
           </section>
         )}
 
-        {clase.class_group === "adults" ? <section className="split-section class-workbench">
+        {clase.class_group === "adults" && activeStep === "techniques" ? <section className="split-section class-workbench">
           <article className="card">
             <h2>Grupos tecnicos</h2>
             <div className="chip-list">
@@ -481,7 +547,7 @@ export default async function ClaseDetailPage({
           </section>
         )}
 
-        {clase.class_group === "adults" ? (
+        {clase.class_group === "adults" && activeStep === "techniques" ? (
           <>
             <div className="section-heading-row">
               <h2 className="section-title">Plan tecnico</h2>
@@ -490,10 +556,11 @@ export default async function ClaseDetailPage({
             <form action={updateClassPlanTechniquesAction} className="class-plan-form">
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
+              <input type="hidden" name="nextStep" value="attendance" />
               {!clase.closed && groupedPlan.length ? (
                 <div className="plan-save-row">
                   <p className="muted">Marca todas las tecnicas realizadas y guarda una sola vez antes de pasar asistencia.</p>
-                  <button type="submit">Guardar tecnicas realizadas</button>
+                  <button type="submit">Guardar y pasar asistencia</button>
                 </div>
               ) : null}
               <section className="plan-board mobile-plan-board">
@@ -501,7 +568,7 @@ export default async function ClaseDetailPage({
                 const groupCompleted = items.filter((item) => item.completed).length;
                 const targetGrade = items[0]?.target_grade ?? null;
                 return (
-                  <details className="card plan-group" key={grade} open={index === 0 || groupCompleted > 0}>
+                  <details className="card plan-group" key={grade}>
                     <summary className="plan-group-head">
                       <div>
                         <div className="grade-route">
@@ -549,14 +616,18 @@ export default async function ClaseDetailPage({
               </section>
               {!clase.closed && groupedPlan.length ? (
                 <div className="plan-save-row bottom">
-                  <button type="submit">Guardar tecnicas realizadas</button>
+                  <button type="submit">Guardar y pasar asistencia</button>
                 </div>
               ) : null}
             </form>
           </>
         ) : null}
 
-        <h2 className="section-title">{clase.class_group === "kids" ? "Asistencia infantil" : "Asistencia final"}</h2>
+        {clase.class_group !== "adults" || activeStep === "attendance" ? <>
+        <div className="section-heading-row">
+          <h2 className="section-title">{clase.class_group === "kids" ? "Asistencia infantil" : "Asistencia final"}</h2>
+          {clase.class_group === "adults" ? <a className="secondary-link" href={techniqueStepHref}>Volver a tecnicas</a> : null}
+        </div>
         <section className="card mobile-attendance-note">
           {clase.class_group === "adults" ? (
             <>
@@ -575,10 +646,11 @@ export default async function ClaseDetailPage({
         </section>
 
         <section className="mobile-work-anchor" id="asistencia">
-          {attendanceQuickPanel}
+          {clase.class_group === "adults" ? attendancePanel : attendanceQuickPanel}
         </section>
+        </> : null}
 
-        {readyToClose ? (
+        {readyToClose && activeStep === "attendance" ? (
           <section className="mobile-close-bar" aria-label="Cerrar clase">
             <div>
               <strong>{completedPlan}/{(plan ?? []).length}</strong>
@@ -612,7 +684,8 @@ export default async function ClaseDetailPage({
           </section>
         ) : null}
 
-        <h2 className="section-title">Asistencia</h2>
+        {clase.class_group !== "adults" || activeStep === "attendance" ? <>
+        <h2 className="section-title">Asistencia registrada</h2>
         <section className="table-wrap">
           <table>
             <thead>
@@ -630,6 +703,7 @@ export default async function ClaseDetailPage({
             </tbody>
           </table>
         </section>
+        </> : null}
       </main>
     </div>
   );

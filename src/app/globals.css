@@ -1745,6 +1745,61 @@ tbody tr:hover {
   font-size: 12px;
 }
 
+.attendance-group-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.attendance-group-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.attendance-group-panel summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 54px;
+}
+
+.attendance-group-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.attendance-group-panel summary strong {
+  font-size: 18px;
+}
+
+.attendance-group-panel summary span {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 13px;
+  font-weight: 900;
+  padding: 7px 10px;
+}
+
+.attendance-group-panel summary::after {
+  background: #0f1b2d;
+  border-radius: 999px;
+  color: white;
+  content: "+";
+  display: grid;
+  flex: 0 0 28px;
+  font-size: 18px;
+  font-weight: 900;
+  height: 28px;
+  place-items: center;
+  width: 28px;
+}
+
+.attendance-group-panel[open] summary::after {
+  content: "-";
+}
+
 .inline-report-form {
   display: grid;
   gap: 6px;

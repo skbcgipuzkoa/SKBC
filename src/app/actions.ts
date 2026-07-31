@@ -683,10 +683,11 @@ export async function addBulkAttendanceAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
   const memberIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
 
   if (!classId || !legacyId || !memberIds.length) {
-    redirect(`/clases/${legacyId || ""}?error=attendance`);
+    redirect(`/clases/${returnLegacyId || legacyId || ""}?error=attendance&step=asistencia`);
   }
 
   const supabase = createAdminClient();
@@ -704,7 +705,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
   ]);
 
   if (classError || !clase || membersError || !members?.length) {
-    redirect(`/clases/${legacyId}?error=attendance`);
+    redirect(`/clases/${returnLegacyId || legacyId}?error=attendance&step=asistencia`);
   }
 
   const rows = members.map((member) => {
@@ -729,7 +730,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
     .returns<Array<{ id: string }>>();
 
   if (error) {
-    redirect(`/clases/${legacyId}?error=attendance`);
+    redirect(`/clases/${returnLegacyId || legacyId}?error=attendance&step=asistencia`);
   }
 
   try {
@@ -738,7 +739,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
     console.error("Error syncing bulk attendance to legacy sheet", syncError);
   }
 
-  redirect(`/clases/${legacyId}?saved=attendance`);
+  redirect(`/clases/${returnLegacyId || legacyId}?saved=attendance&step=asistencia`);
 }
 
 export async function updatePlanTechniqueAction(formData: FormData) {
@@ -771,6 +772,7 @@ export async function updateClassPlanTechniquesAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const nextStep = String(formData.get("nextStep") ?? "");
   const planIds = formData.getAll("planIds").map((value) => String(value)).filter(Boolean);
 
   if (!classId || !legacyId) {
@@ -802,7 +804,7 @@ export async function updateClassPlanTechniquesAction(formData: FormData) {
     redirect(`/clases/${legacyId}?error=plan-technique`);
   }
 
-  redirect(`/clases/${legacyId}?saved=plan-technique`);
+  redirect(`/clases/${legacyId}?saved=plan-technique${nextStep === "attendance" ? "&step=asistencia" : ""}`);
 }
 
 export async function closeAdultClassAction(formData: FormData) {
