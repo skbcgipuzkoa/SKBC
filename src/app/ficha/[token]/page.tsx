@@ -1,3 +1,4 @@
+import { ExternalLink, Gamepad2, Library, NotebookTabs } from "lucide-react";
 import { notFound } from "next/navigation";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
@@ -365,9 +366,9 @@ function AdultFicha({
       </section>
 
       <section className="ficha-actions">
-        {member.site_url ? <a href={member.site_url} target="_blank">AREA TECNICA PERSONAL</a> : null}
-        <a href="https://akapi80.github.io/Juego-SKBC/" target="_blank">ENTRENAR JUGANDO</a>
-        <a href="https://stirring-madeleine-467faf.netlify.app/technique-consultation/" target="_blank">CONSULTAR TECNICAS</a>
+        {member.site_url ? <a href={member.site_url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />AREA TECNICA PERSONAL<ExternalLink aria-hidden="true" size={15} /></a> : null}
+        <a href="https://akapi80.github.io/Juego-SKBC/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
+        <a href="https://stirring-madeleine-467faf.netlify.app/technique-consultation/" target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
 
       <section className="ficha-section">
@@ -554,7 +555,7 @@ function KidsFicha({
       </section>
 
       <section className="ficha-actions">
-        <a href="https://akapi80.github.io/SKBC-KIDS/" target="_blank">ENTRENAR JUGANDO</a>
+        <a href="https://akapi80.github.io/SKBC-KIDS/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
 
       <section className="ficha-section">

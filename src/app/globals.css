@@ -2811,31 +2811,46 @@ tbody tr:hover {
 }
 
 .ficha-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   margin-bottom: 18px;
 }
 
 .ficha-actions a {
-  background: var(--ficha-blue);
-  box-shadow: 0 8px 18px rgba(0, 87, 184, 0.14);
-  border-radius: 999px;
-  color: #fff;
+  align-items: center;
+  background: #ffffff;
+  border: 2px solid var(--ficha-blue);
+  border-radius: 12px;
+  box-shadow: 0 10px 22px rgba(0, 87, 184, 0.12);
+  color: var(--ficha-blue);
+  display: inline-flex;
+  gap: 9px;
+  justify-content: center;
   font-size: 13px;
-  font-weight: 800;
-  min-height: 38px;
-  padding: 11px 14px;
-  transition: box-shadow 160ms ease, transform 160ms ease;
+  font-weight: 950;
+  min-height: 48px;
+  padding: 12px 14px;
+  text-align: center;
+  text-decoration: none;
+  transition: background 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
 .ficha-actions a:hover {
-  box-shadow: 0 12px 24px rgba(0, 87, 184, 0.18);
+  background: var(--ficha-blue);
+  box-shadow: 0 14px 28px rgba(0, 87, 184, 0.2);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
 .kids-ficha .ficha-actions a {
+  border-color: #db2777;
+  color: #db2777;
+}
+
+.kids-ficha .ficha-actions a:hover {
   background: #db2777;
+  color: #ffffff;
 }
 
 .ficha-section {
