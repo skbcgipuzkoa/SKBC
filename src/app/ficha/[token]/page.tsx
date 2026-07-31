@@ -980,7 +980,7 @@ function examKey(exam: Pick<Exam, "exam_date" | "grade">) {
 }
 
 function Footer() {
-  return <footer className="ficha-footer">Datos del sistema nuevo SKBC. Ficha privada de consulta personal.</footer>;
+  return <footer className="ficha-footer">Datos del sistema nuevo SKBC. Ficha privada de consulta personal actualizada automaticamente en tiempo real.</footer>;
 }
 
 function buildAdultActivity(attendance: Attendance[], courses: Course[]) {
