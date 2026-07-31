@@ -4,9 +4,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: NextRequest) {
   const accessCode = process.env.SKBC_INTERNAL_ACCESS_CODE ?? "SKBC2026";
+  const recalculateToken = process.env.SKBC_RECALCULATE_TOKEN;
   const headerCode = request.headers.get("x-skbc-admin-code");
+  const headerToken = request.headers.get("x-skbc-recalculate-token");
   const cookieCode = request.cookies.get("skbc_internal_access")?.value;
-  if (headerCode !== accessCode && cookieCode !== accessCode) {
+  const hasRecalculateToken = Boolean(recalculateToken && headerToken === recalculateToken);
+  if (headerCode !== accessCode && cookieCode !== accessCode && !hasRecalculateToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
