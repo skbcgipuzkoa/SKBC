@@ -2179,6 +2179,29 @@ tbody tr:hover {
   color: rgba(255, 255, 255, 0.8);
 }
 
+.year-select-form {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(180px, 260px) auto;
+  margin-top: 12px;
+}
+
+.year-select-form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.year-select-form select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
 .black-belt-attendance-form {
   display: grid;
   gap: 12px;

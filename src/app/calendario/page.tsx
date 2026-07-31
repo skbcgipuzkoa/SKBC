@@ -35,7 +35,9 @@ export default async function CalendarioPage({
   const closures = error ? [] : data ?? [];
   const currentYear = new Date().getFullYear();
   const years = buildCalendarYears(closures, currentYear);
-  const selectedYear = years.some((item) => item.year === params.year) ? params.year : String(currentYear);
+  const requestedYear = String(params.year ?? "");
+  const selectedYear = years.some((item) => item.year === requestedYear) ? requestedYear : String(currentYear);
+  const quickYears = buildQuickYears(years, selectedYear, currentYear);
   const selectedClosures = closures.filter((closure) => closure.starts_on.startsWith(`${selectedYear}-`));
 
   return (
@@ -88,13 +90,24 @@ export default async function CalendarioPage({
             <span className="tag">{selectedYear}</span>
           </div>
           <div className="year-chip-list">
-            {years.map((item) => (
+            {quickYears.map((item) => (
               <a className={item.year === selectedYear ? "year-chip selected" : "year-chip"} href={`/calendario?year=${item.year}`} key={item.year}>
                 <strong>{item.year}</strong>
                 <span>{item.count} cierres</span>
               </a>
             ))}
           </div>
+          <form action="/calendario" className="year-select-form" method="get">
+            <label>
+              Ver otro ano
+              <select name="year" defaultValue={selectedYear}>
+                {years.map((item) => (
+                  <option value={item.year} key={item.year}>{item.year} - {item.count} cierres</option>
+                ))}
+              </select>
+            </label>
+            <button className="mini-action" type="submit">Ver</button>
+          </form>
         </section>
 
         <section className="split-section">
@@ -164,4 +177,9 @@ function buildCalendarYears(closures: CalendarClosure[], currentYear: number) {
   return Array.from(counts.entries())
     .map(([year, count]) => ({ year, count }))
     .sort((a, b) => Number(a.year) - Number(b.year));
+}
+
+function buildQuickYears(years: Array<{ year: string; count: number }>, selectedYear: string, currentYear: number) {
+  const quick = new Set([String(currentYear - 1), String(currentYear), String(currentYear + 1), selectedYear]);
+  return years.filter((item) => quick.has(item.year));
 }
