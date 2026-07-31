@@ -1,6 +1,6 @@
 import { CalendarDays, LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createClubClosureAction, deactivateClubClosureAction, logoutAction } from "@/app/actions";
+import { createClubClosureAction, deactivateClubClosureAction, duplicateClubCalendarYearAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -71,7 +71,9 @@ export default async function CalendarioPage({
         </div>
 
         {params.saved === "closure" ? <p className="save-ok">Cierre o festivo guardado.</p> : null}
+        {params.saved === "duplicate" ? <p className="save-ok">Calendario duplicado. Revisa y ajusta las fechas necesarias.</p> : null}
         {params.error === "closure" ? <p className="form-error">No se pudo guardar el cierre. Revisa fechas y titulo.</p> : null}
+        {params.error === "duplicate" ? <p className="form-error">No se pudo duplicar el calendario. Revisa los anos origen y destino.</p> : null}
 
         <section className="split-section">
           <article className="card">
@@ -94,6 +96,19 @@ export default async function CalendarioPage({
               <button type="submit">Guardar cierre</button>
             </form>
           </article>
+          <article className="card">
+            <CalendarDays aria-hidden="true" size={22} />
+            <h2>Duplicar ano</h2>
+            <p className="muted">Copia todos los cierres activos de un ano a otro. Despues puedes ajustar fechas concretas manualmente.</p>
+            <form action={duplicateClubCalendarYearAction} className="quick-form">
+              <label>Ano origen<input name="sourceYear" type="number" min="2000" max="2100" defaultValue="2026" required /></label>
+              <label>Ano destino<input name="targetYear" type="number" min="2000" max="2100" defaultValue="2027" required /></label>
+              <button type="submit">Duplicar calendario</button>
+            </form>
+          </article>
+        </section>
+
+        <section className="split-section">
           <article className="card">
             <h2>Cierres activos</h2>
             <div className="stack-list compact-stack">

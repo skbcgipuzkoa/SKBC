@@ -1345,6 +1345,74 @@ export async function deactivateClubClosureAction(formData: FormData) {
   redirect("/calendario?saved=closure");
 }
 
+export async function duplicateClubCalendarYearAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const sourceYear = Number.parseInt(String(formData.get("sourceYear") ?? ""), 10);
+  const targetYear = Number.parseInt(String(formData.get("targetYear") ?? ""), 10);
+  if (!Number.isFinite(sourceYear) || !Number.isFinite(targetYear) || sourceYear < 2000 || targetYear < 2000 || sourceYear === targetYear) {
+    redirect("/calendario?error=duplicate");
+  }
+
+  const supabase = createAdminClient();
+  const sourceStart = `${sourceYear}-01-01`;
+  const sourceEnd = `${sourceYear}-12-31`;
+  const { data: sourceRows, error: sourceError } = await supabase
+    .from("skbc_calendar_closures")
+    .select("starts_on,ends_on,title,applies_to,notes")
+    .eq("active", true)
+    .gte("starts_on", sourceStart)
+    .lte("starts_on", sourceEnd)
+    .returns<Array<{ starts_on: string; ends_on: string; title: string; applies_to: "all" | "kids" | "adults"; notes: string | null }>>();
+
+  if (sourceError || !sourceRows?.length) {
+    if (sourceError) console.error("Error loading source club calendar", sourceError);
+    redirect("/calendario?error=duplicate");
+  }
+
+  const diff = targetYear - sourceYear;
+  const duplicatedRows = sourceRows.map((row) => ({
+    starts_on: addYearsToIsoDate(row.starts_on, diff),
+    ends_on: addYearsToIsoDate(row.ends_on, diff),
+    title: row.title.replace(String(sourceYear), String(targetYear)),
+    applies_to: row.applies_to,
+    notes: row.notes,
+    active: true
+  }));
+
+  const targetStart = `${targetYear}-01-01`;
+  const targetEnd = `${targetYear + 1}-12-31`;
+  const { data: existingRows, error: existingError } = await supabase
+    .from("skbc_calendar_closures")
+    .select("starts_on,ends_on,title,applies_to")
+    .eq("active", true)
+    .gte("starts_on", targetStart)
+    .lte("starts_on", targetEnd)
+    .returns<Array<{ starts_on: string; ends_on: string; title: string; applies_to: string }>>();
+
+  if (existingError) {
+    console.error("Error loading target club calendar", existingError);
+    redirect("/calendario?error=duplicate");
+  }
+
+  const existingKeys = new Set((existingRows ?? []).map((row) => `${row.starts_on}|${row.ends_on}|${row.title}|${row.applies_to}`));
+  const rowsToInsert = duplicatedRows.filter((row) => !existingKeys.has(`${row.starts_on}|${row.ends_on}|${row.title}|${row.applies_to}`));
+
+  if (!rowsToInsert.length) {
+    redirect("/calendario?saved=duplicate");
+  }
+
+  const { error } = await supabase.from("skbc_calendar_closures").insert(rowsToInsert);
+  if (error) {
+    console.error("Error duplicating club calendar", error);
+    redirect("/calendario?error=duplicate");
+  }
+
+  redirect("/calendario?saved=duplicate");
+}
+
 export async function retryLegacySheetSyncAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -1784,6 +1852,12 @@ function normalizeTechniqueCategoryInput(value: string) {
 function parseDateInput(value: string) {
   const trimmed = value.trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+}
+
+function addYearsToIsoDate(value: string, years: number) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setFullYear(date.getFullYear() + years);
+  return date.toISOString().slice(0, 10);
 }
 
 function getPhotoFile(formData: FormData) {
