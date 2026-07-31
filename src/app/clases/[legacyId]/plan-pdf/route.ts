@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from "pdf-lib";
 import { hasInternalAccess } from "@/lib/auth";
+import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ClassRow = {
@@ -202,7 +203,7 @@ function rowHeight(item: PlanRow) {
 }
 
 function effectiveSummary(item: PlanRow) {
-  return item.summary_es || item.techniques?.summary_es || "";
+  return item.summary_es || item.techniques?.summary_es || getKamokuSummaryFallback(item.technique_name);
 }
 
 function groupPlanByGrade(plan: PlanRow[]) {

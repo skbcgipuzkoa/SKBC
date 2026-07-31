@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { logoutAction, updateTechniqueAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades } from "@/lib/grades";
+import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BookOpenCheck, CheckCircle2, Filter, LogOut, RotateCcw } from "lucide-react";
 
@@ -49,7 +50,7 @@ export default async function TecnicasPage({
   const activeCount = techniques.filter((tecnica) => tecnica.active).length;
   const planningCount = techniques.filter((tecnica) => tecnica.active_in_planning).length;
   const neverTrained = techniques.filter((tecnica) => !tecnica.last_trained_on || tecnica.repetitions === 0).length;
-  const missingSummary = techniques.filter((tecnica) => !tecnica.summary_es).length;
+  const missingSummary = techniques.filter((tecnica) => !effectiveSummary(tecnica)).length;
   const missingVariant = techniques.filter((tecnica) => needsVariant(tecnica.name) && !tecnica.variant).length;
   const gradeStats = grades.map((grade) => {
     const rows = techniques.filter((tecnica) => normalize(tecnica.grade) === normalize(grade));
@@ -260,7 +261,7 @@ export default async function TecnicasPage({
                       {tecnica.variant ? <span>Variante: {tecnica.variant}</span> : null}
                       {tecnica.variant_note ? <span>{tecnica.variant_note}</span> : null}
                     </div>
-                    {tecnica.summary_es ? <p className="technique-summary compact">{tecnica.summary_es}</p> : null}
+                    {effectiveSummary(tecnica) ? <p className="technique-summary compact">{effectiveSummary(tecnica)}</p> : null}
                     <details className="inline-edit-details" open={params.edit === tecnica.legacy_id}>
                       <summary>Editar tecnica</summary>
                       <form action={updateTechniqueAction} className="technique-edit-form">
@@ -348,12 +349,16 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
   if (params.status === "planning" && !tecnica.active_in_planning) return false;
   if (params.status === "inactive" && tecnica.active) return false;
   if (params.status === "never" && tecnica.last_trained_on && tecnica.repetitions > 0) return false;
-  if (params.status === "missing-summary" && tecnica.summary_es) return false;
+  if (params.status === "missing-summary" && effectiveSummary(tecnica)) return false;
   if (params.status === "missing-variant" && (!needsVariant(tecnica.name) || tecnica.variant)) return false;
   if (params.status === "duplicate-name" && !review.duplicateNameIds.has(rowKey(tecnica))) return false;
   if (params.status === "duplicate-base" && !review.baseWithoutVariantIds.has(rowKey(tecnica))) return false;
   if (params.status === "planning-non-core" && !isPlanningNonCore(tecnica)) return false;
   return true;
+}
+
+function effectiveSummary(tecnica: Tecnica) {
+  return tecnica.summary_es || getKamokuSummaryFallback(tecnica.name);
 }
 
 function compareTechniques(a: Tecnica, b: Tecnica) {
