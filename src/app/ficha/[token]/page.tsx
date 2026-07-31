@@ -371,6 +371,10 @@ function AdultFicha({
 
       <section className="ficha-section">
         <h2>Datos del kenshi</h2>
+        <div className="adult-grade-badges">
+          <AdultGradeBadge label="Grado actual" value={member.grade ?? "-"} />
+          <AdultGradeBadge label="Grado objetivo" value={technicalProgress.targetGrade || "-"} />
+        </div>
         <div className="ficha-card ficha-fields">
           <Field label="ID SKBC" value={member.legacy_id} />
           <Field label="ID IKA" value={member.ika_id ?? "Pendiente"} />
@@ -662,6 +666,15 @@ function Field({ label, value }: { label: string; value: string | number | null 
 function KidBadge({ label, value, tone }: { label: string; value: string; tone: FichaTone }) {
   return (
     <span className={`kid-badge kid-badge-${tone}`}>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
+function AdultGradeBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <span className={`adult-grade-badge adult-grade-${adultGradeColor(value)}`}>
       <small>{label}</small>
       <strong>{value}</strong>
     </span>
@@ -992,6 +1005,19 @@ function kidGradeTone(grade: string | null): FichaTone {
   if (value.includes("VERDE")) return "green";
   if (value.includes("AZUL")) return "blue";
   if (value.includes("MARRON") || value.includes("KYU")) return "red";
+  return "neutral";
+}
+
+function adultGradeColor(grade: string | null): "white" | "yellow" | "orange" | "green" | "blue" | "brown" | "black" | "neutral" {
+  const value = normalizeGradeKey(grade);
+  if (!value) return "neutral";
+  if (value.includes("DAN")) return "black";
+  if (value.includes("MINARAI") || value.includes("BLANCO")) return "white";
+  if (value.includes("5KYU") || value.includes("AMARILLO")) return "yellow";
+  if (value.includes("4KYU") || value.includes("NARANJA")) return "orange";
+  if (value.includes("3KYU") || value.includes("VERDE")) return "green";
+  if (value.includes("2KYU") || value.includes("AZUL")) return "blue";
+  if (value.includes("1KYU") || value.includes("MARRON")) return "brown";
   return "neutral";
 }
 

@@ -3101,6 +3101,84 @@ tbody tr:hover {
   color: #4b5563;
 }
 
+.adult-grade-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.adult-grade-badge {
+  align-items: center;
+  border: 1px solid var(--ficha-line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 9px;
+  min-height: 42px;
+  padding: 9px 13px;
+}
+
+.adult-grade-badge small {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  opacity: 0.72;
+  text-transform: uppercase;
+}
+
+.adult-grade-badge strong {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.adult-grade-white {
+  background: #ffffff;
+  border-color: #d9c07a;
+  color: #334155;
+}
+
+.adult-grade-yellow {
+  background: #fff15a;
+  border-color: #d6bd20;
+  color: #4a3a00;
+}
+
+.adult-grade-orange {
+  background: #ff9b2f;
+  border-color: #de7a13;
+  color: #3f1e00;
+}
+
+.adult-grade-green {
+  background: #22a767;
+  border-color: #15834d;
+  color: #ffffff;
+}
+
+.adult-grade-blue {
+  background: #2d7fe8;
+  border-color: #1d61b5;
+  color: #ffffff;
+}
+
+.adult-grade-brown {
+  background: #8b5a35;
+  border-color: #654024;
+  color: #ffffff;
+}
+
+.adult-grade-black {
+  background: #111827;
+  border-color: #d9c07a;
+  color: #ffffff;
+}
+
+.adult-grade-neutral {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
 .behavior-fields .ficha-field {
   background: #fff;
 }
