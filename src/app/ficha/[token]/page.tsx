@@ -255,13 +255,14 @@ export default async function PublicFichaPage({
     return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} ranking={childRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} adminBackUrl={adminBackUrl} />;
   }
 
+  const workGrade = adultWorkGrade(member.grade);
   const targetGrade = nextAdultGrade(member.grade);
   const date180 = daysAgo(180);
   const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,grade,base_name,name,category,active,active_in_planning")
-      .eq("grade", targetGrade)
+      .eq("grade", workGrade)
       .returns<Technique[]>(),
     supabase
       .from("member_technical_history")
@@ -1146,6 +1147,10 @@ function nextAdultGrade(grade: string | null) {
   const index = ADULT_GRADES.findIndex((item) => normalizeGradeKey(item) === normalized);
   if (index === -1) return grade ?? "";
   return ADULT_GRADES[Math.min(index + 1, ADULT_GRADES.length - 1)];
+}
+
+function adultWorkGrade(grade: string | null) {
+  return normalizeGradeKey(grade) === "MINARAI" ? "5 KYU" : grade ?? "";
 }
 
 function safeInternalReturnUrl(value: string | null | undefined) {
