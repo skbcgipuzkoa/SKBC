@@ -2733,6 +2733,26 @@ tbody tr:hover {
   min-width: 760px;
 }
 
+.admin-ficha-back {
+  align-items: center;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.24);
+  color: #fff;
+  display: inline-flex;
+  font-weight: 900;
+  justify-content: center;
+  left: 14px;
+  min-height: 42px;
+  padding: 10px 16px;
+  position: sticky;
+  text-decoration: none;
+  top: 10px;
+  width: fit-content;
+  z-index: 20;
+}
+
 .state-badge {
   border-radius: 999px;
   display: inline-flex;

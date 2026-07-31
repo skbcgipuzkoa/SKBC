@@ -196,7 +196,7 @@ export default async function KenshisPage({
                   <td data-label="Contacto">{kenshi.family_email || kenshi.guardian_phone || kenshi.student_phone || <span className="muted">-</span>}</td>
                   <td data-label="Ficha">
                     <span className="link-stack">
-                      {kenshi.ficha_token ? <a className="text-link" href={`/ficha/${kenshi.ficha_token}`} target="_blank" rel="noopener noreferrer external">Nueva</a> : null}
+                      {kenshi.ficha_token ? <a className="text-link" href={`/ficha/${kenshi.ficha_token}?admin=1&returnTo=${encodeURIComponent("/kenshis")}`} target="_blank" rel="noopener noreferrer external">Nueva</a> : null}
                       {kenshi.legacy_ficha_url ? <a className="text-link" href={kenshi.legacy_ficha_url} target="_blank" rel="noopener noreferrer external">Actual</a> : null}
                       {!kenshi.ficha_token && !kenshi.legacy_ficha_url ? <span className="muted">-</span> : null}
                     </span>

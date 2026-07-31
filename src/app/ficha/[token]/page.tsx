@@ -165,8 +165,15 @@ type ShakujoAttendanceRow = {
 
 type FichaTone = "green" | "yellow" | "red" | "blue" | "neutral";
 
-export default async function PublicFichaPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+export default async function PublicFichaPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ admin?: string; returnTo?: string }>;
+}) {
+  const [{ token }, queryParams] = await Promise.all([params, searchParams]);
+  const adminBackUrl = queryParams.admin === "1" ? safeInternalReturnUrl(queryParams.returnTo) : null;
   const supabase = createAdminClient();
 
   const { data: member, error } = await supabase
@@ -233,7 +240,7 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
     ]);
 
     const automaticNotices = buildAutomaticChildNotices(childRanking);
-    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} ranking={childRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} />;
+    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} ranking={childRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} adminBackUrl={adminBackUrl} />;
   }
 
   const targetGrade = nextAdultGrade(member.grade);
@@ -299,7 +306,7 @@ export default async function PublicFichaPage({ params }: { params: Promise<{ to
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? []);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} adminBackUrl={adminBackUrl} />;
 }
 
 function AdultFicha({
@@ -312,7 +319,8 @@ function AdultFicha({
   ranking,
   childTransition,
   blackBeltSpecial,
-  shakujoAttendance
+  shakujoAttendance,
+  adminBackUrl
 }: {
   member: Member;
   attendance: Attendance[];
@@ -324,6 +332,7 @@ function AdultFicha({
   childTransition: ChildAdultTransition | null;
   blackBeltSpecial: BlackBeltSpecialRow[];
   shakujoAttendance: ShakujoAttendanceRow[];
+  adminBackUrl: string | null;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const nacionales = courses.filter((course) => course.kind === "national");
@@ -331,6 +340,7 @@ function AdultFicha({
 
   return (
     <main className="legacy-ficha adult-ficha">
+      <AdminBackLink href={adminBackUrl} />
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="FICHA PRO · SKBC GIPUZKOA" />
 
       <section className={`ficha-alert ficha-${normalizeCss(member.semaphore ?? "gris")}`}>
@@ -498,7 +508,8 @@ function KidsFicha({
   ranking,
   notices,
   note,
-  behavior
+  behavior,
+  adminBackUrl
 }: {
   member: Member;
   attendance: Attendance[];
@@ -507,11 +518,13 @@ function KidsFicha({
   notices: ChildNotice[];
   note: ChildNote | null;
   behavior: ChildBehavior | null;
+  adminBackUrl: string | null;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const objective = nextKidGrade(member.grade);
   return (
     <main className="legacy-ficha kids-ficha">
+      <AdminBackLink href={adminBackUrl} />
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="SKBC Gipuzkoa · Ficha infantil" />
 
       <section className="kid-badges">
@@ -611,6 +624,11 @@ function HeaderLogos({ member, photoSrc, eyebrow }: { member: Member; photoSrc: 
       <div className="logo-box"><img src={LOGO_SKBC_URL} alt="SKBC Gipuzkoa" /></div>
     </section>
   );
+}
+
+function AdminBackLink({ href }: { href: string | null }) {
+  if (!href) return null;
+  return <a className="admin-ficha-back" href={href}>Volver al sistema</a>;
 }
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -883,6 +901,14 @@ function nextAdultGrade(grade: string | null) {
   const index = ADULT_GRADES.findIndex((item) => normalizeGradeKey(item) === normalized);
   if (index === -1) return grade ?? "";
   return ADULT_GRADES[Math.min(index + 1, ADULT_GRADES.length - 1)];
+}
+
+function safeInternalReturnUrl(value: string | null | undefined) {
+  const fallback = "/kenshis";
+  const text = String(value ?? "").trim();
+  if (!text || !text.startsWith("/") || text.startsWith("//")) return fallback;
+  if (text.startsWith("/ficha/")) return fallback;
+  return text;
 }
 
 function nextKidGrade(grade: string | null) {
