@@ -142,12 +142,9 @@ function planViewerResponse(legacyId: string) {
       .mobile-panel p { color: #64748b; line-height: 1.4; margin: 0; }
       .mobile-panel .primary { background: #0057b8; color: white; display: block; text-align: center; }
       .mobile-panel .grid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mobile-panel .back { border: 1px solid #dbe5f0; display: block; text-align: center; }
       iframe {
-        height: 58vh;
-        margin: 0 12px 18px;
-        width: calc(100% - 24px);
-        border: 1px solid #dbe5f0;
-        border-radius: 12px;
+        display: none;
       }
     }
     @media print { .bar, .mobile-panel { display: none; } iframe { height: 100vh; margin: 0; width: 100%; } }
@@ -165,7 +162,8 @@ function planViewerResponse(legacyId: string) {
   </div>
   <section class="mobile-panel">
     <h1>PDF completo del plan tecnico</h1>
-    <p>En movil el visor integrado puede mostrar solo la primera hoja. Abre el PDF completo para ver todas las paginas, imprimir o compartir.</p>
+    <p>En movil manten esta pantalla abierta para poder volver al sistema. El PDF real se abre aparte solo cuando lo necesites.</p>
+    <a class="back" href="/clases/${encodeURIComponent(legacyId)}">Volver al sistema</a>
     <a class="primary" href="${rawUrl}" target="_blank" rel="noreferrer">Abrir PDF completo</a>
     <div class="grid">
       <a href="${rawUrl}" download="${fileName}">Descargar</a>
