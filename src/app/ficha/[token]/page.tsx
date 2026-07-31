@@ -632,6 +632,10 @@ function HeaderLogos({ member, photoSrc, eyebrow }: { member: Member; photoSrc: 
       <div className="logo-box"><img src={LOGO_IKA_URL} alt="IKA" /></div>
       <div className="student-box">
         {photoSrc ? <img src={photoSrc} alt="" /> : <div className="student-placeholder" />}
+        <div className="japanese-mark" aria-label="Shorinji Kempo en japones">
+          <strong>少林寺拳法</strong>
+          <span>Shorinji Kempo</span>
+        </div>
         <p>{eyebrow}</p>
         <h1>{member.display_name}</h1>
         <span>{member.status === "active" ? "ACTIVO" : "INACTIVO"} · ID SKBC {member.legacy_id ?? "-"} · ID IKA {member.ika_id ?? "pendiente"}</span>
