@@ -74,7 +74,6 @@ const date180 = daysAgo(180);
 
 export async function sendTelegramDigest(notificationType: NotificationType, options: { force?: boolean } = {}): Promise<NotificationResult> {
   const period = resolvePeriod(notificationType);
-  const message = await buildNotificationMessage(notificationType, period);
   const supabase = createAdminClient();
 
   const existing = period
@@ -88,11 +87,13 @@ export async function sendTelegramDigest(notificationType: NotificationType, opt
     : null;
 
   if (!options.force && existing?.data?.status === "sent") {
-    return { notificationType, status: "skipped", message };
+    return { notificationType, status: "skipped", message: "Notificacion ya enviada para este periodo." };
   }
 
   const chatId = cleanEnv(process.env.TELEGRAM_CHAT_ID);
+  let message = "";
   try {
+    message = await buildNotificationMessage(notificationType, period);
     await sendTelegramMessage(message);
     await upsertNotificationLog({
       notificationType,
@@ -106,6 +107,7 @@ export async function sendTelegramDigest(notificationType: NotificationType, opt
     return { notificationType, status: "sent", message };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!message) message = `No se pudo construir la notificacion ${notificationType}.`;
     await upsertNotificationLog({
       notificationType,
       periodStart: period?.start ?? null,
@@ -270,7 +272,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       .lte("attended_on", period.end)
       .returns<Array<{ member_id: string; attended_on: string; members: { class: "kids" | "adults" } | null }>>(),
     supabase.from("member_technical_history").select("id", { count: "exact", head: true }).gte("class_date", period.start).lte("class_date", period.end).eq("completed", true),
-    supabase.from("exams").select("id", { count: "exact", head: true }).gte("exam_date", period.start).lte("exam_date", period.end).eq("result", "passed"),
+    supabase.from("exams").select("id", { count: "exact", head: true }).gte("exam_date", period.start).lte("exam_date", period.end),
     supabase.from("courses").select("kind,course_date").gte("course_date", period.start).lte("course_date", period.end).returns<Array<{ kind: "national" | "international"; course_date: string }>>(),
     supabase
       .from("members")
