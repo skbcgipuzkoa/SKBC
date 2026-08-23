@@ -83,6 +83,8 @@ export async function updateTelegramNotificationSettingAction(formData: FormData
   const type = String(formData.get("type") ?? "");
   const enabled = formData.get("enabled") === "on";
   const reason = String(formData.get("reason") ?? "").trim() || null;
+  const pauseStartsOn = String(formData.get("pauseStartsOn") ?? "").trim() || null;
+  const pauseEndsOn = String(formData.get("pauseEndsOn") ?? "").trim() || null;
   const allowed = ["daily_ranking", "monthly_stats", "semester_stats", "yearly_stats"] as const;
 
   if (!allowed.includes(type as typeof allowed[number])) {
@@ -90,7 +92,7 @@ export async function updateTelegramNotificationSettingAction(formData: FormData
   }
 
   try {
-    await updateTelegramNotificationSetting(type as typeof allowed[number], enabled, reason);
+    await updateTelegramNotificationSetting(type as typeof allowed[number], enabled, reason, pauseStartsOn, pauseEndsOn);
   } catch (error) {
     console.error("Error updating Telegram notification setting", error);
     redirect("/notificaciones?error=settings");

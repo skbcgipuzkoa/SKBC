@@ -115,6 +115,8 @@ type NotificationSetting = {
   notification_type: NotificationType;
   enabled: boolean;
   paused_reason: string | null;
+  pause_starts_on: string | null;
+  pause_ends_on: string | null;
 };
 
 const today = new Date();
@@ -128,8 +130,9 @@ export async function sendTelegramDigest(notificationType: NotificationType, opt
 
   if (!options.force && notificationType !== "test") {
     const setting = await getNotificationSetting(notificationType);
-    if (setting && !setting.enabled) {
-      const message = `Notificacion pausada${setting.paused_reason ? `: ${setting.paused_reason}` : "."}`;
+    const pauseReason = setting ? notificationPauseReason(setting, todayIso()) : null;
+    if (pauseReason) {
+      const message = pauseReason;
       await upsertNotificationLog({
         notificationType,
         periodStart: period?.start ?? null,
@@ -247,7 +250,9 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
 export async function updateTelegramNotificationSetting(
   notificationType: NotificationType,
   enabled: boolean,
-  pausedReason: string | null
+  pausedReason: string | null,
+  pauseStartsOn: string | null = null,
+  pauseEndsOn: string | null = null
 ) {
   const configurableTypes: NotificationType[] = ["daily_ranking", "monthly_stats", "semester_stats", "yearly_stats"];
   if (!configurableTypes.includes(notificationType)) {
@@ -260,6 +265,8 @@ export async function updateTelegramNotificationSetting(
       notification_type: notificationType,
       enabled,
       paused_reason: enabled ? null : pausedReason,
+      pause_starts_on: normalizeDateOrNull(pauseStartsOn),
+      pause_ends_on: normalizeDateOrNull(pauseEndsOn),
       updated_at: new Date().toISOString()
     }, { onConflict: "notification_type" });
 
@@ -1110,7 +1117,7 @@ function cleanEnv(value: string | undefined) {
 async function getNotificationSetting(notificationType: NotificationType) {
   const { data, error } = await createAdminClient()
     .from("telegram_notification_settings")
-    .select("notification_type,enabled,paused_reason")
+    .select("notification_type,enabled,paused_reason,pause_starts_on,pause_ends_on")
     .eq("notification_type", notificationType)
     .maybeSingle<NotificationSetting>();
 
@@ -1120,4 +1127,21 @@ async function getNotificationSetting(notificationType: NotificationType) {
   }
 
   return data;
+}
+
+function notificationPauseReason(setting: NotificationSetting, currentDate: string) {
+  if (!setting.enabled) {
+    return `Notificacion pausada manualmente${setting.paused_reason ? `: ${setting.paused_reason}` : "."}`;
+  }
+  const starts = setting.pause_starts_on;
+  const ends = setting.pause_ends_on;
+  if (starts && ends && starts <= currentDate && currentDate <= ends) {
+    return `Notificacion pausada por calendario (${formatHumanDate(starts)} - ${formatHumanDate(ends)})${setting.paused_reason ? `: ${setting.paused_reason}` : "."}`;
+  }
+  return null;
+}
+
+function normalizeDateOrNull(value: string | null | undefined) {
+  const clean = String(value ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(clean) ? clean : null;
 }

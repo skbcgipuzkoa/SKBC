@@ -954,6 +954,19 @@ tbody tr:hover {
   width: 100%;
 }
 
+.notification-date-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.notification-date-row label {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.86rem;
+  gap: 4px;
+}
+
 .notification-setting button {
   align-items: center;
   display: inline-flex;

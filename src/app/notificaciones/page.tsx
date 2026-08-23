@@ -19,6 +19,8 @@ type NotificationSetting = {
   notification_type: string;
   enabled: boolean;
   paused_reason: string | null;
+  pause_starts_on: string | null;
+  pause_ends_on: string | null;
   updated_at: string;
 };
 
@@ -50,7 +52,7 @@ export default async function NotificacionesPage({
       .returns<NotificationLog[]>(),
     supabase
       .from("telegram_notification_settings")
-      .select("notification_type,enabled,paused_reason,updated_at")
+      .select("notification_type,enabled,paused_reason,pause_starts_on,pause_ends_on,updated_at")
       .returns<NotificationSetting[]>()
   ]);
   const data = logsResult.data;
@@ -125,6 +127,9 @@ export default async function NotificacionesPage({
             {quickActions.filter((action) => action.configurable).map((action) => {
               const setting = settings.find((item) => item.notification_type === action.type);
               const enabled = setting?.enabled ?? true;
+              const scheduled = setting?.pause_starts_on && setting.pause_ends_on
+                ? `Pausa programada: ${formatDate(setting.pause_starts_on)} - ${formatDate(setting.pause_ends_on)}`
+                : "Sin pausa programada";
               return (
                 <article className={`notification-setting ${enabled ? "enabled" : "paused"}`} key={action.type}>
                   <div>
@@ -132,6 +137,7 @@ export default async function NotificacionesPage({
                     <p className="muted">
                       {enabled ? "Activa" : `Pausada${setting?.paused_reason ? `: ${setting.paused_reason}` : ""}`}
                     </p>
+                    <p className="muted">{scheduled}</p>
                   </div>
                   <form action={updateTelegramNotificationSettingAction}>
                     <input type="hidden" name="type" value={action.type} />
@@ -141,6 +147,16 @@ export default async function NotificacionesPage({
                       placeholder="Motivo de pausa"
                       defaultValue={enabled ? "Vacaciones / pausa temporal" : setting?.paused_reason ?? ""}
                     />
+                    <div className="notification-date-row">
+                      <label>
+                        Desde
+                        <input name="pauseStartsOn" type="date" defaultValue={setting?.pause_starts_on ?? ""} />
+                      </label>
+                      <label>
+                        Hasta
+                        <input name="pauseEndsOn" type="date" defaultValue={setting?.pause_ends_on ?? ""} />
+                      </label>
+                    </div>
                     <button type="submit" className={enabled ? "secondary-button danger-button" : "secondary-button"}>
                       {enabled ? <PauseCircle aria-hidden="true" size={16} /> : <PlayCircle aria-hidden="true" size={16} />}
                       {enabled ? "Pausar" : "Reactivar"}
