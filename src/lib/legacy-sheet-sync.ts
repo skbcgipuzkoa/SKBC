@@ -98,6 +98,8 @@ export async function syncLegacyCourse(courseId: string) {
     .single<CourseSnapshot>();
 
   if (error || !course) throw error ?? new Error("Curso no encontrado para sincronizar.");
+  if (course.kind === "taikai") return;
+
   const member = await getMemberSnapshot(course.member_id);
   const notes = [course.notes, formatCompetitionSummary(course)].filter(Boolean).join(" | ");
   const row = [
@@ -113,7 +115,7 @@ export async function syncLegacyCourse(courseId: string) {
 
   await appendLegacyRow({
     eventType: "course.created",
-    targetSheet: course.kind === "international" ? "CURSOS_INT" : course.kind === "taikai" ? "TAIKAI" : "CURSOS_NAC",
+    targetSheet: course.kind === "international" ? "CURSOS_INT" : "CURSOS_NAC",
     sourceTable: "courses",
     sourceId: course.id,
     payload: { course, member },
