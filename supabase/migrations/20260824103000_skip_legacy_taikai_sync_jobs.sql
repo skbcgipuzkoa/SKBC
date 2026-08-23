@@ -1,7 +1,7 @@
 update public.legacy_sheet_sync_jobs
 set
-  status = 'skipped',
-  error_message = null,
+  status = 'completed',
+  error_message = 'Omitido por diseño: Taikai vive solo en el sistema nuevo.',
   completed_at = coalesce(completed_at, now()),
   updated_at = now()
 where target_sheet = 'TAIKAI'
