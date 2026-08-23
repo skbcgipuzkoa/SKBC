@@ -30,6 +30,9 @@ type Course = {
   member_id: string;
   course_date: string;
   kind: "national" | "international";
+  title?: string | null;
+  location?: string | null;
+  sensei?: string | null;
 };
 
 type AdultBonus = {
@@ -58,6 +61,43 @@ type CalendarClosure = {
   starts_on: string;
   ends_on: string;
   applies_to: "all" | "kids" | "adults";
+};
+
+type PeriodClass = {
+  id: string;
+  name: string;
+  class_date: string;
+  class_group: "kids" | "adults";
+  closed: boolean;
+};
+
+type PeriodAttendance = {
+  member_id: string;
+  attended_on: string;
+  members: {
+    display_name: string;
+    class: "kids" | "adults";
+  } | null;
+};
+
+type PeriodTechnique = {
+  member_id: string;
+  class_date: string;
+  technique_name: string;
+  technique_grade: string | null;
+  category: string | null;
+  members: {
+    display_name: string;
+  } | null;
+};
+
+type PeriodExam = {
+  exam_date: string;
+  grade: string;
+  members: {
+    display_name: string;
+    class: "kids" | "adults";
+  } | null;
 };
 
 type NotificationResult = {
@@ -123,20 +163,20 @@ export async function sendTelegramDigest(notificationType: NotificationType, opt
 
 export async function buildNotificationMessage(notificationType: NotificationType, period = resolvePeriod(notificationType)) {
   if (notificationType === "test") {
-    return `SKBC Gipuzkoa\nPrueba Telegram correcta.\n${formatHumanDate(todayIso())}`;
+    return `<b>SKBC Gipuzkoa</b>\nPrueba Telegram correcta.\n${formatHumanDate(todayIso())}`;
   }
 
   if (notificationType === "daily_ranking") {
     const digest = await buildDailyDigest();
     return [
-      `SKBC Gipuzkoa - Parte diario`,
-      formatHumanDate(todayIso()),
+      `🥋 <b>SKBC GIPUZKOA · PARTE DIARIO</b>`,
+      `<i>${formatHumanDate(todayIso())}</i>`,
       "",
       formatTodayClasses(digest.todayClasses),
       "",
-      formatRanking("Top adultos", digest.adults),
+      formatRanking("🏆 Top adultos", digest.adults),
       "",
-      formatRanking("Top ninos", digest.kids),
+      formatRanking("🌱 Top niños", digest.kids),
       "",
       formatExamReady(digest.readyForExam)
     ].join("\n").trim();
@@ -150,16 +190,22 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
       : "Resumen anual";
 
   return [
-    `SKBC Gipuzkoa - ${title}`,
-    `${formatHumanDate(period.start)} - ${formatHumanDate(period.end)}`,
+    `🥋 <b>SKBC GIPUZKOA · ${html(title.toUpperCase())}</b>`,
+    `<i>${formatHumanDate(period.start)} - ${formatHumanDate(period.end)}</i>`,
     "",
-    `Clases registradas: ${stats.classes}`,
-    `Asistencias adultos: ${stats.adultAttendance}`,
-    `Asistencias ninos: ${stats.kidsAttendance}`,
-    `Tecnicas marcadas: ${stats.techniques}`,
-    `Examenes aprobados: ${stats.passedExams}`,
-    `Cursos nacionales: ${stats.nationalCourses}`,
-    `Cursos internacionales: ${stats.internationalCourses}`,
+    formatClubNumbers(stats),
+    "",
+    formatAttendanceStats(stats),
+    "",
+    formatTechnicalStats(stats),
+    "",
+    formatCourseStats(stats),
+    "",
+    formatExamStats(stats),
+    "",
+    formatRanking("🏆 Top asistencia adultos", stats.topAdultAttendance),
+    "",
+    formatRanking("🌱 Top asistencia niños", stats.topKidsAttendance),
     "",
     formatExamReady(stats.readyForExam)
   ].join("\n").trim();
@@ -264,16 +310,37 @@ async function buildPeriodStats(period: { start: string; end: string }) {
     coursesResult,
     membersResult
   ] = await Promise.all([
-    supabase.from("classes").select("id", { count: "exact", head: true }).gte("class_date", period.start).lte("class_date", period.end),
+    supabase
+      .from("classes")
+      .select("id,name,class_date,class_group,closed")
+      .gte("class_date", period.start)
+      .lte("class_date", period.end)
+      .returns<PeriodClass[]>(),
     supabase
       .from("attendance_logs")
-      .select("member_id,attended_on,members(class)")
+      .select("member_id,attended_on,members(display_name,class)")
       .gte("attended_on", period.start)
       .lte("attended_on", period.end)
-      .returns<Array<{ member_id: string; attended_on: string; members: { class: "kids" | "adults" } | null }>>(),
-    supabase.from("member_technical_history").select("id", { count: "exact", head: true }).gte("class_date", period.start).lte("class_date", period.end).eq("completed", true),
-    supabase.from("exams").select("id", { count: "exact", head: true }).gte("exam_date", period.start).lte("exam_date", period.end),
-    supabase.from("courses").select("kind,course_date").gte("course_date", period.start).lte("course_date", period.end).returns<Array<{ kind: "national" | "international"; course_date: string }>>(),
+      .returns<PeriodAttendance[]>(),
+    supabase
+      .from("member_technical_history")
+      .select("member_id,class_date,technique_name,technique_grade,category,members(display_name)")
+      .gte("class_date", period.start)
+      .lte("class_date", period.end)
+      .eq("completed", true)
+      .returns<PeriodTechnique[]>(),
+    supabase
+      .from("exams")
+      .select("exam_date,grade,members(display_name,class)")
+      .gte("exam_date", period.start)
+      .lte("exam_date", period.end)
+      .returns<PeriodExam[]>(),
+    supabase
+      .from("courses")
+      .select("member_id,kind,course_date,title,location,sensei")
+      .gte("course_date", period.start)
+      .lte("course_date", period.end)
+      .returns<Course[]>(),
     supabase
       .from("members")
       .select("id,legacy_id,display_name,class,grade,status,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance")
@@ -289,16 +356,49 @@ async function buildPeriodStats(period: { start: string; end: string }) {
   if (membersResult.error) throw membersResult.error;
 
   const attendance = attendanceResult.data ?? [];
+  const classes = classesResult.data ?? [];
+  const techniques = techniquesResult.data ?? [];
+  const exams = examsResult.data ?? [];
   const courses = coursesResult.data ?? [];
+  const members = membersResult.data ?? [];
+  const adultAttendance = attendance.filter((row) => row.members?.class === "adults");
+  const kidsAttendance = attendance.filter((row) => row.members?.class === "kids");
+  const nationalCourseRows = courses.filter((row) => row.kind === "national");
+  const internationalCourseRows = courses.filter((row) => row.kind === "international");
+  const nationalCourseEvents = uniqueCourseEvents(nationalCourseRows);
+  const internationalCourseEvents = uniqueCourseEvents(internationalCourseRows);
+  const activeAdults = members.filter((member) => member.class === "adults").length;
+  const activeKids = members.filter((member) => member.class === "kids").length;
+
   return {
-    classes: classesResult.count ?? 0,
-    adultAttendance: attendance.filter((row) => row.members?.class === "adults").length,
-    kidsAttendance: attendance.filter((row) => row.members?.class === "kids").length,
-    techniques: techniquesResult.count ?? 0,
-    passedExams: examsResult.count ?? 0,
-    nationalCourses: courses.filter((row) => row.kind === "national").length,
-    internationalCourses: courses.filter((row) => row.kind === "international").length,
-    readyForExam: readyForExam(membersResult.data ?? [])
+    activeMembers: members.length,
+    activeAdults,
+    activeKids,
+    classes: classes.length,
+    adultClasses: classes.filter((row) => row.class_group === "adults").length,
+    kidsClasses: classes.filter((row) => row.class_group === "kids").length,
+    closedClasses: classes.filter((row) => row.closed).length,
+    adultAttendance: adultAttendance.length,
+    kidsAttendance: kidsAttendance.length,
+    totalAttendance: attendance.length,
+    uniqueAttendees: new Set(attendance.map((row) => row.member_id)).size,
+    averageAttendancePerClass: classes.length ? Math.round((attendance.length / classes.length) * 10) / 10 : 0,
+    techniques: techniques.length,
+    uniqueTechniques: new Set(techniques.map((row) => normalizeKey(row.technique_name))).size,
+    topTechniques: topCounts(techniques.map((row) => row.technique_name), 5),
+    topTechnicalMembers: topCounts(techniques.map((row) => row.members?.display_name ?? "Kenshi"), 5),
+    passedExams: exams.length,
+    examsByGrade: topCounts(exams.map((row) => row.grade), 8),
+    nationalCourses: nationalCourseEvents.length,
+    internationalCourses: internationalCourseEvents.length,
+    nationalCourseParticipants: nationalCourseRows.length,
+    internationalCourseParticipants: internationalCourseRows.length,
+    topCourses: [...nationalCourseEvents, ...internationalCourseEvents]
+      .sort((a, b) => b.participants - a.participants || a.date.localeCompare(b.date))
+      .slice(0, 6),
+    topAdultAttendance: topAttendanceRows(adultAttendance, 10),
+    topKidsAttendance: topAttendanceRows(kidsAttendance, 10),
+    readyForExam: readyForExam(members)
   };
 }
 
@@ -309,19 +409,22 @@ async function sendTelegramMessage(text: string) {
     throw new Error("Faltan TELEGRAM_BOT_TOKEN y/o TELEGRAM_CHAT_ID.");
   }
 
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text.slice(0, 4000),
-      disable_web_page_preview: true
-    })
-  });
+  for (const chunk of splitTelegramMessage(text)) {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: chunk,
+        parse_mode: "HTML",
+        disable_web_page_preview: true
+      })
+    });
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Telegram ${response.status}: ${detail.slice(0, 300)}`);
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Telegram ${response.status}: ${detail.slice(0, 300)}`);
+    }
   }
 }
 
@@ -428,39 +531,183 @@ function readyForExam(members: Member[]) {
     }));
 }
 
+function uniqueCourseEvents(rows: Course[]) {
+  const map = new Map<string, {
+    kind: "national" | "international";
+    date: string;
+    title: string;
+    location: string;
+    sensei: string;
+    participants: number;
+  }>();
+
+  for (const row of rows) {
+    const key = [
+      row.kind,
+      row.course_date,
+      normalizeKey(row.title || "Curso"),
+      normalizeKey(row.location || ""),
+      normalizeKey(row.sensei || "")
+    ].join("|");
+    const current = map.get(key);
+    if (current) {
+      current.participants += 1;
+    } else {
+      map.set(key, {
+        kind: row.kind,
+        date: row.course_date,
+        title: row.title?.trim() || "Curso",
+        location: row.location?.trim() || "",
+        sensei: row.sensei?.trim() || "",
+        participants: 1
+      });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function topCounts(values: Array<string | null | undefined>, limit: number) {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    const label = String(value ?? "").trim();
+    if (!label) continue;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, limit);
+}
+
+function topAttendanceRows(rows: PeriodAttendance[], limit: number) {
+  const byMember = new Map<string, { name: string; count: number }>();
+  for (const row of rows) {
+    const current = byMember.get(row.member_id) ?? { name: row.members?.display_name ?? "Kenshi", count: 0 };
+    current.count += 1;
+    byMember.set(row.member_id, current);
+  }
+  return Array.from(byMember.values())
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map((row, index) => ({
+      name: row.name,
+      grade: "Asistencia",
+      score: row.count,
+      detail: "clases en el periodo",
+      position: index + 1
+    }));
+}
+
+function splitTelegramMessage(text: string) {
+  const limit = 3900;
+  const lines = text.split("\n");
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const line of lines) {
+    const next = current ? `${current}\n${line}` : line;
+    if (next.length > limit && current) {
+      chunks.push(current);
+      current = line;
+    } else {
+      current = next;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.length ? chunks : [text.slice(0, limit)];
+}
+
+function html(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function formatTodayClasses(classes: Array<{ name: string; class_group: "kids" | "adults"; closed: boolean; plan_generated: boolean }>) {
-  if (!classes.length) return "Clase de hoy: no hay clase creada.";
+  if (!classes.length) return "📅 <b>Clase de hoy</b>\nNo hay clase creada.";
   return [
-    "Clase de hoy:",
+    "📅 <b>Clase de hoy</b>",
     ...classes.map((item) => {
-      const group = item.class_group === "kids" ? "ninos" : "adultos";
+      const group = item.class_group === "kids" ? "niños" : "adultos";
       const status = item.closed ? "cerrada" : "abierta";
       const plan = item.class_group === "adults" ? (item.plan_generated ? "plan OK" : "plan pendiente") : "solo asistencia";
-      return `- ${item.name} (${group}): ${status}, ${plan}`;
+      return `• <b>${html(item.name)}</b> (${group}): ${status}, ${plan}`;
     })
   ].join("\n");
 }
 
 function formatRanking(title: string, rows: Array<{ name: string; grade: string; score: number; detail: string; position: number }>) {
-  if (!rows.length) return `${title}: sin datos.`;
+  if (!rows.length) return `<b>${html(title)}</b>\nSin datos.`;
   return [
-    `${title}:`,
-    ...rows.slice(0, 5).map((row) => `${row.position}. ${row.name} - ${row.score} pts (${row.grade}; ${row.detail})`)
+    `<b>${html(title)}</b>`,
+    ...rows.slice(0, 10).map((row) => `${row.position}. <b>${html(row.name)}</b> · ${row.score} pts\n   ${html(row.grade)} · ${html(row.detail)}`)
   ].join("\n");
 }
 
 function formatExamReady(rows: ReturnType<typeof readyForExam>) {
   if (!rows.length) {
-    return "Kenshis listos para examen: ninguno hoy.";
+    return "🟢 <b>Kenshis listos para examen</b>\nNinguno ahora mismo.";
   }
   return [
-    "Kenshis listos para examen:",
+    "🟢 <b>Kenshis listos para examen</b>",
     ...rows.slice(0, 12).map((row) => {
       const attendance = row.attendance !== null && row.minimum !== null ? ` - asist. ${row.attendance}/${row.minimum}` : "";
-      return `- ${row.name} (${row.className}, ${row.grade})${row.nextExamOn ? ` - ${formatHumanDate(row.nextExamOn)}` : ""}${attendance}`;
+      return `• <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)})${row.nextExamOn ? ` · ${formatHumanDate(row.nextExamOn)}` : ""}${attendance}`;
     }),
     rows.length > 12 ? `Y ${rows.length - 12} mas.` : ""
   ].filter(Boolean).join("\n");
+}
+
+function formatClubNumbers(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+  return [
+    "📌 <b>Club en numeros</b>",
+    `• Kenshis activos: <b>${stats.activeMembers}</b> (${stats.activeAdults} adultos · ${stats.activeKids} niños)`,
+    `• Clases registradas: <b>${stats.classes}</b> (${stats.adultClasses} adultos · ${stats.kidsClasses} niños)`,
+    `• Clases cerradas: <b>${stats.closedClasses}/${stats.classes}</b>`,
+    `• Asistentes únicos del periodo: <b>${stats.uniqueAttendees}</b>`
+  ].join("\n");
+}
+
+function formatAttendanceStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+  return [
+    "👥 <b>Asistencia</b>",
+    `• Total asistencias: <b>${stats.totalAttendance}</b>`,
+    `• Adultos: <b>${stats.adultAttendance}</b>`,
+    `• Niños: <b>${stats.kidsAttendance}</b>`,
+    `• Media por clase: <b>${stats.averageAttendancePerClass}</b>`
+  ].join("\n");
+}
+
+function formatTechnicalStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+  return [
+    "🥋 <b>Trabajo tecnico adulto</b>",
+    `• Registros tecnicos: <b>${stats.techniques}</b>`,
+    `• Tecnicas diferentes trabajadas: <b>${stats.uniqueTechniques}</b>`,
+    stats.topTechniques.length ? "• Mas trabajadas:\n" + stats.topTechniques.map((item, index) => `  ${index + 1}. ${html(item.label)} · ${item.count}`).join("\n") : "• Mas trabajadas: sin datos",
+    stats.topTechnicalMembers.length ? "• Kenshis con mas registros:\n" + stats.topTechnicalMembers.map((item, index) => `  ${index + 1}. ${html(item.label)} · ${item.count}`).join("\n") : ""
+  ].filter(Boolean).join("\n");
+}
+
+function formatCourseStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+  return [
+    "🌍 <b>Cursos</b>",
+    `• Cursos nacionales celebrados: <b>${stats.nationalCourses}</b> (${stats.nationalCourseParticipants} participaciones)`,
+    `• Cursos internacionales celebrados: <b>${stats.internationalCourses}</b> (${stats.internationalCourseParticipants} participaciones)`,
+    stats.topCourses.length ? "• Cursos con mas asistencia:\n" + stats.topCourses.map((course, index) => {
+      const kind = course.kind === "international" ? "INT" : "NAC";
+      return `  ${index + 1}. [${kind}] ${html(course.title)} · ${formatHumanDate(course.date)} · ${course.participants}`;
+    }).join("\n") : "• Sin cursos en el periodo."
+  ].join("\n");
+}
+
+function formatExamStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+  return [
+    "🎓 <b>Examenes</b>",
+    `• Examenes registrados/aprobados: <b>${stats.passedExams}</b>`,
+    stats.examsByGrade.length ? "• Por grado:\n" + stats.examsByGrade.map((item) => `  ${html(item.label)} · ${item.count}`).join("\n") : "• Por grado: sin datos"
+  ].join("\n");
 }
 
 function resolvePeriod(notificationType: NotificationType) {
@@ -539,6 +786,10 @@ function adultInactivityPenalty(daysWithoutAttendance: number) {
   if (daysWithoutAttendance <= 60) return 15;
   if (daysWithoutAttendance <= 90) return 25;
   return 35;
+}
+
+function normalizeKey(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
 }
 
 function daysAgo(days: number) {
