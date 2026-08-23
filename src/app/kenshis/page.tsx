@@ -1,4 +1,4 @@
-import { LogOut, Search, ShieldCheck, UserRound } from "lucide-react";
+import { LogOut, Mail, Phone, Search, ShieldCheck, UserRound } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/actions";
@@ -62,7 +62,9 @@ export default async function KenshisPage({
           kenshi.first_name,
           kenshi.last_name,
           kenshi.grade,
-          kenshi.family_email
+          kenshi.family_email,
+          kenshi.guardian_phone,
+          kenshi.student_phone
         ]
           .filter(Boolean)
           .join(" ")
@@ -173,7 +175,9 @@ export default async function KenshisPage({
                     <span className={`pill ${kenshi.status}`}>{kenshi.status === "active" ? "Activo" : "Inactivo"}</span>
                   </td>
                   <td data-label="Grado">{kenshi.grade || <span className="muted">Sin grado</span>}</td>
-                  <td data-label="Contacto">{kenshi.family_email || kenshi.guardian_phone || kenshi.student_phone || <span className="muted">-</span>}</td>
+                  <td data-label="Contacto">
+                    <ContactPills email={kenshi.family_email} phone={kenshi.guardian_phone || kenshi.student_phone} />
+                  </td>
                   <td data-label="Ficha">
                     <span className="link-stack">
                       {kenshi.ficha_token ? <a className="text-link" href={`/ficha/${kenshi.ficha_token}?admin=1&returnTo=${encodeURIComponent("/kenshis")}`} target="_blank" rel="noopener noreferrer external">Ficha</a> : null}
@@ -188,5 +192,25 @@ export default async function KenshisPage({
         </section>
       </main>
     </div>
+  );
+}
+
+function ContactPills({ email, phone }: { email: string | null; phone: string | null }) {
+  if (!email && !phone) return <span className="muted">-</span>;
+  return (
+    <span className="contact-pills">
+      {email ? (
+        <a className="contact-pill email" href={`mailto:${email}`}>
+          <Mail aria-hidden="true" size={13} />
+          <span>{email}</span>
+        </a>
+      ) : null}
+      {phone ? (
+        <a className="contact-pill phone" href={`tel:${phone.replace(/\s+/g, "")}`}>
+          <Phone aria-hidden="true" size={13} />
+          <span>{phone}</span>
+        </a>
+      ) : null}
+    </span>
   );
 }

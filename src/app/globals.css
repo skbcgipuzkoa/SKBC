@@ -2318,6 +2318,41 @@ tbody tr:hover {
   gap: 8px;
 }
 
+.contact-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.contact-pill {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  text-decoration: none;
+}
+
+.contact-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-pill.email {
+  background: #eef4fb;
+  color: var(--brand-strong);
+}
+
+.contact-pill.phone {
+  background: #e8f5ee;
+  color: var(--ok);
+}
+
 .public-ficha {
   margin: 0 auto;
   max-width: 1120px;
