@@ -1,6 +1,6 @@
-import { Bell, LogOut, Send } from "lucide-react";
+import { Bell, LogOut, PauseCircle, PlayCircle, Send } from "lucide-react";
 import { redirect } from "next/navigation";
-import { logoutAction, sendTelegramNotificationAction } from "@/app/actions";
+import { logoutAction, sendTelegramNotificationAction, updateTelegramNotificationSettingAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -15,12 +15,19 @@ type NotificationLog = {
   created_at: string;
 };
 
+type NotificationSetting = {
+  notification_type: string;
+  enabled: boolean;
+  paused_reason: string | null;
+  updated_at: string;
+};
+
 const quickActions = [
-  { type: "test", label: "Enviar prueba", detail: "Comprueba bot y chat de Telegram." },
-  { type: "daily_ranking", label: "Enviar parte diario", detail: "Ranking, clase del dia y listos para examen." },
-  { type: "monthly_stats", label: "Enviar mensual", detail: "Estadisticas del mes anterior." },
-  { type: "semester_stats", label: "Enviar semestral", detail: "Resumen de enero-junio o julio-diciembre." },
-  { type: "yearly_stats", label: "Enviar anual", detail: "Resumen completo del ano." }
+  { type: "test", label: "Enviar prueba", detail: "Comprueba bot y chat de Telegram.", configurable: false },
+  { type: "daily_ranking", label: "Enviar parte diario", detail: "Ranking, clase del dia, aptos y proximos a examen.", configurable: true },
+  { type: "monthly_stats", label: "Enviar mensual", detail: "Estadisticas del mes anterior.", configurable: true },
+  { type: "semester_stats", label: "Enviar semestral", detail: "Resumen de enero-junio o julio-diciembre.", configurable: true },
+  { type: "yearly_stats", label: "Enviar anual", detail: "Resumen completo del ano.", configurable: true }
 ];
 
 export default async function NotificacionesPage({
@@ -34,12 +41,21 @@ export default async function NotificacionesPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("telegram_notification_logs")
-    .select("id,notification_type,period_start,period_end,status,error_message,sent_at,created_at")
-    .order("created_at", { ascending: false })
-    .limit(30)
-    .returns<NotificationLog[]>();
+  const [logsResult, settingsResult] = await Promise.all([
+    supabase
+      .from("telegram_notification_logs")
+      .select("id,notification_type,period_start,period_end,status,error_message,sent_at,created_at")
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .returns<NotificationLog[]>(),
+    supabase
+      .from("telegram_notification_settings")
+      .select("notification_type,enabled,paused_reason,updated_at")
+      .returns<NotificationSetting[]>()
+  ]);
+  const data = logsResult.data;
+  const error = logsResult.error;
+  const settings = settingsResult.error ? [] : settingsResult.data ?? [];
 
   return (
     <div className="shell">
@@ -79,7 +95,11 @@ export default async function NotificacionesPage({
         </div>
 
         {params.saved ? <p className="save-ok">Notificacion enviada o registrada correctamente.</p> : null}
-        {params.error ? <p className="form-error">No se pudo enviar Telegram{params.detail ? `: ${params.detail}` : "."}</p> : null}
+        {params.error ? (
+          <p className="form-error">
+            {params.error === "settings" ? "No se pudo guardar el ajuste de notificaciones." : `No se pudo enviar Telegram${params.detail ? `: ${params.detail}` : "."}`}
+          </p>
+        ) : null}
 
         <section className="card notifications-hero">
           <Bell aria-hidden="true" size={24} />
@@ -88,6 +108,47 @@ export default async function NotificacionesPage({
             <p className="muted">
               El parte diario incluye rankings y kenshis listos para examen si los hay. Los resumenes mensuales, semestrales y anuales quedan preparados para Vercel Cron.
             </p>
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Pausas individuales</h2>
+              <p className="muted">Pausa solo el aviso que quieras. Los envios manuales siguen funcionando desde los botones de abajo.</p>
+            </div>
+          </div>
+          {settingsResult.error ? (
+            <p className="form-error">Falta aplicar la migracion de ajustes de notificaciones.</p>
+          ) : null}
+          <div className="notification-settings-grid">
+            {quickActions.filter((action) => action.configurable).map((action) => {
+              const setting = settings.find((item) => item.notification_type === action.type);
+              const enabled = setting?.enabled ?? true;
+              return (
+                <article className={`notification-setting ${enabled ? "enabled" : "paused"}`} key={action.type}>
+                  <div>
+                    <h2>{action.label}</h2>
+                    <p className="muted">
+                      {enabled ? "Activa" : `Pausada${setting?.paused_reason ? `: ${setting.paused_reason}` : ""}`}
+                    </p>
+                  </div>
+                  <form action={updateTelegramNotificationSettingAction}>
+                    <input type="hidden" name="type" value={action.type} />
+                    <input type="hidden" name="enabled" value={enabled ? "" : "on"} />
+                    <input
+                      name="reason"
+                      placeholder="Motivo de pausa"
+                      defaultValue={enabled ? "Vacaciones / pausa temporal" : setting?.paused_reason ?? ""}
+                    />
+                    <button type="submit" className={enabled ? "secondary-button danger-button" : "secondary-button"}>
+                      {enabled ? <PauseCircle aria-hidden="true" size={16} /> : <PlayCircle aria-hidden="true" size={16} />}
+                      {enabled ? "Pausar" : "Reactivar"}
+                    </button>
+                  </form>
+                </article>
+              );
+            })}
           </div>
         </section>
 

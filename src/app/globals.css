@@ -917,6 +917,50 @@ tbody tr:hover {
   width: 100%;
 }
 
+.notification-settings-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 14px;
+}
+
+.notification-setting {
+  border: 1px solid #d8e1ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.notification-setting.enabled {
+  background: #f8fbff;
+}
+
+.notification-setting.paused {
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
+.notification-setting h2 {
+  margin: 0 0 6px;
+}
+
+.notification-setting form {
+  display: grid;
+  gap: 8px;
+}
+
+.notification-setting input {
+  width: 100%;
+}
+
+.notification-setting button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+}
+
 .grade-summary-grid {
   display: grid;
   gap: 10px;

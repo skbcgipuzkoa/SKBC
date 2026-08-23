@@ -12,7 +12,7 @@ import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior,
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendTelegramDigest } from "@/lib/telegram-notifications";
+import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/telegram-notifications";
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -73,6 +73,30 @@ export async function sendTelegramNotificationAction(formData: FormData) {
   }
 
   redirect(`/notificaciones?saved=${result.status}`);
+}
+
+export async function updateTelegramNotificationSettingAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const type = String(formData.get("type") ?? "");
+  const enabled = formData.get("enabled") === "on";
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+  const allowed = ["daily_ranking", "monthly_stats", "semester_stats", "yearly_stats"] as const;
+
+  if (!allowed.includes(type as typeof allowed[number])) {
+    redirect("/notificaciones?error=settings");
+  }
+
+  try {
+    await updateTelegramNotificationSetting(type as typeof allowed[number], enabled, reason);
+  } catch (error) {
+    console.error("Error updating Telegram notification setting", error);
+    redirect("/notificaciones?error=settings");
+  }
+
+  redirect("/notificaciones?saved=settings");
 }
 
 async function getNextSkbcLegacyId(supabase: ReturnType<typeof createAdminClient>) {

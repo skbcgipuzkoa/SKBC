@@ -14,6 +14,7 @@ type Member = {
   attendance_count: number | null;
   minimum_attendance: number | null;
   missing_attendance: number | null;
+  exam_notice: string | null;
 };
 
 type Attendance = {
@@ -107,6 +108,12 @@ type NotificationResult = {
   error?: string;
 };
 
+type NotificationSetting = {
+  notification_type: NotificationType;
+  enabled: boolean;
+  paused_reason: string | null;
+};
+
 const today = new Date();
 const date30 = daysAgo(30);
 const date90 = daysAgo(90);
@@ -115,6 +122,23 @@ const date180 = daysAgo(180);
 export async function sendTelegramDigest(notificationType: NotificationType, options: { force?: boolean } = {}): Promise<NotificationResult> {
   const period = resolvePeriod(notificationType);
   const supabase = createAdminClient();
+
+  if (!options.force && notificationType !== "test") {
+    const setting = await getNotificationSetting(notificationType);
+    if (setting && !setting.enabled) {
+      const message = `Notificacion pausada${setting.paused_reason ? `: ${setting.paused_reason}` : "."}`;
+      await upsertNotificationLog({
+        notificationType,
+        periodStart: period?.start ?? null,
+        periodEnd: period?.end ?? null,
+        status: "skipped",
+        telegramChatId: cleanEnv(process.env.TELEGRAM_CHAT_ID) ?? null,
+        message,
+        errorMessage: null
+      });
+      return { notificationType, status: "skipped", message };
+    }
+  }
 
   const existing = period
     ? await supabase
@@ -178,7 +202,9 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
       "",
       formatRanking("🌱 Top niños", digest.kids),
       "",
-      formatExamReady(digest.readyForExam)
+      formatExamReady(digest.readyForExam),
+      "",
+      formatExamUpcoming(digest.upcomingForExam)
     ].join("\n").trim();
   }
 
@@ -211,6 +237,28 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
   ].join("\n").trim();
 }
 
+export async function updateTelegramNotificationSetting(
+  notificationType: NotificationType,
+  enabled: boolean,
+  pausedReason: string | null
+) {
+  const configurableTypes: NotificationType[] = ["daily_ranking", "monthly_stats", "semester_stats", "yearly_stats"];
+  if (!configurableTypes.includes(notificationType)) {
+    throw new Error("Tipo de notificacion no configurable.");
+  }
+
+  const { error } = await createAdminClient()
+    .from("telegram_notification_settings")
+    .upsert({
+      notification_type: notificationType,
+      enabled,
+      paused_reason: enabled ? null : pausedReason,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "notification_type" });
+
+  if (error) throw error;
+}
+
 async function buildDailyDigest() {
   const supabase = createAdminClient();
   const [
@@ -227,7 +275,7 @@ async function buildDailyDigest() {
   ] = await Promise.all([
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,status,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance")
+      .select("id,legacy_id,display_name,class,grade,status,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice")
       .eq("status", "active")
       .returns<Member[]>(),
     supabase.from("attendance_logs").select("member_id,attended_on").returns<Attendance[]>(),
@@ -296,7 +344,8 @@ async function buildDailyDigest() {
     adults,
     kids,
     todayClasses: todayClassesResult.data ?? [],
-    readyForExam: readyForExam(members)
+    readyForExam: readyForExam(members),
+    upcomingForExam: upcomingForExam(members)
   };
 }
 
@@ -343,7 +392,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       .returns<Course[]>(),
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,status,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance")
+      .select("id,legacy_id,display_name,class,grade,status,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice")
       .eq("status", "active")
       .returns<Member[]>()
   ]);
@@ -531,6 +580,53 @@ function readyForExam(members: Member[]) {
     }));
 }
 
+function upcomingForExam(members: Member[]) {
+  const today = todayIso();
+  const followUpLimit = isoDate(addDays(new Date(), 180));
+  return members
+    .filter((member) =>
+      member.semaphore !== "VERDE" &&
+      Boolean(member.next_exam_on) &&
+      member.next_exam_on! >= today &&
+      member.next_exam_on! <= followUpLimit
+    )
+    .sort((a, b) => (a.next_exam_on ?? "9999-12-31").localeCompare(b.next_exam_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name))
+    .slice(0, 12)
+    .map((member) => ({
+      name: member.display_name,
+      grade: member.grade ?? "-",
+      className: member.class === "kids" ? "ninos" : "adultos",
+      nextExamOn: member.next_exam_on,
+      semaphore: member.semaphore ?? "-",
+      reason: studentFriendlyExamReason(member),
+      attendance: member.attendance_count,
+      minimum: member.minimum_attendance,
+      missingAttendance: member.missing_attendance
+    }));
+}
+
+function studentFriendlyExamReason(member: Member) {
+  const missingAttendance = member.missing_attendance ?? 0;
+  const notice = normalizeKey(member.exam_notice);
+
+  if (member.semaphore === "GRIS") {
+    return "Necesita recuperar regularidad de entrenamiento antes de valorar convocatoria.";
+  }
+  if (member.semaphore === "AZUL" || notice.includes("TIEMPO")) {
+    return "Todavia falta tiempo minimo de practica para esta convocatoria.";
+  }
+  if (missingAttendance > 0 || notice.includes("ASISTENCIA")) {
+    return `Necesita sumar ${missingAttendance > 0 ? missingAttendance : "mas"} asistencia${missingAttendance === 1 ? "" : "s"} para llegar al minimo.`;
+  }
+  if (notice.includes("TECNIC")) {
+    return "Necesita completar mas trabajo tecnico de su grado.";
+  }
+  if (notice.includes("IMPLICACION")) {
+    return "La implicacion y cursos registrados aun no compensan los requisitos pendientes.";
+  }
+  return "En seguimiento para proxima convocatoria; revisar asistencia, tiempo minimo y progreso tecnico.";
+}
+
 function uniqueCourseEvents(rows: Course[]) {
   const map = new Map<string, {
     kind: "national" | "international";
@@ -658,6 +754,21 @@ function formatExamReady(rows: ReturnType<typeof readyForExam>) {
     }),
     rows.length > 12 ? `Y ${rows.length - 12} mas.` : ""
   ].filter(Boolean).join("\n");
+}
+
+function formatExamUpcoming(rows: ReturnType<typeof upcomingForExam>) {
+  if (!rows.length) {
+    return "ðŸŸ¡ <b>Proximos a examen</b>\nSin kenshis en ventana de seguimiento.";
+  }
+  return [
+    "ðŸŸ¡ <b>Proximos a examen</b>",
+    ...rows.map((row) => {
+      const attendance = row.attendance !== null && row.minimum !== null
+        ? ` - asist. ${row.attendance}/${row.minimum}${row.missingAttendance ? ` (faltan ${row.missingAttendance})` : ""}`
+        : "";
+      return `â€¢ <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${html(row.semaphore)}${row.nextExamOn ? ` - ${formatHumanDate(row.nextExamOn)}` : ""}${attendance}\n   ${html(row.reason)}`;
+    })
+  ].join("\n");
 }
 
 function formatClubNumbers(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
@@ -798,6 +909,12 @@ function daysAgo(days: number) {
   return isoDate(date);
 }
 
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
 function todayIso() {
   return isoDate(new Date());
 }
@@ -813,4 +930,19 @@ function formatHumanDate(value: string) {
 
 function cleanEnv(value: string | undefined) {
   return value?.replace(/^\uFEFF/, "").trim();
+}
+
+async function getNotificationSetting(notificationType: NotificationType) {
+  const { data, error } = await createAdminClient()
+    .from("telegram_notification_settings")
+    .select("notification_type,enabled,paused_reason")
+    .eq("notification_type", notificationType)
+    .maybeSingle<NotificationSetting>();
+
+  if (error) {
+    console.error("Telegram notification settings not available", error);
+    return null;
+  }
+
+  return data;
 }
