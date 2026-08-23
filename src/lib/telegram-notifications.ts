@@ -9,6 +9,7 @@ type Member = {
   class: "kids" | "adults";
   grade: string | null;
   status: "active" | "inactive";
+  joined_on?: string | null;
   semaphore: string | null;
   next_exam_on: string | null;
   attendance_count: number | null;
@@ -28,7 +29,7 @@ type TechnicalHistory = {
 };
 
 type Course = {
-  member_id: string;
+  member_id?: string;
   course_date: string;
   kind: "national" | "international";
   title?: string | null;
@@ -77,6 +78,7 @@ type PeriodAttendance = {
   attended_on: string;
   members: {
     display_name: string;
+    legacy_id: string | null;
     class: "kids" | "adults";
   } | null;
 };
@@ -89,6 +91,7 @@ type PeriodTechnique = {
   category: string | null;
   members: {
     display_name: string;
+    legacy_id: string | null;
   } | null;
 };
 
@@ -220,6 +223,8 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
     `<i>${formatHumanDate(period.start)} - ${formatHumanDate(period.end)}</i>`,
     "",
     formatClubNumbers(stats),
+    "",
+    formatYearGrowth(stats),
     "",
     formatAttendanceStats(stats),
     "",
@@ -367,13 +372,13 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       .returns<PeriodClass[]>(),
     supabase
       .from("attendance_logs")
-      .select("member_id,attended_on,members(display_name,class)")
+      .select("member_id,attended_on,members(display_name,legacy_id,class)")
       .gte("attended_on", period.start)
       .lte("attended_on", period.end)
       .returns<PeriodAttendance[]>(),
     supabase
       .from("member_technical_history")
-      .select("member_id,class_date,technique_name,technique_grade,category,members(display_name)")
+      .select("member_id,class_date,technique_name,technique_grade,category,members(display_name,legacy_id)")
       .gte("class_date", period.start)
       .lte("class_date", period.end)
       .eq("completed", true)
@@ -392,7 +397,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       .returns<Course[]>(),
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,status,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice")
+      .select("id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice")
       .eq("status", "active")
       .returns<Member[]>()
   ]);
@@ -418,6 +423,16 @@ async function buildPeriodStats(period: { start: string; end: string }) {
   const internationalCourseEvents = uniqueCourseEvents(internationalCourseRows);
   const activeAdults = members.filter((member) => member.class === "adults").length;
   const activeKids = members.filter((member) => member.class === "kids").length;
+  const yearGrowth = await buildYearGrowthStats(period, {
+    classes: classes.length,
+    attendance: attendance.length,
+    adultAttendance: adultAttendance.length,
+    kidsAttendance: kidsAttendance.length,
+    exams: exams.length,
+    nationalCourses: nationalCourseEvents.length,
+    internationalCourses: internationalCourseEvents.length,
+    newMembers: members.filter((member) => member.joined_on && member.joined_on >= period.start && member.joined_on <= period.end).length
+  });
 
   return {
     activeMembers: members.length,
@@ -435,7 +450,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
     techniques: techniques.length,
     uniqueTechniques: new Set(techniques.map((row) => normalizeKey(row.technique_name))).size,
     topTechniques: topCounts(techniques.map((row) => row.technique_name), 5),
-    topTechnicalMembers: topCounts(techniques.map((row) => row.members?.display_name ?? "Kenshi"), 5),
+    topTechnicalMembers: topCounts(techniques.filter((row) => !isSenseiLegacy(row.members?.legacy_id)).map((row) => row.members?.display_name ?? "Kenshi"), 5),
     passedExams: exams.length,
     examsByGrade: topCounts(exams.map((row) => row.grade), 8),
     nationalCourses: nationalCourseEvents.length,
@@ -447,6 +462,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       .slice(0, 6),
     topAdultAttendance: topAttendanceRows(adultAttendance, 10),
     topKidsAttendance: topAttendanceRows(kidsAttendance, 10),
+    yearGrowth,
     readyForExam: readyForExam(members)
   };
 }
@@ -516,8 +532,8 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
   const technical90 = countByMember(technical);
-  const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national").map((row) => ({ member_id: row.member_id, points: 1 })));
-  const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international").map((row) => ({ member_id: row.member_id, points: 3 })));
+  const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 1 })));
+  const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 3 })));
   const manualBonus = sumByMember(
     bonuses
       .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
@@ -678,6 +694,7 @@ function topCounts(values: Array<string | null | undefined>, limit: number) {
 function topAttendanceRows(rows: PeriodAttendance[], limit: number) {
   const byMember = new Map<string, { name: string; count: number }>();
   for (const row of rows) {
+    if (isSenseiLegacy(row.members?.legacy_id)) continue;
     const current = byMember.get(row.member_id) ?? { name: row.members?.display_name ?? "Kenshi", count: 0 };
     current.count += 1;
     byMember.set(row.member_id, current);
@@ -692,6 +709,52 @@ function topAttendanceRows(rows: PeriodAttendance[], limit: number) {
       detail: "clases en el periodo",
       position: index + 1
     }));
+}
+
+async function buildYearGrowthStats(period: { start: string; end: string }, current: {
+  classes: number;
+  attendance: number;
+  adultAttendance: number;
+  kidsAttendance: number;
+  exams: number;
+  nationalCourses: number;
+  internationalCourses: number;
+  newMembers: number;
+}) {
+  const startYear = Number(period.start.slice(0, 4));
+  const isFullYear = period.start === `${startYear}-01-01` && period.end === `${startYear}-12-31`;
+  if (!isFullYear || !Number.isFinite(startYear)) return null;
+
+  const previous = {
+    start: `${startYear - 1}-01-01`,
+    end: `${startYear - 1}-12-31`
+  };
+  const supabase = createAdminClient();
+  const [classesResult, attendanceResult, examsResult, coursesResult, membersResult] = await Promise.all([
+    supabase.from("classes").select("id", { count: "exact", head: true }).gte("class_date", previous.start).lte("class_date", previous.end),
+    supabase.from("attendance_logs").select("member_id,attended_on,members(class)", { count: "exact" }).gte("attended_on", previous.start).lte("attended_on", previous.end).returns<PeriodAttendance[]>(),
+    supabase.from("exams").select("exam_date", { count: "exact", head: true }).gte("exam_date", previous.start).lte("exam_date", previous.end),
+    supabase.from("courses").select("kind,course_date,title,location,sensei").gte("course_date", previous.start).lte("course_date", previous.end).returns<Course[]>(),
+    supabase.from("members").select("id", { count: "exact", head: true }).gte("joined_on", previous.start).lte("joined_on", previous.end)
+  ]);
+
+  const previousAttendance = attendanceResult.error ? [] : attendanceResult.data ?? [];
+  const previousCourses = coursesResult.error ? [] : coursesResult.data ?? [];
+  const previousNationalCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "national")).length;
+  const previousInternationalCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "international")).length;
+
+  return {
+    year: startYear,
+    previousYear: startYear - 1,
+    classes: compareNumber(current.classes, classesResult.count ?? 0),
+    attendance: compareNumber(current.attendance, previousAttendance.length),
+    adultAttendance: compareNumber(current.adultAttendance, previousAttendance.filter((row) => row.members?.class === "adults").length),
+    kidsAttendance: compareNumber(current.kidsAttendance, previousAttendance.filter((row) => row.members?.class === "kids").length),
+    exams: compareNumber(current.exams, examsResult.count ?? 0),
+    nationalCourses: compareNumber(current.nationalCourses, previousNationalCourses),
+    internationalCourses: compareNumber(current.internationalCourses, previousInternationalCourses),
+    newMembers: compareNumber(current.newMembers, membersResult.count ?? 0)
+  };
 }
 
 function splitTelegramMessage(text: string) {
@@ -777,6 +840,20 @@ function formatClubNumbers(stats: Awaited<ReturnType<typeof buildPeriodStats>>) 
     `• Clases registradas: <b>${stats.classes}</b> (${stats.adultClasses} adultos · ${stats.kidsClasses} niños)`,
     `• Clases cerradas: <b>${stats.closedClasses}/${stats.classes}</b>`,
     `• Asistentes únicos del periodo: <b>${stats.uniqueAttendees}</b>`
+  ].join("\n");
+}
+
+function formatYearGrowth(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+  if (!stats.yearGrowth) return "";
+  const growth = stats.yearGrowth;
+  return [
+    `📈 <b>Crecimiento anual ${growth.year} vs ${growth.previousYear}</b>`,
+    `• Nuevos kenshis: <b>${growth.newMembers.current}</b> (${formatDelta(growth.newMembers.delta)})`,
+    `• Asistencias totales: <b>${growth.attendance.current}</b> (${formatDelta(growth.attendance.delta)})`,
+    `• Adultos: <b>${growth.adultAttendance.current}</b> (${formatDelta(growth.adultAttendance.delta)}) · niños: <b>${growth.kidsAttendance.current}</b> (${formatDelta(growth.kidsAttendance.delta)})`,
+    `• Clases registradas: <b>${growth.classes.current}</b> (${formatDelta(growth.classes.delta)})`,
+    `• Examenes: <b>${growth.exams.current}</b> (${formatDelta(growth.exams.delta)})`,
+    `• Cursos: nacionales <b>${growth.nationalCourses.current}</b> (${formatDelta(growth.nationalCourses.delta)}) · internacionales <b>${growth.internationalCourses.current}</b> (${formatDelta(growth.internationalCourses.delta)})`
   ].join("\n");
 }
 
@@ -900,6 +977,23 @@ function adultInactivityPenalty(daysWithoutAttendance: number) {
 
 function normalizeKey(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function isSenseiLegacy(legacyId: string | null | undefined) {
+  return String(legacyId ?? "").trim() === "13";
+}
+
+function compareNumber(current: number, previous: number) {
+  return {
+    current,
+    previous,
+    delta: current - previous
+  };
+}
+
+function formatDelta(delta: number) {
+  if (delta > 0) return `+${delta}`;
+  return String(delta);
 }
 
 function daysAgo(days: number) {
