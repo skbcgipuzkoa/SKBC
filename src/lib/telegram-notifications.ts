@@ -78,7 +78,7 @@ type PeriodAttendance = {
   attended_on: string;
   members: {
     display_name: string;
-    legacy_id: string | null;
+    legacy_id?: string | null;
     class: "kids" | "adults";
   } | null;
 };
@@ -423,8 +423,16 @@ async function buildPeriodStats(period: { start: string; end: string }) {
   const internationalCourseEvents = uniqueCourseEvents(internationalCourseRows);
   const activeAdults = members.filter((member) => member.class === "adults").length;
   const activeKids = members.filter((member) => member.class === "kids").length;
+  const registeredAdultClasses = classes.filter((row) => row.class_group === "adults").length;
+  const registeredKidsClasses = classes.filter((row) => row.class_group === "kids").length;
+  const inferredKidsClasses = distinctDates(kidsAttendance.map((row) => row.attended_on)).length;
+  const kidsClasses = Math.max(registeredKidsClasses, inferredKidsClasses);
+  const clubClassDays = distinctDates([
+    ...classes.map((row) => row.class_date),
+    ...kidsAttendance.map((row) => row.attended_on)
+  ]).length;
   const yearGrowth = await buildYearGrowthStats(period, {
-    classes: classes.length,
+    classes: clubClassDays,
     attendance: attendance.length,
     adultAttendance: adultAttendance.length,
     kidsAttendance: kidsAttendance.length,
@@ -438,15 +446,17 @@ async function buildPeriodStats(period: { start: string; end: string }) {
     activeMembers: members.length,
     activeAdults,
     activeKids,
-    classes: classes.length,
-    adultClasses: classes.filter((row) => row.class_group === "adults").length,
-    kidsClasses: classes.filter((row) => row.class_group === "kids").length,
+    classes: clubClassDays,
+    registeredClasses: classes.length,
+    adultClasses: registeredAdultClasses,
+    kidsClasses,
+    inferredKidsClasses,
     closedClasses: classes.filter((row) => row.closed).length,
     adultAttendance: adultAttendance.length,
     kidsAttendance: kidsAttendance.length,
     totalAttendance: attendance.length,
     uniqueAttendees: new Set(attendance.map((row) => row.member_id)).size,
-    averageAttendancePerClass: classes.length ? Math.round((attendance.length / classes.length) * 10) / 10 : 0,
+    averageAttendancePerClass: clubClassDays ? Math.round((attendance.length / clubClassDays) * 10) / 10 : 0,
     techniques: techniques.length,
     uniqueTechniques: new Set(techniques.map((row) => normalizeKey(row.technique_name))).size,
     topTechniques: topCounts(techniques.map((row) => row.technique_name), 5),
@@ -740,13 +750,16 @@ async function buildYearGrowthStats(period: { start: string; end: string }, curr
 
   const previousAttendance = attendanceResult.error ? [] : attendanceResult.data ?? [];
   const previousCourses = coursesResult.error ? [] : coursesResult.data ?? [];
+  const previousClassRows = classesResult.count ?? 0;
+  const previousKidsClassDates = distinctDates(previousAttendance.filter((row) => row.members?.class === "kids").map((row) => row.attended_on));
+  const previousClubClassDays = Math.max(previousClassRows, previousKidsClassDates.length);
   const previousNationalCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "national")).length;
   const previousInternationalCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "international")).length;
 
   return {
     year: startYear,
     previousYear: startYear - 1,
-    classes: compareNumber(current.classes, classesResult.count ?? 0),
+    classes: compareNumber(current.classes, previousClubClassDays),
     attendance: compareNumber(current.attendance, previousAttendance.length),
     adultAttendance: compareNumber(current.adultAttendance, previousAttendance.filter((row) => row.members?.class === "adults").length),
     kidsAttendance: compareNumber(current.kidsAttendance, previousAttendance.filter((row) => row.members?.class === "kids").length),
@@ -837,8 +850,9 @@ function formatClubNumbers(stats: Awaited<ReturnType<typeof buildPeriodStats>>) 
   return [
     "📌 <b>Club en numeros</b>",
     `• Kenshis activos: <b>${stats.activeMembers}</b> (${stats.activeAdults} adultos · ${stats.activeKids} niños)`,
-    `• Clases registradas: <b>${stats.classes}</b> (${stats.adultClasses} adultos · ${stats.kidsClasses} niños)`,
-    `• Clases cerradas: <b>${stats.closedClasses}/${stats.classes}</b>`,
+    `• Dias de clase del club: <b>${stats.classes}</b>`,
+    `• Adultos registrados: <b>${stats.adultClasses}</b> · niños por asistencia: <b>${stats.kidsClasses}</b>`,
+    `• Clases cerradas: <b>${stats.closedClasses}/${stats.registeredClasses}</b>`,
     `• Asistentes únicos del periodo: <b>${stats.uniqueAttendees}</b>`
   ].join("\n");
 }
@@ -977,6 +991,10 @@ function adultInactivityPenalty(daysWithoutAttendance: number) {
 
 function normalizeKey(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function distinctDates(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").slice(0, 10)).filter(Boolean)));
 }
 
 function isSenseiLegacy(legacyId: string | null | undefined) {
