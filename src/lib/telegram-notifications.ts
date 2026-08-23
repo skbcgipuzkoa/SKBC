@@ -456,7 +456,11 @@ async function buildPeriodStats(period: { start: string; end: string }) {
     kidsAttendance: kidsAttendance.length,
     totalAttendance: attendance.length,
     uniqueAttendees: new Set(attendance.map((row) => row.member_id)).size,
+    uniqueAdultAttendees: new Set(adultAttendance.map((row) => row.member_id)).size,
+    uniqueKidsAttendees: new Set(kidsAttendance.map((row) => row.member_id)).size,
     averageAttendancePerClass: clubClassDays ? Math.round((attendance.length / clubClassDays) * 10) / 10 : 0,
+    averageAdultAttendancePerClass: registeredAdultClasses ? Math.round((adultAttendance.length / registeredAdultClasses) * 10) / 10 : 0,
+    averageKidsAttendancePerClass: kidsClasses ? Math.round((kidsAttendance.length / kidsClasses) * 10) / 10 : 0,
     techniques: techniques.length,
     uniqueTechniques: new Set(techniques.map((row) => normalizeKey(row.technique_name))).size,
     topTechniques: topCounts(techniques.map((row) => row.technique_name), 5),
@@ -853,7 +857,7 @@ function formatClubNumbers(stats: Awaited<ReturnType<typeof buildPeriodStats>>) 
     `• Dias de clase del club: <b>${stats.classes}</b>`,
     `• Adultos registrados: <b>${stats.adultClasses}</b> · niños por asistencia: <b>${stats.kidsClasses}</b>`,
     `• Clases cerradas: <b>${stats.closedClasses}/${stats.registeredClasses}</b>`,
-    `• Asistentes únicos del periodo: <b>${stats.uniqueAttendees}</b>`
+    `• Asistentes únicos: <b>${stats.uniqueAttendees}</b> (${stats.uniqueAdultAttendees} adultos · ${stats.uniqueKidsAttendees} niños)`
   ].join("\n");
 }
 
@@ -861,13 +865,14 @@ function formatYearGrowth(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
   if (!stats.yearGrowth) return "";
   const growth = stats.yearGrowth;
   return [
-    `📈 <b>Crecimiento anual ${growth.year} vs ${growth.previousYear}</b>`,
-    `• Nuevos kenshis: <b>${growth.newMembers.current}</b> (${formatDelta(growth.newMembers.delta)})`,
-    `• Asistencias totales: <b>${growth.attendance.current}</b> (${formatDelta(growth.attendance.delta)})`,
-    `• Adultos: <b>${growth.adultAttendance.current}</b> (${formatDelta(growth.adultAttendance.delta)}) · niños: <b>${growth.kidsAttendance.current}</b> (${formatDelta(growth.kidsAttendance.delta)})`,
-    `• Clases registradas: <b>${growth.classes.current}</b> (${formatDelta(growth.classes.delta)})`,
-    `• Examenes: <b>${growth.exams.current}</b> (${formatDelta(growth.exams.delta)})`,
-    `• Cursos: nacionales <b>${growth.nationalCourses.current}</b> (${formatDelta(growth.nationalCourses.delta)}) · internacionales <b>${growth.internationalCourses.current}</b> (${formatDelta(growth.internationalCourses.delta)})`
+    `📈 <b>Balance anual ${growth.year}</b>`,
+    `<i>Comparado con ${growth.previousYear}; el paréntesis indica diferencia respecto al año anterior.</i>`,
+    `• Nuevos kenshis: <b>${growth.newMembers.current}</b> (${formatDeltaWords(growth.newMembers.delta)})`,
+    `• Asistencias totales: <b>${growth.attendance.current}</b> (${formatDeltaWords(growth.attendance.delta)})`,
+    `• Adultos: <b>${growth.adultAttendance.current}</b> (${formatDeltaWords(growth.adultAttendance.delta)}) · niños: <b>${growth.kidsAttendance.current}</b> (${formatDeltaWords(growth.kidsAttendance.delta)})`,
+    `• Dias de clase del club: <b>${growth.classes.current}</b> (${formatDeltaWords(growth.classes.delta)})`,
+    `• Examenes: <b>${growth.exams.current}</b> (${formatDeltaWords(growth.exams.delta)})`,
+    `• Cursos: nacionales <b>${growth.nationalCourses.current}</b> (${formatDeltaWords(growth.nationalCourses.delta)}) · internacionales <b>${growth.internationalCourses.current}</b> (${formatDeltaWords(growth.internationalCourses.delta)})`
   ].join("\n");
 }
 
@@ -875,9 +880,9 @@ function formatAttendanceStats(stats: Awaited<ReturnType<typeof buildPeriodStats
   return [
     "👥 <b>Asistencia</b>",
     `• Total asistencias: <b>${stats.totalAttendance}</b>`,
-    `• Adultos: <b>${stats.adultAttendance}</b>`,
-    `• Niños: <b>${stats.kidsAttendance}</b>`,
-    `• Media por clase: <b>${stats.averageAttendancePerClass}</b>`
+    `• Adultos: <b>${stats.adultAttendance}</b> · media <b>${stats.averageAdultAttendancePerClass}</b>`,
+    `• Niños: <b>${stats.kidsAttendance}</b> · media <b>${stats.averageKidsAttendancePerClass}</b>`,
+    `• Media global por dia de clase: <b>${stats.averageAttendancePerClass}</b>`
   ].join("\n");
 }
 
@@ -1012,6 +1017,12 @@ function compareNumber(current: number, previous: number) {
 function formatDelta(delta: number) {
   if (delta > 0) return `+${delta}`;
   return String(delta);
+}
+
+function formatDeltaWords(delta: number) {
+  if (delta > 0) return `${delta} mas que el año anterior`;
+  if (delta < 0) return `${Math.abs(delta)} menos que el año anterior`;
+  return "igual que el año anterior";
 }
 
 function daysAgo(days: number) {
