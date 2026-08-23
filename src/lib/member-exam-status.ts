@@ -16,7 +16,7 @@ type AttendanceRow = {
 };
 
 type CourseRow = {
-  kind: "national" | "international";
+  kind: "national" | "international" | "taikai";
   course_date: string;
 };
 
@@ -318,7 +318,7 @@ async function calculateEngagementStatus(member: MemberRow, cycleStart: string):
   ]);
 
   const recentCourses = (courses ?? []).filter((row) => row.course_date >= date180);
-  const coursePoints = recentCourses.reduce((sum, row) => sum + (row.kind === "international" ? 3 : 1), 0);
+  const coursePoints = recentCourses.reduce((sum, row) => sum + courseKindPoints(row.kind), 0);
   const bonusPoints = bonusResult.error ? 0 : (bonusResult.data ?? [])
     .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
     .reduce((sum, row) => sum + row.points, 0);
@@ -598,4 +598,10 @@ function nextAdultGrade(grade: string | null) {
   const index = ADULT_GRADES.findIndex((item) => normalizeGrade(item) === normalized);
   if (index === -1) return grade ?? "";
   return ADULT_GRADES[Math.min(index + 1, ADULT_GRADES.length - 1)];
+}
+
+function courseKindPoints(kind: CourseRow["kind"]) {
+  if (kind === "international") return 3;
+  if (kind === "taikai") return 2;
+  return 1;
 }

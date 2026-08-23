@@ -28,7 +28,7 @@ type TechnicalHistory = {
 type Course = {
   member_id: string;
   course_date: string;
-  kind: "national" | "international";
+  kind: "national" | "international" | "taikai";
 };
 
 type AdultBonus = {
@@ -68,6 +68,7 @@ type AdultRankingRow = Member & {
   daysWithoutAttendance: number;
   nationalCoursePoints: number;
   internationalCoursePoints: number;
+  taikaiCoursePoints: number;
   manualBonus: number;
   blackBeltPoints: number;
   shakujoPoints: number;
@@ -233,7 +234,7 @@ export default async function RankingsPage({
                       <span className="ranking-chip">30/90: {row.attendance30}/{row.attendance90}</span>
                       <span className="ranking-chip">{formatDaysWithout(row.daysWithoutAttendance)}</span>
                       <span className="ranking-chip">Tecnicas {row.technical90}</span>
-                      <span className="ranking-chip">Cursos {row.nationalCoursePoints + row.internationalCoursePoints}</span>
+                      <span className="ranking-chip">Cursos {row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}</span>
                       <span className="ranking-chip">Busen {row.blackBeltPoints}</span>
                       <span className="ranking-chip">Shakujo {row.shakujoPoints}</span>
                       {row.manualBonus ? <span className="ranking-chip">Bonus {row.manualBonus}</span> : null}
@@ -329,7 +330,7 @@ export default async function RankingsPage({
                       <td data-label="Grado">{row.grade ?? "-"}</td>
                       <td data-label="Asist. 30/90">{row.attendance30}/{row.attendance90}</td>
                       <td data-label="Dias sin venir">{row.daysWithoutAttendance}</td>
-                      <td data-label="Cursos">{row.nationalCoursePoints + row.internationalCoursePoints}</td>
+                      <td data-label="Cursos">{row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}</td>
                       <td data-label="Busen">{row.blackBeltPoints}</td>
                       <td data-label="Shakujo">{row.shakujoPoints}</td>
                       <td data-label="Bonus">{row.manualBonus}</td>
@@ -387,6 +388,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const technical90 = countByMember(technical);
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national").map((row) => ({ member_id: row.member_id, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international").map((row) => ({ member_id: row.member_id, points: 3 })));
+  const taikaiCoursePoints = sumByMember(courses.filter((row) => row.kind === "taikai").map((row) => ({ member_id: row.member_id, points: 2 })));
   const manualBonus = sumByMember(
     bonuses
       .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
@@ -413,10 +415,11 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10), closures) : 999;
       const nac = nationalCoursePoints.get(member.id) ?? 0;
       const intl = internationalCoursePoints.get(member.id) ?? 0;
+      const taikai = taikaiCoursePoints.get(member.id) ?? 0;
       const bonus = manualBonus.get(member.id) ?? 0;
       const black = blackBeltPoints.get(member.id) ?? 0;
       const shakujo = shakujoPoints.get(member.id) ?? 0;
-      const activityScore = a30 * 8 + a90 * 2 + nac + intl + bonus + black + shakujo;
+      const activityScore = a30 * 8 + a90 * 2 + nac + intl + taikai + bonus + black + shakujo;
       const inactivityPenalty = adultInactivityPenalty(daysWithoutAttendance);
       return {
         ...member,
@@ -426,6 +429,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         daysWithoutAttendance,
         nationalCoursePoints: nac,
         internationalCoursePoints: intl,
+        taikaiCoursePoints: taikai,
         manualBonus: bonus,
         blackBeltPoints: black,
         shakujoPoints: shakujo,

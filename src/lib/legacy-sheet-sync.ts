@@ -24,7 +24,7 @@ type ExamSnapshot = {
 
 type CourseSnapshot = {
   id: string;
-  kind: "national" | "international";
+  kind: "national" | "international" | "taikai";
   course_date: string;
   member_id: string;
   location: string | null;

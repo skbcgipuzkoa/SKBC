@@ -17,7 +17,7 @@ type Member = {
 type Course = {
   id: string;
   member_id: string;
-  kind: "national" | "international";
+  kind: CourseKind;
   course_date: string;
   location: string | null;
   title: string | null;
@@ -50,7 +50,7 @@ export default async function CursosPage({
     .order("course_date", { ascending: false })
     .limit(80);
 
-  if (params.kind === "national" || params.kind === "international") {
+  if (isCourseKind(params.kind)) {
     courseQuery = courseQuery.eq("kind", params.kind);
   }
 
@@ -79,6 +79,7 @@ export default async function CursosPage({
   const courseGroups = filterCourseGroups(groupCourses(courses ?? []), params);
   const nationalGroups = courseGroups.filter((course) => course.kind === "national");
   const internationalGroups = courseGroups.filter((course) => course.kind === "international");
+  const taikaiGroups = courseGroups.filter((course) => course.kind === "taikai");
   const attendeeCount = courseGroups.reduce((sum, course) => sum + course.attendees.length, 0);
 
   return (
@@ -87,8 +88,8 @@ export default async function CursosPage({
       <main className="main">
         <div className="topbar">
           <div>
-            <p className="eyebrow">Replica de CURSOS_NAC y CURSOS_INT</p>
-            <h1>Cursos nacionales e internacionales</h1>
+            <p className="eyebrow">Cursos, taikai y actividades especiales</p>
+            <h1>Cursos y taikai</h1>
           </div>
           <form action={logoutAction}>
             <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
@@ -113,8 +114,8 @@ export default async function CursosPage({
           </article>
           <article className="card">
             <Trophy aria-hidden="true" size={19} />
-            <h2>Cursos</h2>
-            <div className="metric">{courseGroups.length}</div>
+            <h2>Taikai</h2>
+            <div className="metric">{taikaiGroups.length}</div>
           </article>
           <article className="card">
             <MapPin aria-hidden="true" size={19} />
@@ -132,6 +133,7 @@ export default async function CursosPage({
                 <select name="kind" required>
                   <option value="national">Nacional</option>
                   <option value="international">Internacional</option>
+                  <option value="taikai">Taikai</option>
                 </select>
               </label>
               <details className="wide course-member-dropdown">
@@ -176,12 +178,13 @@ export default async function CursosPage({
           <article className="card">
             <h2>Como suma al ranking</h2>
             <p className="muted">Los cursos se guardan en Supabase nuevo y aparecen en la ficha del kenshi.</p>
-            <p className="muted">Para ranking adulto, en los ultimos 180 dias: curso nacional +1, curso internacional +3.</p>
+            <p className="muted">Para ranking adulto, en los ultimos 180 dias: curso nacional +1, taikai +2, curso internacional +3.</p>
             <p className="muted">En grados KYU, los cursos internacionales tambien pueden adelantar la convocatoria de examen de forma controlada.</p>
             <div className="chip-list">
               <a className="tag" href="/cursos">Todos</a>
               <a className="tag" href="/cursos?kind=national">Nacionales</a>
               <a className="tag" href="/cursos?kind=international">Internacionales</a>
+              <a className="tag" href="/cursos?kind=taikai">Taikai</a>
             </div>
           </article>
         </section>
@@ -197,6 +200,7 @@ export default async function CursosPage({
               <option value="">Todos</option>
               <option value="national">Nacional</option>
               <option value="international">Internacional</option>
+              <option value="taikai">Taikai</option>
             </select>
           </label>
           <label>
@@ -216,6 +220,7 @@ export default async function CursosPage({
         <section className="course-layers">
           <CourseLayer title="Cursos nacionales" courses={nationalGroups} members={members ?? []} empty="No hay cursos nacionales con este filtro." />
           <CourseLayer title="Cursos internacionales" courses={internationalGroups} members={members ?? []} empty="No hay cursos internacionales con este filtro." />
+          <CourseLayer title="Taikai" courses={taikaiGroups} members={members ?? []} empty="No hay taikai con este filtro." />
         </section>
       </main>
     </div>
@@ -224,7 +229,7 @@ export default async function CursosPage({
 
 type CourseGroup = {
   key: string;
-  kind: "national" | "international";
+  kind: CourseKind;
   course_date: string;
   location: string | null;
   title: string | null;
@@ -258,6 +263,7 @@ function CourseLayer({ title, courses, members, empty }: { title: string; course
                     <select name="kind" defaultValue={course.kind} required>
                       <option value="national">Nacional</option>
                       <option value="international">Internacional</option>
+                      <option value="taikai">Taikai</option>
                     </select>
                   </label>
                   <label>Fecha<input name="courseDate" type="date" defaultValue={course.course_date} required /></label>
@@ -354,4 +360,10 @@ function buildAttendeeExport(course: CourseGroup) {
 
 function normalizeCourseText(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase();
+}
+
+type CourseKind = "national" | "international" | "taikai";
+
+function isCourseKind(value: string | undefined): value is CourseKind {
+  return value === "national" || value === "international" || value === "taikai";
 }

@@ -31,7 +31,7 @@ type TechnicalHistory = {
 type Course = {
   member_id?: string;
   course_date: string;
-  kind: "national" | "international";
+  kind: "national" | "international" | "taikai";
   title?: string | null;
   location?: string | null;
   sensei?: string | null;
@@ -428,8 +428,10 @@ async function buildPeriodStats(period: { start: string; end: string }) {
   const kidsAttendance = attendance.filter((row) => row.members?.class === "kids");
   const nationalCourseRows = courses.filter((row) => row.kind === "national");
   const internationalCourseRows = courses.filter((row) => row.kind === "international");
+  const taikaiCourseRows = courses.filter((row) => row.kind === "taikai");
   const nationalCourseEvents = uniqueCourseEvents(nationalCourseRows);
   const internationalCourseEvents = uniqueCourseEvents(internationalCourseRows);
+  const taikaiCourseEvents = uniqueCourseEvents(taikaiCourseRows);
   const activeAdults = members.filter((member) => member.class === "adults").length;
   const activeKids = members.filter((member) => member.class === "kids").length;
   const registeredAdultClasses = classes.filter((row) => row.class_group === "adults").length;
@@ -448,6 +450,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
     exams: exams.length,
     nationalCourses: nationalCourseEvents.length,
     internationalCourses: internationalCourseEvents.length,
+    taikaiCourses: taikaiCourseEvents.length,
     newMembers: members.filter((member) => member.joined_on && member.joined_on >= period.start && member.joined_on <= period.end).length
   });
 
@@ -479,9 +482,11 @@ async function buildPeriodStats(period: { start: string; end: string }) {
     examsByGrade: topCounts(exams.map((row) => row.grade), 8),
     nationalCourses: nationalCourseEvents.length,
     internationalCourses: internationalCourseEvents.length,
+    taikaiCourses: taikaiCourseEvents.length,
     nationalCourseParticipants: nationalCourseRows.length,
     internationalCourseParticipants: internationalCourseRows.length,
-    topCourses: [...nationalCourseEvents, ...internationalCourseEvents]
+    taikaiCourseParticipants: taikaiCourseRows.length,
+    topCourses: [...nationalCourseEvents, ...internationalCourseEvents, ...taikaiCourseEvents]
       .sort((a, b) => b.participants - a.participants || a.date.localeCompare(b.date))
       .slice(0, 6),
     topAdultAttendance: topAttendanceRows(adultAttendance, 10),
@@ -558,6 +563,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const technical90 = countByMember(technical);
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 3 })));
+  const taikaiCoursePoints = sumByMember(courses.filter((row) => row.kind === "taikai" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 2 })));
   const manualBonus = sumByMember(
     bonuses
       .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
@@ -588,6 +594,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
           a90 * 2 +
           (nationalCoursePoints.get(member.id) ?? 0) +
           (internationalCoursePoints.get(member.id) ?? 0) +
+          (taikaiCoursePoints.get(member.id) ?? 0) +
           (manualBonus.get(member.id) ?? 0) +
           (blackBeltPoints.get(member.id) ?? 0) +
           (shakujoPoints.get(member.id) ?? 0) -
@@ -668,7 +675,7 @@ function studentFriendlyExamReason(member: Member) {
 
 function uniqueCourseEvents(rows: Course[]) {
   const map = new Map<string, {
-    kind: "national" | "international";
+    kind: Course["kind"];
     date: string;
     title: string;
     location: string;
@@ -754,6 +761,7 @@ async function buildYearGrowthStats(period: { start: string; end: string }, curr
   exams: number;
   nationalCourses: number;
   internationalCourses: number;
+  taikaiCourses: number;
   newMembers: number;
 }) {
   const startYear = Number(period.start.slice(0, 4));
@@ -780,6 +788,7 @@ async function buildYearGrowthStats(period: { start: string; end: string }, curr
   const previousClubClassDays = Math.max(previousClassRows, previousKidsClassDates.length);
   const previousNationalCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "national")).length;
   const previousInternationalCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "international")).length;
+  const previousTaikaiCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "taikai")).length;
 
   return {
     year: startYear,
@@ -791,6 +800,7 @@ async function buildYearGrowthStats(period: { start: string; end: string }, curr
     exams: compareNumber(current.exams, examsResult.count ?? 0),
     nationalCourses: compareNumber(current.nationalCourses, previousNationalCourses),
     internationalCourses: compareNumber(current.internationalCourses, previousInternationalCourses),
+    taikaiCourses: compareNumber(current.taikaiCourses, previousTaikaiCourses),
     newMembers: compareNumber(current.newMembers, membersResult.count ?? 0)
   };
 }
@@ -893,7 +903,7 @@ function formatYearGrowth(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
     `• Adultos: <b>${growth.adultAttendance.current}</b> (${formatDeltaWords(growth.adultAttendance.delta)}) · niños: <b>${growth.kidsAttendance.current}</b> (${formatDeltaWords(growth.kidsAttendance.delta)})`,
     `• Dias de clase del club: <b>${growth.classes.current}</b> (${formatDeltaWords(growth.classes.delta)})`,
     `• Examenes: <b>${growth.exams.current}</b> (${formatDeltaWords(growth.exams.delta)})`,
-    `• Cursos: nacionales <b>${growth.nationalCourses.current}</b> (${formatDeltaWords(growth.nationalCourses.delta)}) · internacionales <b>${growth.internationalCourses.current}</b> (${formatDeltaWords(growth.internationalCourses.delta)})`
+    `• Cursos: nacionales <b>${growth.nationalCourses.current}</b> (${formatDeltaWords(growth.nationalCourses.delta)}) · internacionales <b>${growth.internationalCourses.current}</b> (${formatDeltaWords(growth.internationalCourses.delta)}) · taikai <b>${growth.taikaiCourses.current}</b> (${formatDeltaWords(growth.taikaiCourses.delta)})`
   ].join("\n");
 }
 
@@ -930,8 +940,9 @@ function formatCourseStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) 
     "🌍 <b>Cursos</b>",
     `• Cursos nacionales celebrados: <b>${stats.nationalCourses}</b> (${stats.nationalCourseParticipants} participaciones)`,
     `• Cursos internacionales celebrados: <b>${stats.internationalCourses}</b> (${stats.internationalCourseParticipants} participaciones)`,
+    `• Taikai celebrados: <b>${stats.taikaiCourses}</b> (${stats.taikaiCourseParticipants} participaciones)`,
     stats.topCourses.length ? "• Cursos con mas asistencia:\n" + stats.topCourses.map((course, index) => {
-      const kind = course.kind === "international" ? "INT" : "NAC";
+      const kind = course.kind === "international" ? "INT" : course.kind === "taikai" ? "TAIKAI" : "NAC";
       return `  ${index + 1}. [${kind}] ${html(course.title)} · ${formatHumanDate(course.date)} · ${course.participants}`;
     }).join("\n") : "• Sin cursos en el periodo."
   ].join("\n");

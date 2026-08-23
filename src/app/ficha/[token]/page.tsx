@@ -73,7 +73,7 @@ type LegacyExamRow = {
 };
 
 type Course = {
-  kind: "national" | "international";
+  kind: "national" | "international" | "taikai";
   course_date: string;
   location: string | null;
   title: string | null;
@@ -288,7 +288,7 @@ export default async function PublicFichaPage({
       .from("courses")
       .select("member_id,course_date,kind")
       .gte("course_date", date180)
-      .returns<Array<{ member_id: string; course_date: string; kind: "national" | "international" }>>(),
+      .returns<Array<{ member_id: string; course_date: string; kind: "national" | "international" | "taikai" }>>(),
     supabase
       .from("adult_ranking_bonuses")
       .select("member_id,points,bonus_date,active,permanent")
@@ -371,6 +371,7 @@ function AdultFicha({
   const photoSrc = driveImageUrl(member.photo_url);
   const nacionales = courses.filter((course) => course.kind === "national");
   const internacionales = courses.filter((course) => course.kind === "international");
+  const taikai = courses.filter((course) => course.kind === "taikai");
 
   return (
     <main className="legacy-ficha adult-ficha">
@@ -531,6 +532,10 @@ function AdultFicha({
 
       <FoldableSection title="Cursos internacionales" meta={`${internacionales.length} registros`}>
         <CourseTable courses={internacionales} />
+      </FoldableSection>
+
+      <FoldableSection title="Taikai" meta={`${taikai.length} registros`}>
+        <CourseTable courses={taikai} />
       </FoldableSection>
 
       <Footer />
@@ -1045,7 +1050,7 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
   };
 }
 
-function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" }>, bonuses: AdultBonus[], closures: CalendarClosure[]) {
+function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" | "taikai" }>, bonuses: AdultBonus[], closures: CalendarClosure[]) {
   const date30 = daysAgo(30);
   const date90 = daysAgo(90);
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
@@ -1329,10 +1334,16 @@ function sumByMember(rows: Array<{ member_id: string; points: number }>) {
   return counts;
 }
 
-function countCoursePoints(rows: Array<{ member_id: string; kind: "national" | "international" }>) {
+function countCoursePoints(rows: Array<{ member_id: string; kind: "national" | "international" | "taikai" }>) {
   const counts = new Map<string, number>();
-  rows.forEach((row) => counts.set(row.member_id, (counts.get(row.member_id) ?? 0) + (row.kind === "international" ? 3 : 1)));
+  rows.forEach((row) => counts.set(row.member_id, (counts.get(row.member_id) ?? 0) + courseKindPoints(row.kind)));
   return counts;
+}
+
+function courseKindPoints(kind: "national" | "international" | "taikai") {
+  if (kind === "international") return 3;
+  if (kind === "taikai") return 2;
+  return 1;
 }
 
 function latestByMember(rows: Array<{ member_id: string; attended_on: string }>) {

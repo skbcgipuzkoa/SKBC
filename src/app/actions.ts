@@ -2280,7 +2280,7 @@ function normalizeClass(value: string) {
 }
 
 function normalizeCourseKind(value: string) {
-  return value === "national" || value === "international" ? value : null;
+  return value === "national" || value === "international" || value === "taikai" ? value : null;
 }
 
 function normalizeStatus(value: string) {

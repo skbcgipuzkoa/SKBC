@@ -609,7 +609,7 @@ export default async function KenshiDetailPage({
                   {(courses ?? []).map((item) => (
                     <tr key={`${item.course_date}-${item.kind}-${item.title}`}>
                       <td data-label="Fecha">{item.course_date}</td>
-                      <td data-label="Tipo">{item.kind === "national" ? "Nacional" : "Internacional"}</td>
+                      <td data-label="Tipo">{courseKindLabel(item.kind)}</td>
                       <td data-label="Curso">{item.title ?? "-"}</td>
                       <td data-label="Lugar">{item.location ?? "-"}</td>
                     </tr>
@@ -628,6 +628,12 @@ const NOTE_TYPES = ["NOTA DEL SENSEI", "FELICITACION", "SEGUIMIENTO", "AVISO", "
 const BEHAVIOR_OPTIONS = ["EXCELENTE", "MUY BUENA", "BUENA", "NORMAL", "A MEJORAR"];
 const RESPECT_OPTIONS = ["10", "9", "8", "7", "BUENO", "NORMAL", "A MEJORAR"];
 const EFFORT_OPTIONS = ["EXCELENTE", "MUY BUENO", "BUENO", "POCO A POCO MEJORANDO", "A MEJORAR"];
+
+function courseKindLabel(value: string) {
+  if (value === "international") return "Internacional";
+  if (value === "taikai") return "Taikai";
+  return "Nacional";
+}
 
 function SelectOptions({ name, options, value }: { name: string; options: string[]; value: string | null | undefined }) {
   return (
