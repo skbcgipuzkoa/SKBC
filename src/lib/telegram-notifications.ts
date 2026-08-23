@@ -226,6 +226,8 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
     "",
     formatYearGrowth(stats),
     "",
+    formatActiveGrades(stats),
+    "",
     formatAttendanceStats(stats),
     "",
     formatTechnicalStats(stats),
@@ -446,6 +448,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
     activeMembers: members.length,
     activeAdults,
     activeKids,
+    activeGrades: activeGradeSummary(members),
     classes: clubClassDays,
     registeredClasses: classes.length,
     adultClasses: registeredAdultClasses,
@@ -725,6 +728,17 @@ function topAttendanceRows(rows: PeriodAttendance[], limit: number) {
     }));
 }
 
+function activeGradeSummary(members: Member[]) {
+  const counts = new Map<string, number>();
+  for (const member of members) {
+    const grade = normalizeGradeLabel(member.grade);
+    counts.set(grade, (counts.get(grade) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([grade, count]) => ({ grade, count, order: gradeOrder(grade) }))
+    .sort((a, b) => a.order - b.order || a.grade.localeCompare(b.grade));
+}
+
 async function buildYearGrowthStats(period: { start: string; end: string }, current: {
   classes: number;
   attendance: number;
@@ -876,6 +890,14 @@ function formatYearGrowth(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
   ].join("\n");
 }
 
+function formatActiveGrades(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+  if (!stats.activeGrades.length) return "";
+  return [
+    "🎖️ <b>Grados activos del club</b>",
+    ...stats.activeGrades.map((item) => `• ${html(item.grade)}: <b>${item.count}</b> kenshi${item.count === 1 ? "" : "s"}`)
+  ].join("\n");
+}
+
 function formatAttendanceStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
   return [
     "👥 <b>Asistencia</b>",
@@ -996,6 +1018,37 @@ function adultInactivityPenalty(daysWithoutAttendance: number) {
 
 function normalizeKey(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function normalizeGradeLabel(value: string | null | undefined) {
+  return normalizeKey(value || "SIN GRADO");
+}
+
+function gradeOrder(grade: string) {
+  const normalized = normalizeGradeLabel(grade).replace(/\s*-\s*/g, "-");
+  const order: Record<string, number> = {
+    "MINARAI": 10,
+    "BLANCO-AMARILLO": 15,
+    "5 KYU": 20,
+    "AMARILLO-NARANJA": 25,
+    "4 KYU": 30,
+    "NARANJA-VERDE": 35,
+    "3 KYU": 40,
+    "VERDE-AZUL": 45,
+    "2 KYU": 50,
+    "AZUL-MARRON": 55,
+    "1 KYU": 60,
+    "1 DAN": 70,
+    "2 DAN": 80,
+    "3 DAN": 90,
+    "4 DAN": 100,
+    "5 DAN": 110,
+    "6 DAN": 120,
+    "7 DAN": 130,
+    "8 DAN": 140,
+    "9 DAN": 150
+  };
+  return order[normalized] ?? 999;
 }
 
 function distinctDates(values: Array<string | null | undefined>) {
