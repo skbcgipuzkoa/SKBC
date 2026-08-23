@@ -1,6 +1,6 @@
 import { Bell, LogOut, PauseCircle, PlayCircle, Send } from "lucide-react";
 import { redirect } from "next/navigation";
-import { logoutAction, sendTelegramNotificationAction, updateTelegramNotificationSettingAction } from "@/app/actions";
+import { logoutAction, sendTelegramNotificationAction, updateTelegramNotificationSettingAction, updateTelegramScheduledPauseAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -144,8 +144,21 @@ export default async function NotificacionesPage({
                     <input type="hidden" name="enabled" value={enabled ? "" : "on"} />
                     <input
                       name="reason"
-                      placeholder="Motivo de pausa"
+                      placeholder="Motivo de pausa manual"
                       defaultValue={enabled ? "Vacaciones / pausa temporal" : setting?.paused_reason ?? ""}
+                    />
+                    <button type="submit" className={enabled ? "secondary-button danger-button" : "secondary-button"}>
+                      {enabled ? <PauseCircle aria-hidden="true" size={16} /> : <PlayCircle aria-hidden="true" size={16} />}
+                      {enabled ? "Pausar manualmente" : "Reactivar manual"}
+                    </button>
+                  </form>
+                  <form action={updateTelegramScheduledPauseAction}>
+                    <input type="hidden" name="type" value={action.type} />
+                    <input type="hidden" name="enabled" value={enabled ? "on" : ""} />
+                    <input
+                      name="reason"
+                      placeholder="Motivo de pausa programada"
+                      defaultValue={setting?.paused_reason ?? "Vacaciones / pausa temporal"}
                     />
                     <div className="notification-date-row">
                       <label>
@@ -157,10 +170,14 @@ export default async function NotificacionesPage({
                         <input name="pauseEndsOn" type="date" defaultValue={setting?.pause_ends_on ?? ""} />
                       </label>
                     </div>
-                    <button type="submit" className={enabled ? "secondary-button danger-button" : "secondary-button"}>
-                      {enabled ? <PauseCircle aria-hidden="true" size={16} /> : <PlayCircle aria-hidden="true" size={16} />}
-                      {enabled ? "Pausar" : "Reactivar"}
-                    </button>
+                    <div className="notification-button-row">
+                      <button type="submit" className="secondary-button">
+                        Guardar pausa programada
+                      </button>
+                      <button type="submit" className="secondary-button" name="clear" value="on">
+                        Quitar fechas
+                      </button>
+                    </div>
                   </form>
                 </article>
               );

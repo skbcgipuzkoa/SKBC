@@ -101,6 +101,38 @@ export async function updateTelegramNotificationSettingAction(formData: FormData
   redirect("/notificaciones?saved=settings");
 }
 
+export async function updateTelegramScheduledPauseAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const type = String(formData.get("type") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+  const pauseStartsOn = String(formData.get("pauseStartsOn") ?? "").trim() || null;
+  const pauseEndsOn = String(formData.get("pauseEndsOn") ?? "").trim() || null;
+  const enabled = formData.get("clear") === "on" ? true : formData.get("enabled") === "on";
+  const allowed = ["daily_ranking", "monthly_stats", "semester_stats", "yearly_stats"] as const;
+
+  if (!allowed.includes(type as typeof allowed[number])) {
+    redirect("/notificaciones?error=settings");
+  }
+
+  try {
+    await updateTelegramNotificationSetting(
+      type as typeof allowed[number],
+      enabled,
+      reason,
+      formData.get("clear") === "on" ? null : pauseStartsOn,
+      formData.get("clear") === "on" ? null : pauseEndsOn
+    );
+  } catch (error) {
+    console.error("Error updating Telegram scheduled pause", error);
+    redirect("/notificaciones?error=settings");
+  }
+
+  redirect("/notificaciones?saved=settings");
+}
+
 async function getNextSkbcLegacyId(supabase: ReturnType<typeof createAdminClient>) {
   const { data, error } = await supabase
     .from("members")
