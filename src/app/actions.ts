@@ -1744,10 +1744,6 @@ export async function createCourseAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const sensei = String(formData.get("sensei") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  const competitionCategory = kind === "taikai" ? String(formData.get("competitionCategory") ?? "").trim() || null : null;
-  const competitionResult = kind === "taikai" ? String(formData.get("competitionResult") ?? "").trim() || null : null;
-  const competitionMedal = kind === "taikai" ? normalizeCompetitionMedal(String(formData.get("competitionMedal") ?? "")) : null;
-  const competitionNotes = kind === "taikai" ? String(formData.get("competitionNotes") ?? "").trim() || null : null;
   const selectedMemberIds = memberIds.length ? memberIds : fallbackMemberId ? [fallbackMemberId] : [];
 
   if (!selectedMemberIds.length || !kind || !courseDate || !location || !title) {
@@ -1764,10 +1760,6 @@ export async function createCourseAction(formData: FormData) {
     title,
     sensei,
     notes,
-    competition_category: competitionCategory,
-    competition_result: competitionResult,
-    competition_medal: competitionMedal,
-    competition_notes: competitionNotes,
     legacy_id: `CURS-${batchId}-${index + 1}`
   }));
 

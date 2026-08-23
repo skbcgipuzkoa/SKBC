@@ -183,19 +183,6 @@ export default async function CursosPage({
               <label>Donde<input name="location" placeholder="Lugar" required /></label>
               <label>Curso<input name="title" placeholder="Nombre del curso" required /></label>
               <label>Sensei<input name="sensei" placeholder="Sensei / responsable" /></label>
-              <label>Categoria Taikai<input name="competitionCategory" placeholder="Categoria / modalidad" /></label>
-              <label>
-                Medalla Taikai
-                <select name="competitionMedal" defaultValue="">
-                  <option value="">Sin medalla</option>
-                  <option value="gold">Oro</option>
-                  <option value="silver">Plata</option>
-                  <option value="bronze">Bronce</option>
-                  <option value="participant">Participacion</option>
-                </select>
-              </label>
-              <label>Resultado Taikai<input name="competitionResult" placeholder="Ej. 1 puesto, semifinal, participacion..." /></label>
-              <label>Notas resultado<input name="competitionNotes" placeholder="Detalle interno del resultado" /></label>
               <label className="wide">Notas<textarea name="notes" rows={3} placeholder="Notas internas" /></label>
               <button type="submit">Guardar curso</button>
             </form>
@@ -318,11 +305,11 @@ function CourseLayer({ title, courses, members, empty }: { title: string; course
                   </div>
                 </details>
                 {course.kind === "taikai" ? (
-                  <details className="course-member-dropdown taikai-results-editor" open>
+                  <details className="course-member-dropdown taikai-results-editor">
                     <summary>
                       <span>
-                        <strong>Resultados Taikai</strong>
-                        <small>Historial de competicion para cada kenshi</small>
+                        <strong>Registrar resultados Taikai</strong>
+                        <small>Solo participantes de este Taikai. Se completa despues de la competicion.</small>
                       </span>
                       <b>{course.attendees.length} resultados</b>
                     </summary>
