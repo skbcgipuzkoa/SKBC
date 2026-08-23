@@ -229,7 +229,7 @@ export default async function RankingsPage({
               <h2 className="section-title">{selectedView === "adults" ? "Top 10 adultos" : "Top 10 ninos"}</h2>
               <p className="muted">
                 {selectedView === "adults"
-                  ? "Pulsa un kenshi para ver su detalle. Se premian asistencia reciente, tecnicas, cursos, Busen, Shakujo y bonus."
+                  ? "Pulsa un kenshi para ver su detalle. Se premian constancia, asistencia reciente, cursos, Busen, Shakujo y bonus manual."
                   : "Pulsa un kenshi para ver su ficha y detalle infantil."}
               </p>
             </div>
@@ -329,7 +329,7 @@ export default async function RankingsPage({
           <article>
             <div className="section-heading-row">
               <h2 className="section-title">Adultos</h2>
-              <span className="tag">Legacy: 30d*3 + 90d - dias sin venir + cursos + bonus</span>
+              <span className="tag">Constancia: 30d*8 + 90d*2 + cursos + bonus - inactividad</span>
             </div>
             <div className="table-wrap">
               <table>
@@ -434,7 +434,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const bonus = manualBonus.get(member.id) ?? 0;
       const black = blackBeltPoints.get(member.id) ?? 0;
       const shakujo = shakujoPoints.get(member.id) ?? 0;
-      const activityScore = a30 * 4 + a90 + t90 + nac + intl + bonus + black + shakujo;
+      const activityScore = a30 * 8 + a90 * 2 + nac + intl + bonus + black + shakujo;
       const inactivityPenalty = adultInactivityPenalty(daysWithoutAttendance);
       return {
         ...member,

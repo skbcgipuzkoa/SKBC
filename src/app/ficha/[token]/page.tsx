@@ -1060,7 +1060,7 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
       const daysWithoutAttendance = lastAttendance.get(member.id) ? trainingDaysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10), closures) : 999;
-      const activityScore = a30 * 4 + a90 + (coursePoints.get(member.id) ?? 0) + (bonusPoints.get(member.id) ?? 0);
+      const activityScore = a30 * 8 + a90 * 2 + (coursePoints.get(member.id) ?? 0) + (bonusPoints.get(member.id) ?? 0);
       const score = Math.max(0, activityScore - adultInactivityPenalty(daysWithoutAttendance));
       return { ...member, score };
     })

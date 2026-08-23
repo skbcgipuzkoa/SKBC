@@ -540,14 +540,12 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
-      const technicalScore = Math.min(8, Math.floor(t90 / 4));
       const last = lastAttendance.get(member.id);
       const daysWithoutAttendance = last ? trainingDaysBetween(last, todayIso(), closures) : 999;
       const score = Math.max(
         0,
         a30 * 8 +
           a90 * 2 +
-          technicalScore +
           (nationalCoursePoints.get(member.id) ?? 0) +
           (internationalCoursePoints.get(member.id) ?? 0) +
           (manualBonus.get(member.id) ?? 0) +
@@ -559,7 +557,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         name: member.display_name,
         grade: member.grade ?? "-",
         score,
-        detail: `asist. 30/90: ${a30}/${a90} - tecnicas ${t90} (bonus ${technicalScore})`,
+        detail: `asist. 30/90: ${a30}/${a90} - tecnicas registradas ${t90}`,
         position: 0
       };
     })
