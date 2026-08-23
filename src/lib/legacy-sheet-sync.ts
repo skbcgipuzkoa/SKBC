@@ -31,6 +31,10 @@ type CourseSnapshot = {
   title: string | null;
   sensei: string | null;
   notes: string | null;
+  competition_category: string | null;
+  competition_result: string | null;
+  competition_medal: string | null;
+  competition_notes: string | null;
   legacy_id: string | null;
 };
 
@@ -89,26 +93,27 @@ export async function syncLegacyCourse(courseId: string) {
   const supabase = createAdminClient();
   const { data: course, error } = await supabase
     .from("courses")
-    .select("id,kind,course_date,member_id,location,title,sensei,notes,legacy_id")
+    .select("id,kind,course_date,member_id,location,title,sensei,notes,competition_category,competition_result,competition_medal,competition_notes,legacy_id")
     .eq("id", courseId)
     .single<CourseSnapshot>();
 
   if (error || !course) throw error ?? new Error("Curso no encontrado para sincronizar.");
   const member = await getMemberSnapshot(course.member_id);
+  const notes = [course.notes, formatCompetitionSummary(course)].filter(Boolean).join(" | ");
   const row = [
     course.course_date,
     member.legacy_id ?? "",
     course.location ?? "",
     course.title ?? "",
     course.sensei ?? "",
-    course.notes ?? "",
+    notes,
     course.legacy_id ?? `CURS-NEW-${course.id.slice(0, 8)}`,
     new Date().toISOString()
   ];
 
   await appendLegacyRow({
     eventType: "course.created",
-    targetSheet: course.kind === "international" ? "CURSOS_INT" : "CURSOS_NAC",
+    targetSheet: course.kind === "international" ? "CURSOS_INT" : course.kind === "taikai" ? "TAIKAI" : "CURSOS_NAC",
     sourceTable: "courses",
     sourceId: course.id,
     payload: { course, member },
@@ -445,6 +450,25 @@ function firstName(displayName: string) {
 function lastName(displayName: string) {
   const parts = displayName.trim().split(/\s+/);
   return parts.length > 1 ? parts.slice(1).join(" ") : "";
+}
+
+function formatCompetitionSummary(course: Pick<CourseSnapshot, "kind" | "competition_category" | "competition_medal" | "competition_result" | "competition_notes">) {
+  if (course.kind !== "taikai") return "";
+  const parts = [
+    course.competition_category ? `Categoria: ${course.competition_category}` : "",
+    course.competition_medal ? `Medalla: ${competitionMedalLabel(course.competition_medal)}` : "",
+    course.competition_result ? `Resultado: ${course.competition_result}` : "",
+    course.competition_notes ? `Detalle: ${course.competition_notes}` : ""
+  ].filter(Boolean);
+  return parts.length ? `Taikai - ${parts.join(" · ")}` : "Taikai - resultado pendiente";
+}
+
+function competitionMedalLabel(value: string) {
+  if (value === "gold") return "Oro";
+  if (value === "silver") return "Plata";
+  if (value === "bronze") return "Bronce";
+  if (value === "participant") return "Participacion";
+  return value;
 }
 
 function errorMessage(error: unknown) {

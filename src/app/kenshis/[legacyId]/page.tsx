@@ -58,6 +58,10 @@ type Course = {
   location: string | null;
   title: string | null;
   sensei: string | null;
+  competition_category: string | null;
+  competition_result: string | null;
+  competition_medal: string | null;
+  competition_notes: string | null;
 };
 
 type ChildRanking = {
@@ -176,7 +180,7 @@ export default async function KenshiDetailPage({
       .returns<Exam[]>(),
     supabase
       .from("courses")
-      .select("kind,course_date,location,title,sensei")
+      .select("kind,course_date,location,title,sensei,competition_category,competition_result,competition_medal,competition_notes")
       .eq("member_id", member.id)
       .order("course_date", { ascending: false })
       .returns<Course[]>(),
@@ -604,7 +608,7 @@ export default async function KenshiDetailPage({
             <h2 className="section-title">Cursos</h2>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Fecha</th><th>Tipo</th><th>Curso</th><th>Lugar</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Tipo</th><th>Curso</th><th>Lugar</th><th>Resultado</th></tr></thead>
                 <tbody>
                   {(courses ?? []).map((item) => (
                     <tr key={`${item.course_date}-${item.kind}-${item.title}`}>
@@ -612,6 +616,7 @@ export default async function KenshiDetailPage({
                       <td data-label="Tipo">{courseKindLabel(item.kind)}</td>
                       <td data-label="Curso">{item.title ?? "-"}</td>
                       <td data-label="Lugar">{item.location ?? "-"}</td>
+                      <td data-label="Resultado">{item.kind === "taikai" ? formatTaikaiCourseResult(item) : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -633,6 +638,20 @@ function courseKindLabel(value: string) {
   if (value === "international") return "Internacional";
   if (value === "taikai") return "Taikai";
   return "Nacional";
+}
+
+function formatTaikaiCourseResult(course: Course) {
+  const parts = [course.competition_category, medalLabel(course.competition_medal), course.competition_result].filter(Boolean);
+  const summary = parts.length ? parts.join(" · ") : "Resultado pendiente";
+  return course.competition_notes ? `${summary} · ${course.competition_notes}` : summary;
+}
+
+function medalLabel(value: string | null) {
+  if (value === "gold") return "Oro";
+  if (value === "silver") return "Plata";
+  if (value === "bronze") return "Bronce";
+  if (value === "participant") return "Participacion";
+  return "";
 }
 
 function SelectOptions({ name, options, value }: { name: string; options: string[]; value: string | null | undefined }) {

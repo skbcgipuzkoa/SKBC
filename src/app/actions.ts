@@ -1744,6 +1744,10 @@ export async function createCourseAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const sensei = String(formData.get("sensei") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const competitionCategory = kind === "taikai" ? String(formData.get("competitionCategory") ?? "").trim() || null : null;
+  const competitionResult = kind === "taikai" ? String(formData.get("competitionResult") ?? "").trim() || null : null;
+  const competitionMedal = kind === "taikai" ? normalizeCompetitionMedal(String(formData.get("competitionMedal") ?? "")) : null;
+  const competitionNotes = kind === "taikai" ? String(formData.get("competitionNotes") ?? "").trim() || null : null;
   const selectedMemberIds = memberIds.length ? memberIds : fallbackMemberId ? [fallbackMemberId] : [];
 
   if (!selectedMemberIds.length || !kind || !courseDate || !location || !title) {
@@ -1760,6 +1764,10 @@ export async function createCourseAction(formData: FormData) {
     title,
     sensei,
     notes,
+    competition_category: competitionCategory,
+    competition_result: competitionResult,
+    competition_medal: competitionMedal,
+    competition_notes: competitionNotes,
     legacy_id: `CURS-${batchId}-${index + 1}`
   }));
 
@@ -1806,9 +1814,9 @@ export async function updateCourseGroupAction(formData: FormData) {
   const supabase = createAdminClient();
   const { data: existing, error: existingError } = await supabase
     .from("courses")
-    .select("id,member_id")
+    .select("id,member_id,competition_category,competition_result,competition_medal,competition_notes")
     .in("id", courseIds)
-    .returns<Array<{ id: string; member_id: string }>>();
+    .returns<Array<{ id: string; member_id: string; competition_category: string | null; competition_result: string | null; competition_medal: string | null; competition_notes: string | null }>>();
 
   if (existingError || !existing?.length) {
     redirect("/cursos?error=course");
@@ -1819,9 +1827,24 @@ export async function updateCourseGroupAction(formData: FormData) {
   const removeIds = existing.filter((row) => !selected.has(row.member_id)).map((row) => row.id);
   const addMemberIds = memberIds.filter((memberId) => !existingMemberIds.has(memberId));
 
+  const updatePayload = {
+    kind,
+    course_date: courseDate,
+    location,
+    title,
+    sensei,
+    notes,
+    ...(kind === "taikai" ? {} : {
+      competition_category: null,
+      competition_result: null,
+      competition_medal: null,
+      competition_notes: null
+    })
+  };
+
   const { error: updateError } = await supabase
     .from("courses")
-    .update({ kind, course_date: courseDate, location, title, sensei, notes })
+    .update(updatePayload)
     .in("id", courseIds);
 
   if (updateError) {
@@ -1847,6 +1870,10 @@ export async function updateCourseGroupAction(formData: FormData) {
       title,
       sensei,
       notes,
+      competition_category: kind === "taikai" ? String(formData.get(`competitionCategory:${memberId}`) ?? "").trim() || null : null,
+      competition_result: kind === "taikai" ? String(formData.get(`competitionResult:${memberId}`) ?? "").trim() || null : null,
+      competition_medal: kind === "taikai" ? normalizeCompetitionMedal(String(formData.get(`competitionMedal:${memberId}`) ?? "")) : null,
+      competition_notes: kind === "taikai" ? String(formData.get(`competitionNotes:${memberId}`) ?? "").trim() || null : null,
       legacy_id: `CURS-EDIT-${batchId}-${index + 1}`
     }));
     const { data: insertedCourses, error: insertError } = await supabase
@@ -1862,6 +1889,33 @@ export async function updateCourseGroupAction(formData: FormData) {
       await Promise.all((insertedCourses ?? []).map((course) => syncLegacyCourse(course.id)));
     } catch (syncError) {
       console.error("Error syncing edited course additions to legacy sheet", syncError);
+    }
+  }
+
+  if (kind === "taikai") {
+    const resultUpdates = existing
+      .filter((row) => selected.has(row.member_id))
+      .map((row) => ({
+        id: row.id,
+        kind,
+        course_date: courseDate,
+        member_id: row.member_id,
+        location,
+        title,
+        sensei,
+        notes,
+        competition_category: String(formData.get(`competitionCategory:${row.member_id}`) ?? "").trim() || null,
+        competition_result: String(formData.get(`competitionResult:${row.member_id}`) ?? "").trim() || null,
+        competition_medal: normalizeCompetitionMedal(String(formData.get(`competitionMedal:${row.member_id}`) ?? "")),
+        competition_notes: String(formData.get(`competitionNotes:${row.member_id}`) ?? "").trim() || null
+      }));
+
+    if (resultUpdates.length) {
+      const { error: resultError } = await supabase.from("courses").upsert(resultUpdates);
+      if (resultError) {
+        console.error("Error updating taikai results", resultError);
+        redirect("/cursos?error=course");
+      }
     }
   }
 
@@ -2281,6 +2335,12 @@ function normalizeClass(value: string) {
 
 function normalizeCourseKind(value: string) {
   return value === "national" || value === "international" || value === "taikai" ? value : null;
+}
+
+function normalizeCompetitionMedal(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (["gold", "silver", "bronze", "participant"].includes(normalized)) return normalized;
+  return null;
 }
 
 function normalizeStatus(value: string) {

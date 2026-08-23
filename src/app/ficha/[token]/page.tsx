@@ -78,6 +78,10 @@ type Course = {
   location: string | null;
   title: string | null;
   sensei: string | null;
+  competition_category: string | null;
+  competition_result: string | null;
+  competition_medal: string | null;
+  competition_notes: string | null;
 };
 
 type Technique = {
@@ -216,7 +220,7 @@ export default async function PublicFichaPage({
       .returns<Exam[]>(),
     supabase
       .from("courses")
-      .select("kind,course_date,location,title,sensei")
+      .select("kind,course_date,location,title,sensei,competition_category,competition_result,competition_medal,competition_notes")
       .eq("member_id", member.id)
       .order("course_date", { ascending: false })
       .returns<Course[]>()
@@ -257,7 +261,7 @@ export default async function PublicFichaPage({
     ]);
 
     const automaticNotices = buildAutomaticChildNotices(childRanking);
-    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} ranking={childRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} adminBackUrl={adminBackUrl} />;
+    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={childRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} adminBackUrl={adminBackUrl} />;
   }
 
   const targetGrade = nextAdultGrade(member.grade);
@@ -547,6 +551,7 @@ function KidsFicha({
   member,
   attendance,
   exams,
+  courses,
   ranking,
   notices,
   note,
@@ -556,6 +561,7 @@ function KidsFicha({
   member: Member;
   attendance: Attendance[];
   exams: Exam[];
+  courses: Course[];
   ranking: ChildRanking | null;
   notices: ChildNotice[];
   note: ChildNote | null;
@@ -564,6 +570,7 @@ function KidsFicha({
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const objective = nextKidGrade(member.grade);
+  const taikai = courses.filter((course) => course.kind === "taikai");
   return (
     <main className="legacy-ficha kids-ficha">
       <AdminBackLink href={adminBackUrl} />
@@ -624,6 +631,10 @@ function KidsFicha({
             </article>
           )) : <div className="ficha-card">Sin exámenes registrados.</div>}
         </div>
+      </FoldableSection>
+
+      <FoldableSection title="Taikai" meta={`${taikai.length} registros`}>
+        <CourseTable courses={taikai} />
       </FoldableSection>
 
       <FoldableSection title="Nota del Sensei" meta={note?.note ? "Visible" : "Sin nota"}>
@@ -900,13 +911,31 @@ function Progress({ label, value }: { label: string; value: number }) {
 }
 
 function CourseTable({ courses }: { courses: Course[] }) {
+  const hasTaikai = courses.some((course) => course.kind === "taikai");
   return (
     <ResponsiveTable
-      columns={["Fecha", "Curso", "Lugar", "Sensei"]}
-      rows={courses.map((course) => [formatDate(course.course_date), course.title ?? "-", course.location ?? "-", course.sensei ?? "-"])}
+      columns={hasTaikai ? ["Fecha", "Curso", "Lugar", "Sensei", "Resultado"] : ["Fecha", "Curso", "Lugar", "Sensei"]}
+      rows={courses.map((course) => {
+        const base = [formatDate(course.course_date), course.title ?? "-", course.location ?? "-", course.sensei ?? "-"];
+        return hasTaikai ? [...base, formatTaikaiCourseResult(course)] : base;
+      })}
       empty="Sin cursos registrados."
     />
   );
+}
+
+function formatTaikaiCourseResult(course: Course) {
+  const parts = [course.competition_category, medalLabel(course.competition_medal), course.competition_result].filter(Boolean);
+  const summary = parts.length ? parts.join(" · ") : "Resultado pendiente";
+  return course.competition_notes ? `${summary} · ${course.competition_notes}` : summary;
+}
+
+function medalLabel(value: string | null) {
+  if (value === "gold") return "Oro";
+  if (value === "silver") return "Plata";
+  if (value === "bronze") return "Bronce";
+  if (value === "participant") return "Participacion";
+  return "";
 }
 
 function ResponsiveTable({ columns, rows, empty }: { columns: string[]; rows: Array<Array<React.ReactNode>>; empty: string }) {

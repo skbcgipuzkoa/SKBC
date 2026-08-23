@@ -23,6 +23,10 @@ type Course = {
   title: string | null;
   sensei: string | null;
   notes: string | null;
+  competition_category: string | null;
+  competition_result: string | null;
+  competition_medal: string | null;
+  competition_notes: string | null;
   members: {
     id: string;
     legacy_id: string | null;
@@ -30,6 +34,14 @@ type Course = {
     class: "kids" | "adults";
     grade: string | null;
   } | null;
+};
+
+type CourseAttendee = NonNullable<Course["members"]> & {
+  course_id: string;
+  competition_category: string | null;
+  competition_result: string | null;
+  competition_medal: string | null;
+  competition_notes: string | null;
 };
 
 export default async function CursosPage({
@@ -46,7 +58,7 @@ export default async function CursosPage({
 
   let courseQuery = supabase
     .from("courses")
-    .select("id,member_id,kind,course_date,location,title,sensei,notes,members(id,legacy_id,display_name,class,grade)")
+    .select("id,member_id,kind,course_date,location,title,sensei,notes,competition_category,competition_result,competition_medal,competition_notes,members(id,legacy_id,display_name,class,grade)")
     .order("course_date", { ascending: false })
     .limit(80);
 
@@ -171,6 +183,19 @@ export default async function CursosPage({
               <label>Donde<input name="location" placeholder="Lugar" required /></label>
               <label>Curso<input name="title" placeholder="Nombre del curso" required /></label>
               <label>Sensei<input name="sensei" placeholder="Sensei / responsable" /></label>
+              <label>Categoria Taikai<input name="competitionCategory" placeholder="Categoria / modalidad" /></label>
+              <label>
+                Medalla Taikai
+                <select name="competitionMedal" defaultValue="">
+                  <option value="">Sin medalla</option>
+                  <option value="gold">Oro</option>
+                  <option value="silver">Plata</option>
+                  <option value="bronze">Bronce</option>
+                  <option value="participant">Participacion</option>
+                </select>
+              </label>
+              <label>Resultado Taikai<input name="competitionResult" placeholder="Ej. 1 puesto, semifinal, participacion..." /></label>
+              <label>Notas resultado<input name="competitionNotes" placeholder="Detalle interno del resultado" /></label>
               <label className="wide">Notas<textarea name="notes" rows={3} placeholder="Notas internas" /></label>
               <button type="submit">Guardar curso</button>
             </form>
@@ -236,7 +261,7 @@ type CourseGroup = {
   sensei: string | null;
   notes: string | null;
   rowIds: string[];
-  attendees: Array<NonNullable<Course["members"]>>;
+  attendees: CourseAttendee[];
 };
 
 function CourseLayer({ title, courses, members, empty }: { title: string; courses: CourseGroup[]; members: Member[]; empty: string }) {
@@ -292,6 +317,37 @@ function CourseLayer({ title, courses, members, empty }: { title: string; course
                     ))}
                   </div>
                 </details>
+                {course.kind === "taikai" ? (
+                  <details className="course-member-dropdown taikai-results-editor" open>
+                    <summary>
+                      <span>
+                        <strong>Resultados Taikai</strong>
+                        <small>Historial de competicion para cada kenshi</small>
+                      </span>
+                      <b>{course.attendees.length} resultados</b>
+                    </summary>
+                    <div className="taikai-result-list">
+                      {course.attendees.map((attendee) => (
+                        <fieldset className="taikai-result-row" key={`${course.key}-result-${attendee.id}`}>
+                          <legend>{attendee.display_name}</legend>
+                          <label>Categoria<input name={`competitionCategory:${attendee.id}`} defaultValue={attendee.competition_category ?? ""} placeholder="Categoria / modalidad" /></label>
+                          <label>
+                            Medalla
+                            <select name={`competitionMedal:${attendee.id}`} defaultValue={attendee.competition_medal ?? ""}>
+                              <option value="">Sin medalla</option>
+                              <option value="gold">Oro</option>
+                              <option value="silver">Plata</option>
+                              <option value="bronze">Bronce</option>
+                              <option value="participant">Participacion</option>
+                            </select>
+                          </label>
+                          <label>Resultado<input name={`competitionResult:${attendee.id}`} defaultValue={attendee.competition_result ?? ""} placeholder="Resultado obtenido" /></label>
+                          <label>Notas<input name={`competitionNotes:${attendee.id}`} defaultValue={attendee.competition_notes ?? ""} placeholder="Detalle interno" /></label>
+                        </fieldset>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
                 <button type="submit">Guardar cambios del curso</button>
               </form>
               <h3 className="course-subtitle">Asistentes actuales</h3>
@@ -299,6 +355,7 @@ function CourseLayer({ title, courses, members, empty }: { title: string; course
               {course.attendees.map((attendee) => (
                 <a className="course-attendee" href={attendee.legacy_id ? `/kenshis/${attendee.legacy_id}` : "#"} key={`${course.key}-${attendee.legacy_id}-${attendee.display_name}`}>
                   <strong>{attendee.display_name}</strong>
+                  {course.kind === "taikai" ? <small>{formatTaikaiResult(attendee)}</small> : null}
                   <small>{attendee.class === "kids" ? "Ninos" : "Adultos"} · {attendee.grade ?? "Sin grado"} · ID {attendee.legacy_id ?? "-"}</small>
                 </a>
               ))}
@@ -333,7 +390,16 @@ function groupCourses(courses: Course[]) {
       attendees: []
     };
     current.rowIds.push(course.id);
-    if (course.members) current.attendees.push(course.members);
+    if (course.members) {
+      current.attendees.push({
+        ...course.members,
+        course_id: course.id,
+        competition_category: course.competition_category,
+        competition_result: course.competition_result,
+        competition_medal: course.competition_medal,
+        competition_notes: course.competition_notes
+      });
+    }
     map.set(key, current);
   }
   return Array.from(map.values()).sort((a, b) => b.course_date.localeCompare(a.course_date));
@@ -354,8 +420,25 @@ function filterCourseGroups(courses: CourseGroup[], params: { q?: string }) {
 
 function buildAttendeeExport(course: CourseGroup) {
   const header = `${course.title ?? "Curso"} - ${course.course_date} - ${course.location ?? "-"}`;
-  const attendees = course.attendees.map((attendee, index) => `${index + 1}. ${attendee.display_name} (${attendee.class === "kids" ? "Ninos" : "Adultos"} - ${attendee.grade ?? "Sin grado"} - ID ${attendee.legacy_id ?? "-"})`);
+  const attendees = course.attendees.map((attendee, index) => {
+    const result = course.kind === "taikai" ? ` - ${formatTaikaiResult(attendee)}` : "";
+    return `${index + 1}. ${attendee.display_name} (${attendee.class === "kids" ? "Ninos" : "Adultos"} - ${attendee.grade ?? "Sin grado"} - ID ${attendee.legacy_id ?? "-"})${result}`;
+  });
   return [header, `Sensei: ${course.sensei ?? "-"}`, `Asistentes: ${course.attendees.length}`, "", ...attendees].join("\n");
+}
+
+function formatTaikaiResult(attendee: CourseAttendee) {
+  const parts = [attendee.competition_category, medalLabel(attendee.competition_medal), attendee.competition_result].filter(Boolean);
+  const summary = parts.length ? parts.join(" · ") : "resultado pendiente";
+  return attendee.competition_notes ? `${summary} · ${attendee.competition_notes}` : summary;
+}
+
+function medalLabel(value: string | null) {
+  if (value === "gold") return "Oro";
+  if (value === "silver") return "Plata";
+  if (value === "bronze") return "Bronce";
+  if (value === "participant") return "Participacion";
+  return "";
 }
 
 function normalizeCourseText(value: string | null | undefined) {
