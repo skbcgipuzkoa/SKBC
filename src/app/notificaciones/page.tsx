@@ -1,6 +1,6 @@
-import { Bell, LogOut, PauseCircle, PlayCircle, Send } from "lucide-react";
+import { Bell, LogOut, Mail, PauseCircle, PlayCircle, Send } from "lucide-react";
 import { redirect } from "next/navigation";
-import { logoutAction, sendTelegramNotificationAction, updateTelegramNotificationSettingAction, updateTelegramScheduledPauseAction } from "@/app/actions";
+import { logoutAction, sendStudentEmailNotificationAction, sendTelegramNotificationAction, updateTelegramNotificationSettingAction, updateTelegramScheduledPauseAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -24,6 +24,19 @@ type NotificationSetting = {
   updated_at: string;
 };
 
+type EmailNotificationLog = {
+  id: string;
+  audience: string;
+  subject: string;
+  recipient_count: number;
+  sent_count: number;
+  failed_count: number;
+  status: "pending" | "sent" | "partial" | "failed";
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+};
+
 const quickActions = [
   { type: "test", label: "Enviar prueba", detail: "Comprueba bot y chat de Telegram.", configurable: false },
   { type: "daily_ranking", label: "Enviar parte diario", detail: "Ranking, clase del dia, aptos y proximos a examen.", configurable: true },
@@ -43,7 +56,7 @@ export default async function NotificacionesPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [logsResult, settingsResult] = await Promise.all([
+  const [logsResult, settingsResult, emailLogsResult] = await Promise.all([
     supabase
       .from("telegram_notification_logs")
       .select("id,notification_type,period_start,period_end,status,error_message,sent_at,created_at")
@@ -54,6 +67,13 @@ export default async function NotificacionesPage({
       .from("telegram_notification_settings")
       .select("notification_type,enabled,paused_reason,pause_starts_on,pause_ends_on,updated_at")
       .returns<NotificationSetting[]>()
+    ,
+    supabase
+      .from("email_notification_logs")
+      .select("id,audience,subject,recipient_count,sent_count,failed_count,status,error_message,sent_at,created_at")
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .returns<EmailNotificationLog[]>()
   ]);
   const data = logsResult.data;
   const error = logsResult.error;
@@ -96,10 +116,14 @@ export default async function NotificacionesPage({
           </form>
         </div>
 
-        {params.saved ? <p className="save-ok">Notificacion enviada o registrada correctamente.</p> : null}
+        {params.saved ? <p className="save-ok">{params.detail ? params.detail : "Notificacion enviada o registrada correctamente."}</p> : null}
         {params.error ? (
           <p className="form-error">
-            {params.error === "settings" ? "No se pudo guardar el ajuste de notificaciones." : `No se pudo enviar Telegram${params.detail ? `: ${params.detail}` : "."}`}
+            {params.error === "settings"
+              ? "No se pudo guardar el ajuste de notificaciones."
+              : params.error === "email"
+                ? `No se pudo enviar email${params.detail ? `: ${params.detail}` : "."}`
+                : `No se pudo enviar Telegram${params.detail ? `: ${params.detail}` : "."}`}
           </p>
         ) : null}
 
@@ -203,6 +227,83 @@ export default async function NotificacionesPage({
           ))}
         </section>
 
+        <section className="card email-notification-card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Email a alumnos</h2>
+              <p className="muted">Envia comunicados individuales desde skbcgipuzkoa@gmail.com a los emails familiares guardados en cada kenshi.</p>
+            </div>
+            <Mail aria-hidden="true" size={22} />
+          </div>
+          <form className="email-notification-form" action={sendStudentEmailNotificationAction}>
+            <label>
+              Destinatarios
+              <select name="audience" defaultValue="all_active">
+                <option value="all_active">Todos los kenshis activos</option>
+                <option value="adults">Solo adultos activos</option>
+                <option value="kids">Solo ninos activos</option>
+                <option value="exam_ready">Aptos para examen</option>
+                <option value="exam_upcoming">Proximos a examen</option>
+                <option value="inactive">Inactivos</option>
+              </select>
+            </label>
+            <label>
+              Asunto
+              <input name="subject" required placeholder="Asunto del email" />
+            </label>
+            <label className="wide">
+              Mensaje
+              <textarea name="body" required rows={7} placeholder="Escribe aqui el mensaje. Se enviara individualmente a cada email." />
+            </label>
+            <div className="wide email-notification-submit">
+              <p className="muted">No se muestran destinatarios entre si. Si falta email familiar, ese kenshi queda fuera del envio.</p>
+              <button type="submit">
+                <Send aria-hidden="true" size={16} />
+                Enviar email
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Ultimos emails</h2>
+              <p className="muted">Historial de comunicados enviados a alumnos y familias.</p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Destinatarios</th>
+                  <th>Asunto</th>
+                  <th>Estado</th>
+                  <th>Enviados</th>
+                  <th>Fecha</th>
+                  <th>Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {emailLogsResult.error ? (
+                  <tr><td colSpan={6} className="muted">Falta aplicar la migracion de emails.</td></tr>
+                ) : emailLogsResult.data?.length ? emailLogsResult.data.map((log) => (
+                  <tr key={log.id}>
+                    <td data-label="Destinatarios">{emailAudienceLabel(log.audience)}</td>
+                    <td data-label="Asunto">{log.subject}</td>
+                    <td data-label="Estado"><span className={`pill status-${log.status}`}>{statusLabel(log.status)}</span></td>
+                    <td data-label="Enviados">{log.sent_count}/{log.recipient_count}{log.failed_count ? ` (${log.failed_count} fallidos)` : ""}</td>
+                    <td data-label="Fecha">{formatDateTime(log.sent_at ?? log.created_at)}</td>
+                    <td data-label="Detalle">{log.error_message ?? "-"}</td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={6} className="muted">Aun no hay emails registrados.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section className="card">
           <div className="section-heading-row">
             <div>
@@ -258,9 +359,22 @@ function notificationLabel(value: string) {
 function statusLabel(value: string) {
   const labels: Record<string, string> = {
     sent: "Enviado",
+    partial: "Parcial",
     failed: "Fallido",
     skipped: "Saltado",
     pending: "Pendiente"
+  };
+  return labels[value] ?? value;
+}
+
+function emailAudienceLabel(value: string) {
+  const labels: Record<string, string> = {
+    all_active: "Activos",
+    adults: "Adultos",
+    kids: "Ninos",
+    exam_ready: "Aptos examen",
+    exam_upcoming: "Proximos examen",
+    inactive: "Inactivos"
   };
   return labels[value] ?? value;
 }

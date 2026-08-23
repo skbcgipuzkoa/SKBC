@@ -980,6 +980,66 @@ tbody tr:hover {
   justify-content: center;
 }
 
+.email-notification-card {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.email-notification-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.email-notification-form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.email-notification-form input,
+.email-notification-form select,
+.email-notification-form textarea {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 42px;
+  padding: 9px 11px;
+  width: 100%;
+}
+
+.email-notification-form textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.email-notification-form .wide {
+  grid-column: 1 / -1;
+}
+
+.email-notification-submit {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.email-notification-submit button {
+  align-items: center;
+  background: var(--brand);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 14px;
+}
+
 .grade-summary-grid {
   display: grid;
   gap: 10px;
@@ -4841,7 +4901,9 @@ tbody tr:hover {
   .control-summary-grid,
   .control-check-grid,
   .notification-action-grid,
-  .quick-action-grid {
+  .quick-action-grid,
+  .email-notification-form,
+  .email-notification-submit {
     grid-template-columns: 1fr;
   }
 
@@ -4870,6 +4932,11 @@ tbody tr:hover {
   .notifications-hero {
     align-items: start;
     grid-template-columns: 1fr;
+  }
+
+  .email-notification-submit button {
+    min-height: 48px;
+    width: 100%;
   }
 }
 

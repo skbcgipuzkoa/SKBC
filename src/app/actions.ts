@@ -7,6 +7,7 @@ import { generateAdultTechnicalGroups, resolveTrainingGroupGrade } from "@/lib/a
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { generateDiplomaForExam } from "@/lib/diplomas";
+import { sendStudentEmailNotification, type EmailAudience } from "@/lib/email-notifications";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
 import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
@@ -73,6 +74,35 @@ export async function sendTelegramNotificationAction(formData: FormData) {
   }
 
   redirect(`/notificaciones?saved=${result.status}`);
+}
+
+export async function sendStudentEmailNotificationAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const audience = String(formData.get("audience") ?? "");
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const allowed = ["all_active", "adults", "kids", "exam_ready", "exam_upcoming", "inactive"] as const;
+
+  if (!allowed.includes(audience as EmailAudience) || !subject || !body) {
+    redirect("/notificaciones?error=email&detail=Faltan%20datos%20del%20email");
+  }
+
+  let result: Awaited<ReturnType<typeof sendStudentEmailNotification>>;
+  try {
+    result = await sendStudentEmailNotification({
+      audience: audience as EmailAudience,
+      subject,
+      body
+    });
+  } catch (error) {
+    console.error("Error sending student email notification", error);
+    redirect(`/notificaciones?error=email&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  redirect(`/notificaciones?saved=email&detail=${encodeURIComponent(`${result.sentCount}/${result.recipientCount} emails enviados`)}`);
 }
 
 export async function updateTelegramNotificationSettingAction(formData: FormData) {
