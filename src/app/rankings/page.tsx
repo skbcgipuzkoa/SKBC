@@ -1,4 +1,5 @@
 import { Award, LogOut, Medal } from "lucide-react";
+import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
 import { addAdultRankingBonusAction, deactivateAdultRankingBonusAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
@@ -179,26 +180,7 @@ export default async function RankingsPage({
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <strong>SKBC Gipuzkoa</strong>
-          <span>Admin privado</span>
-        </div>
-        <nav className="nav" aria-label="Principal">
-          <a href="/">Inicio</a>
-          <a href="/kenshis">Kenshis</a>
-          <a href="/clases">Clases</a>
-          <a href="/clases-negras">Busen</a>
-          <a href="/shakujo">Shakujo</a>
-          <a href="/tecnicas">Tecnicas</a>
-          <a href="/examenes">Examenes</a>
-          <a href="/cursos">Cursos</a>
-          <a href="/pedidos-cinturones">Cinturones</a>
-          <a href="/proximos-examenes">Proximos examenes</a>
-          <a href="/rankings" aria-current="page">Rankings</a>
-          <a href="/sistema">Sistema</a>
-        </nav>
-      </aside>
+      <SidebarNav current="/rankings" />
       <main className="main">
         <div className="topbar">
           <div>

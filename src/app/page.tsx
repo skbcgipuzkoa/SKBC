@@ -14,6 +14,7 @@ import {
   UserPlus,
   Users
 } from "lucide-react";
+import { SidebarNav } from "@/app/components/SidebarNav";
 import { loginAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -136,28 +137,7 @@ export default async function Home({
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <strong>SKBC Gipuzkoa</strong>
-          <span>Admin privado</span>
-        </div>
-        <nav className="nav" aria-label="Principal">
-          <a href="/" aria-current="page">Inicio</a>
-          <a href="/control-dia">Control dia</a>
-          <a href="/kenshis">Kenshis</a>
-          <a href="/clases">Clases</a>
-          <a href="/clases-negras">Busen</a>
-          <a href="/shakujo">Shakujo</a>
-          <a href="/tecnicas">Tecnicas</a>
-          <a href="/examenes">Examenes</a>
-          <a href="/cursos">Cursos</a>
-          <a href="/calendario">Calendario</a>
-          <a href="/proximos-examenes">Examenes prox.</a>
-          <a href="/rankings">Rankings</a>
-          <a href="/notificaciones">Notificaciones</a>
-          <a href="/sistema">Sistema</a>
-        </nav>
-      </aside>
+      <SidebarNav current="/" />
       <main className="main home-main">
         <div className="topbar home-topbar">
           <div>
@@ -301,22 +281,7 @@ export default async function Home({
 function LoginHome({ error }: { error?: string }) {
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <strong>SKBC Gipuzkoa</strong>
-          <span>Plataforma paralela</span>
-        </div>
-        <nav className="nav" aria-label="Principal">
-          <a aria-current="page" href="/">Panel</a>
-          <a href="/kenshis">Kenshis</a>
-          <a href="/clases">Clases</a>
-          <a href="/clases-negras">Busen</a>
-          <a href="/shakujo">Shakujo</a>
-          <a href="/tecnicas">Tecnicas</a>
-          <a href="/calendario">Calendario</a>
-          <a href="/sistema">Sistema</a>
-        </nav>
-      </aside>
+      <SidebarNav current="/" />
       <main className="main">
         <div className="topbar">
           <div>

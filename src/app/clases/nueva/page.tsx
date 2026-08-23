@@ -1,4 +1,5 @@
 import { ArrowLeft, LogOut } from "lucide-react";
+import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
 import { createClassAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
@@ -16,24 +17,7 @@ export default async function NuevaClasePage({
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <strong>SKBC Gipuzkoa</strong>
-          <span>Admin privado</span>
-        </div>
-        <nav className="nav" aria-label="Principal">
-          <a href="/">Inicio</a>
-          <a href="/kenshis">Kenshis</a>
-          <a href="/clases" aria-current="page">Clases</a>
-          <a href="/tecnicas">Tecnicas</a>
-          <a href="/examenes">Examenes</a>
-          <a href="/cursos">Cursos</a>
-          <a href="/pedidos-cinturones">Cinturones</a>
-          <a href="/proximos-examenes">Proximos examenes</a>
-          <a href="/rankings">Rankings</a>
-          <a href="/sistema">Sistema</a>
-        </nav>
-      </aside>
+      <SidebarNav current="/clases" />
       <main className="main new-class-main">
         <div className="topbar">
           <div>

@@ -1,0 +1,39 @@
+type SidebarNavProps = {
+  current?: string;
+};
+
+const navItems = [
+  { label: "Inicio", href: "/" },
+  { label: "Control dia", href: "/control-dia" },
+  { label: "Kenshis", href: "/kenshis" },
+  { label: "Clases", href: "/clases" },
+  { label: "Busen", href: "/clases-negras" },
+  { label: "Shakujo", href: "/shakujo" },
+  { label: "Tecnicas", href: "/tecnicas" },
+  { label: "Examenes", href: "/examenes" },
+  { label: "Cursos", href: "/cursos" },
+  { label: "Calendario", href: "/calendario" },
+  { label: "Cinturones", href: "/pedidos-cinturones" },
+  { label: "Proximos examenes", href: "/proximos-examenes" },
+  { label: "Rankings", href: "/rankings" },
+  { label: "Notificaciones", href: "/notificaciones" },
+  { label: "Sistema", href: "/sistema" }
+];
+
+export function SidebarNav({ current }: SidebarNavProps) {
+  return (
+    <aside className="sidebar">
+      <div className="brand">
+        <strong>SKBC Gipuzkoa</strong>
+        <span>Admin privado</span>
+      </div>
+      <nav className="nav" aria-label="Principal">
+        {navItems.map((item) => (
+          <a key={item.href} href={item.href} aria-current={current === item.href ? "page" : undefined}>
+            {item.label}
+          </a>
+        ))}
+      </nav>
+    </aside>
+  );
+}
