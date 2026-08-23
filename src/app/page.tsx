@@ -9,6 +9,7 @@ import {
   NotebookTabs,
   ShieldCheck,
   Sparkles,
+  Bell,
   Trophy,
   UserPlus,
   Users
@@ -63,6 +64,7 @@ const moduleGroups = [
       { label: "Tecnicas", href: "/tecnicas", icon: GraduationCap },
       { label: "Cinturones", href: "/pedidos-cinturones", icon: Medal },
       { label: "Calendario club", href: "/calendario", icon: CalendarCheck },
+      { label: "Notificaciones", href: "/notificaciones", icon: Bell },
       { label: "Sistema", href: "/sistema", icon: ShieldCheck }
     ]
   }
@@ -152,6 +154,7 @@ export default async function Home({
           <a href="/calendario">Calendario</a>
           <a href="/proximos-examenes">Examenes prox.</a>
           <a href="/rankings">Rankings</a>
+          <a href="/notificaciones">Notificaciones</a>
           <a href="/sistema">Sistema</a>
         </nav>
       </aside>

@@ -869,6 +869,54 @@ tbody tr:hover {
   color: #667085;
 }
 
+.pill.status-sent {
+  background: #e8f5ee;
+  color: var(--ok);
+}
+
+.pill.status-failed {
+  background: #fff1f0;
+  color: var(--danger);
+}
+
+.pill.status-skipped,
+.pill.status-pending {
+  background: #eef4fb;
+  color: #0b5db8;
+}
+
+.notifications-hero {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.notifications-hero h2,
+.notification-action h2 {
+  margin: 0 0 6px;
+}
+
+.notification-action-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  margin: 18px 0;
+}
+
+.notification-action {
+  display: grid;
+  gap: 14px;
+}
+
+.notification-action button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+
 .grade-summary-grid {
   display: grid;
   gap: 10px;
@@ -4729,6 +4777,7 @@ tbody tr:hover {
   .control-date-form,
   .control-summary-grid,
   .control-check-grid,
+  .notification-action-grid,
   .quick-action-grid {
     grid-template-columns: 1fr;
   }
@@ -4753,6 +4802,11 @@ tbody tr:hover {
 
   .control-person-row a {
     grid-column: 1 / -1;
+  }
+
+  .notifications-hero {
+    align-items: start;
+    grid-template-columns: 1fr;
   }
 }
 

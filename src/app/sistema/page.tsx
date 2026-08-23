@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Database,
   FileText,
+  Bell,
   LogOut,
   Newspaper,
   RefreshCw,
@@ -27,6 +28,12 @@ const systemItems = [
     body: "Estado de hojas legacy importadas, filas copiadas y datos normalizados desde el archivo viejo.",
     href: "/importacion",
     icon: Database
+  },
+  {
+    title: "Notificaciones",
+    body: "Telegram privado: ranking diario, listos para examen y resumenes mensuales, semestrales y anuales.",
+    href: "/notificaciones",
+    icon: Bell
   },
   {
     title: "Novedades",
@@ -86,6 +93,7 @@ export default async function SistemaPage() {
           <a href="/pedidos-cinturones">Cinturones</a>
           <a href="/proximos-examenes">Proximos examenes</a>
           <a href="/rankings">Rankings</a>
+          <a href="/notificaciones">Notificaciones</a>
           <a href="/sistema" aria-current="page">Sistema</a>
         </nav>
       </aside>

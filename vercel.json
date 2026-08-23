@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/telegram/daily-ranking",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/telegram/monthly-stats",
+      "schedule": "0 7 1 * *"
+    },
+    {
+      "path": "/api/cron/telegram/semester-stats",
+      "schedule": "0 7 1 1,7 *"
+    },
+    {
+      "path": "/api/cron/telegram/yearly-stats",
+      "schedule": "0 8 1 1 *"
+    }
+  ]
+}

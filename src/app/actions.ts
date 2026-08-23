@@ -12,6 +12,7 @@ import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior,
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendTelegramDigest } from "@/lib/telegram-notifications";
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -53,6 +54,25 @@ export async function recalculateAllExamStatusesAction() {
   await recalculateChildRankings();
 
   redirect("/proximos-examenes?saved=recalculate");
+}
+
+export async function sendTelegramNotificationAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const type = String(formData.get("type") ?? "");
+  const allowed = ["daily_ranking", "monthly_stats", "semester_stats", "yearly_stats", "test"] as const;
+  if (!allowed.includes(type as typeof allowed[number])) {
+    redirect("/notificaciones?error=telegram");
+  }
+
+  const result = await sendTelegramDigest(type as typeof allowed[number], { force: true });
+  if (result.status === "failed") {
+    redirect(`/notificaciones?error=telegram&detail=${encodeURIComponent(result.error ?? "Error desconocido")}`);
+  }
+
+  redirect(`/notificaciones?saved=${result.status}`);
 }
 
 async function getNextSkbcLegacyId(supabase: ReturnType<typeof createAdminClient>) {
