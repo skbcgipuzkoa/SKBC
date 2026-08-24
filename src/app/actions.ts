@@ -1641,6 +1641,48 @@ export async function deactivateClubClosureAction(formData: FormData) {
   redirect("/calendario?saved=closure");
 }
 
+export async function updateClubClosureAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const closureId = String(formData.get("closureId") ?? "").trim();
+  const selectedYear = String(formData.get("selectedYear") ?? "").trim();
+  const startsOn = parseDateInput(String(formData.get("startsOn") ?? ""));
+  const endsOn = parseDateInput(String(formData.get("endsOn") ?? "")) ?? startsOn;
+  const title = String(formData.get("title") ?? "").trim();
+  const appliesToRaw = String(formData.get("appliesTo") ?? "all").trim();
+  const appliesTo = ["all", "kids", "adults"].includes(appliesToRaw) ? appliesToRaw : "all";
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const yearQuery = selectedYear ? `&year=${encodeURIComponent(selectedYear)}` : "";
+
+  if (!closureId || !startsOn || !endsOn || !title || endsOn < startsOn) {
+    redirect(`/calendario?error=closure${yearQuery}`);
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("skbc_calendar_closures")
+    .update({
+      starts_on: startsOn,
+      ends_on: endsOn,
+      title,
+      applies_to: appliesTo,
+      notes,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", closureId);
+
+  if (error) {
+    console.error("Error updating club closure", error);
+    redirect(`/calendario?error=closure${yearQuery}`);
+  }
+
+  await recalculateActiveExamStatuses();
+
+  redirect(`/calendario?saved=closure${yearQuery}`);
+}
+
 export async function duplicateClubCalendarYearAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

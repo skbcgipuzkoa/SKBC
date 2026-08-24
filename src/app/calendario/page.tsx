@@ -1,7 +1,7 @@
 import { CalendarDays, LogOut } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { createClubClosureAction, deactivateClubClosureAction, duplicateClubCalendarYearAction, logoutAction } from "@/app/actions";
+import { createClubClosureAction, deactivateClubClosureAction, duplicateClubCalendarYearAction, logoutAction, updateClubClosureAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -130,13 +130,34 @@ export default async function CalendarioPage({
             <div className="stack-list compact-stack">
               {selectedClosures.length ? selectedClosures.map((closure) => (
                 <div className="closure-row" key={closure.id}>
-                  <strong>{closure.title}</strong>
-                  <span>{closure.starts_on === closure.ends_on ? closure.starts_on : `${closure.starts_on} - ${closure.ends_on}`} - {closure.applies_to === "all" ? "Todos" : closure.applies_to === "kids" ? "Ninos" : "Adultos"}</span>
-                  {closure.notes ? <p>{closure.notes}</p> : null}
-                  <form action={deactivateClubClosureAction}>
-                    <input type="hidden" name="closureId" value={closure.id} />
-                    <button className="mini-action danger" type="submit">Desactivar</button>
-                  </form>
+                  <details>
+                    <summary>
+                      <strong>{closure.title}</strong>
+                      <span>{closure.starts_on === closure.ends_on ? closure.starts_on : `${closure.starts_on} - ${closure.ends_on}`} - {closure.applies_to === "all" ? "Todos" : closure.applies_to === "kids" ? "Ninos" : "Adultos"}</span>
+                    </summary>
+                    {closure.notes ? <p>{closure.notes}</p> : null}
+                    <form action={updateClubClosureAction} className="quick-form closure-edit-form">
+                      <input type="hidden" name="closureId" value={closure.id} />
+                      <input type="hidden" name="selectedYear" value={selectedYear} />
+                      <label className="wide">Titulo<input name="title" defaultValue={closure.title} required /></label>
+                      <label>Desde<input name="startsOn" type="date" defaultValue={closure.starts_on} required /></label>
+                      <label>Hasta<input name="endsOn" type="date" defaultValue={closure.ends_on} required /></label>
+                      <label>
+                        Aplica a
+                        <select name="appliesTo" defaultValue={closure.applies_to}>
+                          <option value="all">Todos</option>
+                          <option value="adults">Solo adultos</option>
+                          <option value="kids">Solo ninos</option>
+                        </select>
+                      </label>
+                      <label className="wide">Notas<input name="notes" defaultValue={closure.notes ?? ""} /></label>
+                      <button type="submit">Guardar cambios</button>
+                    </form>
+                    <form action={deactivateClubClosureAction}>
+                      <input type="hidden" name="closureId" value={closure.id} />
+                      <button className="mini-action danger" type="submit">Desactivar</button>
+                    </form>
+                  </details>
                 </div>
               )) : <p className="muted">Sin cierres activos para este ano.</p>}
             </div>

@@ -2741,9 +2741,18 @@ tbody tr:hover {
 .closure-row {
   border: 1px solid var(--line);
   border-radius: 8px;
+  padding: 10px;
+}
+
+.closure-row details {
+  display: grid;
+  gap: 10px;
+}
+
+.closure-row summary {
+  cursor: pointer;
   display: grid;
   gap: 4px;
-  padding: 10px;
 }
 
 .closure-row strong {
@@ -2759,6 +2768,12 @@ tbody tr:hover {
 
 .closure-row form {
   margin-top: 4px;
+}
+
+.closure-edit-form {
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 10px;
 }
 
 .closure-row .mini-action {
