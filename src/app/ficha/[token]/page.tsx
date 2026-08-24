@@ -205,7 +205,7 @@ export default async function PublicFichaPage({
 
   if (error || !member) notFound();
 
-  const [{ data: attendance }, { data: exams }, { data: courses }] = await Promise.all([
+  const [{ data: attendance }, { data: exams }, { data: courses }, { data: fichaClosures }] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("attended_on,official_grade,trained_grade,classes(name)")
@@ -224,7 +224,17 @@ export default async function PublicFichaPage({
       .eq("member_id", member.id)
       .order("course_date", { ascending: false })
       .returns<Course[]>()
+    ,
+    supabase
+      .from("skbc_calendar_closures")
+      .select("starts_on,ends_on,applies_to")
+      .eq("active", true)
+      .lte("starts_on", new Date().toISOString().slice(0, 10))
+      .gte("ends_on", "2000-01-01")
+      .in("applies_to", ["all", member.class])
+      .returns<CalendarClosure[]>()
   ]);
+  const closures = fichaClosures ?? [];
 
   const legacyExams = await loadLegacyExams(supabase, member.legacy_id);
   const fichaExams = mergeExams(exams ?? [], legacyExams);
@@ -260,8 +270,9 @@ export default async function PublicFichaPage({
         .maybeSingle<ChildBehavior>()
     ]);
 
-    const automaticNotices = buildAutomaticChildNotices(childRanking);
-    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={childRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} adminBackUrl={adminBackUrl} />;
+    const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures);
+    const automaticNotices = buildAutomaticChildNotices(visibleChildRanking);
+    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} adminBackUrl={adminBackUrl} />;
   }
 
   const targetGrade = nextAdultGrade(member.grade);
@@ -339,7 +350,7 @@ export default async function PublicFichaPage({
   ]);
 
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
-  const adultActivity = buildAdultActivity(attendance ?? [], courses ?? []);
+  const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
   return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} adminBackUrl={adminBackUrl} />;
@@ -1020,21 +1031,44 @@ function Footer() {
   return <footer className="ficha-footer">Datos del sistema nuevo SKBC. Ficha privada de consulta personal actualizada automaticamente en tiempo real.</footer>;
 }
 
-function buildAdultActivity(attendance: Attendance[], courses: Course[]) {
+function buildVisibleChildRanking(ranking: ChildRanking | null, attendance: Attendance[], closures: CalendarClosure[]): ChildRanking | null {
   const today = startOfDay(new Date());
   const dates = attendance
     .map((row) => parseDate(row.attended_on))
     .filter((date): date is Date => Boolean(date))
     .sort((a, b) => b.getTime() - a.getTime());
   const last = dates[0] ?? null;
-  const weeksSinceLast = last ? Math.floor(daysBetweenDates(last, today) / 7) : null;
-  const attendance12m = dates.filter((date) => date >= addMonths(today, -12)).length;
-  const attendance6m = dates.filter((date) => date >= addMonths(today, -6)).length;
-  const attendance1m = dates.filter((date) => date >= addMonths(today, -1)).length;
-  const activeThisWeek = dates.some((date) => date >= startOfWeek(today));
+  const attendance30 = countSinceEffective(dates, 30, today, closures);
+  const attendance90 = countSinceEffective(dates, 90, today, closures);
+  const daysWithoutAttendance = last ? trainingDaysBetween(formatDateObject(last), formatDateObject(today), closures) : null;
+  return {
+    attendance_30d: attendance30,
+    attendance_90d: attendance90,
+    last_attendance_on: last ? formatDateObject(last) : ranking?.last_attendance_on ?? null,
+    days_without_attendance: daysWithoutAttendance,
+    score: ranking?.score ?? attendance30 + attendance90,
+    position: ranking?.position ?? null,
+    level: ranking?.level ?? null,
+    constancy_status: ranking?.constancy_status ?? null,
+    motivational_message: ranking?.motivational_message ?? null
+  };
+}
+
+function buildAdultActivity(attendance: Attendance[], courses: Course[], closures: CalendarClosure[]) {
+  const today = startOfDay(new Date());
+  const dates = attendance
+    .map((row) => parseDate(row.attended_on))
+    .filter((date): date is Date => Boolean(date))
+    .sort((a, b) => b.getTime() - a.getTime());
+  const last = dates[0] ?? null;
+  const weeksSinceLast = last ? Math.floor(trainingDaysBetween(formatDateObject(last), formatDateObject(today), closures) / 7) : null;
+  const attendance12m = countSinceEffective(dates, 365, today, closures);
+  const attendance6m = countSinceEffective(dates, 180, today, closures);
+  const attendance1m = countSinceEffective(dates, 30, today, closures);
+  const activeThisWeek = dates.some((date) => date >= effectiveDaysAgo(7, today, closures));
   const courses12m = courses.filter((course) => {
     const date = parseDate(course.course_date);
-    return date && date >= addMonths(today, -12);
+    return date && date >= effectiveDaysAgo(365, today, closures);
   }).length;
   const visualStatus = calculateVisualStatus(weeksSinceLast, attendance1m, activeThisWeek);
   const involvement = calculateInvolvement(attendance1m, attendance6m, courses12m, activeThisWeek);
@@ -1169,6 +1203,23 @@ function trainingDaysBetween(from: string, to: string, closures: CalendarClosure
     cursor.setDate(cursor.getDate() + 1);
   }
   return count;
+}
+
+function countSinceEffective(dates: Date[], activeDays: number, today: Date, closures: CalendarClosure[]) {
+  const start = effectiveDaysAgo(activeDays, today, closures);
+  return dates.filter((date) => date >= start && date <= today).length;
+}
+
+function effectiveDaysAgo(activeDays: number, today: Date, closures: CalendarClosure[]) {
+  const cursor = startOfDay(today);
+  let remaining = activeDays;
+  while (remaining > 0) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (!isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) {
+      remaining -= 1;
+    }
+  }
+  return startOfDay(cursor);
 }
 
 function isExplicitlyClosed(date: Date, closures: CalendarClosure[]) {
