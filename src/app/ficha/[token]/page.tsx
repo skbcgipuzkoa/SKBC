@@ -450,7 +450,11 @@ function AdultFicha({
         <h2>Actividad e implicación</h2>
         <div className="ficha-triple">
           <StatusBlock title="Estado" value={activity.visualStatus} tone={activityTone(activity.visualStatus)} />
-          <StatusBlock title="Esta semana" value={activity.activeThisWeek ? "SI" : "NO"} tone={activity.activeThisWeek ? "green" : "red"} />
+          <StatusBlock
+            title="Esta semana"
+            value={activity.currentWeekOpen ? (activity.activeThisWeek ? "SI" : "NO") : "SIN CLASE"}
+            tone={activity.currentWeekOpen ? (activity.activeThisWeek ? "green" : "red") : "neutral"}
+          />
           <StatusBlock title="Implicación" value={activity.involvement} tone={involvementTone(activity.involvement)} />
         </div>
         {ranking ? <p className="ficha-ranking">{ranking.message} · Score {ranking.score}</p> : null}
@@ -1065,14 +1069,15 @@ function buildAdultActivity(attendance: Attendance[], courses: Course[], closure
   const attendance12m = countSinceEffective(dates, 365, today, closures);
   const attendance6m = countSinceEffective(dates, 180, today, closures);
   const attendance1m = countSinceEffective(dates, 30, today, closures);
-  const activeThisWeek = dates.some((date) => date >= effectiveDaysAgo(7, today, closures));
+  const currentWeekOpen = isCurrentWeekOpen(today, closures);
+  const activeThisWeek = currentWeekOpen && dates.some((date) => date >= startOfWeek(today));
   const courses12m = courses.filter((course) => {
     const date = parseDate(course.course_date);
     return date && date >= effectiveDaysAgo(365, today, closures);
   }).length;
   const visualStatus = calculateVisualStatus(weeksSinceLast, attendance1m, activeThisWeek);
   const involvement = calculateInvolvement(attendance1m, attendance6m, courses12m, activeThisWeek);
-  return { lastAttendance: last ? formatDateObject(last) : null, weeksSinceLast, attendance12m, attendance6m, attendance1m, activeThisWeek, courses12m, visualStatus, involvement };
+  return { lastAttendance: last ? formatDateObject(last) : null, weeksSinceLast, attendance12m, attendance6m, attendance1m, activeThisWeek, currentWeekOpen, courses12m, visualStatus, involvement };
 }
 
 function buildTechnicalProgress(targetGrade: string, techniques: Technique[], history: TechnicalHistory[]) {
@@ -1203,6 +1208,16 @@ function trainingDaysBetween(from: string, to: string, closures: CalendarClosure
     cursor.setDate(cursor.getDate() + 1);
   }
   return count;
+}
+
+function isCurrentWeekOpen(today: Date, closures: CalendarClosure[]) {
+  const cursor = startOfWeek(today);
+  const end = startOfDay(today);
+  while (cursor <= end) {
+    if (!isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) return true;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return false;
 }
 
 function countSinceEffective(dates: Date[], activeDays: number, today: Date, closures: CalendarClosure[]) {
