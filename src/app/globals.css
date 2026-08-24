@@ -2847,6 +2847,26 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.edit-panel {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 18px;
+  padding: 12px;
+}
+
+.edit-panel summary {
+  color: var(--blue);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.edit-panel form {
+  margin-top: 10px;
+}
+
 .black-belt-row {
   align-items: center;
   border: 1px solid var(--line);

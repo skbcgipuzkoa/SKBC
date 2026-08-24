@@ -1,7 +1,7 @@
 import { CheckCircle2, LogOut, Plus, Sparkles, Users } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { createShakujoClassAction, logoutAction, saveShakujoAttendanceAction } from "@/app/actions";
+import { createShakujoClassAction, deleteShakujoClassAction, logoutAction, saveShakujoAttendanceAction, updateShakujoClassAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -120,6 +120,22 @@ export default async function ShakujoPage({
               </div>
               <span className="tag">Suma implicacion 180 dias</span>
             </div>
+            <details className="edit-panel">
+              <summary>Editar o eliminar sesion</summary>
+              <form action={updateShakujoClassAction} className="quick-form">
+                <input type="hidden" name="classId" value={selectedSession.id} />
+                <label>Fecha<input name="classDate" type="date" defaultValue={selectedSession.class_date} required /></label>
+                <label>Titulo<input name="title" defaultValue={selectedSession.title} /></label>
+                <label>Instructor<input name="instructor" defaultValue={selectedSession.instructor ?? ""} /></label>
+                <label className="wide">Notas<textarea name="notes" rows={3} defaultValue={selectedSession.notes ?? ""} /></label>
+                <label className="checkbox-field"><input name="closed" type="checkbox" defaultChecked={selectedSession.closed} /> Sesion cerrada</label>
+                <button type="submit">Guardar cambios de sesion</button>
+              </form>
+              <form action={deleteShakujoClassAction}>
+                <input type="hidden" name="classId" value={selectedSession.id} />
+                <button className="mini-action danger" type="submit">Eliminar sesion de prueba</button>
+              </form>
+            </details>
             <form action={saveShakujoAttendanceAction} className="black-belt-attendance-form">
               <input type="hidden" name="classId" value={selectedSession.id} />
               <div className="attendance-checklist">

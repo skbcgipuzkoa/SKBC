@@ -2177,6 +2177,65 @@ export async function createShakujoClassAction(formData: FormData) {
   redirect("/shakujo?saved=session");
 }
 
+export async function updateShakujoClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const classId = String(formData.get("classId") ?? "").trim();
+  const classDate = parseDateInput(String(formData.get("classDate") ?? ""));
+  if (!classId || !classDate) redirect("/shakujo?error=session");
+
+  const { error } = await createAdminClient()
+    .from("shakujo_classes")
+    .update({
+      class_date: classDate,
+      title: String(formData.get("title") ?? "").trim() || "Clase Shakujo",
+      instructor: String(formData.get("instructor") ?? "").trim() || null,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+      closed: formData.get("closed") === "on",
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", classId);
+
+  if (error) {
+    console.error("Error updating shakujo class", error);
+    redirect(`/shakujo?error=session&classId=${encodeURIComponent(classId)}`);
+  }
+
+  redirect(`/shakujo?saved=session&classId=${encodeURIComponent(classId)}`);
+}
+
+export async function deleteShakujoClassAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const classId = String(formData.get("classId") ?? "").trim();
+  if (!classId) redirect("/shakujo?error=session");
+
+  const supabase = createAdminClient();
+  const { data: previousRows, error: previousError } = await supabase
+    .from("shakujo_attendance")
+    .select("member_id")
+    .eq("shakujo_class_id", classId)
+    .returns<Array<{ member_id: string }>>();
+
+  if (previousError) {
+    console.error("Error loading shakujo attendance before delete", previousError);
+    redirect(`/shakujo?error=session&classId=${encodeURIComponent(classId)}`);
+  }
+
+  const { error } = await supabase
+    .from("shakujo_classes")
+    .delete()
+    .eq("id", classId);
+
+  if (error) {
+    console.error("Error deleting shakujo class", error);
+    redirect(`/shakujo?error=session&classId=${encodeURIComponent(classId)}`);
+  }
+
+  const affectedMemberIds = Array.from(new Set((previousRows ?? []).map((row) => row.member_id)));
+  await Promise.all(affectedMemberIds.map((memberId) => recalculateMemberExamStatus(memberId)));
+
+  redirect("/shakujo?saved=deleted");
+}
+
 export async function saveShakujoAttendanceAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/");
   const classId = String(formData.get("classId") ?? "").trim();
