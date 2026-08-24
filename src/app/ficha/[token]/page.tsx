@@ -113,6 +113,7 @@ type AdultBonus = {
 type CalendarClosure = {
   starts_on: string;
   ends_on: string;
+  title?: string | null;
   applies_to: "all" | "kids" | "adults";
 };
 
@@ -227,7 +228,7 @@ export default async function PublicFichaPage({
     ,
     supabase
       .from("skbc_calendar_closures")
-      .select("starts_on,ends_on,applies_to")
+      .select("starts_on,ends_on,title,applies_to")
       .eq("active", true)
       .lte("starts_on", new Date().toISOString().slice(0, 10))
       .gte("ends_on", "2000-01-01")
@@ -333,7 +334,7 @@ export default async function PublicFichaPage({
     ,
     supabase
       .from("skbc_calendar_closures")
-      .select("starts_on,ends_on,applies_to")
+      .select("starts_on,ends_on,title,applies_to")
       .eq("active", true)
       .lte("starts_on", new Date().toISOString().slice(0, 10))
       .gte("ends_on", "2000-01-01")
@@ -452,7 +453,7 @@ function AdultFicha({
           <StatusBlock title="Estado" value={activity.visualStatus} tone={activityTone(activity.visualStatus)} />
           <StatusBlock
             title="Esta semana"
-            value={activity.currentWeekOpen ? (activity.activeThisWeek ? "SI" : "NO") : "SIN CLASE"}
+            value={activity.currentWeekOpen ? (activity.activeThisWeek ? "SI" : "NO") : activity.weekClosedLabel}
             tone={activity.currentWeekOpen ? (activity.activeThisWeek ? "green" : "red") : "neutral"}
           />
           <StatusBlock title="Implicación" value={activity.involvement} tone={involvementTone(activity.involvement)} />
@@ -1070,6 +1071,7 @@ function buildAdultActivity(attendance: Attendance[], courses: Course[], closure
   const attendance6m = countSinceEffective(dates, 180, today, closures);
   const attendance1m = countSinceEffective(dates, 30, today, closures);
   const currentWeekOpen = isCurrentWeekOpen(today, closures);
+  const weekClosedLabel = getCurrentWeekClosedLabel(today, closures);
   const activeThisWeek = currentWeekOpen && dates.some((date) => date >= startOfWeek(today));
   const courses12m = courses.filter((course) => {
     const date = parseDate(course.course_date);
@@ -1077,7 +1079,7 @@ function buildAdultActivity(attendance: Attendance[], courses: Course[], closure
   }).length;
   const visualStatus = calculateVisualStatus(weeksSinceLast, attendance1m, activeThisWeek);
   const involvement = calculateInvolvement(attendance1m, attendance6m, courses12m, activeThisWeek);
-  return { lastAttendance: last ? formatDateObject(last) : null, weeksSinceLast, attendance12m, attendance6m, attendance1m, activeThisWeek, currentWeekOpen, courses12m, visualStatus, involvement };
+  return { lastAttendance: last ? formatDateObject(last) : null, weeksSinceLast, attendance12m, attendance6m, attendance1m, activeThisWeek, currentWeekOpen, weekClosedLabel, courses12m, visualStatus, involvement };
 }
 
 function buildTechnicalProgress(targetGrade: string, techniques: Technique[], history: TechnicalHistory[]) {
@@ -1218,6 +1220,35 @@ function isCurrentWeekOpen(today: Date, closures: CalendarClosure[]) {
     cursor.setDate(cursor.getDate() + 1);
   }
   return false;
+}
+
+function getCurrentWeekClosedLabel(today: Date, closures: CalendarClosure[]) {
+  const cursor = startOfWeek(today);
+  const end = startOfDay(today);
+  while (cursor <= end) {
+    if (isClubTrainingDay(cursor) && isVacationDay(cursor, closures)) return "VACACIONES";
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return "SIN CLASE";
+}
+
+function isVacationDay(date: Date, closures: CalendarClosure[]) {
+  if (isSummerBreak(date)) return true;
+  return closures.some((closure) => {
+    const starts = new Date(`${closure.starts_on}T00:00:00`);
+    const ends = new Date(`${closure.ends_on}T00:00:00`);
+    if (!(starts <= date && date <= ends)) return false;
+    return isVacationTitle(closure.title);
+  });
+}
+
+function isVacationTitle(title?: string | null) {
+  const normalized = normalizePlainText(title ?? "");
+  return normalized.includes("vacacion") || normalized.includes("verano") || normalized.includes("navidad") || normalized.includes("semana santa");
+}
+
+function normalizePlainText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 function countSinceEffective(dates: Date[], activeDays: number, today: Date, closures: CalendarClosure[]) {
