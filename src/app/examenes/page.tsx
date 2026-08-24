@@ -59,7 +59,8 @@ export default async function ExamenesPage({
   const missingReport = exams.filter((exam) => !exam.report_url).length;
   const missingDiploma = exams.filter((exam) => !exam.diploma_url).length;
   const completeExams = exams.filter((exam) => exam.report_url && exam.diploma_url).length;
-  const visibleMembers = params.class === "kids" || params.class === "adults" ? (members ?? []).filter((member) => member.class === params.class) : (members ?? []);
+  const adultMembers = (members ?? []).filter((member) => member.class === "adults");
+  const kidMembers = (members ?? []).filter((member) => member.class === "kids");
 
   return (
     <div className="shell">
@@ -95,14 +96,26 @@ export default async function ExamenesPage({
             <a className="secondary-link" href="/diplomas-verificacion">Generar diploma de prueba</a>
           </div>
           <form action={registerExamAction} className="edit-form">
+            <p className="muted">Selecciona un kenshi en adultos o en ninos. Usa solo uno de los dos desplegables.</p>
             <div className="form-grid">
-              <label className="wide">
-                Kenshi
-                <select name="memberId" required>
-                  <option value="">Seleccionar</option>
-                  {visibleMembers.map((member) => (
+              <label>
+                Adultos
+                <select name="memberIdAdults">
+                  <option value="">Seleccionar adulto</option>
+                  {adultMembers.map((member) => (
                     <option key={member.id} value={member.id}>
-                      {member.display_name} - {member.class === "kids" ? "Ninos" : "Adultos"} - {member.grade ?? "Sin grado"}
+                      {member.display_name} - {member.grade ?? "Sin grado"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Ninos
+                <select name="memberIdKids">
+                  <option value="">Seleccionar nino</option>
+                  {kidMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.display_name} - {member.grade ?? "Sin grado"}
                     </option>
                   ))}
                 </select>

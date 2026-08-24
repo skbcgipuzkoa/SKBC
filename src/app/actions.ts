@@ -1103,7 +1103,12 @@ export async function registerExamAction(formData: FormData) {
     redirect("/");
   }
 
-  const memberId = String(formData.get("memberId") ?? "");
+  const selectedMemberIds = [
+    String(formData.get("memberId") ?? "").trim(),
+    String(formData.get("memberIdAdults") ?? "").trim(),
+    String(formData.get("memberIdKids") ?? "").trim()
+  ].filter(Boolean);
+  const memberId = selectedMemberIds.length === 1 ? selectedMemberIds[0] : "";
   const examDate = parseDateInput(String(formData.get("examDate") ?? ""));
   const grade = String(formData.get("grade") ?? "").trim();
   const examiner = String(formData.get("examiner") ?? "").trim() || null;
