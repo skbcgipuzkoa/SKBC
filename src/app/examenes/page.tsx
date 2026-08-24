@@ -96,30 +96,30 @@ export default async function ExamenesPage({
             <a className="secondary-link" href="/diplomas-verificacion">Generar diploma de prueba</a>
           </div>
           <form action={registerExamAction} className="edit-form">
-            <p className="muted">Selecciona un kenshi en adultos o en ninos. Usa solo uno de los dos desplegables.</p>
+            <p className="muted">Selecciona uno o varios kenshis. La fecha y el nuevo grado se aplicaran a todos los seleccionados.</p>
             <div className="form-grid">
-              <label>
-                Adultos
-                <select name="memberIdAdults">
-                  <option value="">Seleccionar adulto</option>
+              <details className="exam-member-picker">
+                <summary>Adultos <span>{adultMembers.length}</span></summary>
+                <div className="attendance-checklist compact-picker">
                   {adultMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.display_name} - {member.grade ?? "Sin grado"}
-                    </option>
+                    <label className="check-row" key={member.id}>
+                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
+                    </label>
                   ))}
-                </select>
-              </label>
-              <label>
-                Ninos
-                <select name="memberIdKids">
-                  <option value="">Seleccionar nino</option>
+                </div>
+              </details>
+              <details className="exam-member-picker">
+                <summary>Ninos <span>{kidMembers.length}</span></summary>
+                <div className="attendance-checklist compact-picker">
                   {kidMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.display_name} - {member.grade ?? "Sin grado"}
-                    </option>
+                    <label className="check-row" key={member.id}>
+                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
+                    </label>
                   ))}
-                </select>
-              </label>
+                </div>
+              </details>
               <label>Fecha examen<input name="examDate" type="date" required /></label>
               <label>
                 Nuevo grado

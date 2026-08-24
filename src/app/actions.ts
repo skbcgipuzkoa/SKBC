@@ -1103,36 +1103,38 @@ export async function registerExamAction(formData: FormData) {
     redirect("/");
   }
 
-  const selectedMemberIds = [
+  const selectedMemberIds = Array.from(new Set([
+    ...formData.getAll("memberIds").map((value) => String(value).trim()),
     String(formData.get("memberId") ?? "").trim(),
     String(formData.get("memberIdAdults") ?? "").trim(),
     String(formData.get("memberIdKids") ?? "").trim()
-  ].filter(Boolean);
-  const memberId = selectedMemberIds.length === 1 ? selectedMemberIds[0] : "";
+  ].filter(Boolean)));
   const examDate = parseDateInput(String(formData.get("examDate") ?? ""));
   const grade = String(formData.get("grade") ?? "").trim();
   const examiner = String(formData.get("examiner") ?? "").trim() || null;
 
-  if (!memberId || !examDate || !grade) {
+  if (!selectedMemberIds.length || !examDate || !grade) {
     redirect("/examenes?error=exam");
   }
 
-  let memberLegacyId: string | null = null;
+  const registeredLegacyIds: string[] = [];
   try {
-    const result = await registerExam({
-      memberId,
-      examDate,
-      grade,
-      examiner,
-      registeredBy: "WEB SKBC"
-    });
-    memberLegacyId = result.memberLegacyId;
+    for (const memberId of selectedMemberIds) {
+      const result = await registerExam({
+        memberId,
+        examDate,
+        grade,
+        examiner,
+        registeredBy: "WEB SKBC"
+      });
+      if (result.memberLegacyId) registeredLegacyIds.push(result.memberLegacyId);
+    }
   } catch (error) {
     console.error("Error registering exam", error);
     redirect("/examenes?error=exam");
   }
 
-  redirect(memberLegacyId ? `/kenshis/${memberLegacyId}?saved=exam` : "/examenes?saved=exam");
+  redirect(selectedMemberIds.length === 1 && registeredLegacyIds[0] ? `/kenshis/${registeredLegacyIds[0]}?saved=exam` : "/examenes?saved=exam");
 }
 
 export async function saveExamReportAction(formData: FormData) {
