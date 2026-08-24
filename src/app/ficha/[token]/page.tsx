@@ -1204,7 +1204,7 @@ function trainingDaysBetween(from: string, to: string, closures: CalendarClosure
   const end = new Date(`${to}T00:00:00`);
   cursor.setDate(cursor.getDate() + 1);
   while (cursor <= end) {
-    if (!isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) count += 1;
+    if (isClubTrainingDay(cursor) && !isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) count += 1;
     cursor.setDate(cursor.getDate() + 1);
   }
   return count;
@@ -1214,7 +1214,7 @@ function isCurrentWeekOpen(today: Date, closures: CalendarClosure[]) {
   const cursor = startOfWeek(today);
   const end = startOfDay(today);
   while (cursor <= end) {
-    if (!isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) return true;
+    if (isClubTrainingDay(cursor) && !isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) return true;
     cursor.setDate(cursor.getDate() + 1);
   }
   return false;
@@ -1243,6 +1243,11 @@ function isExplicitlyClosed(date: Date, closures: CalendarClosure[]) {
     const ends = new Date(`${closure.ends_on}T00:00:00`);
     return starts <= date && date <= ends;
   });
+}
+
+function isClubTrainingDay(date: Date) {
+  const day = date.getDay();
+  return day === 2 || day === 4;
 }
 
 function isSummerBreak(date: Date) {
