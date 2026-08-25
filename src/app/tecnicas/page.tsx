@@ -24,10 +24,12 @@ type Tecnica = {
   summary_es: string | null;
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function TecnicasPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; grade?: string; category?: string; status?: string; edit?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; grade?: string; category?: string; status?: string; edit?: string; saved?: string; error?: string; technique?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -54,6 +56,10 @@ export default async function TecnicasPage({
   const neverTrained = techniques.filter((tecnica) => !tecnica.last_trained_on || tecnica.repetitions === 0).length;
   const missingSummary = techniques.filter((tecnica) => !effectiveSummary(tecnica)).length;
   const missingVariant = techniques.filter((tecnica) => needsVariant(tecnica.name) && !tecnica.variant).length;
+  const savedTechnique = params.technique
+    ? techniques.find((tecnica) => tecnica.legacy_id === params.technique)
+    : null;
+  const returnPath = buildTechniqueReturnPath(params);
   const gradeStats = grades.map((grade) => {
     const rows = techniques.filter((tecnica) => normalize(tecnica.grade) === normalize(grade));
     const totalRepetitions = rows.reduce((sum, tecnica) => sum + (tecnica.repetitions ?? 0), 0);
@@ -81,7 +87,12 @@ export default async function TecnicasPage({
           </form>
         </div>
 
-        {params.saved === "technique" ? <p className="save-ok">Tecnica guardada.</p> : null}
+        {params.saved === "technique" ? (
+          <p className="save-ok">
+            Tecnica guardada correctamente
+            {savedTechnique ? `: ${savedTechnique.name}` : ""}. Editor cerrado y datos actualizados.
+          </p>
+        ) : null}
         {params.error === "technique" ? <p className="form-error">No se ha podido guardar la tecnica.</p> : null}
 
         <section className="grid stats compact" aria-label="Resumen tecnicas">
@@ -234,7 +245,7 @@ export default async function TecnicasPage({
             </thead>
             <tbody>
               {visibleTechniques.length ? visibleTechniques.map((tecnica) => (
-                <tr key={tecnica.legacy_id ?? tecnica.name}>
+                <tr className={params.technique === tecnica.legacy_id ? "saved-row" : undefined} key={tecnica.legacy_id ?? tecnica.name}>
                   <td data-label="ID">{tecnica.legacy_id}</td>
                   <td data-label="Grado"><span className={`grade-chip grade-${slugGrade(tecnica.grade)}`}>{tecnica.grade}</span></td>
                   <td data-label="Tecnica">
@@ -249,6 +260,7 @@ export default async function TecnicasPage({
                       <summary>Editar tecnica</summary>
                       <form action={updateTechniqueAction} className="technique-edit-form">
                         <input type="hidden" name="legacyId" value={tecnica.legacy_id ?? ""} />
+                        <input type="hidden" name="returnPath" value={returnPath} />
                         <label>
                           Nombre
                           <input name="name" defaultValue={tecnica.name} required />
@@ -342,6 +354,16 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
 
 function effectiveSummary(tecnica: Tecnica) {
   return adaptTechniqueSummary(tecnica.summary_es || getKamokuSummaryFallback(tecnica.name), tecnica);
+}
+
+function buildTechniqueReturnPath(params: { q?: string; grade?: string; category?: string; status?: string }) {
+  const query = new URLSearchParams();
+  if (params.q) query.set("q", params.q);
+  if (params.grade) query.set("grade", params.grade);
+  if (params.category) query.set("category", params.category);
+  if (params.status) query.set("status", params.status);
+  const serialized = query.toString();
+  return `/tecnicas${serialized ? `?${serialized}` : ""}`;
 }
 
 function compareTechniques(a: Tecnica, b: Tecnica) {

@@ -206,6 +206,7 @@ export async function updateIkaIdAction(formData: FormData) {
 
 export async function updateTechniqueAction(formData: FormData) {
   const legacyId = String(formData.get("legacyId") ?? "").trim();
+  const returnPath = safeTechniqueReturnPath(String(formData.get("returnPath") ?? ""));
   if (!(await hasInternalAccess()) || !legacyId) {
     redirect("/tecnicas?error=technique");
   }
@@ -227,7 +228,7 @@ export async function updateTechniqueAction(formData: FormData) {
   };
 
   if (!payload.name || !payload.category) {
-    redirect(`/tecnicas?error=technique&edit=${encodeURIComponent(legacyId)}`);
+    redirect(addTechniqueParams(returnPath, { error: "technique", edit: legacyId }));
   }
 
   const supabase = createAdminClient();
@@ -238,7 +239,7 @@ export async function updateTechniqueAction(formData: FormData) {
 
   if (error) {
     console.error("Error updating technique", error);
-    redirect(`/tecnicas?error=technique&edit=${encodeURIComponent(legacyId)}`);
+    redirect(addTechniqueParams(returnPath, { error: "technique", edit: legacyId }));
   }
 
   try {
@@ -247,7 +248,24 @@ export async function updateTechniqueAction(formData: FormData) {
     console.error("Error recalculating exam statuses after technique update", recalculateError);
   }
 
-  redirect(`/tecnicas?saved=technique&edit=${encodeURIComponent(legacyId)}`);
+  redirect(addTechniqueParams(returnPath, { saved: "technique", technique: legacyId }));
+}
+
+function safeTechniqueReturnPath(value: string) {
+  const path = value.trim();
+  if (!path.startsWith("/tecnicas") || path.startsWith("//")) return "/tecnicas";
+  return path;
+}
+
+function addTechniqueParams(path: string, values: Record<string, string>) {
+  const url = new URL(path, "https://skbc.local");
+  url.searchParams.delete("edit");
+  url.searchParams.delete("saved");
+  url.searchParams.delete("error");
+  url.searchParams.delete("technique");
+  Object.entries(values).forEach(([key, value]) => url.searchParams.set(key, value));
+  const query = url.searchParams.toString();
+  return `${url.pathname}${query ? `?${query}` : ""}`;
 }
 
 export async function updateKenshiAction(formData: FormData) {

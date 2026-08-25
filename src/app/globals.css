@@ -852,6 +852,15 @@ tbody tr:hover {
   background: #f8fbff;
 }
 
+.saved-row {
+  background: #edfdf4;
+  box-shadow: inset 4px 0 0 var(--ok);
+}
+
+.saved-row:hover {
+  background: #e5f8ee;
+}
+
 .pill {
   border-radius: 999px;
   display: inline-flex;
