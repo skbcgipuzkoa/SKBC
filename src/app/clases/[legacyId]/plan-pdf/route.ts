@@ -404,10 +404,11 @@ function rowHeight(item: PlanRow) {
 }
 
 function effectiveSummary(item: PlanRow) {
-  return adaptTechniqueSummary(
-    item.summary_es ?? item.techniques?.summary_es ?? getKamokuSummaryFallback(item.technique_name),
-    item
-  );
+  if (item.summary_es !== null) return item.summary_es.trim();
+  if (item.techniques?.summary_es !== null && item.techniques?.summary_es !== undefined) {
+    return item.techniques.summary_es.trim();
+  }
+  return adaptTechniqueSummary(getKamokuSummaryFallback(item.technique_name), item);
 }
 
 function groupPlanByGrade(plan: PlanRow[]) {

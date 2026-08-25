@@ -357,7 +357,8 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
 }
 
 function effectiveSummary(tecnica: Tecnica) {
-  return adaptTechniqueSummary(tecnica.summary_es ?? getKamokuSummaryFallback(tecnica.name), tecnica);
+  if (tecnica.summary_es !== null) return tecnica.summary_es.trim();
+  return adaptTechniqueSummary(getKamokuSummaryFallback(tecnica.name), tecnica);
 }
 
 function buildTechniqueReturnPath(params: { q?: string; grade?: string; category?: string; status?: string }) {
