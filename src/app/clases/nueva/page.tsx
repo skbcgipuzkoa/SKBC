@@ -7,13 +7,14 @@ import { hasInternalAccess } from "@/lib/auth";
 export default async function NuevaClasePage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; delegado?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
   }
 
   const params = await searchParams;
+  const delegateFlow = params.delegado === "1";
 
   return (
     <div className="shell">
@@ -24,7 +25,7 @@ export default async function NuevaClasePage({
             <p className="eyebrow">
               <a className="text-link" href="/clases"><ArrowLeft size={14} aria-hidden="true" /> Volver</a>
             </p>
-            <h1>Nueva clase</h1>
+            <h1>{delegateFlow ? "Preparar sustituto" : "Nueva clase"}</h1>
           </div>
           <form action={logoutAction}>
             <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
@@ -35,12 +36,15 @@ export default async function NuevaClasePage({
 
         <section className="card new-class-card">
           <form action={createClassAction} className="edit-form">
+            {delegateFlow ? <input type="hidden" name="delegateFlow" value="1" /> : null}
             <p className="muted">
-              En clases de adultos se generaran automaticamente los grupos tecnicos y el plan tecnico al crear la clase.
+              {delegateFlow
+                ? "Crea la clase y el sistema te llevara directamente al enlace para que otra persona cubra adultos, ninos o combinado."
+                : "En clases de adultos se generaran automaticamente los grupos tecnicos y el plan tecnico al crear la clase."}
             </p>
             <div className="form-grid">
               <label>Fecha<input name="classDate" type="date" required /></label>
-              <label>Nombre<input name="name" placeholder="Clase adultos" defaultValue="Clase adultos" required /></label>
+              <label>Nombre<input name="name" placeholder={delegateFlow ? "Clase sustituto" : "Clase adultos"} defaultValue={delegateFlow ? "Clase sustituto" : "Clase adultos"} required /></label>
               <label>
                 Grupo
                 <select name="classGroup" defaultValue="adults">
@@ -61,7 +65,7 @@ export default async function NuevaClasePage({
               <label className="wide">Notas<textarea name="notes" rows={4} /></label>
             </div>
             <div className="form-actions">
-              <button type="submit">Crear clase con plan</button>
+              <button type="submit">{delegateFlow ? "Crear y generar enlace" : "Crear clase con plan"}</button>
               {params.error ? <span className="form-error">No se pudo crear</span> : null}
             </div>
           </form>

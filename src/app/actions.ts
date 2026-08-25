@@ -597,6 +597,7 @@ export async function createClassAction(formData: FormData) {
   const classType = String(formData.get("classType") ?? "").trim() || null;
   const responsible = String(formData.get("responsible") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const delegateFlow = String(formData.get("delegateFlow") ?? "") === "1";
 
   if (!classDate || !name) {
     redirect("/clases/nueva?error=class");
@@ -628,11 +629,11 @@ export async function createClassAction(formData: FormData) {
       await generateAdultTechnicalPlan(data.id);
     } catch (prepareError) {
       console.error("Error auto preparing adult class", prepareError);
-      redirect(`/clases/${data.legacy_id}?saved=class&error=prepare&detail=${encodeURIComponent(errorMessage(prepareError))}`);
+      redirect(`/clases/${data.legacy_id}?saved=class&error=prepare${delegateFlow ? "&delegate=1" : ""}&detail=${encodeURIComponent(errorMessage(prepareError))}`);
     }
   }
 
-  redirect(`/clases/${data.legacy_id}?saved=${classGroup === "adults" ? "class-prepared" : "class"}`);
+  redirect(`/clases/${data.legacy_id}?saved=${classGroup === "adults" ? "class-prepared" : "class"}${delegateFlow ? "&delegate=1" : ""}`);
 }
 
 export async function updateClassAction(formData: FormData) {

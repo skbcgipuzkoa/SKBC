@@ -5,6 +5,7 @@ type SidebarNavProps = {
 const navItems = [
   { label: "Inicio", href: "/" },
   { label: "Control dia", href: "/control-dia" },
+  { label: "Sustituto", href: "/clases/nueva?delegado=1" },
   { label: "Kenshis", href: "/kenshis" },
   { label: "Clases", href: "/clases" },
   { label: "Busen", href: "/clases-negras" },

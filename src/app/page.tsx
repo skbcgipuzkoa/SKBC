@@ -42,6 +42,7 @@ const moduleGroups = [
     title: "Trabajo diario",
     items: [
       { label: "Nueva clase", href: "/clases/nueva", icon: CalendarCheck, tone: "primary" },
+      { label: "Sustituto", href: "/clases/nueva?delegado=1", icon: ShieldCheck, tone: "primary" },
       { label: "Control del dia", href: "/control-dia", icon: ClipboardCheck, tone: "primary" },
       { label: "Calendario", href: "/clases", icon: NotebookTabs },
       { label: "Clases Busen", href: "/clases-negras", icon: ShieldCheck },
@@ -161,6 +162,7 @@ export default async function Home({
           </div>
           <div className="home-hero-actions">
             <a className="primary-link" href="/clases/nueva">Nueva clase</a>
+            <a className="primary-link secondary-link" href="/clases/nueva?delegado=1">Modo sustituto</a>
             <a className="primary-link secondary-link" href="/clases">Ver calendario</a>
           </div>
         </section>
