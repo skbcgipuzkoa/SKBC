@@ -294,7 +294,7 @@ export default async function TecnicasPage({
                         </label>
                         <label className="wide">
                           Resumen en castellano
-                          <textarea name="summaryEs" rows={4} defaultValue={tecnica.summary_es ?? ""} placeholder="Explicacion breve para el plan tecnico" />
+                          <textarea name="summaryEs" rows={4} defaultValue={effectiveSummary(tecnica) ?? ""} placeholder="Explicacion breve para el plan tecnico" />
                         </label>
                         <button type="submit">Guardar tecnica</button>
                       </form>
