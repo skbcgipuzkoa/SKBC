@@ -18,6 +18,7 @@ import {
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { PlanTechniqueForm } from "./PlanTechniqueForm";
 
 type ClassRow = {
   id: string;
@@ -577,9 +578,9 @@ export default async function ClaseDetailPage({
           <>
             <div className="section-heading-row">
               <h2 className="section-title">Plan tecnico</h2>
-              <span className="status">{completedPlan}/{(plan ?? []).length} realizadas</span>
+              <span className="status" data-plan-total-count data-plan-total-label=" realizadas">{completedPlan}/{(plan ?? []).length} realizadas</span>
             </div>
-            <form action={updateClassPlanTechniquesAction} className="class-plan-form">
+            <PlanTechniqueForm action={updateClassPlanTechniquesAction}>
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
               <input type="hidden" name="nextStep" value="attendance" />
@@ -594,7 +595,7 @@ export default async function ClaseDetailPage({
                 const groupCompleted = items.filter((item) => item.completed).length;
                 const targetGrade = items[0]?.target_grade ?? null;
                 return (
-                  <details className="card plan-group" key={grade}>
+                  <details className="card plan-group" key={grade} data-plan-group>
                     <summary className="plan-group-head">
                       <div>
                         <div className="grade-route">
@@ -604,7 +605,7 @@ export default async function ClaseDetailPage({
                         </div>
                         <h2>{grade} para {targetGrade ?? "objetivo"}</h2>
                       </div>
-                      <span className="plan-group-count">{groupCompleted}/{items.length}</span>
+                      <span className="plan-group-count" data-plan-group-count>{groupCompleted}/{items.length}</span>
                     </summary>
                     <div className="plan-card-list">
                       {items.map((item) => (
@@ -645,7 +646,7 @@ export default async function ClaseDetailPage({
                   <button type="submit">Guardar y pasar asistencia</button>
                 </div>
               ) : null}
-            </form>
+              </PlanTechniqueForm>
           </>
         ) : null}
 
@@ -679,7 +680,7 @@ export default async function ClaseDetailPage({
         {readyToClose && activeStep === "attendance" && (attendance ?? []).length ? (
           <section className="mobile-close-bar" aria-label="Cerrar clase">
             <div>
-              <strong>{completedPlan}/{(plan ?? []).length}</strong>
+                <strong data-plan-total-count>{completedPlan}/{(plan ?? []).length}</strong>
               <span>tecnicas realizadas. Usa solo si la asistencia ya esta guardada.</span>
             </div>
             <form action={closeAdultClassAction}>
