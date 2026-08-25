@@ -405,7 +405,7 @@ function rowHeight(item: PlanRow) {
 
 function effectiveSummary(item: PlanRow) {
   return adaptTechniqueSummary(
-    item.summary_es || item.techniques?.summary_es || getKamokuSummaryFallback(item.technique_name),
+    item.summary_es ?? item.techniques?.summary_es ?? getKamokuSummaryFallback(item.technique_name),
     item
   );
 }

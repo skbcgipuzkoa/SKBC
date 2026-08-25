@@ -222,7 +222,7 @@ export async function updateTechniqueAction(formData: FormData) {
     variant_note: String(formData.get("variantNote") ?? "").trim() || null,
     category: normalizeTechniqueCategoryInput(String(formData.get("category") ?? "")),
     content_type: String(formData.get("contentType") ?? "").trim() || null,
-    summary_es: String(formData.get("summaryEs") ?? "").trim() || null,
+    summary_es: String(formData.get("summaryEs") ?? "").trim(),
     active,
     active_in_planning: activeInPlanning,
     updated_at: new Date().toISOString()
@@ -243,14 +243,7 @@ export async function updateTechniqueAction(formData: FormData) {
     redirect(addTechniqueParams(returnPath, { error: "technique", edit: legacyId }));
   }
 
-  try {
-    await recalculateActiveExamStatuses();
-  } catch (recalculateError) {
-    console.error("Error recalculating exam statuses after technique update", recalculateError);
-  }
-
   revalidatePath("/tecnicas");
-  revalidatePath("/proximos-examenes");
   redirect(addTechniqueParams(returnPath, { saved: "technique", technique: legacyId }));
 }
 

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { SidebarNav } from "@/app/components/SidebarNav";
+import { SubmitButton } from "@/app/components/SubmitButton";
 import { logoutAction, updateTechniqueAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades } from "@/lib/grades";
@@ -311,7 +312,7 @@ export default async function TecnicasPage({
                           Resumen en castellano
                           <textarea name="summaryEs" rows={4} defaultValue={effectiveSummary(tecnica) ?? ""} placeholder="Explicacion breve para el plan tecnico" />
                         </label>
-                        <button type="submit">Guardar tecnica</button>
+                        <SubmitButton pendingLabel="Guardando tecnica...">Guardar tecnica</SubmitButton>
                       </form>
                     </details>
                   </td>
@@ -356,7 +357,7 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
 }
 
 function effectiveSummary(tecnica: Tecnica) {
-  return adaptTechniqueSummary(tecnica.summary_es || getKamokuSummaryFallback(tecnica.name), tecnica);
+  return adaptTechniqueSummary(tecnica.summary_es ?? getKamokuSummaryFallback(tecnica.name), tecnica);
 }
 
 function buildTechniqueReturnPath(params: { q?: string; grade?: string; category?: string; status?: string }) {

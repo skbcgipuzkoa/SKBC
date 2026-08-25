@@ -1332,6 +1332,11 @@ tbody tr:hover {
   min-height: 40px;
 }
 
+.technique-edit-form button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .text-link {
   color: var(--brand);
   display: inline-flex;
