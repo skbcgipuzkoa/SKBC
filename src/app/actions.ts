@@ -891,7 +891,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
     try {
       for (const dayClass of classes) {
         const ids = memberIdsByClass.get(dayClass.id) ?? [];
-        if (ids.length) await addAttendanceRows(dayClass.id, ids, "WEB SKBC");
+        if (ids.length) await addAttendanceRows(dayClass.id, ids, "WEB SKBC", formData);
       }
 
       if (closeAfter) {
@@ -2693,7 +2693,7 @@ async function setDelegatePlanCompleted(classId: string, planIds: string[]) {
   if (error) throw error;
 }
 
-async function addAttendanceRows(classId: string, memberIds: string[], technicalNote = "WEB SKBC") {
+async function addAttendanceRows(classId: string, memberIds: string[], technicalNote = "WEB SKBC", formData?: FormData) {
   const supabase = createAdminClient();
   const [{ data: clase, error: classError }, { data: members, error: membersError }] = await Promise.all([
     supabase
@@ -2714,7 +2714,14 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
 
   const rows = members.map((member) => {
     const officialGrade = member.grade || "";
-    const trainedGrade = clase.class_group === "adults" ? resolveTrainingGroupGrade(officialGrade) : officialGrade;
+    const trainedGradeOverride = String(formData?.get(`trainedGrade:${classId}:${member.id}`) ?? "").trim();
+    const roleOverride = String(formData?.get(`technicalRole:${classId}:${member.id}`) ?? "").trim();
+    const technicalRole = clase.class_group === "adults" && ["student", "teaching", "support", "reviewing", "observing"].includes(roleOverride)
+      ? roleOverride
+      : "student";
+    const trainedGrade = clase.class_group === "adults"
+      ? trainedGradeOverride || resolveTrainingGroupGrade(officialGrade)
+      : officialGrade;
     return {
       legacy_id: `NEW-ASIS-${classId}-${member.id}`,
       class_id: classId,
@@ -2722,7 +2729,7 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
       attended_on: clase.class_date,
       official_grade: officialGrade || null,
       trained_grade: trainedGrade || null,
-      technical_role: "student",
+      technical_role: technicalRole,
       technical_note: technicalNote,
       use_for_history: true
     };
@@ -2741,4 +2748,42 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
   } catch (syncError) {
     console.error("Error syncing delegate attendance to legacy sheet", syncError);
   }
+
+  if (clase.class_group === "adults") {
+    await addTeachingBonuses(supabase, classId, clase.class_date, rows.filter((row) => row.technical_role === "teaching").map((row) => row.member_id));
+  }
+}
+
+async function addTeachingBonuses(
+  supabase: ReturnType<typeof createAdminClient>,
+  classId: string,
+  classDate: string,
+  memberIds: string[]
+) {
+  if (!memberIds.length) return;
+
+  const reason = `Ayuda ensenando en clase ${classDate}`;
+  const { data: existing, error: existingError } = await supabase
+    .from("adult_ranking_bonuses")
+    .select("member_id")
+    .eq("bonus_date", classDate)
+    .eq("reason", reason)
+    .in("member_id", memberIds)
+    .returns<Array<{ member_id: string }>>();
+
+  if (existingError) throw existingError;
+  const existingIds = new Set((existing ?? []).map((row) => row.member_id));
+  const rows = memberIds
+    .filter((memberId) => !existingIds.has(memberId))
+    .map((memberId) => ({
+      member_id: memberId,
+      bonus_date: classDate,
+      points: 1,
+      reason,
+      created_by: `WEB SKBC:${classId}`
+    }));
+
+  if (!rows.length) return;
+  const { error } = await supabase.from("adult_ranking_bonuses").insert(rows);
+  if (error) throw error;
 }

@@ -215,6 +215,38 @@ export default async function ClaseDetailPage({
   const totalDayAttendance = attendanceClasses.length > 1
     ? (dayAttendance ?? []).filter((item) => attendanceClasses.some((dayClass) => dayClass.id === item.class_id)).length
     : (attendance?.length ?? 0);
+  const kidsDayClass = (dayClasses ?? []).find((item) => item.class_group === "kids");
+  const kidsAttendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === kidsDayClass?.id).map((item) => item.member_id));
+  const kidsDayMembers = (dayMembers ?? []).filter((member) => member.class === "kids");
+  const pendingKidsDayMembers = kidsDayMembers.filter((member) => !kidsAttendedIds.has(member.id));
+  const kidsEarlyAttendancePanel = clase.class_group === "adults" && activeStep === "techniques" && kidsDayClass && !kidsDayClass.closed ? (
+    <details className="card early-kids-attendance">
+      <summary>
+        <strong>Asistencia de ninos antes de tecnica</strong>
+        <span>{kidsDayMembers.length - pendingKidsDayMembers.length}/{kidsDayMembers.length} registrados</span>
+      </summary>
+      <form action={addBulkAttendanceAction} className="attendance-day-form">
+        <input type="hidden" name="classId" value={kidsDayClass.id} />
+        <input type="hidden" name="legacyId" value={kidsDayClass.legacy_id ?? legacyId} />
+        <input type="hidden" name="returnLegacyId" value={legacyId} />
+        <input type="hidden" name="groupClassIds" value={kidsDayClass.id} />
+        <div className="attendance-checklist">
+          {pendingKidsDayMembers.length ? pendingKidsDayMembers.map((member) => (
+            <label className="check-row" key={member.id}>
+              <input name={`memberIds:${kidsDayClass.id}`} type="checkbox" value={member.id} />
+              <span>
+                <strong>{member.display_name}</strong>
+                <small>{member.grade ?? "Sin grado"}</small>
+              </span>
+            </label>
+          )) : <p className="muted">Todos los ninos activos estan ya en asistencia.</p>}
+        </div>
+        <div className="form-actions">
+          <button type="submit" disabled={!pendingKidsDayMembers.length}>Guardar asistencia infantil</button>
+        </div>
+      </form>
+    </details>
+  ) : null;
   const attendancePanel = (
     <form action={addBulkAttendanceAction} className="attendance-day-form">
       <input type="hidden" name="classId" value={clase.id} />
@@ -242,6 +274,21 @@ export default async function ClaseDetailPage({
                         <strong>{member.display_name}</strong>
                         <small>{member.grade ?? "Sin grado"}</small>
                       </span>
+                      {dayClass.class_group === "adults" ? (
+                        <span className="attendance-options">
+                          <select name={`trainedGrade:${dayClass.id}:${member.id}`} defaultValue="">
+                            <option value="">Su grupo</option>
+                            {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                          </select>
+                          <select name={`technicalRole:${dayClass.id}:${member.id}`} defaultValue="student">
+                            <option value="student">Entrena</option>
+                            <option value="teaching">Ensenando +1</option>
+                            <option value="support">Apoyo</option>
+                            <option value="reviewing">Repaso</option>
+                            <option value="observing">Observa</option>
+                          </select>
+                        </span>
+                      ) : null}
                     </label>
                   )) : <p className="muted">Todos los kenshis activos de {title.toLowerCase()} estan ya en asistencia.</p>}
                 </div>
@@ -573,6 +620,8 @@ export default async function ClaseDetailPage({
             <p className="muted">Esta sesion no usa plan tecnico. Registra asistencia y abre las fichas para revisar constancia, avisos y datos del alumno.</p>
           </section>
         )}
+
+        {kidsEarlyAttendancePanel}
 
         {clase.class_group === "adults" && activeStep === "techniques" ? (
           <>

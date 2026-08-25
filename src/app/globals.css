@@ -1835,6 +1835,39 @@ tbody tr:hover {
   color: var(--muted);
 }
 
+.attendance-options {
+  display: grid;
+  gap: 6px;
+  grid-column: 2;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.attendance-options select {
+  min-height: 38px;
+  width: 100%;
+}
+
+.early-kids-attendance {
+  border-color: rgba(0, 92, 185, 0.24);
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
+}
+
+.early-kids-attendance summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.early-kids-attendance summary span {
+  background: var(--soft-blue);
+  border-radius: 999px;
+  color: var(--blue);
+  font-weight: 900;
+  padding: 5px 12px;
+}
+
 .exam-member-picker {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -4412,6 +4445,16 @@ tbody tr:hover {
   .check-row input {
     height: 22px;
     width: 22px;
+  }
+
+  .attendance-options {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
+  }
+
+  .early-kids-attendance summary {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .plan-card {
