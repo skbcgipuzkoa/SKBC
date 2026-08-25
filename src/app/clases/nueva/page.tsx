@@ -47,7 +47,8 @@ export default async function NuevaClasePage({
               <label>Nombre<input name="name" placeholder={delegateFlow ? "Clase sustituto" : "Clase adultos"} defaultValue={delegateFlow ? "Clase sustituto" : "Clase adultos"} required /></label>
               <label>
                 Grupo
-                <select name="classGroup" defaultValue="adults">
+                <select name="classGroup" defaultValue={delegateFlow ? "combined" : "adults"}>
+                  <option value="combined">Adultos + ninos</option>
                   <option value="adults">Adultos</option>
                   <option value="kids">Ninos</option>
                 </select>

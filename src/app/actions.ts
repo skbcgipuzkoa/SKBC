@@ -593,7 +593,9 @@ export async function createClassAction(formData: FormData) {
 
   const classDate = parseDateInput(String(formData.get("classDate") ?? ""));
   const name = String(formData.get("name") ?? "").trim();
-  const classGroup = normalizeClass(String(formData.get("classGroup") ?? "")) ?? "adults";
+  const classGroupRaw = String(formData.get("classGroup") ?? "");
+  const classGroup = normalizeClass(classGroupRaw) ?? "adults";
+  const combinedClass = classGroupRaw === "combined";
   const classType = String(formData.get("classType") ?? "").trim() || null;
   const responsible = String(formData.get("responsible") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
@@ -621,6 +623,26 @@ export async function createClassAction(formData: FormData) {
 
   if (error || !data?.legacy_id) {
     redirect("/clases/nueva?error=class");
+  }
+
+  if (combinedClass) {
+    const { error: kidsError } = await supabase
+      .from("classes")
+      .insert({
+        legacy_id: `NEW-CLA-KIDS-${Date.now()}`,
+        class_date: classDate,
+        name: `${name} ninos`,
+        class_group: "kids",
+        class_type: classType,
+        responsible,
+        notes,
+        status: "pending"
+      });
+
+    if (kidsError) {
+      console.error("Error creating combined kids class", kidsError);
+      redirect(`/clases/${data.legacy_id}?saved=class&error=kids-companion${delegateFlow ? "&delegate=1" : ""}`);
+    }
   }
 
   if (classGroup === "adults") {
