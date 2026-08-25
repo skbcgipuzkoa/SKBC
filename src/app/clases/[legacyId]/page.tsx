@@ -19,6 +19,7 @@ import { CopyLinkButton } from "@/components/copy-link-button";
 import { hasInternalAccess } from "@/lib/auth";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
 import { PlanTechniqueForm } from "./PlanTechniqueForm";
 
 type ClassRow = {
@@ -802,7 +803,10 @@ function groupPlanByGrade(plan: PlanRow[]) {
 }
 
 function effectivePlanSummary(item: PlanRow) {
-  return item.summary_es || item.techniques?.summary_es || getKamokuSummaryFallback(item.technique_name);
+  return adaptTechniqueSummary(
+    item.summary_es || item.techniques?.summary_es || getKamokuSummaryFallback(item.technique_name),
+    item
+  );
 }
 
 function gradeSortValue(grade: string) {

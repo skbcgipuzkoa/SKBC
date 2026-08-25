@@ -3,6 +3,7 @@ import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from "pdf-lib";
 import { hasInternalAccess } from "@/lib/auth";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
 
 type ClassRow = {
   id: string;
@@ -403,7 +404,10 @@ function rowHeight(item: PlanRow) {
 }
 
 function effectiveSummary(item: PlanRow) {
-  return item.summary_es || item.techniques?.summary_es || getKamokuSummaryFallback(item.technique_name);
+  return adaptTechniqueSummary(
+    item.summary_es || item.techniques?.summary_es || getKamokuSummaryFallback(item.technique_name),
+    item
+  );
 }
 
 function groupPlanByGrade(plan: PlanRow[]) {

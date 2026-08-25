@@ -5,6 +5,7 @@ import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades } from "@/lib/grades";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
 import { BookOpenCheck, CheckCircle2, Filter, LogOut, RotateCcw } from "lucide-react";
 
 type Tecnica = {
@@ -340,7 +341,7 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
 }
 
 function effectiveSummary(tecnica: Tecnica) {
-  return tecnica.summary_es || getKamokuSummaryFallback(tecnica.name);
+  return adaptTechniqueSummary(tecnica.summary_es || getKamokuSummaryFallback(tecnica.name), tecnica);
 }
 
 function compareTechniques(a: Tecnica, b: Tecnica) {
