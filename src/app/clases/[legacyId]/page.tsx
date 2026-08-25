@@ -17,6 +17,7 @@ import {
 } from "@/app/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { hasInternalAccess } from "@/lib/auth";
+import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PlanTechniqueForm } from "./PlanTechniqueForm";
 
@@ -53,6 +54,7 @@ type PlanRow = {
     repetitions: number | null;
     last_trained_on: string | null;
     score: number | null;
+    summary_es: string | null;
   } | null;
 };
 
@@ -118,7 +120,7 @@ export default async function ClaseDetailPage({
   const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }, { data: dayClasses }, { data: dayMembers }, { data: dayAttendance }] = await Promise.all([
     supabase
       .from("technical_plans")
-      .select("id,legacy_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score)")
+      .select("id,legacy_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score,summary_es)")
       .eq("class_id", clase.id)
       .order("group_grade")
       .order("suggested_order")
@@ -665,7 +667,7 @@ export default async function ClaseDetailPage({
                             <small className="plan-reason">
                               Rep: {item.techniques?.repetitions ?? 0} - Ultima: {item.techniques?.last_trained_on ?? "nunca"} - Score: {item.techniques?.score ?? item.score_at_that_moment ?? 0}
                             </small>
-                            {item.summary_es ? <p className="technique-summary">{item.summary_es}</p> : null}
+                            {effectivePlanSummary(item) ? <p className="technique-summary plan-technique-summary">{effectivePlanSummary(item)}</p> : null}
                           </div>
                           {clase.closed ? (
                             <span className={item.completed ? "mini-action selected" : "mini-action"}>
@@ -797,6 +799,10 @@ function groupPlanByGrade(plan: PlanRow[]) {
     groups.set(key, current);
   });
   return [...groups.entries()].sort(([gradeA], [gradeB]) => gradeSortValue(gradeA) - gradeSortValue(gradeB));
+}
+
+function effectivePlanSummary(item: PlanRow) {
+  return item.summary_es || item.techniques?.summary_es || getKamokuSummaryFallback(item.technique_name);
 }
 
 function gradeSortValue(grade: string) {

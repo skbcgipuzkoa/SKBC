@@ -1141,6 +1141,13 @@ tbody tr:hover {
   padding: 4px 0 4px 8px;
 }
 
+.plan-technique-summary {
+  background: #ffffff;
+  border-left-color: var(--brand);
+  color: #243244;
+  font-size: 14px;
+}
+
 .technique-meta-line,
 .technique-variant-line {
   display: flex;
