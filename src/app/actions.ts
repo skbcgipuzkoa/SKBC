@@ -1,6 +1,7 @@
 "use server";
 
 import { randomBytes } from "crypto";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
 import { generateAdultTechnicalGroups, resolveTrainingGroupGrade } from "@/lib/adult-groups";
@@ -248,6 +249,8 @@ export async function updateTechniqueAction(formData: FormData) {
     console.error("Error recalculating exam statuses after technique update", recalculateError);
   }
 
+  revalidatePath("/tecnicas");
+  revalidatePath("/proximos-examenes");
   redirect(addTechniqueParams(returnPath, { saved: "technique", technique: legacyId }));
 }
 

@@ -245,7 +245,10 @@ export default async function TecnicasPage({
             </thead>
             <tbody>
               {visibleTechniques.length ? visibleTechniques.map((tecnica) => (
-                <tr className={params.technique === tecnica.legacy_id ? "saved-row" : undefined} key={tecnica.legacy_id ?? tecnica.name}>
+                <tr
+                  className={params.technique === tecnica.legacy_id ? "saved-row" : undefined}
+                  key={`${tecnica.legacy_id ?? tecnica.name}-${params.saved ?? ""}-${params.technique ?? ""}-${params.edit ?? ""}`}
+                >
                   <td data-label="ID">{tecnica.legacy_id}</td>
                   <td data-label="Grado"><span className={`grade-chip grade-${slugGrade(tecnica.grade)}`}>{tecnica.grade}</span></td>
                   <td data-label="Tecnica">
@@ -256,7 +259,7 @@ export default async function TecnicasPage({
                       {tecnica.variant_note ? <span>{tecnica.variant_note}</span> : null}
                     </div>
                     {effectiveSummary(tecnica) ? <p className="technique-summary compact">{effectiveSummary(tecnica)}</p> : null}
-                    <details className="inline-edit-details" open={params.edit === tecnica.legacy_id}>
+                    <details className="inline-edit-details" open={params.saved !== "technique" && params.edit === tecnica.legacy_id}>
                       <summary>Editar tecnica</summary>
                       <form action={updateTechniqueAction} className="technique-edit-form">
                         <input type="hidden" name="legacyId" value={tecnica.legacy_id ?? ""} />
