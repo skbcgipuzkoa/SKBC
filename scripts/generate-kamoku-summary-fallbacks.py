@@ -10,7 +10,7 @@ SYLLABUS_PATHS = [
     Path("C:/Users/alvar/Desktop/CLAUDE/superpowers-main/skbc-gipuzkoa/exam-system/kyu-syllabus-extracted.txt"),
     Path("C:/Users/alvar/Desktop/CLAUDE/superpowers-main/skbc-gipuzkoa/exam-system/dan-syllabus-extracted.txt"),
 ]
-STANCE_WORDS = ["Tai", "Hiraki", "Both", "Any", "All"]
+STANCE_WORDS = ["Tai", "Hiraki", "Both", "Any", "All", "Back"]
 SECTION_STOP = re.compile(
     r"\s+(--\s+\d+\s+of\s+24\s+--|Goho\s+Juho|Tai gamae|Hiraki gamae|Umpo ho|Ukemi|"
     r"Kata tan-en|Kata sotai|Kumi embu|Randori|Keimyaku|Gakka|Dokun|Vocab list|Notes)\b",
@@ -66,6 +66,10 @@ def build_entry_regexes(names):
         "Hasami daoshi (2 types)",
         "Tora daoshi (2 types)",
         "Ryu nage, ryu gatame",
+        "Shita uke zuki (ura & omote)",
+        "Gyaku gassho nage (two types)",
+        "Ashi nuki (two types)",
+        "Hagai jime to shuho",
     ]
     patterns = []
     for name in sorted(set(names + extra), key=len, reverse=True):
@@ -123,6 +127,10 @@ def variant_candidates(name):
         ("hasami daoshi", "Hasami daoshi (2 types)"),
         ("tora daoshi", "Tora daoshi (2 types)"),
         ("ryu nage", "Ryu nage, ryu gatame"),
+        ("shita uke zuki", "Shita uke zuki (ura & omote)"),
+        ("gyaku gassho nage", "Gyaku gassho nage (two types)"),
+        ("ashi nuki", "Ashi nuki (two types)"),
+        ("hagai jime", "Hagai jime to shuho"),
     ]
     lowered = name.lower()
     for needle, candidate in grouped:
@@ -223,14 +231,128 @@ def translate(value):
         (r"\bextended\b", "extendido"),
         (r"\bfrom\b", "desde"),
         (r"\bany punch\b", "cualquier golpe de puño"),
+        (r"\bany wrist grab\b", "cualquier agarre de muneca"),
+        (r"\btop of wrist\b", "parte superior de la muneca"),
+        (r"\bunderside of wrist\b", "parte inferior de la muneca"),
+        (r"\binside of wrist\b", "interior de la muneca"),
+        (r"\boutside of wrist\b", "exterior de la muneca"),
+        (r"\bpush head down from behind\b", "empuja la cabeza hacia abajo desde atras"),
+        (r"\bbody slam\b", "derribo al cuerpo"),
+        (r"\bchoke\b", "estrangulacion"),
+        (r"\bbottom wrist\b", "muneca inferior"),
+        (r"\bwrap arm\b", "envuelve el brazo"),
+        (r"\bgrab hair from front\b", "agarra el pelo desde delante"),
+        (r"\bgrab collar from behind\b", "agarra el cuello desde atras"),
+        (r"\bgrab belt\b", "agarra el cinturon"),
+        (r"\bpalm down\b", "palma hacia abajo"),
+        (r"\bpalm up\b", "palma hacia arriba"),
+        (r"\barrest\b", "detencion"),
+        (r"\bhammer throw\b", "proyeccion tipo martillo"),
+        (r"\bsecond release\b", "segunda salida"),
+        (r"\bresist\b", "resistir"),
+        (r"\bboth hands\b", "ambas manos"),
+        (r"\bone hand\b", "una mano"),
+        (r"\btwo ways\b", "dos formas"),
+        (r"\bstep under arm\b", "pasa por debajo del brazo"),
+        (r"\blift elbow\b", "levanta el codo"),
+        (r"\bescape\b", "escapar de"),
+        (r"\bopening\b", "bocamanga"),
+        (r"\bthumb\b", "pulgar"),
+        (r"\bfingers\b", "dedos"),
+        (r"\bbut offer hand low\b", "pero ofrece la mano baja"),
+        (r"\bbut\b", "pero"),
+        (r"\bwider distance\b", "distancia mas amplia"),
+        (r"\bbear hug\b", "abrazo desde atras"),
+        (r"\breverse direction\b", "cambia la direccion"),
+        (r"\bthigh\b", "muslo"),
+        (r"\bchest\b", "pecho"),
+        (r"\bstanding\b", "de pie"),
+        (r"\bpalm\b", "palma"),
+        (r"\bsqueeze\b", "aprieta"),
+        (r"\bwalk past &\b", "pasa caminando y"),
+        (r"\bwalk past\b", "pasa caminando"),
+        (r"\bgrap\b", "agarra"),
+        (r"\bsleeve\b", "manga"),
+        (r"\bhigh near neck\b", "alta cerca del cuello"),
+        (r"\bblock\b", "bloquea"),
+        (r"\bknee\b", "rodilla"),
+        (r"\bwith nyoi\b", "con nyoi"),
+        (r"\bsame lado grip\b", "agarre del mismo lado"),
+        (r"\bgirar away\b", "gira hacia fuera"),
+        (r"\bpush down\b", "empuja hacia abajo"),
+        (r"\bhands down\b", "manos hacia abajo"),
+        (r"\bstraight away\b", "directamente"),
+        (r"\btrap leg\b", "atrapa la pierna"),
+        (r"\bfront\b", "delante"),
+        (r"\bbehind\b", "atras"),
+        (r"\bback\b", "atras"),
         (r"\bsequence\b", "secuencia"),
     ]
     text = value
     for pattern, replacement in replacements:
         text = re.sub(pattern, replacement, text, flags=re.I)
+    text = sanitize_spanish_summary(fix_encoding(clean_pdf_artifacts(text)))
     text = re.sub(r"\s+(Goho|Juho)\s+(--\s+\d+\s+of\s+24\s+--.*|\d+dan.*|st.*|nd.*|rd.*|th.*)$", "", text, flags=re.I)
     text = re.sub(r"\s+(Goho|Juho)\s*$", "", text, flags=re.I)
     return re.sub(r"\s+([.,;:])", r"\1", text).strip()
+
+
+def clean_pdf_artifacts(text):
+    text = re.sub(r"\s+--\s+\d+\s+of\s+24\s+--.*$", "", text, flags=re.I)
+    text = re.sub(r"\s+(Goho|Juho)\s+\(cont\.\).*$", "", text, flags=re.I)
+    text = re.sub(r"\s+Goho\s+\(all\s+con\s+ren han ko\).*$", "", text, flags=re.I)
+    text = re.sub(r"\s+(White|Yellow|Orange|Green|Blue|Brown|Black|Shodan|Nidan|Sandan|Yondan|Godan)\b.*$", "", text, flags=re.I)
+    text = re.sub(r"\s+\d+\s*$", "", text)
+    return text
+
+
+def fix_encoding(text):
+    return (
+        text.replace("muÃ±eca", "muneca")
+        .replace("muÃƒÂ±eca", "muneca")
+        .replace("puÃ±o", "puno")
+        .replace("Ã±", "n")
+    )
+
+
+def sanitize_spanish_summary(text):
+    cleanups = [
+        (r"\bDefensor: after\b", "Defensor: despues"),
+        (r"\bafter\b", "despues de"),
+        (r"\bgrab both hands\b", "agarra ambas manos"),
+        (r"\bgrab one arm\b", "agarra un brazo"),
+        (r"\bgrab bicep\b", "agarra el biceps"),
+        (r"\bgrab collar Desde atras\b", "agarra el cuello desde atras"),
+        (r"\bgrab hair Desde delante\b", "agarra el pelo desde delante"),
+        (r"\bgrab baja lapel / jacket\b", "agarra la solapa baja o la chaqueta"),
+        (r"\bgrab alta lapel\b", "agarra la solapa alta"),
+        (r"\bgrab parte superior de la muneca\b", "agarra la parte superior de la muneca"),
+        (r"\bgrab parte inferior de la muneca\b", "agarra la parte inferior de la muneca"),
+        (r"\bgrab por dentro of wrist\b", "agarra por dentro de la muneca"),
+        (r"\bgrab por fuera of wrist\b", "agarra por fuera de la muneca"),
+        (r"\bgrab\b", "agarra"),
+        (r"\bwrist\b", "muneca"),
+        (r"\brelease\b", "libera"),
+        (r"\btwist\b", "gira"),
+        (r"\bstop\b", "impedir"),
+        (r"\bOffer raised\b", "Ofrece levantada"),
+        (r"\bof\b", "de"),
+        (r"\bdown\b", "hacia abajo"),
+        (r"\bup\b", "hacia arriba"),
+        (r"\bside\b", "lado"),
+        (r"\bfor\b", "para"),
+        (r"\blapel\b", "solapa"),
+        (r"\bvertical fist\b", "puno vertical"),
+        (r"\bhorizontal fist\b", "puno horizontal"),
+        (r"\belbow lock\b", "luxacion de codo"),
+        (r"\bstab down Desde above\b", "cuchillada descendente desde arriba"),
+        (r"\bstab down desde above\b", "cuchillada descendente desde arriba"),
+        (r"\bstab hacia abajo Desde above\b", "cuchillada descendente desde arriba"),
+        (r"\bstab hacia abajo desde above\b", "cuchillada descendente desde arriba"),
+    ]
+    for pattern, replacement in cleanups:
+        text = re.sub(pattern, replacement, text, flags=re.I)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def translate_stance(stance):
@@ -240,6 +362,7 @@ def translate_stance(stance):
         "both": "tai/hiraki segun ura u omote",
         "any": "cualquier kamae indicado",
         "all": "todas las formas indicadas",
+        "back": "ataque desde atras",
     }.get(stance.lower(), stance)
 
 
