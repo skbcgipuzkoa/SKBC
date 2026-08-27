@@ -15,6 +15,7 @@ type MemberOption = {
 
 type ExamRow = {
   id: string;
+  member_id: string;
   exam_date: string;
   grade: string;
   cycle_attendance: number | null;
@@ -29,7 +30,7 @@ type ExamRow = {
 export default async function ExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; detail?: string; class?: string; status?: string; q?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; detail?: string; class?: string; status?: string; q?: string; member?: string; from?: string; to?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -39,9 +40,9 @@ export default async function ExamenesPage({
   const supabase = createAdminClient();
   let examsQuery = supabase
     .from("exams")
-    .select("id,exam_date,grade,cycle_attendance,examiner,diploma_url,report_url,report_type,report_file_name,members(legacy_id,display_name,class)")
+    .select("id,member_id,exam_date,grade,cycle_attendance,examiner,diploma_url,report_url,report_type,report_file_name,members(legacy_id,display_name,class)")
     .order("exam_date", { ascending: false })
-    .limit(80);
+    .limit(200);
 
   const [{ data: members }, { data: rawExams }] = await Promise.all([
     supabase
@@ -61,6 +62,7 @@ export default async function ExamenesPage({
   const completeExams = exams.filter((exam) => exam.report_url && exam.diploma_url).length;
   const adultMembers = (members ?? []).filter((member) => member.class === "adults");
   const kidMembers = (members ?? []).filter((member) => member.class === "kids");
+  const hasHistoryFilters = Boolean(params.q || params.class || params.status || params.member || params.from || params.to);
 
   return (
     <div className="shell">
@@ -183,6 +185,25 @@ export default async function ExamenesPage({
             <input name="q" defaultValue={params.q ?? ""} placeholder="Kenshi, grado, examinador..." />
           </label>
           <label>
+            Kenshi
+            <select name="member" defaultValue={params.member ?? ""}>
+              <option value="">Todos</option>
+              {(members ?? []).map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.display_name} - {member.class === "kids" ? "Ninos" : "Adultos"}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Desde
+            <input name="from" type="date" defaultValue={params.from ?? ""} />
+          </label>
+          <label>
+            Hasta
+            <input name="to" type="date" defaultValue={params.to ?? ""} />
+          </label>
+          <label>
             Clase
             <select name="class" defaultValue={params.class ?? ""}>
               <option value="">Todas</option>
@@ -200,73 +221,84 @@ export default async function ExamenesPage({
             </select>
           </label>
           <button type="submit">Filtrar</button>
+          <a className="secondary-link" href="/examenes">Limpiar</a>
         </form>
 
-        <h2 className="section-title">Seguimiento de examenes</h2>
-        <section className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th><th>Diploma</th><th>Gestion</th></tr>
-            </thead>
-            <tbody>
-              {(exams ?? []).map((exam) => (
-                <tr key={`${exam.exam_date}-${exam.members?.display_name}-${exam.grade}`}>
-                  <td data-label="Fecha">{exam.exam_date}</td>
-                  <td data-label="Kenshi">
-                    {exam.members?.legacy_id ? <a className="text-link" href={`/kenshis/${exam.members.legacy_id}`}><strong>{exam.members.display_name}</strong></a> : <strong>{exam.members?.display_name ?? "-"}</strong>}
-                  </td>
-                  <td data-label="Clase">{exam.members?.class === "kids" ? "Ninos" : "Adultos"}</td>
-                  <td data-label="Grado">{exam.grade}</td>
-                  <td data-label="Asistencias">{exam.cycle_attendance ?? 0}</td>
-                  <td data-label="Examinador">{exam.examiner ?? "-"}</td>
-                  <td data-label="Informe">
-                    {exam.report_url ? (
-                      <span className="exam-doc-stack"><span className="state-badge state-completada">Informe OK</span><a className="text-link" href={exam.report_url} target="_blank">{exam.report_file_name || "Abrir informe"}</a></span>
-                    ) : (
-                      <form action={saveExamReportAction} className="inline-report-form">
+        <details className="card foldable-admin-section" open={hasHistoryFilters}>
+          <summary>
+            <span>
+              <strong>Seguimiento de examenes</strong>
+              <small>{exams.length} registros visibles{hasHistoryFilters ? " con filtros aplicados" : ""}</small>
+            </span>
+          </summary>
+          <section className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th><th>Diploma</th><th>Gestion</th></tr>
+              </thead>
+              <tbody>
+                {(exams ?? []).map((exam) => (
+                  <tr key={`${exam.exam_date}-${exam.members?.display_name}-${exam.grade}`}>
+                    <td data-label="Fecha">{exam.exam_date}</td>
+                    <td data-label="Kenshi">
+                      {exam.members?.legacy_id ? <a className="text-link" href={`/kenshis/${exam.members.legacy_id}`}><strong>{exam.members.display_name}</strong></a> : <strong>{exam.members?.display_name ?? "-"}</strong>}
+                    </td>
+                    <td data-label="Clase">{exam.members?.class === "kids" ? "Ninos" : "Adultos"}</td>
+                    <td data-label="Grado">{exam.grade}</td>
+                    <td data-label="Asistencias">{exam.cycle_attendance ?? 0}</td>
+                    <td data-label="Examinador">{exam.examiner ?? "-"}</td>
+                    <td data-label="Informe">
+                      {exam.report_url ? (
+                        <span className="exam-doc-stack"><span className="state-badge state-completada">Informe OK</span><a className="text-link" href={exam.report_url} target="_blank">{exam.report_file_name || "Abrir informe"}</a></span>
+                      ) : (
+                        <form action={saveExamReportAction} className="inline-report-form">
+                          <input type="hidden" name="examId" value={exam.id} />
+                          <input name="reportUrl" placeholder="URL informe PDF" required />
+                          <input name="reportType" placeholder="Tipo" defaultValue={exam.members?.class === "kids" ? "Ninos" : "Adultos"} />
+                          <input name="reportFileName" placeholder="Archivo" />
+                          <button type="submit">Guardar URL</button>
+                        </form>
+                      )}
+                    </td>
+                    <td data-label="Diploma">
+                      {exam.diploma_url ? (
+                        <span className="exam-doc-stack"><span className="state-badge state-completada">Diploma OK</span><a className="text-link" href={exam.diploma_url} target="_blank">Abrir diploma</a></span>
+                      ) : (
+                        <form action={generateDiplomaAction}>
+                          <input type="hidden" name="examId" value={exam.id} />
+                          <button className="mini-action selected" type="submit">Generar diploma</button>
+                        </form>
+                      )}
+                    </td>
+                    <td data-label="Gestion">
+                      <form action={deleteExamAction}>
                         <input type="hidden" name="examId" value={exam.id} />
-                        <input name="reportUrl" placeholder="URL informe PDF" required />
-                        <input name="reportType" placeholder="Tipo" defaultValue={exam.members?.class === "kids" ? "Ninos" : "Adultos"} />
-                        <input name="reportFileName" placeholder="Archivo" />
-                        <button type="submit">Guardar URL</button>
+                        <button className="mini-action danger" type="submit">Eliminar</button>
                       </form>
-                    )}
-                  </td>
-                  <td data-label="Diploma">
-                    {exam.diploma_url ? (
-                      <span className="exam-doc-stack"><span className="state-badge state-completada">Diploma OK</span><a className="text-link" href={exam.diploma_url} target="_blank">Abrir diploma</a></span>
-                    ) : (
-                      <form action={generateDiplomaAction}>
-                        <input type="hidden" name="examId" value={exam.id} />
-                        <button className="mini-action selected" type="submit">Generar diploma</button>
-                      </form>
-                    )}
-                  </td>
-                  <td data-label="Gestion">
-                    <form action={deleteExamAction}>
-                      <input type="hidden" name="examId" value={exam.id} />
-                      <button className="mini-action danger" type="submit">Eliminar</button>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-              {!exams.length ? (
-                <tr>
-                  <td colSpan={9} className="muted">No hay examenes con estos filtros.</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </section>
+                    </td>
+                  </tr>
+                ))}
+                {!exams.length ? (
+                  <tr>
+                    <td colSpan={9} className="muted">No hay examenes con estos filtros.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </section>
+        </details>
       </main>
     </div>
   );
 }
 
-function filterExams(exams: ExamRow[], params: { class?: string; status?: string; q?: string }) {
+function filterExams(exams: ExamRow[], params: { class?: string; status?: string; q?: string; member?: string; from?: string; to?: string }) {
   const q = normalize(params.q);
   return exams.filter((exam) => {
     if ((params.class === "kids" || params.class === "adults") && exam.members?.class !== params.class) return false;
+    if (params.member && exam.member_id !== params.member) return false;
+    if (params.from && exam.exam_date < params.from) return false;
+    if (params.to && exam.exam_date > params.to) return false;
     if (params.status === "pending-report" && exam.report_url) return false;
     if (params.status === "pending-diploma" && exam.diploma_url) return false;
     if (params.status === "complete" && (!exam.report_url || !exam.diploma_url)) return false;

@@ -1106,6 +1106,63 @@ tbody tr:hover {
   justify-content: center;
 }
 
+.foldable-admin-section {
+  margin-top: 18px;
+  padding: 0;
+}
+
+.foldable-admin-section > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  list-style: none;
+  padding: 18px;
+}
+
+.foldable-admin-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.foldable-admin-section > summary::after {
+  background: #eef4fb;
+  border: 1px solid #d6e6f7;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  content: "+";
+  display: inline-grid;
+  font-size: 24px;
+  font-weight: 900;
+  height: 38px;
+  place-items: center;
+  width: 38px;
+}
+
+.foldable-admin-section[open] > summary::after {
+  content: "-";
+}
+
+.foldable-admin-section > summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.foldable-admin-section > summary strong {
+  font-size: 20px;
+}
+
+.foldable-admin-section > summary small {
+  color: var(--muted);
+}
+
+.foldable-admin-section .table-wrap {
+  border-left: 0;
+  border-radius: 0 0 8px 8px;
+  border-right: 0;
+  border-bottom: 0;
+  box-shadow: none;
+}
+
 .grade-summary-grid {
   display: grid;
   gap: 10px;
