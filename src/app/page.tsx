@@ -15,6 +15,7 @@ import {
   Users
 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
+import { PasswordField } from "@/app/components/PasswordField";
 import { loginAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -307,9 +308,12 @@ function LoginHome({ error }: { error?: string }) {
           <form action={loginAction} className="login-form">
             <label htmlFor="code">Codigo interno</label>
             <div className="login-row">
-              <input id="code" name="code" type="password" autoComplete="current-password" required />
+              <PasswordField id="code" name="code" autoComplete="current-password" required />
               <button type="submit">Entrar</button>
             </div>
+            <p className="login-help">
+              Si no recuerdas el codigo, revisa la variable <strong>SKBC_INTERNAL_ACCESS_CODE</strong> en Vercel.
+            </p>
             {error ? <p className="form-error">Codigo incorrecto.</p> : null}
           </form>
         </section>

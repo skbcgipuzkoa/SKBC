@@ -456,6 +456,41 @@ h1 {
   padding: 8px 10px;
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 46px;
+  width: 100%;
+}
+
+.password-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 4px;
+  top: 1px;
+  width: 38px;
+}
+
+.password-toggle:hover {
+  color: var(--brand-strong);
+}
+
+.login-help {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+
 .login-row button,
 .filters button {
   background: var(--brand);
