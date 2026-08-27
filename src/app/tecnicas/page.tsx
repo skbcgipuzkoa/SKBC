@@ -460,5 +460,13 @@ function balanceIssue(goho: number, juho: number) {
   if (juho === 0 && goho > 0) return "Sin Juho";
   if (goho === 1 && juho >= 4) return "Goho muy escaso";
   if (juho === 1 && goho >= 4) return "Juho muy escaso";
+  const lower = Math.min(goho, juho);
+  const higher = Math.max(goho, juho);
+  if (higher >= 8 && lower / higher < 0.5) {
+    return goho < juho ? "Goho escaso" : "Juho escaso";
+  }
+  if (higher >= 12 && higher - lower >= 8) {
+    return goho < juho ? "Predomina Juho" : "Predomina Goho";
+  }
   return null;
 }

@@ -8,8 +8,8 @@ alter table public.technical_plans
 
 update public.techniques
 set
-  variant = coalesce(variant, detected.variant),
-  variant_note = coalesce(variant_note, detected.variant_note)
+  variant = coalesce(public.techniques.variant, detected.variant),
+  variant_note = coalesce(public.techniques.variant_note, detected.variant_note)
 from (
   select
     id,
