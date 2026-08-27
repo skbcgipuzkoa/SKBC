@@ -7,6 +7,7 @@ import {
   LockKeyhole,
   Medal,
   NotebookTabs,
+  SquareArrowOutUpRight,
   ShieldCheck,
   Sparkles,
   Bell,
@@ -19,6 +20,7 @@ import { PasswordField } from "@/app/components/PasswordField";
 import { loginAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { LucideIcon } from "lucide-react";
 
 type ClassPreview = {
   legacy_id: string | null;
@@ -38,7 +40,15 @@ type ExamAlert = {
   exam_notice: string | null;
 };
 
-const moduleGroups = [
+type ModuleLink = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  tone?: "primary";
+  external?: boolean;
+};
+
+const moduleGroups: Array<{ title: string; items: ModuleLink[] }> = [
   {
     title: "Trabajo diario",
     items: [
@@ -57,6 +67,7 @@ const moduleGroups = [
     items: [
       { label: "Proximos examenes", href: "/proximos-examenes", icon: Medal },
       { label: "Examenes", href: "/examenes", icon: GraduationCap },
+      { label: "App examenes", href: "https://akapi80.github.io/EXAMENES/", icon: SquareArrowOutUpRight, external: true },
       { label: "Rankings", href: "/rankings", icon: Trophy },
       { label: "Cursos", href: "/cursos", icon: BarChart3 }
     ]
@@ -266,7 +277,13 @@ export default async function Home({
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   return (
-                    <a className={item.tone === "primary" ? "home-module-link primary" : "home-module-link"} href={item.href} key={item.href}>
+                    <a
+                      className={item.tone === "primary" ? "home-module-link primary" : "home-module-link"}
+                      href={item.href}
+                      key={item.href}
+                      target={item.external ? "_blank" : undefined}
+                      rel={item.external ? "noopener noreferrer external" : undefined}
+                    >
                       <Icon aria-hidden="true" size={18} />
                       <span>{item.label}</span>
                     </a>

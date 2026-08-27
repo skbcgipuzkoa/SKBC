@@ -1084,6 +1084,28 @@ tbody tr:hover {
   padding: 9px 14px;
 }
 
+.exam-app-card {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 18px;
+}
+
+.exam-app-card h2 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.exam-app-card p {
+  margin: 0;
+}
+
+.exam-app-card .primary-link {
+  gap: 8px;
+  justify-content: center;
+}
+
 .grade-summary-grid {
   display: grid;
   gap: 10px;
@@ -5140,6 +5162,7 @@ tbody tr:hover {
   .control-check-grid,
   .notification-action-grid,
   .quick-action-grid,
+  .exam-app-card,
   .email-notification-form,
   .email-notification-submit {
     grid-template-columns: 1fr;
@@ -5174,6 +5197,10 @@ tbody tr:hover {
 
   .email-notification-submit button {
     min-height: 48px;
+    width: 100%;
+  }
+
+  .exam-app-card .primary-link {
     width: 100%;
   }
 }

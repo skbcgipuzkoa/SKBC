@@ -12,6 +12,7 @@ const navItems = [
   { label: "Shakujo", href: "/shakujo" },
   { label: "Tecnicas", href: "/tecnicas" },
   { label: "Examenes", href: "/examenes" },
+  { label: "App examenes", href: "https://akapi80.github.io/EXAMENES/", external: true },
   { label: "Cursos", href: "/cursos" },
   { label: "Calendario", href: "/calendario" },
   { label: "Cinturones", href: "/pedidos-cinturones" },
@@ -30,7 +31,13 @@ export function SidebarNav({ current }: SidebarNavProps) {
       </div>
       <nav className="nav" aria-label="Principal">
         {navItems.map((item) => (
-          <a key={item.href} href={item.href} aria-current={current === item.href ? "page" : undefined}>
+          <a
+            key={item.href}
+            href={item.href}
+            aria-current={current === item.href ? "page" : undefined}
+            target={item.external ? "_blank" : undefined}
+            rel={item.external ? "noopener noreferrer external" : undefined}
+          >
             {item.label}
           </a>
         ))}

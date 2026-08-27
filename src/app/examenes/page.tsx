@@ -1,4 +1,4 @@
-import { FileText, GraduationCap, LogOut, ScrollText, Trophy } from "lucide-react";
+import { ExternalLink, FileText, GraduationCap, LogOut, ScrollText, Trophy } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
 import { deleteExamAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
@@ -86,6 +86,24 @@ export default async function ExamenesPage({
         {params.error === "report" ? <p className="form-error">No se pudo guardar el informe.</p> : null}
         {params.error === "diploma" ? <p className="form-error">No se pudo generar el diploma{params.detail ? `: ${params.detail}` : "."}</p> : null}
         {params.error === "delete" ? <p className="form-error">No se pudo eliminar el examen{params.detail ? `: ${params.detail}` : "."}</p> : null}
+
+        <section className="card exam-app-card">
+          <div>
+            <p className="eyebrow">Aplicacion externa conectada</p>
+            <h2>Realizar examenes en el sistema actual</h2>
+            <p className="muted">
+              Abre la app de examenes en una pestana aparte. Los resultados aprobados siguen entrando al sistema nuevo mediante la conexion externa.
+            </p>
+          </div>
+          <a
+            className="primary-link"
+            href="https://akapi80.github.io/EXAMENES/"
+            target="_blank"
+            rel="noopener noreferrer external"
+          >
+            Abrir app examenes <ExternalLink aria-hidden="true" size={17} />
+          </a>
+        </section>
 
         <section className="card">
           <div className="section-heading-row">
