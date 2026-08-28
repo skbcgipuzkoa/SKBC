@@ -3043,6 +3043,58 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.busen-foldable {
+  padding: 0;
+}
+
+.busen-foldable > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 18px;
+}
+
+.busen-foldable > summary::-webkit-details-marker {
+  display: none;
+}
+
+.busen-foldable > summary::after {
+  align-items: center;
+  background: var(--blue-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--blue);
+  content: "+";
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 22px;
+  font-weight: 900;
+  height: 38px;
+  justify-content: center;
+  line-height: 1;
+  width: 38px;
+}
+
+.busen-foldable[open] > summary::after {
+  content: "-";
+}
+
+.busen-foldable > summary h2 {
+  margin-bottom: 4px;
+}
+
+.busen-foldable > summary .tag {
+  margin-left: auto;
+}
+
+.busen-foldable > form {
+  border-top: 1px solid var(--line);
+  padding: 18px;
+}
+
 .edit-panel {
   background: var(--soft);
   border: 1px solid var(--line);
@@ -4650,6 +4702,23 @@ tbody tr:hover {
 
   .black-belt-row {
     grid-template-columns: 1fr;
+  }
+
+  .busen-foldable > summary {
+    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 14px;
+  }
+
+  .busen-foldable > summary .tag {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-left: 0;
+  }
+
+  .busen-foldable > form {
+    padding: 14px;
   }
 
   .busen-roster-row {

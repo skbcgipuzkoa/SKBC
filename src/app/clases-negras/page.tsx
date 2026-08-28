@@ -77,6 +77,10 @@ export default async function BlackBeltClassesPage({
   const attendanceByKey = new Map((attendance ?? []).map((row) => [`${row.special_class_id}:${row.member_id}`, row]));
   const presentCount = (attendance ?? []).filter((row) => row.status === "present").length;
   const absentCount = (attendance ?? []).filter((row) => row.status === "absent").length;
+  const selectedAttendance = selectedSession ? (attendance ?? []).filter((row) => row.special_class_id === selectedSession.id) : [];
+  const selectedPresentCount = selectedAttendance.filter((row) => row.status === "present").length;
+  const selectedJustifiedCount = selectedAttendance.filter((row) => row.status === "justified").length;
+  const selectedAbsentCount = selectedAttendance.filter((row) => row.status === "absent").length;
 
   return (
     <div className="shell">
@@ -119,14 +123,14 @@ export default async function BlackBeltClassesPage({
           </article>
         </section>
 
-        <section className="card">
-          <div className="section-heading-row">
+        <details className="card busen-foldable">
+          <summary>
             <div>
               <h2>Kenshis del grupo Busen</h2>
               <p className="muted">Activa el switch de quien puede asistir a Busen. Puedes dejar notas internas por kenshi.</p>
             </div>
             <span className="tag">{eligibleMembers.length} activos</span>
-          </div>
+          </summary>
           <form action={saveBlackBeltEligibilityRosterAction} className="busen-roster-form">
             <div className="busen-roster-list">
               {(members ?? []).map((member) => {
@@ -149,7 +153,7 @@ export default async function BlackBeltClassesPage({
             </div>
             <button type="submit">Guardar grupo Busen</button>
           </form>
-        </section>
+        </details>
 
         <section className="card">
           <h2>Sesiones</h2>
@@ -163,13 +167,14 @@ export default async function BlackBeltClassesPage({
         </section>
 
         {selectedSession ? (
-          <section className="card">
-            <div className="section-heading-row">
+          <details className="card busen-foldable" open={!selectedSession.closed}>
+            <summary>
               <div>
                 <h2>{selectedSession.title}</h2>
                 <p className="muted">{selectedSession.class_date} - {selectedSession.instructor ?? "Sin instructor"} - {selectedSession.notes ?? "Sin notas"}</p>
               </div>
-            </div>
+              <span className="tag">{selectedPresentCount} presentes · {selectedJustifiedCount} just. · {selectedAbsentCount} aus.</span>
+            </summary>
             <form action={saveBlackBeltAttendanceAction} className="black-belt-attendance-form">
               <input type="hidden" name="classId" value={selectedSession.id} />
               <div className="attendance-checklist">
@@ -191,7 +196,7 @@ export default async function BlackBeltClassesPage({
               <label className="checkbox-field"><input name="close" type="checkbox" defaultChecked={selectedSession.closed} /> Cerrar sesion</label>
               <button type="submit">Guardar asistencia especial</button>
             </form>
-          </section>
+          </details>
         ) : <p className="muted">Crea una sesion especial para registrar asistencia.</p>}
       </main>
     </div>
