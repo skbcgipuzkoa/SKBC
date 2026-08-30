@@ -12,6 +12,7 @@ import {
   generateAdultPlanAction,
   logoutAction,
   prepareAdultClassAction,
+  saveAttendanceTechnicalReviewAction,
   updateClassAction,
   updateClassPlanTechniquesAction
 } from "@/app/actions";
@@ -68,11 +69,13 @@ type GroupRow = {
 };
 
 type AttendanceRow = {
+  id: string;
   class_id?: string;
   attended_on: string;
   member_id: string;
   official_grade: string | null;
   trained_grade: string | null;
+  technical_note: string | null;
   members: { first_name: string; last_name: string | null; legacy_id: string | null; class: "kids" | "adults" } | null;
 };
 
@@ -95,6 +98,11 @@ type DelegateLinkRow = {
   expires_at: string;
   created_at: string;
   created_by: string | null;
+};
+
+type TechnicalOverrideRow = {
+  attendance_id: string;
+  plan_id: string;
 };
 
 export default async function ClaseDetailPage({
@@ -129,7 +137,7 @@ export default async function ClaseDetailPage({
       .returns<PlanRow[]>(),
     supabase
       .from("attendance_logs")
-      .select("attended_on,member_id,official_grade,trained_grade,members(first_name,last_name,legacy_id,class)")
+      .select("id,attended_on,member_id,official_grade,trained_grade,technical_note,members(first_name,last_name,legacy_id,class)")
       .eq("class_id", clase.id)
       .order("attended_on", { ascending: false })
       .returns<AttendanceRow[]>(),
@@ -171,7 +179,7 @@ export default async function ClaseDetailPage({
       .returns<Array<MemberOption & { class: "kids" | "adults" }>>(),
     supabase
       .from("attendance_logs")
-      .select("class_id,attended_on,member_id,official_grade,trained_grade,members(first_name,last_name,legacy_id,class)")
+      .select("id,class_id,attended_on,member_id,official_grade,trained_grade,technical_note,members(first_name,last_name,legacy_id,class)")
       .in("class_id", (await supabase.from("classes").select("id").eq("class_date", clase.class_date).in("class_group", ["adults", "kids"]).returns<Array<{ id: string }>>()).data?.map((item) => item.id) ?? [])
       .returns<Array<AttendanceRow & { class_id: string }>>()
   ]);
@@ -221,6 +229,19 @@ export default async function ClaseDetailPage({
     ? (dayAttendance ?? []).filter((item) => attendanceClasses.some((dayClass) => dayClass.id === item.class_id)).length
     : (attendance?.length ?? 0);
   const kidsDayClass = (dayClasses ?? []).find((item) => item.class_group === "kids");
+  const adultAttendanceRows = (dayAttendance ?? []).filter((item) => item.class_id === clase.id && item.members?.class === "adults");
+  const reviewableAdultAttendanceRows = adultAttendanceRows.filter((item) => item.technical_note?.includes("CAMBIO_GRUPO"));
+  const completedHistoryPlan = (plan ?? []).filter((item) => item.completed && item.id);
+  const { data: technicalOverrides } = reviewableAdultAttendanceRows.length
+    ? await supabase
+      .from("attendance_technical_overrides")
+      .select("attendance_id,plan_id")
+      .eq("class_id", clase.id)
+      .in("attendance_id", reviewableAdultAttendanceRows.map((item) => item.id))
+      .eq("include_in_history", true)
+      .returns<TechnicalOverrideRow[]>()
+    : { data: [] as TechnicalOverrideRow[] };
+  const technicalOverridesByAttendance = groupOverridesByAttendance(technicalOverrides ?? []);
   const kidsAttendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === kidsDayClass?.id).map((item) => item.member_id));
   const kidsDayMembers = (dayMembers ?? []).filter((member) => member.class === "kids");
   const pendingKidsDayMembers = kidsDayMembers.filter((member) => !kidsAttendedIds.has(member.id));
@@ -292,6 +313,10 @@ export default async function ClaseDetailPage({
                             <option value="reviewing">Repaso</option>
                             <option value="observing">Observa</option>
                           </select>
+                          <label className="inline-check">
+                            <input name={`technicalReview:${dayClass.id}:${member.id}`} type="checkbox" value="true" />
+                            Revisar cambio
+                          </label>
                         </span>
                       ) : null}
                     </label>
@@ -312,6 +337,68 @@ export default async function ClaseDetailPage({
       </div>
     </form>
   );
+  const technicalReviewPanel = clase.class_group === "adults" && activeStep === "attendance" && !clase.closed && reviewableAdultAttendanceRows.length && completedHistoryPlan.length ? (
+    <details className="card technical-review-panel" open>
+      <summary>
+        <strong>Revisar cambios de grupo</strong>
+        <span>{reviewableAdultAttendanceRows.length} kenshi{reviewableAdultAttendanceRows.length === 1 ? "" : "s"}</span>
+      </summary>
+      <form action={saveAttendanceTechnicalReviewAction} className="technical-review-form">
+        <input type="hidden" name="classId" value={clase.id} />
+        <input type="hidden" name="legacyId" value={legacyId} />
+        <p className="muted">Ajusta solo las tecnicas que realmente debe llevarse cada kenshi por haber cambiado de grupo durante la clase.</p>
+        <div className="technical-review-stack">
+          {reviewableAdultAttendanceRows.map((row) => {
+            const selectedOverrides = technicalOverridesByAttendance.get(row.id);
+            const defaultPlanIds = new Set(
+              completedHistoryPlan
+                .filter((item) => normalizeGradeLabel(item.group_grade) === normalizeGradeLabel(row.trained_grade ?? row.official_grade))
+                .map((item) => item.id)
+            );
+            const selectedPlanIds = selectedOverrides ?? defaultPlanIds;
+            const memberName = `${row.members?.first_name ?? ""} ${row.members?.last_name ?? ""}`.trim();
+            return (
+              <details className="technical-review-member" key={row.id} open>
+                <summary>
+                  <strong>{memberName || "Kenshi"}</strong>
+                  <span>{row.trained_grade ?? row.official_grade ?? "Sin grado"} · {selectedPlanIds.size} tecnicas</span>
+                </summary>
+                <input type="hidden" name="attendanceIds" value={row.id} />
+                <div className="class-technical-review-grid">
+                  {groupPlanByGrade(completedHistoryPlan).map(([grade, rows]) => (
+                    <fieldset className="technical-review-grade" key={`${row.id}-${grade}`}>
+                      <legend>{grade}</legend>
+                      {rows.map((item) => (
+                        <label className="mini-check-row" key={`${row.id}-${item.id}`}>
+                          <input
+                            name={`review:${row.id}`}
+                            type="checkbox"
+                            value={item.id}
+                            defaultChecked={selectedPlanIds.has(item.id)}
+                          />
+                          <span>
+                            <strong>{item.technique_name}</strong>
+                            <small>{item.category ?? "tecnica"} · {item.proposal_type ?? item.focus ?? "programa"}</small>
+                          </span>
+                        </label>
+                      ))}
+                    </fieldset>
+                  ))}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+        <div className="attendance-day-actions">
+          <button type="submit">Guardar revision</button>
+          <button className="primary-link button-reset" type="submit" name="closeAfter" value="true">
+            <Check aria-hidden="true" size={16} />
+            Guardar revision y cerrar clase
+          </button>
+        </div>
+      </form>
+    </details>
+  ) : null;
   const attendanceQuickPanel = (
     <article className="card">
       <h2>Asistencia final</h2>
@@ -729,6 +816,7 @@ export default async function ClaseDetailPage({
         <section className="mobile-work-anchor" id="asistencia">
           {attendanceClasses.length > 1 ? attendancePanel : attendanceQuickPanel}
         </section>
+        {technicalReviewPanel}
         </> : null}
 
         {readyToClose && activeStep === "attendance" && (attendance ?? []).length ? (
@@ -831,6 +919,16 @@ function buildAdultTrainingGradeOptions(groups: GroupRow[]) {
 
 function normalizeGradeLabel(grade: string | null | undefined) {
   return String(grade ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function groupOverridesByAttendance(rows: TechnicalOverrideRow[]) {
+  const map = new Map<string, Set<string>>();
+  rows.forEach((row) => {
+    const planIds = map.get(row.attendance_id) ?? new Set<string>();
+    planIds.add(row.plan_id);
+    map.set(row.attendance_id, planIds);
+  });
+  return map;
 }
 
 function delegateModeFromCreatedBy(value: string | null | undefined) {

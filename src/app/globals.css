@@ -1982,6 +1982,88 @@ tbody tr:hover {
   width: 100%;
 }
 
+.inline-check {
+  align-items: center;
+  color: var(--brand-strong);
+  display: flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 7px;
+}
+
+.inline-check input {
+  height: 16px;
+  width: 16px;
+}
+
+.technical-review-panel summary,
+.technical-review-member summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.technical-review-panel summary span,
+.technical-review-member summary span {
+  background: var(--soft-blue);
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 13px;
+  font-weight: 900;
+  padding: 6px 10px;
+}
+
+.technical-review-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.technical-review-member,
+.technical-review-grade {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.class-technical-review-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 12px;
+}
+
+.technical-review-grade legend {
+  color: var(--brand-strong);
+  font-weight: 900;
+  padding: 0 6px;
+}
+
+.mini-check-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 18px 1fr;
+  padding: 8px 0;
+}
+
+.mini-check-row input {
+  height: 18px;
+  width: 18px;
+}
+
+.mini-check-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.mini-check-row small {
+  color: var(--muted);
+}
+
 .early-kids-attendance {
   border-color: rgba(0, 92, 185, 0.24);
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);

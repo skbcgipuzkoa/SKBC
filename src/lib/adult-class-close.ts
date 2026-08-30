@@ -46,6 +46,12 @@ type ExistingAssignment = {
   technique_id: string | null;
 };
 
+type TechnicalOverrideRow = {
+  attendance_id: string;
+  plan_id: string;
+  include_in_history: boolean;
+};
+
 export async function setPlanTechniqueCompleted(planId: string, completed: boolean) {
   const supabase = createAdminClient();
   const { error } = await supabase
@@ -94,7 +100,8 @@ export async function closeAdultClass(classId: string) {
   let memberHistoryCount = 0;
 
   if (validAttendance.length && validPlan.length) {
-    const insertedAssignments = await generateAssignments(clase, validAttendance, validPlan);
+    const overrides = await getTechnicalOverrides(clase.id, validAttendance);
+    const insertedAssignments = await generateAssignments(clase, validAttendance, validPlan, overrides);
     assignmentCount = insertedAssignments;
     dojoHistoryCount = await generateDojoHistory(clase, validAttendance, validPlan);
     memberHistoryCount = await generateMemberHistory(clase);
@@ -111,7 +118,31 @@ export async function closeAdultClass(classId: string) {
   return { assignments: assignmentCount, dojoHistory: dojoHistoryCount, memberHistory: memberHistoryCount };
 }
 
-async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[], plan: PlanRow[]) {
+async function getTechnicalOverrides(classId: string, attendance: AttendanceRow[]) {
+  const attendanceIds = attendance.map((row) => row.id);
+  if (!attendanceIds.length) return new Map<string, Set<string>>();
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("attendance_technical_overrides")
+    .select("attendance_id,plan_id,include_in_history")
+    .eq("class_id", classId)
+    .in("attendance_id", attendanceIds)
+    .returns<TechnicalOverrideRow[]>();
+
+  if (error) throw error;
+
+  const map = new Map<string, Set<string>>();
+  for (const row of data ?? []) {
+    if (!row.include_in_history) continue;
+    const planIds = map.get(row.attendance_id) ?? new Set<string>();
+    planIds.add(row.plan_id);
+    map.set(row.attendance_id, planIds);
+  }
+  return map;
+}
+
+async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[], plan: PlanRow[], overrides: Map<string, Set<string>>) {
   const supabase = createAdminClient();
   const { data: existing, error } = await supabase
     .from("member_technique_assignments")
@@ -124,10 +155,41 @@ async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[],
   const existingKeys = new Set(
     (existing ?? []).map((row) => `${row.class_id}::${row.member_id}::${row.technique_id ?? ""}`)
   );
-  const attendanceByGrade = groupAttendanceByTrainedGrade(attendance);
+  const attendanceByGrade = groupAttendanceByTrainedGrade(attendance.filter((row) => !overrides.has(row.id)));
+  const planById = new Map(plan.map((item) => [item.id, item]));
   let nextCounter = await getNextLegacyCounter("member_technique_assignments", "ATAC_");
 
   const inserts = [];
+  for (const attendant of attendance) {
+    const overridePlanIds = overrides.get(attendant.id);
+    if (!overridePlanIds?.size) continue;
+
+    for (const planId of overridePlanIds) {
+      const item = planById.get(planId);
+      if (!item) continue;
+      const isReview = normalize(item.proposal_type ?? item.focus) === "REPASO";
+      const key = `${clase.id}::${attendant.member_id}::${item.technique_id ?? ""}`;
+      if (existingKeys.has(key)) continue;
+      existingKeys.add(key);
+      inserts.push({
+        legacy_id: `ATAC_${String(nextCounter++).padStart(6, "0")}`,
+        class_id: clase.id,
+        plan_id: item.id,
+        technique_id: item.technique_id,
+        member_id: attendant.member_id,
+        assigned_on: item.class_date || clase.class_date,
+        group_grade: item.group_grade,
+        active: true,
+        completed: true,
+        counts_as_progression: !isReview,
+        counts_as_review: isReview,
+        counts_for_stats: true,
+        notes: attendant.technical_note || "AJUSTE TECNICO MANUAL DE CLASE",
+        created_by: "system"
+      });
+    }
+  }
+
   for (const item of plan) {
     const groupGrade = normalize(item.group_grade);
     const attendants = attendanceByGrade.get(groupGrade) ?? [];

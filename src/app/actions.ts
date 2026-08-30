@@ -1079,6 +1079,73 @@ export async function updateClassPlanTechniquesAction(formData: FormData) {
   redirect(`/clases/${legacyId}?saved=plan-technique${nextStep === "attendance" ? "&step=asistencia" : ""}`);
 }
 
+export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const closeAfter = String(formData.get("closeAfter") ?? "") === "true";
+  const attendanceIds = formData.getAll("attendanceIds").map((value) => String(value)).filter(Boolean);
+
+  if (!classId || !legacyId || !attendanceIds.length) {
+    redirect(`/clases/${legacyId || ""}?error=technical-review&step=asistencia`);
+  }
+
+  const supabase = createAdminClient();
+
+  try {
+    const { data: attendanceRows, error: attendanceError } = await supabase
+      .from("attendance_logs")
+      .select("id,member_id")
+      .eq("class_id", classId)
+      .in("id", attendanceIds)
+      .returns<Array<{ id: string; member_id: string }>>();
+
+    if (attendanceError) throw attendanceError;
+
+    const now = new Date().toISOString();
+    const rows = [];
+    for (const attendance of attendanceRows ?? []) {
+      const planIds = formData.getAll(`review:${attendance.id}`).map((value) => String(value)).filter(Boolean);
+      for (const planId of planIds) {
+        rows.push({
+          class_id: classId,
+          attendance_id: attendance.id,
+          member_id: attendance.member_id,
+          plan_id: planId,
+          include_in_history: true,
+          updated_at: now
+        });
+      }
+    }
+
+    const { error: deleteError } = await supabase
+      .from("attendance_technical_overrides")
+      .delete()
+      .eq("class_id", classId)
+      .in("attendance_id", attendanceIds);
+
+    if (deleteError) throw deleteError;
+
+    if (rows.length) {
+      const { error: insertError } = await supabase.from("attendance_technical_overrides").insert(rows);
+      if (insertError) throw insertError;
+    }
+
+    if (closeAfter) {
+      await closeAdultClass(classId);
+      await recalculateClassExamStatus(classId);
+    }
+  } catch (error) {
+    console.error("Error saving attendance technical review", error);
+    redirect(`/clases/${legacyId}?error=technical-review&step=asistencia`);
+  }
+
+  redirect(`/clases/${legacyId}?saved=${closeAfter ? "close" : "technical-review"}&step=asistencia`);
+}
+
 export async function closeAdultClassAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -2730,6 +2797,7 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
     const officialGrade = member.grade || "";
     const trainedGradeOverride = String(formData?.get(`trainedGrade:${classId}:${member.id}`) ?? "").trim();
     const roleOverride = String(formData?.get(`technicalRole:${classId}:${member.id}`) ?? "").trim();
+    const needsTechnicalReview = String(formData?.get(`technicalReview:${classId}:${member.id}`) ?? "") === "true";
     const technicalRole = clase.class_group === "adults" && ["student", "teaching", "support", "reviewing", "observing"].includes(roleOverride)
       ? roleOverride
       : "student";
@@ -2744,7 +2812,7 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
       official_grade: officialGrade || null,
       trained_grade: trainedGrade || null,
       technical_role: technicalRole,
-      technical_note: technicalNote,
+      technical_note: needsTechnicalReview ? `${technicalNote} · CAMBIO_GRUPO` : technicalNote,
       use_for_history: true
     };
   });
