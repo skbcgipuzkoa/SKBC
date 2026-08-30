@@ -2350,6 +2350,11 @@ tbody tr:hover {
   color: #be185d;
 }
 
+.calendar-event.combined {
+  background: linear-gradient(135deg, #eef4fb 0%, #fdf2f8 100%);
+  color: var(--brand-strong);
+}
+
 .plan-card.completed {
   background: #f2fbf6;
   border-color: #b9dec9;
