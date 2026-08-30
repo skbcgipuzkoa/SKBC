@@ -333,12 +333,17 @@ export default async function ClaseDetailPage({
       </div>
     </form>
   );
-  const technicalReviewPanel = clase.class_group === "adults" && activeStep === "attendance" && !clase.closed && reviewableAdultAttendanceRows.length && completedHistoryPlan.length ? (
+  const technicalReviewPanel = clase.class_group === "adults" && activeStep === "attendance" && !clase.closed && hasPlan ? (
     <details className="card technical-review-panel">
       <summary>
         <strong>Ajustes tecnicos especiales</strong>
-        <span>{reviewableAdultAttendanceRows.length} kenshi{reviewableAdultAttendanceRows.length === 1 ? "" : "s"}</span>
+        <span>{reviewableAdultAttendanceRows.length ? `${reviewableAdultAttendanceRows.length} kenshi${reviewableAdultAttendanceRows.length === 1 ? "" : "s"}` : "opcional"}</span>
       </summary>
+      {!reviewableAdultAttendanceRows.length ? (
+        <p className="muted">Primero guarda la asistencia de adultos. Despues podras corregir aqui si alguien entreno con mas de un grupo.</p>
+      ) : !completedHistoryPlan.length ? (
+        <p className="muted">Primero marca y guarda las tecnicas realizadas. Despues podras elegir exactamente cuales se adjuntan a cada asistente.</p>
+      ) : (
       <form action={saveAttendanceTechnicalReviewAction} className="technical-review-form">
         <input type="hidden" name="classId" value={clase.id} />
         <input type="hidden" name="legacyId" value={legacyId} />
@@ -393,6 +398,7 @@ export default async function ClaseDetailPage({
           </button>
         </div>
       </form>
+      )}
     </details>
   ) : null;
   const attendanceQuickPanel = (
