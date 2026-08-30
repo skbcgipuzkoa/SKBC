@@ -9,6 +9,7 @@ type ExamForDiploma = {
   exam_date: string;
   grade: string;
   diploma_url: string | null;
+  diploma_registry: string | null;
   members: {
     legacy_id: string | null;
     display_name: string;
@@ -41,7 +42,7 @@ export async function generateDiplomaForExam(examId: string) {
   const supabase = createAdminClient();
   const { data: exam, error } = await supabase
     .from("exams")
-    .select("id,exam_date,grade,diploma_url,members(legacy_id,display_name)")
+    .select("id,exam_date,grade,diploma_url,diploma_registry,members(legacy_id,display_name)")
     .eq("id", examId)
     .single<ExamForDiploma>();
 
@@ -52,20 +53,22 @@ export async function generateDiplomaForExam(examId: string) {
   const folderId = requiredEnv("DIPLOMA_EXAMEN_FOLDER_ID");
   const accessToken = await getGoogleAccessToken();
   const examDate = parseDate(exam.exam_date);
+  const registry = exam.diploma_registry || await reserveDiplomaRegistry(supabase, exam.id, exam.exam_date);
   const diploma = await generateDiplomaPdf({
     accessToken,
     folderId,
     name: exam.members.display_name,
     grade: exam.grade,
     examDate,
-    registry: exam.members.legacy_id ?? ""
+    registry
   });
 
   try {
     const { error: updateError } = await supabase
       .from("exams")
       .update({
-        diploma_url: diploma.url
+        diploma_url: diploma.url,
+        diploma_registry: registry
       })
       .eq("id", exam.id);
 
@@ -74,6 +77,22 @@ export async function generateDiplomaForExam(examId: string) {
   } catch (error) {
     throw error;
   }
+}
+
+async function reserveDiplomaRegistry(
+  supabase: ReturnType<typeof createAdminClient>,
+  examId: string,
+  examDate: string
+) {
+  const { data, error } = await supabase.rpc("next_diploma_registry", { registry_date: examDate });
+  if (error || !data) throw new Error("No se ha podido crear el registro del diploma.");
+  const registry = String(data);
+  const { error: updateError } = await supabase
+    .from("exams")
+    .update({ diploma_registry: registry })
+    .eq("id", examId);
+  if (updateError) throw updateError;
+  return registry;
 }
 
 export async function verifyDiplomaSetup() {

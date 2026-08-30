@@ -21,6 +21,7 @@ type ExamRow = {
   cycle_attendance: number | null;
   examiner: string | null;
   diploma_url: string | null;
+  diploma_registry: string | null;
   report_url: string | null;
   report_type: string | null;
   report_file_name: string | null;
@@ -40,7 +41,7 @@ export default async function ExamenesPage({
   const supabase = createAdminClient();
   let examsQuery = supabase
     .from("exams")
-    .select("id,member_id,exam_date,grade,cycle_attendance,examiner,diploma_url,report_url,report_type,report_file_name,members(legacy_id,display_name,class)")
+    .select("id,member_id,exam_date,grade,cycle_attendance,examiner,diploma_url,diploma_registry,report_url,report_type,report_file_name,members(legacy_id,display_name,class)")
     .order("exam_date", { ascending: false })
     .limit(200);
 
@@ -234,12 +235,13 @@ export default async function ExamenesPage({
           <section className="table-wrap">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th><th>Diploma</th><th>Gestion</th></tr>
+                <tr><th>Fecha</th><th>Registro</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th><th>Diploma</th><th>Gestion</th></tr>
               </thead>
               <tbody>
                 {(exams ?? []).map((exam) => (
                   <tr key={`${exam.exam_date}-${exam.members?.display_name}-${exam.grade}`}>
                     <td data-label="Fecha">{exam.exam_date}</td>
+                    <td data-label="Registro">{exam.diploma_registry ?? (exam.diploma_url ? "Pendiente registro" : "-")}</td>
                     <td data-label="Kenshi">
                       {exam.members?.legacy_id ? <a className="text-link" href={`/kenshis/${exam.members.legacy_id}`}><strong>{exam.members.display_name}</strong></a> : <strong>{exam.members?.display_name ?? "-"}</strong>}
                     </td>
@@ -280,7 +282,7 @@ export default async function ExamenesPage({
                 ))}
                 {!exams.length ? (
                   <tr>
-                    <td colSpan={9} className="muted">No hay examenes con estos filtros.</td>
+                    <td colSpan={10} className="muted">No hay examenes con estos filtros.</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -303,7 +305,7 @@ function filterExams(exams: ExamRow[], params: { class?: string; status?: string
     if (params.status === "pending-diploma" && exam.diploma_url) return false;
     if (params.status === "complete" && (!exam.report_url || !exam.diploma_url)) return false;
     if (!q) return true;
-    return [exam.members?.display_name, exam.members?.class, exam.grade, exam.examiner, exam.report_file_name]
+    return [exam.diploma_registry, exam.members?.display_name, exam.members?.class, exam.grade, exam.examiner, exam.report_file_name]
       .some((value) => normalize(value).includes(q));
   });
 }
