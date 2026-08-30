@@ -12,6 +12,7 @@ import {
   generateAdultPlanAction,
   logoutAction,
   prepareAdultClassAction,
+  removeAttendanceAction,
   saveAttendanceTechnicalReviewAction,
   updateClassAction,
   updateClassPlanTechniquesAction
@@ -544,6 +545,7 @@ export default async function ClaseDetailPage({
         {query.saved === "prepare" ? <p className="save-ok">Clase preparada: grupos y plan tecnico listos.</p> : null}
         {query.saved === "groups" ? <p className="save-ok">Grupos tecnicos generados.</p> : null}
         {query.saved === "attendance" ? <p className="save-ok">Asistencia anadida.</p> : null}
+        {query.saved === "attendance-removed" ? <p className="save-ok">Asistencia quitada.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.saved === "delegate" ? <p className="save-ok">Enlace de sustituto generado.</p> : null}
@@ -862,7 +864,7 @@ export default async function ClaseDetailPage({
             <h3>{group.title}</h3>
             <table>
               <thead>
-                <tr><th>Kenshi</th><th>Grado oficial</th><th>Grado entrenado</th><th>Ficha</th></tr>
+                <tr><th>Kenshi</th><th>Grado oficial</th><th>Grado entrenado</th><th>Ficha</th>{!clase.closed ? <th>Accion</th> : null}</tr>
               </thead>
               <tbody>
                 {group.rows.map((item) => (
@@ -871,6 +873,16 @@ export default async function ClaseDetailPage({
                     <td data-label="Grado oficial">{item.official_grade ?? "-"}</td>
                     <td data-label="Grado entrenado">{item.trained_grade ?? "-"}</td>
                     <td data-label="Ficha">{item.members?.legacy_id ? <a className="text-link" href={`/kenshis/${item.members.legacy_id}`}>Abrir ficha</a> : "-"}</td>
+                    {!clase.closed ? (
+                      <td data-label="Accion">
+                        <form action={removeAttendanceAction}>
+                          <input type="hidden" name="attendanceId" value={item.id} />
+                          <input type="hidden" name="legacyId" value={legacyId} />
+                          <input type="hidden" name="returnLegacyId" value={legacyId} />
+                          <button className="danger-link button-reset" type="submit">Quitar</button>
+                        </form>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

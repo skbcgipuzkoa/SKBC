@@ -1014,6 +1014,51 @@ export async function addBulkAttendanceAction(formData: FormData) {
   redirect(`/clases/${returnLegacyId || legacyId}?saved=attendance&step=asistencia`);
 }
 
+export async function removeAttendanceAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const attendanceId = String(formData.get("attendanceId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
+
+  if (!attendanceId || !legacyId) {
+    redirect(`/clases/${returnLegacyId || ""}?error=attendance&step=asistencia`);
+  }
+
+  const supabase = createAdminClient();
+  const { data: attendance, error: attendanceError } = await supabase
+    .from("attendance_logs")
+    .select("id,class_id,classes(closed,class_group)")
+    .eq("id", attendanceId)
+    .single<{ id: string; class_id: string | null; classes: { closed: boolean; class_group: "kids" | "adults" } | null }>();
+
+  if (attendanceError || !attendance?.class_id || attendance.classes?.closed) {
+    redirect(`/clases/${returnLegacyId}?error=attendance&step=asistencia`);
+  }
+
+  const { error } = await supabase
+    .from("attendance_logs")
+    .delete()
+    .eq("id", attendanceId);
+
+  if (error) {
+    redirect(`/clases/${returnLegacyId}?error=attendance&step=asistencia`);
+  }
+
+  try {
+    await recalculateClassExamStatus(attendance.class_id);
+    if (attendance.classes?.class_group === "kids") {
+      await recalculateChildRankings();
+    }
+  } catch (recalculateError) {
+    console.error("Error recalculating after attendance removal", recalculateError);
+  }
+
+  redirect(`/clases/${returnLegacyId}?saved=attendance-removed&step=asistencia`);
+}
+
 export async function updatePlanTechniqueAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

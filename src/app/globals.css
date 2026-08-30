@@ -177,6 +177,17 @@ textarea {
   gap: 8px;
 }
 
+.danger-link {
+  color: #b91c1c;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.danger-link:hover {
+  color: #7f1d1d;
+  text-decoration: underline;
+}
+
 .eyebrow {
   color: var(--muted);
   font-size: 13px;
