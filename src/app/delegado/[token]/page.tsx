@@ -1,6 +1,7 @@
 import { Check, ClipboardCheck, Play, Send } from "lucide-react";
 import { notFound } from "next/navigation";
 import { saveDelegateTechnicalStepAction, startDelegateClassAction, submitDelegateClassAction } from "@/app/actions";
+import { adultGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type DelegateMode = "adults" | "kids" | "combined";
@@ -94,9 +95,9 @@ export default async function DelegateClassPage({
   const adultClasses = usableClasses.filter((clase) => clase.class_group === "adults");
   const kidsClasses = usableClasses.filter((clase) => clase.class_group === "kids");
   const isExpired = new Date(link.expires_at).getTime() < Date.now();
-  const isUnavailable = Boolean(link.revoked_at || link.closed_at || isExpired || !usableClasses.length || (mode === "combined" && usableClasses.length < 2));
+  const isUnavailable = Boolean(link.revoked_at || link.closed_at || isExpired || !usableClasses.length);
   const hasStarted = Boolean(link.started_at || query.started || mode === "kids");
-  const step = query.step ?? (hasStarted ? (adultClasses.length ? "technical" : "attendance") : "start");
+  const step = normalizeDelegateStep(query.step, mode, hasStarted, kidsClasses.length > 0, adultClasses.length > 0);
 
   const classIds = usableClasses.map((clase) => clase.id);
   const [{ data: plan }, { data: attendance }, { data: members }] = classIds.length ? await Promise.all([
@@ -165,14 +166,52 @@ export default async function DelegateClassPage({
             </button>
           </form>
         </section>
+      ) : step === "kids-attendance" ? (
+        <form action={submitDelegateClassAction} className="delegate-form delegate-flow">
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="mode" value={mode} />
+          <input type="hidden" name="nextStep" value="technical" />
+          <section className="delegate-card">
+            <span className="tag">Paso 1</span>
+            <h2>Asistencia ninos</h2>
+            <p className="muted">Primero registra la clase infantil. Despues el enlace pasara al plan tecnico de adultos.</p>
+            <label>
+              Responsable
+              <input name="delegateName" defaultValue={link.delegate_name ?? ""} placeholder="Nombre del sustituto" />
+            </label>
+            {query.error === "attendance" ? <p className="form-error">Selecciona al menos un asistente.</p> : null}
+            {query.error === "submit" ? (
+              <p className="form-error">No se ha podido guardar la asistencia infantil{query.detail ? `: ${query.detail}` : "."}</p>
+            ) : null}
+          </section>
+          {kidsClasses.map((clase) => (
+            <DelegateAttendanceSection
+              key={clase.id}
+              clase={clase}
+              members={(members ?? []).filter((member) => member.class === "kids")}
+              attendanceKeys={attendanceKeys}
+              adultTrainingGradeOptions={[]}
+            />
+          ))}
+          <section className="delegate-submit-bar">
+            <div>
+              <strong>Guardar ninos</strong>
+              <span>Continua despues con adultos.</span>
+            </div>
+            <button type="submit">
+              <Send aria-hidden="true" size={18} />
+              Guardar y seguir
+            </button>
+          </section>
+        </form>
       ) : adultClasses.length && step !== "attendance" ? (
         <form action={saveDelegateTechnicalStepAction} className="delegate-form delegate-flow">
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="mode" value={mode} />
           <section className="delegate-card">
-            <span className="tag">Paso 1</span>
+            <span className="tag">{mode === "combined" ? "Paso 2" : "Paso 1"}</span>
             <h2>Parte tecnica</h2>
-            <p className="muted">Marca solo las tecnicas que se han trabajado. Despues pasas a asistencia.</p>
+            <p className="muted">Marca solo las tecnicas que se han trabajado. Despues pasas a asistencia de adultos.</p>
             <label>
               Responsable
               <input name="delegateName" defaultValue={link.delegate_name ?? ""} placeholder="Nombre del sustituto" />
@@ -201,7 +240,7 @@ export default async function DelegateClassPage({
           <section className="delegate-submit-bar">
             <div>
               <strong>Siguiente</strong>
-              <span>Guardar tecnicas y pasar asistencia</span>
+              <span>Guardar tecnicas y pasar asistencia adultos</span>
             </div>
             <button type="submit">
               <ClipboardCheck aria-hidden="true" size={18} />
@@ -214,9 +253,9 @@ export default async function DelegateClassPage({
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="mode" value={mode} />
           <section className="delegate-card">
-            <span className="tag">{adultClasses.length ? "Paso 2" : "Paso 1"}</span>
-            <h2>Asistencia</h2>
-            <p className="muted">Selecciona quienes han venido y envia la clase.</p>
+            <span className="tag">{mode === "combined" ? "Paso 3" : adultClasses.length ? "Paso 2" : "Paso 1"}</span>
+            <h2>{adultClasses.length ? "Asistencia adultos" : "Asistencia"}</h2>
+            <p className="muted">Selecciona quienes han venido. En adultos puedes indicar si entrenan con otro grupo o si han estado ensenando.</p>
             <label>
               Responsable
               <input name="delegateName" defaultValue={link.delegate_name ?? ""} placeholder="Nombre del sustituto" />
@@ -226,28 +265,15 @@ export default async function DelegateClassPage({
               <p className="form-error">No se ha podido enviar la clase{query.detail ? `: ${query.detail}` : "."}</p>
             ) : null}
           </section>
-          {[...adultClasses, ...kidsClasses].map((clase) => {
-            const pendingMembers = (members ?? [])
-              .filter((member) => member.class === clase.class_group)
-              .filter((member) => !attendanceKeys.has(`${clase.id}:${member.id}`));
-            return (
-              <section className="delegate-step-card" key={clase.id}>
-                <h2>{clase.class_group === "adults" ? "Adultos" : "Ninos"}</h2>
-                <p className="muted">{clase.name}</p>
-                <div className="delegate-check-list">
-                  {pendingMembers.length ? pendingMembers.map((member) => (
-                    <label className="delegate-check" key={member.id}>
-                      <input name={`memberIds:${clase.id}`} type="checkbox" value={member.id} />
-                      <span>
-                        <strong>{member.display_name}</strong>
-                        <small>{member.grade ?? "Sin grado"}</small>
-                      </span>
-                    </label>
-                  )) : <p className="muted">Ya no quedan kenshis pendientes.</p>}
-                </div>
-              </section>
-            );
-          })}
+          {(step === "attendance" ? adultClasses : [...adultClasses, ...kidsClasses]).map((clase) => (
+            <DelegateAttendanceSection
+              key={clase.id}
+              clase={clase}
+              members={(members ?? []).filter((member) => member.class === clase.class_group)}
+              attendanceKeys={attendanceKeys}
+              adultTrainingGradeOptions={adultTrainingGradeOptions()}
+            />
+          ))}
           <section className="delegate-submit-bar">
             <div>
               <strong>Enviar y cerrar</strong>
@@ -261,6 +287,52 @@ export default async function DelegateClassPage({
         </form>
       )}
     </main>
+  );
+}
+
+function DelegateAttendanceSection({
+  clase,
+  members,
+  attendanceKeys,
+  adultTrainingGradeOptions
+}: {
+  clase: ClassRow;
+  members: MemberOption[];
+  attendanceKeys: Set<string>;
+  adultTrainingGradeOptions: string[];
+}) {
+  const pendingMembers = members.filter((member) => !attendanceKeys.has(`${clase.id}:${member.id}`));
+  return (
+    <section className="delegate-step-card" key={clase.id}>
+      <h2>{clase.class_group === "adults" ? "Adultos" : "Ninos"}</h2>
+      <p className="muted">{clase.name}</p>
+      <div className="delegate-check-list">
+        {pendingMembers.length ? pendingMembers.map((member) => (
+          <label className="delegate-check delegate-check-with-options" key={member.id}>
+            <input name={`memberIds:${clase.id}`} type="checkbox" value={member.id} />
+            <span>
+              <strong>{member.display_name}</strong>
+              <small>{member.grade ?? "Sin grado"}</small>
+            </span>
+            {clase.class_group === "adults" ? (
+              <span className="delegate-attendance-options">
+                <select name={`trainedGrade:${clase.id}:${member.id}`} defaultValue="">
+                  <option value="">Su grupo ({member.grade ?? "automatico"})</option>
+                  {adultTrainingGradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                </select>
+                <select name={`technicalRole:${clase.id}:${member.id}`} defaultValue="student">
+                  <option value="student">Entrena</option>
+                  <option value="teaching">Ensenando +1</option>
+                  <option value="support">Apoyo</option>
+                  <option value="reviewing">Repaso</option>
+                  <option value="observing">Observa</option>
+                </select>
+              </span>
+            ) : null}
+          </label>
+        )) : <p className="muted">Ya no quedan kenshis pendientes.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -281,6 +353,32 @@ function normalizeDelegateMode(value: string | null | undefined): DelegateMode |
   if (["combined", "combinado"].includes(normalized)) return "combined";
   if (["adults", "adultos"].includes(normalized)) return "adults";
   return null;
+}
+
+function normalizeDelegateStep(
+  value: string | null | undefined,
+  mode: DelegateMode,
+  hasStarted: boolean,
+  hasKidsClass: boolean,
+  hasAdultClass: boolean
+) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["start", "kids-attendance", "technical", "attendance"].includes(normalized)) return normalized;
+  if (!hasStarted) return "start";
+  if (mode === "combined") return hasKidsClass ? "kids-attendance" : hasAdultClass ? "technical" : "attendance";
+  if (mode === "kids") return "attendance";
+  return hasAdultClass ? "technical" : "attendance";
+}
+
+function adultTrainingGradeOptions() {
+  return adultGrades.filter((grade) => gradeSortValue(grade) <= gradeSortValue("5 DAN"));
+}
+
+function gradeSortValue(grade: string) {
+  const normalized = String(grade ?? "").trim().toUpperCase();
+  const order = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN"];
+  const index = order.indexOf(normalized);
+  return index === -1 ? 999 : index;
 }
 
 function delegateModeFromCreatedBy(value: string | null | undefined): DelegateMode | null {

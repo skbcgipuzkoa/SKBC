@@ -518,7 +518,7 @@ export async function startDelegateClassAction(formData: FormData) {
     redirect(`/delegado/${token}?mode=${mode}&error=start`);
   }
 
-  const nextStep = mode === "kids" ? "attendance" : "technical";
+  const nextStep = mode === "combined" ? "kids-attendance" : mode === "kids" ? "attendance" : "technical";
   redirect(`/delegado/${token}?mode=${mode}&started=1&step=${nextStep}`);
 }
 
@@ -555,19 +555,24 @@ export async function submitDelegateClassAction(formData: FormData) {
   const token = String(formData.get("token") ?? "").trim();
   const mode = normalizeDelegateMode(String(formData.get("mode") ?? ""));
   const delegateName = String(formData.get("delegateName") ?? "").trim() || null;
+  const nextStep = String(formData.get("nextStep") ?? "").trim();
   const memberIdsByClass = getDelegateMemberIdsByClass(formData);
   const totalMembers = [...memberIdsByClass.values()].reduce((count, ids) => count + ids.length, 0);
+  const isPartialCombinedStep = mode === "combined" && nextStep === "technical";
 
   if (!token || !totalMembers) {
-    redirect(`/delegado/${token || "error"}?mode=${mode}&step=attendance&error=attendance`);
+    redirect(`/delegado/${token || "error"}?mode=${mode}&step=${isPartialCombinedStep ? "kids-attendance" : "attendance"}&error=attendance`);
   }
 
   try {
     const { link, classes } = await getValidDelegateContext(token, mode);
-    for (const clase of classes) {
+    const classesToProcess = isPartialCombinedStep
+      ? classes.filter((clase) => clase.class_group === "kids")
+      : classes;
+    for (const clase of classesToProcess) {
       const memberIds = memberIdsByClass.get(clase.id) ?? [];
       if (memberIds.length) {
-        await addAttendanceRows(clase.id, memberIds, "REGISTRADO POR SUSTITUTO");
+        await addAttendanceRows(clase.id, memberIds, "REGISTRADO POR SUSTITUTO", formData);
       }
       if (clase.class_group === "adults") {
         await closeAdultClass(clase.id);
@@ -583,20 +588,30 @@ export async function submitDelegateClassAction(formData: FormData) {
       await recalculateClassExamStatus(clase.id);
     }
 
-    if (classes.some((clase) => clase.class_group === "kids")) {
+    if (classesToProcess.some((clase) => clase.class_group === "kids")) {
       await recalculateChildRankings();
     }
 
     const supabase = createAdminClient();
-    await supabase
-      .from("class_delegate_links")
-      .update({ delegate_name: delegateName, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", link.id);
+    if (isPartialCombinedStep) {
+      await supabase
+        .from("class_delegate_links")
+        .update({ delegate_name: delegateName, started_at: link.started_at ?? new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", link.id);
+    } else {
+      await supabase
+        .from("class_delegate_links")
+        .update({ delegate_name: delegateName, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", link.id);
+    }
   } catch (error) {
     console.error("Error submitting delegate class", error);
-    redirect(`/delegado/${token}?mode=${mode}&step=attendance&error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
+    redirect(`/delegado/${token}?mode=${mode}&step=${isPartialCombinedStep ? "kids-attendance" : "attendance"}&error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
+  if (isPartialCombinedStep) {
+    redirect(`/delegado/${token}?mode=${mode}&started=1&step=technical`);
+  }
   redirect(`/delegado/${token}?mode=${mode}&saved=sent`);
 }
 
