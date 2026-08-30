@@ -17,6 +17,7 @@ import {
 } from "@/app/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { hasInternalAccess } from "@/lib/auth";
+import { adultGrades } from "@/lib/grades";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
@@ -179,6 +180,7 @@ export default async function ClaseDetailPage({
   const pendingClassMembers = (classMembers ?? []).filter((member) => !attendanceMemberIds.has(member.id));
   const completedPlan = (plan ?? []).filter((item) => item.completed).length;
   const groupedPlan = groupPlanByGrade(plan ?? []);
+  const adultTrainingGradeOptions = buildAdultTrainingGradeOptions(groups ?? []);
   const hasGroups = Boolean((groups ?? []).length);
   const hasPlan = Boolean((plan ?? []).length);
   const readyToClose = clase.class_group === "adults" && clase.plan_generated && !clase.closed;
@@ -280,8 +282,8 @@ export default async function ClaseDetailPage({
                       {dayClass.class_group === "adults" ? (
                         <span className="attendance-options">
                           <select name={`trainedGrade:${dayClass.id}:${member.id}`} defaultValue="">
-                            <option value="">Su grupo</option>
-                            {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                            <option value="">Su grupo ({member.grade ?? "automatico"})</option>
+                            {adultTrainingGradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
                           </select>
                           <select name={`technicalRole:${dayClass.id}:${member.id}`} defaultValue="student">
                             <option value="student">Entrena</option>
@@ -356,14 +358,14 @@ export default async function ClaseDetailPage({
                 Grado oficial
                 <select name="officialGrade">
                   <option value="">Usar ficha</option>
-                  {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                  {adultGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
                 </select>
               </label>
               <label>
                 Grado entrenado
                 <select name="trainedGrade">
                   <option value="">Automatico</option>
-                  {(groups ?? []).map((group) => <option key={group.id} value={group.grade}>{group.grade}</option>)}
+                  {adultTrainingGradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
                 </select>
               </label>
               <button type="submit">Anadir uno</button>
@@ -815,6 +817,20 @@ function gradeSortValue(grade: string) {
   const order = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
   const index = order.indexOf(normalized);
   return index === -1 ? 999 : index;
+}
+
+function buildAdultTrainingGradeOptions(groups: GroupRow[]) {
+  const classGrades = new Set(groups.map((group) => normalizeGradeLabel(group.grade)).filter(Boolean));
+  const technicalProgramGrades = adultGrades.filter((grade) => gradeSortValue(grade) <= gradeSortValue("5 DAN"));
+  const ordered = technicalProgramGrades.filter((grade) => classGrades.size === 0 || classGrades.has(grade) || gradeSortValue(grade) <= gradeSortValue("5 DAN"));
+  const extras = [...classGrades]
+    .filter((grade) => !ordered.includes(grade))
+    .sort((a, b) => gradeSortValue(a) - gradeSortValue(b));
+  return [...ordered, ...extras];
+}
+
+function normalizeGradeLabel(grade: string | null | undefined) {
+  return String(grade ?? "").trim().toUpperCase().replace(/\s+/g, " ");
 }
 
 function delegateModeFromCreatedBy(value: string | null | undefined) {
