@@ -2797,7 +2797,6 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
     const officialGrade = member.grade || "";
     const trainedGradeOverride = String(formData?.get(`trainedGrade:${classId}:${member.id}`) ?? "").trim();
     const roleOverride = String(formData?.get(`technicalRole:${classId}:${member.id}`) ?? "").trim();
-    const needsTechnicalReview = String(formData?.get(`technicalReview:${classId}:${member.id}`) ?? "") === "true";
     const technicalRole = clase.class_group === "adults" && ["student", "teaching", "support", "reviewing", "observing"].includes(roleOverride)
       ? roleOverride
       : "student";
@@ -2812,7 +2811,7 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
       official_grade: officialGrade || null,
       trained_grade: trainedGrade || null,
       technical_role: technicalRole,
-      technical_note: needsTechnicalReview ? `${technicalNote} · CAMBIO_GRUPO` : technicalNote,
+      technical_note: technicalNote,
       use_for_history: true
     };
   });

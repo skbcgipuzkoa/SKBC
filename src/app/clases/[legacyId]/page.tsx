@@ -230,7 +230,7 @@ export default async function ClaseDetailPage({
     : (attendance?.length ?? 0);
   const kidsDayClass = (dayClasses ?? []).find((item) => item.class_group === "kids");
   const adultAttendanceRows = (dayAttendance ?? []).filter((item) => item.class_id === clase.id && item.members?.class === "adults");
-  const reviewableAdultAttendanceRows = adultAttendanceRows.filter((item) => item.technical_note?.includes("CAMBIO_GRUPO"));
+  const reviewableAdultAttendanceRows = adultAttendanceRows;
   const completedHistoryPlan = (plan ?? []).filter((item) => item.completed && item.id);
   const { data: technicalOverrides } = reviewableAdultAttendanceRows.length
     ? await supabase
@@ -313,10 +313,6 @@ export default async function ClaseDetailPage({
                             <option value="reviewing">Repaso</option>
                             <option value="observing">Observa</option>
                           </select>
-                          <label className="inline-check">
-                            <input name={`technicalReview:${dayClass.id}:${member.id}`} type="checkbox" value="true" />
-                            Revisar cambio
-                          </label>
                         </span>
                       ) : null}
                     </label>
@@ -338,15 +334,15 @@ export default async function ClaseDetailPage({
     </form>
   );
   const technicalReviewPanel = clase.class_group === "adults" && activeStep === "attendance" && !clase.closed && reviewableAdultAttendanceRows.length && completedHistoryPlan.length ? (
-    <details className="card technical-review-panel" open>
+    <details className="card technical-review-panel">
       <summary>
-        <strong>Revisar cambios de grupo</strong>
+        <strong>Ajustes tecnicos especiales</strong>
         <span>{reviewableAdultAttendanceRows.length} kenshi{reviewableAdultAttendanceRows.length === 1 ? "" : "s"}</span>
       </summary>
       <form action={saveAttendanceTechnicalReviewAction} className="technical-review-form">
         <input type="hidden" name="classId" value={clase.id} />
         <input type="hidden" name="legacyId" value={legacyId} />
-        <p className="muted">Ajusta solo las tecnicas que realmente debe llevarse cada kenshi por haber cambiado de grupo durante la clase.</p>
+        <p className="muted">Abre esto solo si alguien cambio de grupo, enseno parte de la clase o necesitas corregir exactamente que tecnicas se adjuntan antes de cerrar.</p>
         <div className="technical-review-stack">
           {reviewableAdultAttendanceRows.map((row) => {
             const selectedOverrides = technicalOverridesByAttendance.get(row.id);
@@ -358,7 +354,7 @@ export default async function ClaseDetailPage({
             const selectedPlanIds = selectedOverrides ?? defaultPlanIds;
             const memberName = `${row.members?.first_name ?? ""} ${row.members?.last_name ?? ""}`.trim();
             return (
-              <details className="technical-review-member" key={row.id} open>
+              <details className="technical-review-member" key={row.id}>
                 <summary>
                   <strong>{memberName || "Kenshi"}</strong>
                   <span>{row.trained_grade ?? row.official_grade ?? "Sin grado"} · {selectedPlanIds.size} tecnicas</span>
