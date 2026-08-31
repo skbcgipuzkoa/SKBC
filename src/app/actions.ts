@@ -385,6 +385,104 @@ export async function createKenshiAction(formData: FormData) {
   redirect(`/kenshis/${data.legacy_id}?saved=kenshi`);
 }
 
+export async function createDistributionCampaignAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const title = String(formData.get("title") ?? "").trim();
+  const audience = normalizeDistributionAudience(String(formData.get("audience") ?? ""));
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!title) redirect("/entregas?error=campaign");
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("distribution_campaigns").insert({
+    title,
+    audience,
+    notes,
+    active: true
+  });
+
+  if (error) {
+    console.error("Error creating distribution campaign", error);
+    redirect("/entregas?error=campaign");
+  }
+
+  revalidatePath("/entregas");
+  redirect("/entregas?saved=campaign");
+}
+
+export async function updateDistributionCampaignAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const campaignId = String(formData.get("campaignId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const audience = normalizeDistributionAudience(String(formData.get("audience") ?? ""));
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const active = formData.get("active") === "on";
+
+  if (!campaignId || !title) redirect("/entregas?error=campaign");
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("distribution_campaigns")
+    .update({ title, audience, notes, active, updated_at: new Date().toISOString() })
+    .eq("id", campaignId);
+
+  if (error) {
+    console.error("Error updating distribution campaign", error);
+    redirect(`/entregas?campaign=${campaignId}&error=campaign`);
+  }
+
+  revalidatePath("/entregas");
+  redirect(`/entregas?campaign=${campaignId}&saved=campaign`);
+}
+
+export async function toggleDistributionDeliveryAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const campaignId = String(formData.get("campaignId") ?? "");
+  const memberId = String(formData.get("memberId") ?? "");
+  const delivered = String(formData.get("delivered") ?? "") === "1";
+
+  if (!campaignId || !memberId) redirect("/entregas?error=delivery");
+
+  const supabase = createAdminClient();
+  if (delivered) {
+    const { error } = await supabase
+      .from("distribution_deliveries")
+      .upsert({
+        campaign_id: campaignId,
+        member_id: memberId,
+        delivered: true,
+        delivered_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, { onConflict: "campaign_id,member_id" });
+
+    if (error) {
+      console.error("Error marking delivery", error);
+      redirect(`/entregas?campaign=${campaignId}&error=delivery`);
+    }
+  } else {
+    const { error } = await supabase
+      .from("distribution_deliveries")
+      .delete()
+      .eq("campaign_id", campaignId)
+      .eq("member_id", memberId);
+
+    if (error) {
+      console.error("Error unmarking delivery", error);
+      redirect(`/entregas?campaign=${campaignId}&error=delivery`);
+    }
+  }
+
+  revalidatePath("/entregas");
+  redirect(`/entregas?campaign=${campaignId}&saved=delivery`);
+}
+
+function normalizeDistributionAudience(value: string) {
+  return value === "kids" || value === "adults" ? value : "all";
+}
+
 export async function generateAdultPlanAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

@@ -7,6 +7,7 @@ import {
   LockKeyhole,
   Medal,
   NotebookTabs,
+  PackageCheck,
   SquareArrowOutUpRight,
   ShieldCheck,
   Sparkles,
@@ -58,6 +59,7 @@ const moduleGroups: Array<{ title: string; items: ModuleLink[] }> = [
       { label: "Calendario", href: "/clases", icon: NotebookTabs },
       { label: "Clases Busen", href: "/clases-negras", icon: ShieldCheck },
       { label: "Shakujo", href: "/shakujo", icon: Sparkles },
+      { label: "Entregas", href: "/entregas", icon: PackageCheck },
       { label: "Kenshis", href: "/kenshis", icon: Users },
       { label: "Nuevo kenshi", href: "/kenshis/nuevo", icon: UserPlus }
     ]

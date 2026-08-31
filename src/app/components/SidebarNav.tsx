@@ -10,6 +10,7 @@ const navItems = [
   { label: "Clases", href: "/clases" },
   { label: "Busen", href: "/clases-negras" },
   { label: "Shakujo", href: "/shakujo" },
+  { label: "Entregas", href: "/entregas" },
   { label: "Tecnicas", href: "/tecnicas" },
   { label: "Examenes", href: "/examenes" },
   { label: "App examenes", href: "https://akapi80.github.io/EXAMENES/", external: true },
