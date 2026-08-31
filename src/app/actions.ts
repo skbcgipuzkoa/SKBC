@@ -437,6 +437,27 @@ export async function updateDistributionCampaignAction(formData: FormData) {
   redirect(`/entregas?campaign=${campaignId}&saved=campaign`);
 }
 
+export async function deleteDistributionCampaignAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const campaignId = String(formData.get("campaignId") ?? "");
+  if (!campaignId) redirect("/entregas?error=campaign");
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("distribution_campaigns")
+    .delete()
+    .eq("id", campaignId);
+
+  if (error) {
+    console.error("Error deleting distribution campaign", error);
+    redirect(`/entregas?campaign=${campaignId}&error=campaign`);
+  }
+
+  revalidatePath("/entregas");
+  redirect("/entregas?saved=deleted");
+}
+
 export async function toggleDistributionDeliveryAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/");
 

@@ -5691,6 +5691,20 @@ tbody tr:hover {
   margin-top: 18px;
 }
 
+.delete-delivery-form {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.delete-delivery-form p {
+  margin: 0;
+}
+
 .delivery-member {
   align-items: center;
   background: #fff7ed;
@@ -5741,5 +5755,10 @@ tbody tr:hover {
 
   .delivery-member {
     min-height: 86px;
+  }
+
+  .delete-delivery-form {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

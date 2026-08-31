@@ -3,6 +3,7 @@ import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
 import {
   createDistributionCampaignAction,
+  deleteDistributionCampaignAction,
   logoutAction,
   toggleDistributionDeliveryAction,
   updateDistributionCampaignAction
@@ -179,6 +180,13 @@ export default async function EntregasPage({
                 <label className="checkbox-field"><input name="active" type="checkbox" defaultChecked={selectedCampaign.active} /> Activa</label>
                 <label className="full-width">Notas<textarea name="notes" defaultValue={selectedCampaign.notes ?? ""} /></label>
                 <button type="submit">Guardar campana</button>
+              </form>
+              <form action={deleteDistributionCampaignAction} className="delete-delivery-form">
+                <input type="hidden" name="campaignId" value={selectedCampaign.id} />
+                <button className="mini-action danger" type="submit">
+                  Eliminar este control de entrega
+                </button>
+                <p className="muted">Borra la campana y sus marcas de entregado. Usalo solo para controles terminados o pruebas.</p>
               </form>
 
               <div className="delivery-member-grid">
