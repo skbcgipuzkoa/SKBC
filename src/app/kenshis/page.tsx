@@ -32,7 +32,18 @@ export default async function KenshisPage({
   }
 
   const params = await searchParams;
+  const selectedStatus = params.status === "inactive" ? "inactive" : "active";
   const supabase = createAdminClient();
+  const [
+    { count: activeCount },
+    { count: activeKidsCount },
+    { count: activeAdultsCount }
+  ] = await Promise.all([
+    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active"),
+    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "kids"),
+    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults")
+  ]);
+
   let query = supabase
     .from("members")
     .select(
@@ -46,9 +57,7 @@ export default async function KenshisPage({
     query = query.eq("class", params.class);
   }
 
-  if (params.status === "active" || params.status === "inactive") {
-    query = query.eq("status", params.status);
-  }
+  query = query.eq("status", selectedStatus);
 
   const { data, error } = await query.returns<Kenshi[]>();
   if (error) throw error;
@@ -73,10 +82,6 @@ export default async function KenshisPage({
       )
     : data;
 
-  const active = data.filter((kenshi) => kenshi.status === "active").length;
-  const kids = data.filter((kenshi) => kenshi.class === "kids").length;
-  const adults = data.filter((kenshi) => kenshi.class === "adults").length;
-
   return (
     <div className="shell">
       <SidebarNav current="/kenshis" />
@@ -100,17 +105,17 @@ export default async function KenshisPage({
           <article className="card">
             <ShieldCheck aria-hidden="true" size={19} />
             <h2>Activos</h2>
-            <div className="metric">{active}</div>
+            <div className="metric">{activeCount ?? 0}</div>
           </article>
           <article className="card">
             <UserRound aria-hidden="true" size={19} />
             <h2>Ninos</h2>
-            <div className="metric">{kids}</div>
+            <div className="metric">{activeKidsCount ?? 0}</div>
           </article>
           <article className="card">
             <UserRound aria-hidden="true" size={19} />
             <h2>Adultos</h2>
-            <div className="metric">{adults}</div>
+            <div className="metric">{activeAdultsCount ?? 0}</div>
           </article>
           <article className="card">
             <Search aria-hidden="true" size={19} />
@@ -134,8 +139,7 @@ export default async function KenshisPage({
           </label>
           <label>
             Estado
-            <select name="status" defaultValue={params.status ?? ""}>
-              <option value="">Todos</option>
+            <select name="status" defaultValue={selectedStatus}>
               <option value="active">Activo</option>
               <option value="inactive">Inactivo</option>
             </select>
