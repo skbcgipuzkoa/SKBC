@@ -391,24 +391,43 @@ export async function createDistributionCampaignAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const audience = normalizeDistributionAudience(String(formData.get("audience") ?? ""));
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const itemLabels = parseDistributionItemLabels(formData);
 
   if (!title) redirect("/entregas?error=campaign");
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("distribution_campaigns").insert({
-    title,
-    audience,
-    notes,
-    active: true
-  });
+  const { data, error } = await supabase
+    .from("distribution_campaigns")
+    .insert({
+      title,
+      audience,
+      notes,
+      active: true
+    })
+    .select("id")
+    .single<{ id: string }>();
 
-  if (error) {
+  if (error || !data?.id) {
     console.error("Error creating distribution campaign", error);
     redirect("/entregas?error=campaign");
   }
 
+  const { error: itemsError } = await supabase.from("distribution_campaign_items").insert(
+    itemLabels.map((label, index) => ({
+      campaign_id: data.id,
+      label,
+      position: index + 1,
+      active: true
+    }))
+  );
+
+  if (itemsError) {
+    console.error("Error creating distribution campaign items", itemsError);
+    redirect(`/entregas?campaign=${data.id}&error=campaign`);
+  }
+
   revalidatePath("/entregas");
-  redirect("/entregas?saved=campaign");
+  redirect(`/entregas?campaign=${data.id}&saved=campaign`);
 }
 
 export async function updateDistributionCampaignAction(formData: FormData) {
@@ -419,6 +438,7 @@ export async function updateDistributionCampaignAction(formData: FormData) {
   const audience = normalizeDistributionAudience(String(formData.get("audience") ?? ""));
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const active = formData.get("active") === "on";
+  const itemLabels = parseDistributionItemLabels(formData);
 
   if (!campaignId || !title) redirect("/entregas?error=campaign");
 
@@ -430,6 +450,30 @@ export async function updateDistributionCampaignAction(formData: FormData) {
 
   if (error) {
     console.error("Error updating distribution campaign", error);
+    redirect(`/entregas?campaign=${campaignId}&error=campaign`);
+  }
+
+  const { error: deleteItemsError } = await supabase
+    .from("distribution_campaign_items")
+    .delete()
+    .eq("campaign_id", campaignId);
+
+  if (deleteItemsError) {
+    console.error("Error replacing distribution campaign items", deleteItemsError);
+    redirect(`/entregas?campaign=${campaignId}&error=campaign`);
+  }
+
+  const { error: insertItemsError } = await supabase.from("distribution_campaign_items").insert(
+    itemLabels.map((label, index) => ({
+      campaign_id: campaignId,
+      label,
+      position: index + 1,
+      active: true
+    }))
+  );
+
+  if (insertItemsError) {
+    console.error("Error saving distribution campaign items", insertItemsError);
     redirect(`/entregas?campaign=${campaignId}&error=campaign`);
   }
 
@@ -462,22 +506,24 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/");
 
   const campaignId = String(formData.get("campaignId") ?? "");
+  const itemId = String(formData.get("itemId") ?? "");
   const memberId = String(formData.get("memberId") ?? "");
-  const delivered = String(formData.get("delivered") ?? "") === "1";
+  const checked = String(formData.get("checked") ?? "") === "1";
 
-  if (!campaignId || !memberId) redirect("/entregas?error=delivery");
+  if (!campaignId || !itemId || !memberId) redirect("/entregas?error=delivery");
 
   const supabase = createAdminClient();
-  if (delivered) {
+  if (checked) {
     const { error } = await supabase
-      .from("distribution_deliveries")
+      .from("distribution_delivery_checks")
       .upsert({
         campaign_id: campaignId,
+        item_id: itemId,
         member_id: memberId,
-        delivered: true,
-        delivered_at: new Date().toISOString(),
+        checked: true,
+        checked_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, { onConflict: "campaign_id,member_id" });
+      }, { onConflict: "item_id,member_id" });
 
     if (error) {
       console.error("Error marking delivery", error);
@@ -485,9 +531,9 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
     }
   } else {
     const { error } = await supabase
-      .from("distribution_deliveries")
+      .from("distribution_delivery_checks")
       .delete()
-      .eq("campaign_id", campaignId)
+      .eq("item_id", itemId)
       .eq("member_id", memberId);
 
     if (error) {
@@ -502,6 +548,25 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
 
 function normalizeDistributionAudience(value: string) {
   return value === "kids" || value === "adults" ? value : "all";
+}
+
+function parseDistributionItemLabels(formData: FormData) {
+  const raw = [
+    ...formData.getAll("itemLabels").map((value) => String(value)),
+    String(formData.get("itemLabelsText") ?? "")
+  ].join("\n");
+  const labels = raw
+    .split(/\r?\n|,/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const unique = labels.filter((label) => {
+    const key = label.toLocaleLowerCase("es");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.length ? unique.slice(0, 12) : ["Entregado"];
 }
 
 export async function generateAdultPlanAction(formData: FormData) {
