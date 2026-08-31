@@ -98,7 +98,7 @@ export default async function Home({
     { count: activeMembers },
     { count: adultMembers },
     { count: kidsMembers },
-    { count: openClasses },
+    { data: openClasses },
     { data: todayClasses },
     { data: nextClasses },
     { data: pendingPlanClasses },
@@ -107,7 +107,11 @@ export default async function Home({
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults"),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "kids"),
-    supabase.from("classes").select("id", { count: "exact", head: true }).eq("closed", false),
+    supabase
+      .from("classes")
+      .select("legacy_id,class_date,name,class_group,closed,plan_generated")
+      .eq("closed", false)
+      .returns<ClassPreview[]>(),
     supabase
       .from("classes")
       .select("legacy_id,class_date,name,class_group,closed,plan_generated")
@@ -141,11 +145,15 @@ export default async function Home({
       .returns<ExamAlert[]>()
   ]);
 
+  const todayDisplayClasses = mergeCombinedClassPreviews(todayClasses ?? []);
+  const nextDisplayClasses = mergeCombinedClassPreviews(nextClasses ?? []);
+  const openDisplayClasses = mergeCombinedClassPreviews(openClasses ?? []);
+
   const stats = [
     { label: "Activos", value: activeMembers ?? 0, icon: Users },
     { label: "Adultos", value: adultMembers ?? 0, icon: GraduationCap },
     { label: "Ninos", value: kidsMembers ?? 0, icon: Users },
-    { label: "Abiertas", value: openClasses ?? 0, icon: CalendarCheck }
+    { label: "Abiertas", value: openDisplayClasses.length, icon: CalendarCheck }
   ];
 
   return (
@@ -167,7 +175,7 @@ export default async function Home({
         <section className="home-hero-panel">
           <div>
             <span className="tag">Hoy</span>
-            <h2>{todayClasses?.length ? "Hay clase registrada para hoy" : "No hay clase creada para hoy"}</h2>
+            <h2>{todayDisplayClasses.length ? "Hay clase registrada para hoy" : "No hay clase creada para hoy"}</h2>
             <p className="muted">
               Accede rapido a la clase del dia o crea una nueva. El sistema antiguo sigue intacto.
             </p>
@@ -196,11 +204,11 @@ export default async function Home({
           <article className="card home-focus-card">
             <h2>Clase de hoy</h2>
             <div className="home-class-list">
-              {todayClasses?.length ? todayClasses.map((clase) => (
+              {todayDisplayClasses.length ? todayDisplayClasses.map((clase) => (
                 <a className="home-class-row" href={`/clases/${clase.legacy_id}`} key={clase.legacy_id ?? clase.name}>
                   <span>
                     <strong>{clase.name}</strong>
-                    <small>{clase.class_group === "kids" ? "Ninos" : "Adultos"} - {clase.closed ? "Cerrada" : "Abierta"}</small>
+                    <small>{clase.display_group === "combined" ? "Adultos + ninos" : clase.class_group === "kids" ? "Ninos" : "Adultos"} - {clase.closed ? "Cerrada" : "Abierta"}</small>
                   </span>
                   <b>{clase.plan_generated || clase.class_group === "kids" ? "Lista" : "Plan pendiente"}</b>
                 </a>
@@ -216,11 +224,11 @@ export default async function Home({
           <article className="card home-focus-card">
             <h2>Proximas clases</h2>
             <div className="home-class-list">
-              {nextClasses?.length ? nextClasses.map((clase) => (
+              {nextDisplayClasses.length ? nextDisplayClasses.map((clase) => (
                 <a className="home-class-row" href={`/clases/${clase.legacy_id}`} key={`next-${clase.legacy_id ?? clase.name}`}>
                   <span>
                     <strong>{clase.name}</strong>
-                    <small>{clase.class_date} - {clase.class_group === "kids" ? "Ninos" : "Adultos"}</small>
+                    <small>{clase.class_date} - {clase.display_group === "combined" ? "Adultos + ninos" : clase.class_group === "kids" ? "Ninos" : "Adultos"}</small>
                   </span>
                   <b>{clase.closed ? "Cerrada" : "Abrir"}</b>
                 </a>
@@ -296,6 +304,64 @@ export default async function Home({
       </main>
     </div>
   );
+}
+
+type ClassPreviewDisplay = ClassPreview & {
+  display_group: "kids" | "adults" | "combined";
+};
+
+function mergeCombinedClassPreviews(classes: ClassPreview[]): ClassPreviewDisplay[] {
+  const byDate = new Map<string, ClassPreview[]>();
+  classes.forEach((clase) => {
+    const current = byDate.get(clase.class_date) ?? [];
+    current.push(clase);
+    byDate.set(clase.class_date, current);
+  });
+
+  const merged: ClassPreviewDisplay[] = [];
+  for (const [, dayClasses] of byDate.entries()) {
+    const adults = dayClasses.filter((clase) => clase.class_group === "adults");
+    const kids = dayClasses.filter((clase) => clase.class_group === "kids");
+    const usedKids = new Set<ClassPreview>();
+
+    adults.forEach((adult) => {
+      const companion = kids.find((kid) => !usedKids.has(kid) && sameCombinedClass(adult, kid));
+      if (companion) {
+        usedKids.add(companion);
+        merged.push({
+          ...adult,
+          name: combinedClassName(adult, companion),
+          closed: adult.closed && companion.closed,
+          display_group: "combined"
+        });
+      } else {
+        merged.push({ ...adult, display_group: "adults" });
+      }
+    });
+
+    kids.filter((kid) => !usedKids.has(kid)).forEach((kid) => merged.push({ ...kid, display_group: "kids" }));
+  }
+
+  return merged.sort((a, b) => a.class_date.localeCompare(b.class_date));
+}
+
+function sameCombinedClass(adults: ClassPreview, kids: ClassPreview) {
+  if (adults.class_date !== kids.class_date) return false;
+  const adultName = normalizeClassName(adults.name);
+  const kidName = normalizeClassName(kids.name);
+  return adultName === kidName || kidName === `${adultName} ninos` || kidName === `${adultName} niños`;
+}
+
+function normalizeClassName(value: string) {
+  return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
+function combinedClassName(adults: ClassPreview, kids: ClassPreview) {
+  const adultName = adults.name?.trim();
+  if (adultName && !/^clase adultos$/i.test(adultName)) return `${adultName} · adultos + ninos`;
+  const kidName = kids.name?.trim();
+  if (kidName && !/^ninos/i.test(kidName)) return `${kidName} · adultos + ninos`;
+  return "Clase adultos + ninos";
 }
 
 function LoginHome({ error }: { error?: string }) {

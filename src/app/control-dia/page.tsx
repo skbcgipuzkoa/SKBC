@@ -114,6 +114,9 @@ export default async function ControlDiaPage({
   const dayAttendance = attendance ?? [];
   const adultClass = dayClasses.find((item) => item.class_group === "adults") ?? null;
   const kidsClass = dayClasses.find((item) => item.class_group === "kids") ?? null;
+  const visualClassCount = adultClass && kidsClass && sameCombinedClass(adultClass, kidsClass)
+    ? Math.max(1, dayClasses.length - 1)
+    : dayClasses.length;
   const adultAttendance = dayAttendance.filter((row) => row.members?.class === "adults");
   const kidsAttendance = dayAttendance.filter((row) => row.members?.class === "kids");
   const syncFailed = (syncJobs ?? []).filter((job) => job.status === "failed");
@@ -212,7 +215,7 @@ export default async function ControlDiaPage({
         </section>
 
         <section className="control-summary-grid">
-          <MetricCard icon={CalendarCheck} label="Clases del dia" value={String(dayClasses.length)} tone={dayClasses.length ? "ok" : "warn"} />
+          <MetricCard icon={CalendarCheck} label="Clases del dia" value={String(visualClassCount)} tone={dayClasses.length ? "ok" : "warn"} />
           <MetricCard icon={Users} label="Adultos" value={String(adultAttendance.length)} tone={adultAttendance.length ? "ok" : "neutral"} />
           <MetricCard icon={Users} label="Ninos" value={String(kidsAttendance.length)} tone={kidsAttendance.length ? "ok" : "neutral"} />
           <MetricCard icon={ClipboardCheck} label="Sync fallidos" value={String(syncFailed.length)} tone={syncFailed.length ? "danger" : "ok"} />
@@ -313,4 +316,15 @@ function todayIso() {
 function formatDate(value: string) {
   const [year, month, day] = value.split("-");
   return `${day}/${month}/${year}`;
+}
+
+function sameCombinedClass(adults: ClassRow, kids: ClassRow) {
+  if (adults.class_date !== kids.class_date) return false;
+  const adultName = normalizeClassName(adults.name);
+  const kidName = normalizeClassName(kids.name);
+  return adultName === kidName || kidName === `${adultName} ninos` || kidName === `${adultName} niños`;
+}
+
+function normalizeClassName(value: string) {
+  return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
 }
