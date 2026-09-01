@@ -123,7 +123,8 @@ export default async function Home({
     supabase
       .from("classes")
       .select("legacy_id,class_date,name,class_group,closed,plan_generated")
-      .gte("class_date", today)
+      .eq("closed", false)
+      .gt("class_date", today)
       .order("class_date")
       .limit(5)
       .returns<ClassPreview[]>(),

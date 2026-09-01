@@ -124,6 +124,8 @@ export async function syncLegacyCourse(courseId: string) {
 }
 
 export async function syncLegacyAttendance(attendanceId: string) {
+  if (!shouldSyncLegacyAttendance()) return;
+
   const supabase = createAdminClient();
   const { data: attendance, error } = await supabase
     .from("attendance_logs")
@@ -429,6 +431,10 @@ async function getGoogleOAuthAccessToken() {
 
 function legacySpreadsheetId() {
   return cleanEnv(process.env.LEGACY_GOOGLE_SPREADSHEET_ID) || DEFAULT_LEGACY_SPREADSHEET_ID;
+}
+
+function shouldSyncLegacyAttendance() {
+  return cleanEnv(process.env.LEGACY_SYNC_ATTENDANCE_TO_SHEETS) === "1";
 }
 
 function requiredEnv(name: string) {
