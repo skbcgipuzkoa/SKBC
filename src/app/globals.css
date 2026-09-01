@@ -3752,19 +3752,22 @@ tbody tr:hover {
     linear-gradient(#ffffff, #ffffff) padding-box,
     linear-gradient(135deg, #d4af37, #0f4c81) border-box;
   border: 3px solid transparent;
-  border-radius: 18px;
+  border-radius: 16px;
   display: grid;
-  height: 156px;
+  height: 168px;
   justify-items: center;
   margin-bottom: 8px;
-  padding: 14px;
-  width: 156px;
+  overflow: hidden;
+  padding: 6px;
+  width: 168px;
 }
 
 .inactive-ficha-logo img {
-  max-height: 126px;
-  max-width: 126px;
+  height: 100%;
+  max-height: none;
+  max-width: none;
   object-fit: contain;
+  width: 100%;
 }
 
 .student-box {
