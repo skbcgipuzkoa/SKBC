@@ -205,6 +205,7 @@ export default async function PublicFichaPage({
     .single<Member>();
 
   if (error || !member) notFound();
+  if (member.status !== "active") return <InactiveFichaNotice />;
 
   const [{ data: attendance }, { data: exams }, { data: courses }, { data: fichaClosures }] = await Promise.all([
     supabase
@@ -672,6 +673,22 @@ function KidsFicha({
       </FoldableSection>
 
       <Footer />
+    </main>
+  );
+}
+
+function InactiveFichaNotice() {
+  return (
+    <main className="legacy-ficha inactive-ficha">
+      <section className="inactive-ficha-card">
+        <div className="inactive-ficha-logo">
+          <img src={LOGO_SKBC_URL} alt="SKBC Gipuzkoa" />
+        </div>
+        <p className="eyebrow">SKBC Gipuzkoa</p>
+        <h1>Esta ficha no esta disponible</h1>
+        <p>Estas dado de baja de SKBC Gipuzkoa.</p>
+        <p>Si se trata de un error, contacta con el club. Gracias.</p>
+      </section>
     </main>
   );
 }
