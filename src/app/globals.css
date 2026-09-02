@@ -4588,7 +4588,7 @@ tbody tr:hover {
     display: none;
   }
 
-  .attendance-group-panel[open] {
+  .attendance-group-panel.attendance-focus-open {
     background: var(--panel);
     border-radius: 0;
     display: block;
@@ -4599,7 +4599,7 @@ tbody tr:hover {
     z-index: 80;
   }
 
-  .attendance-group-panel[open] > summary {
+  .attendance-group-panel.attendance-focus-open > summary {
     display: none;
   }
 
@@ -5168,7 +5168,7 @@ tbody tr:hover {
     display: none;
   }
 
-  .attendance-group-panel[open] {
+  .attendance-group-panel.attendance-focus-open {
     background: var(--panel);
     border-radius: 0;
     display: block;
@@ -5179,7 +5179,7 @@ tbody tr:hover {
     z-index: 80;
   }
 
-  .attendance-group-panel[open] > summary {
+  .attendance-group-panel.attendance-focus-open > summary {
     display: none;
   }
 
