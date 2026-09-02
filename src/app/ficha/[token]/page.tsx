@@ -187,6 +187,13 @@ type ShakujoAttendanceRow = {
   } | null;
 };
 
+type TechnicalAreaLink = {
+  url: string;
+  label: string | null;
+  target_grade: string | null;
+  active: boolean;
+};
+
 type FichaTone = "green" | "yellow" | "red" | "blue" | "neutral" | "white" | "orange" | "brown" | "black" | "white-yellow" | "yellow-orange" | "orange-green" | "green-blue" | "blue-brown";
 
 export default async function PublicFichaPage({
@@ -209,6 +216,15 @@ export default async function PublicFichaPage({
 
   if (error || !member) notFound();
   if (member.status !== "active") return <InactiveFichaNotice />;
+
+  const { data: technicalAreaLink } = await supabase
+    .from("technical_area_links")
+    .select("url,label,target_grade,active")
+    .eq("member_class", member.class)
+    .eq("active", true)
+    .returns<Array<TechnicalAreaLink & { grade: string }>>();
+  const configuredTechnicalArea = (technicalAreaLink ?? []).find((link) => sameGrade(link.grade, member.grade ?? "MINARAI")) ?? null;
+  const technicalArea = resolveTechnicalArea(member, configuredTechnicalArea);
 
   const [{ data: attendance }, { data: exams }, { data: courses }, { data: fichaClosures }] = await Promise.all([
     supabase
@@ -277,7 +293,7 @@ export default async function PublicFichaPage({
 
     const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures);
     const automaticNotices = buildAutomaticChildNotices(visibleChildRanking);
-    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} adminBackUrl={adminBackUrl} />;
+    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} technicalArea={technicalArea} adminBackUrl={adminBackUrl} />;
   }
 
   const targetGrade = nextAdultGrade(member.grade);
@@ -359,7 +375,7 @@ export default async function PublicFichaPage({
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} adminBackUrl={adminBackUrl} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} />;
 }
 
 function AdultFicha({
@@ -375,6 +391,7 @@ function AdultFicha({
   blackBeltSpecial,
   showBusen,
   shakujoAttendance,
+  technicalArea,
   adminBackUrl
 }: {
   member: Member;
@@ -389,6 +406,7 @@ function AdultFicha({
   blackBeltSpecial: BlackBeltSpecialRow[];
   showBusen: boolean;
   shakujoAttendance: ShakujoAttendanceRow[];
+  technicalArea: { url: string; label: string };
   adminBackUrl: string | null;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
@@ -408,7 +426,7 @@ function AdultFicha({
       </section>
 
       <section className="ficha-actions">
-        {member.site_url ? <a href={member.site_url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />AREA TECNICA PERSONAL<ExternalLink aria-hidden="true" size={15} /></a> : null}
+        {technicalArea.url ? <a href={technicalArea.url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />{technicalArea.label}<ExternalLink aria-hidden="true" size={15} /></a> : null}
         <a href="https://akapi80.github.io/Juego-SKBC/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
         <a href="https://stirring-madeleine-467faf.netlify.app/technique-consultation/" target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
@@ -599,6 +617,7 @@ function KidsFicha({
   notices,
   note,
   behavior,
+  technicalArea,
   adminBackUrl
 }: {
   member: Member;
@@ -609,6 +628,7 @@ function KidsFicha({
   notices: ChildNotice[];
   note: ChildNote | null;
   behavior: ChildBehavior | null;
+  technicalArea: { url: string; label: string };
   adminBackUrl: string | null;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
@@ -626,6 +646,7 @@ function KidsFicha({
       </section>
 
       <section className="ficha-actions">
+        {technicalArea.url ? <a href={technicalArea.url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />{technicalArea.label}<ExternalLink aria-hidden="true" size={15} /></a> : null}
         <a href="https://akapi80.github.io/SKBC-KIDS/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
 
@@ -741,6 +762,25 @@ function HeaderLogos({ member, photoSrc, eyebrow }: { member: Member; photoSrc: 
 function AdminBackLink({ href }: { href: string | null }) {
   if (!href) return null;
   return <a className="admin-ficha-back" href={href}>Volver al sistema</a>;
+}
+
+function resolveTechnicalArea(member: Member, configured: TechnicalAreaLink | null) {
+  const url = member.site_url?.trim() || configured?.url?.trim() || "";
+  return {
+    url,
+    label: configured?.label?.trim() || "AREA TECNICA PERSONAL"
+  };
+}
+
+function sameGrade(a: string | null | undefined, b: string | null | undefined) {
+  return normalizeGradeAlias(a) === normalizeGradeAlias(b);
+}
+
+function normalizeGradeAlias(value: string | null | undefined) {
+  return normalize(value)
+    .replace(/\s+Y\s+/g, "-")
+    .replace(/\s*-\s*/g, "-")
+    .replace("MARRON", "MARRON");
 }
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {

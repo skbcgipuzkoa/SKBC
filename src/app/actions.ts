@@ -385,6 +385,45 @@ export async function createKenshiAction(formData: FormData) {
   redirect(`/kenshis/${data.legacy_id}?saved=kenshi`);
 }
 
+export async function upsertTechnicalAreaLinkAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const memberClass = normalizeClass(String(formData.get("memberClass") ?? ""));
+  const grade = String(formData.get("grade") ?? "").trim();
+  const targetGrade = String(formData.get("targetGrade") ?? "").trim() || null;
+  const url = String(formData.get("url") ?? "").trim();
+  const label = String(formData.get("label") ?? "").trim() || "AREA TECNICA PERSONAL";
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const active = formData.get("active") === "on";
+
+  if (!memberClass || !grade || !url) {
+    redirect("/areas-tecnicas?error=link");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("technical_area_links")
+    .upsert({
+      member_class: memberClass,
+      grade,
+      target_grade: targetGrade,
+      url,
+      label,
+      notes,
+      active,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "member_class,grade" });
+
+  if (error) {
+    console.error("Error saving technical area link", error);
+    redirect("/areas-tecnicas?error=link");
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/ficha/[token]", "page");
+  redirect(`/areas-tecnicas?saved=link&class=${memberClass}`);
+}
+
 export async function createDistributionCampaignAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/");
 

@@ -5858,7 +5858,62 @@ tbody tr:hover {
   margin-top: 6px;
 }
 
+.segmented-links {
+  background: #edf4fb;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: inline-grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  margin-top: 14px;
+  padding: 4px;
+}
+
+.segmented-links a {
+  border-radius: 8px;
+  color: var(--brand-strong);
+  font-weight: 800;
+  padding: 10px 14px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.segmented-links a.active {
+  background: #ffffff;
+  box-shadow: 0 6px 14px rgba(15, 27, 45, 0.08);
+  color: var(--ink);
+}
+
+.technical-area-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.technical-area-card {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+}
+
+.technical-area-card.muted-card {
+  background: #f8fafc;
+}
+
+.technical-area-form {
+  margin-top: 0;
+}
+
+.technical-area-form .wide {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 720px) {
+  .segmented-links,
+  .technical-area-grid {
+    grid-template-columns: 1fr;
+  }
+
   .delivery-campaign,
   .delivery-member {
     align-items: stretch;

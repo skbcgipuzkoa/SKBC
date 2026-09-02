@@ -7,6 +7,7 @@ import {
   FileText,
   Bell,
   LogOut,
+  NotebookTabs,
   Newspaper,
   RefreshCw,
   Users
@@ -154,6 +155,12 @@ export default async function SistemaPage() {
             <h2>Calendario del club</h2>
             <p className="muted">Festivos y cierres que no penalizan rankings ni proximos examenes.</p>
             <span className="text-link">Editar calendario</span>
+          </a>
+          <a className="card system-card" href="/areas-tecnicas">
+            <NotebookTabs aria-hidden="true" size={22} />
+            <h2>Areas tecnicas personales</h2>
+            <p className="muted">Enlaces por grado que aparecen automaticamente en las fichas nuevas y existentes.</p>
+            <span className="text-link">Editar enlaces</span>
           </a>
         </section>
 
