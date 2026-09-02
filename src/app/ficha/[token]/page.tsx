@@ -530,7 +530,7 @@ function AdultFicha({
         </details>
       </section>
 
-      <FoldableSection title="Progreso tecnico" meta={`${technicalProgress.completed}/${technicalProgress.total} completadas`}>
+      <FoldableSection title="Progreso tecnico del grado" meta={`${technicalProgress.totalRepetitionsCapped}/${technicalProgress.totalRepetitionTarget} reps registradas`}>
         <div className="ficha-card">
           <div className="progress-grid">
             <Progress label="GOHO" value={technicalProgress.pctGoho} />
@@ -539,7 +539,9 @@ function AdultFicha({
           </div>
           <div className="ficha-fields small-fields">
             <Field label="Técnicas objetivo" value={String(technicalProgress.total)} />
-            <Field label="Completadas" value={String(technicalProgress.completed)} />
+            <Field label="Tecnicas iniciadas" value={String(technicalProgress.started)} />
+            <Field label="Tecnicas completadas" value={String(technicalProgress.completed)} />
+            <Field label="Reps registradas" value={`${technicalProgress.totalRepetitionsCapped}/${technicalProgress.totalRepetitionTarget}`} />
             <Field label="Pendientes" value={String(technicalProgress.pending.length)} />
             <Field label="Objetivo por técnica" value={`${REPETITION_GOAL} reps`} />
           </div>
@@ -1191,12 +1193,17 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
 
   const byCategory = (category: string) => details.filter((item) => item.category === category);
   const average = (items: typeof details) => items.length ? items.reduce((sum, item) => sum + item.pct, 0) / items.length : 0;
+  const totalRepetitionTarget = details.length * REPETITION_GOAL;
+  const totalRepetitionsCapped = details.reduce((sum, item) => sum + Math.min(item.repetitions, REPETITION_GOAL), 0);
   return {
     targetGrade,
     details,
     pending: details.filter((item) => !item.completed),
+    started: details.filter((item) => item.repetitions > 0).length,
     completed: details.filter((item) => item.completed).length,
     total: details.length,
+    totalRepetitionTarget,
+    totalRepetitionsCapped,
     pctGoho: average(byCategory("GOHO")),
     pctJuho: average(byCategory("JUHO")),
     pctGlobal: average(details)
