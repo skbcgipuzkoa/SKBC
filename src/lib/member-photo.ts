@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const bucketName = "member-photos";
 const maxPhotoBytes = 5 * 1024 * 1024;
+const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"];
 
 export async function uploadMemberPhoto(file: File | null, memberLegacyId: string) {
   if (!file || file.size === 0) return null;
@@ -35,11 +36,19 @@ async function ensurePhotoBucket() {
   const supabase = createAdminClient();
   const { data: buckets, error } = await supabase.storage.listBuckets();
   if (error) throw error;
-  if (buckets.some((bucket) => bucket.name === bucketName)) return;
+  if (buckets.some((bucket) => bucket.name === bucketName)) {
+    const { error: updateError } = await supabase.storage.updateBucket(bucketName, {
+      public: true,
+      allowedMimeTypes,
+      fileSizeLimit: maxPhotoBytes
+    });
+    if (updateError) throw updateError;
+    return;
+  }
 
   const { error: createError } = await supabase.storage.createBucket(bucketName, {
     public: true,
-    allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+    allowedMimeTypes,
     fileSizeLimit: maxPhotoBytes
   });
 
@@ -48,7 +57,7 @@ async function ensurePhotoBucket() {
 
 function extensionFromFile(file: File) {
   const nameExtension = file.name.match(/\.[a-zA-Z0-9]+$/)?.[0]?.toLowerCase();
-  if (nameExtension && [".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(nameExtension)) {
+  if (nameExtension && [".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"].includes(nameExtension)) {
     return nameExtension;
   }
 
@@ -56,7 +65,9 @@ function extensionFromFile(file: File) {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/webp": ".webp",
-    "image/gif": ".gif"
+    "image/gif": ".gif",
+    "image/heic": ".heic",
+    "image/heif": ".heif"
   };
   return map[file.type] ?? ".jpg";
 }
