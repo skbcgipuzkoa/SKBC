@@ -219,7 +219,7 @@ export default async function PublicFichaPage({
 
   const { data: technicalAreaLink } = await supabase
     .from("technical_area_links")
-    .select("url,label,target_grade,active")
+    .select("grade,url,label,target_grade,active")
     .eq("member_class", member.class)
     .eq("active", true)
     .returns<Array<TechnicalAreaLink & { grade: string }>>();
