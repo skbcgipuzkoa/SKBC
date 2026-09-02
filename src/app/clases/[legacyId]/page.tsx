@@ -753,6 +753,13 @@ export default async function ClaseDetailPage({
                       <span className="plan-group-count" data-plan-group-count>{groupCompleted}/{items.length}</span>
                     </summary>
                     <div className="plan-card-list">
+                      <div className="mobile-focus-head">
+                        <div>
+                          <small>Plan tecnico</small>
+                          <strong>{grade} para {targetGrade ?? "objetivo"}</strong>
+                        </div>
+                        <button type="button" data-close-plan-focus aria-label="Cerrar grado">Cerrar</button>
+                      </div>
                       {items.map((item) => (
                         <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
                           <div>

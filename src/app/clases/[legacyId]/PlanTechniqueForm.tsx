@@ -36,7 +36,17 @@ export function PlanTechniqueForm({ action, children }: PlanTechniqueFormProps) 
 
     updateCounts();
     form.addEventListener("change", updateCounts);
-    return () => form.removeEventListener("change", updateCounts);
+    const closePlanFocus = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.closest("[data-close-plan-focus]")) return;
+      target.closest<HTMLDetailsElement>("[data-plan-group]")?.removeAttribute("open");
+    };
+
+    form.addEventListener("click", closePlanFocus);
+    return () => {
+      form.removeEventListener("change", updateCounts);
+      form.removeEventListener("click", closePlanFocus);
+    };
   }, []);
 
   return (
