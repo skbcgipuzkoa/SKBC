@@ -23,6 +23,7 @@ import { adultGrades } from "@/lib/grades";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
+import { AttendanceDayForm } from "./AttendanceDayForm";
 import { PlanTechniqueForm } from "./PlanTechniqueForm";
 
 type ClassRow = {
@@ -275,7 +276,7 @@ export default async function ClaseDetailPage({
     </details>
   ) : null;
   const attendancePanel = (
-    <form action={addBulkAttendanceAction} className="attendance-day-form">
+    <AttendanceDayForm action={addBulkAttendanceAction}>
       <input type="hidden" name="classId" value={clase.id} />
       <input type="hidden" name="legacyId" value={legacyId} />
       <input type="hidden" name="returnLegacyId" value={legacyId} />
@@ -286,7 +287,7 @@ export default async function ClaseDetailPage({
           const pendingMembers = membersForGroup.filter((member) => !attendedIds.has(member.id));
           const title = dayClass.class_group === "kids" ? "Ninos" : "Adultos";
           return (
-            <details className="card attendance-group-panel" key={dayClass.id} open>
+            <details className="card attendance-group-panel" key={dayClass.id} open data-attendance-group>
               <summary>
                 <strong>{title}</strong>
                 <span>{membersForGroup.length - pendingMembers.length}/{membersForGroup.length} registrados</span>
@@ -294,6 +295,13 @@ export default async function ClaseDetailPage({
               <input type="hidden" name="groupClassIds" value={dayClass.id} />
               {!dayClass.closed ? (
                 <div className="attendance-checklist">
+                  <div className="mobile-focus-head">
+                    <div>
+                      <small>Pasar asistencia</small>
+                      <strong>{title}</strong>
+                    </div>
+                    <button type="button" data-close-attendance-focus aria-label={`Cerrar asistencia ${title}`}>Cerrar</button>
+                  </div>
                   {pendingMembers.length ? pendingMembers.map((member) => (
                     <label className="check-row" key={member.id}>
                       <input name={`memberIds:${dayClass.id}`} type="checkbox" value={member.id} />
@@ -332,7 +340,7 @@ export default async function ClaseDetailPage({
           Guardar todo y cerrar clase
         </button>
       </div>
-    </form>
+    </AttendanceDayForm>
   );
   const technicalReviewPanel = clase.class_group === "adults" && activeStep === "attendance" && !clase.closed && hasPlan ? (
     <details className="card technical-review-panel">

@@ -4588,6 +4588,21 @@ tbody tr:hover {
     display: none;
   }
 
+  .attendance-group-panel[open] {
+    background: var(--panel);
+    border-radius: 0;
+    display: block;
+    inset: 0;
+    overflow-y: auto;
+    padding: 18px;
+    position: fixed;
+    z-index: 80;
+  }
+
+  .attendance-group-panel[open] > summary {
+    display: none;
+  }
+
   .mobile-focus-head {
     align-items: center;
     background:
@@ -5150,6 +5165,21 @@ tbody tr:hover {
   }
 
   .plan-group[open] .plan-group-head {
+    display: none;
+  }
+
+  .attendance-group-panel[open] {
+    background: var(--panel);
+    border-radius: 0;
+    display: block;
+    inset: 0;
+    overflow-y: auto;
+    padding: 12px;
+    position: fixed;
+    z-index: 80;
+  }
+
+  .attendance-group-panel[open] > summary {
     display: none;
   }
 
