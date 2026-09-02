@@ -97,7 +97,10 @@ type Technique = {
 type TechnicalHistory = {
   technique_id: string | null;
   technique_name: string;
+  technique_grade: string | null;
   category: string | null;
+  class_date: string;
+  proposal_type: string | null;
   completed: boolean;
   counts_as_progression: boolean;
 };
@@ -287,7 +290,7 @@ export default async function PublicFichaPage({
       .returns<Technique[]>(),
     supabase
       .from("member_technical_history")
-      .select("technique_id,technique_name,category,completed,counts_as_progression")
+      .select("technique_id,technique_name,technique_grade,category,class_date,proposal_type,completed,counts_as_progression")
       .eq("member_id", member.id)
       .eq("completed", true)
       .returns<TechnicalHistory[]>(),
@@ -352,10 +355,11 @@ export default async function PublicFichaPage({
   ]);
 
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
+  const fullTechnicalHistory = buildFullTechnicalHistory(technicalHistory ?? []);
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} adminBackUrl={adminBackUrl} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} adminBackUrl={adminBackUrl} />;
 }
 
 function AdultFicha({
@@ -365,6 +369,7 @@ function AdultFicha({
   courses,
   activity,
   technicalProgress,
+  fullTechnicalHistory,
   ranking,
   childTransition,
   blackBeltSpecial,
@@ -378,6 +383,7 @@ function AdultFicha({
   courses: Course[];
   activity: ReturnType<typeof buildAdultActivity>;
   technicalProgress: ReturnType<typeof buildTechnicalProgress>;
+  fullTechnicalHistory: ReturnType<typeof buildFullTechnicalHistory>;
   ranking: ReturnType<typeof buildAdultRanking>;
   childTransition: ChildAdultTransition | null;
   blackBeltSpecial: BlackBeltSpecialRow[];
@@ -530,6 +536,26 @@ function AdultFicha({
             <StateBadge key={technique.id} state={technique.completed ? "COMPLETADA" : technique.repetitions > 0 ? "EN PROGRESO" : "PENDIENTE"} />
           ])}
           empty="Sin técnicas cargadas para el grado objetivo."
+        />
+      </FoldableSection>
+
+      <FoldableSection title="Historial tecnico completo" meta={`${fullTechnicalHistory.totalRepetitions} practicas · ${fullTechnicalHistory.techniques.length} tecnicas`}>
+        <div className="ficha-card ficha-fields small-fields">
+          <Field label="Practicas registradas" value={String(fullTechnicalHistory.totalRepetitions)} />
+          <Field label="Tecnicas distintas" value={String(fullTechnicalHistory.techniques.length)} />
+          <Field label="Ultima tecnica" value={fullTechnicalHistory.lastDate ? formatDate(fullTechnicalHistory.lastDate) : "-"} />
+          <Field label="Solo progreso examen" value="No, aqui cuenta todo lo entrenado" />
+        </div>
+        <ResponsiveTable
+          columns={["Tecnica", "Grado", "Categoria", "Veces", "Ultima vez"]}
+          rows={fullTechnicalHistory.techniques.map((technique) => [
+            technique.name,
+            technique.grade,
+            technique.category,
+            String(technique.repetitions),
+            formatDate(technique.lastDate)
+          ])}
+          empty="Sin historial tecnico registrado."
         />
       </FoldableSection>
 
@@ -1135,6 +1161,55 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
     pctJuho: average(byCategory("JUHO")),
     pctGlobal: average(details)
   };
+}
+
+function buildFullTechnicalHistory(history: TechnicalHistory[]) {
+  const byTechnique = new Map<string, {
+    name: string;
+    grade: string;
+    category: string;
+    repetitions: number;
+    lastDate: string | null;
+    seeded: number;
+  }>();
+
+  for (const row of history) {
+    if (!row.completed) continue;
+    const key = row.technique_id ? `id:${row.technique_id}` : `name:${normalize(row.technique_name)}`;
+    const current = byTechnique.get(key) ?? {
+      name: row.technique_name,
+      grade: row.technique_grade ?? "-",
+      category: row.category ? row.category.toUpperCase() : "-",
+      repetitions: 0,
+      lastDate: null,
+      seeded: 0
+    };
+    current.repetitions += 1;
+    if (row.proposal_type === "HISTORIAL_INICIAL") current.seeded += 1;
+    if (!current.lastDate || row.class_date > current.lastDate) current.lastDate = row.class_date;
+    byTechnique.set(key, current);
+  }
+
+  const techniques = [...byTechnique.values()].sort((a, b) => {
+    const gradeCompare = adultGradeIndex(a.grade) - adultGradeIndex(b.grade);
+    if (gradeCompare !== 0) return gradeCompare;
+    if (b.repetitions !== a.repetitions) return b.repetitions - a.repetitions;
+    return a.name.localeCompare(b.name, "es");
+  });
+
+  return {
+    techniques,
+    totalRepetitions: techniques.reduce((sum, technique) => sum + technique.repetitions, 0),
+    lastDate: techniques
+      .map((technique) => technique.lastDate)
+      .filter((date): date is string => Boolean(date))
+      .sort((a, b) => b.localeCompare(a))[0] ?? null
+  };
+}
+
+function adultGradeIndex(grade: string | null | undefined) {
+  const index = ADULT_GRADES.indexOf(normalize(grade));
+  return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
 }
 
 function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" | "taikai" }>, bonuses: AdultBonus[], closures: CalendarClosure[]) {

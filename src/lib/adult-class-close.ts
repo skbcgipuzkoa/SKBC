@@ -93,19 +93,20 @@ export async function closeAdultClass(classId: string) {
   if (planError) throw planError;
 
   const validAttendance = (attendance ?? []).filter((row) => row.members?.class === "adults");
-  const validPlan = (plan ?? []).filter((row) => row.completed && row.used_for_history && row.technique_id);
+  const completedPlan = (plan ?? []).filter((row) => row.completed && row.technique_id);
+  const progressionPlan = completedPlan.filter((row) => row.used_for_history);
 
   let assignmentCount = 0;
   let dojoHistoryCount = 0;
   let memberHistoryCount = 0;
 
-  if (validAttendance.length && validPlan.length) {
+  if (validAttendance.length && completedPlan.length) {
     const overrides = await getTechnicalOverrides(clase.id, validAttendance);
-    const insertedAssignments = await generateAssignments(clase, validAttendance, validPlan, overrides);
+    const insertedAssignments = await generateAssignments(clase, validAttendance, completedPlan, overrides);
     assignmentCount = insertedAssignments;
-    dojoHistoryCount = await generateDojoHistory(clase, validAttendance, validPlan);
+    dojoHistoryCount = await generateDojoHistory(clase, validAttendance, progressionPlan);
     memberHistoryCount = await generateMemberHistory(clase);
-    await updateTechniqueMetrics(validPlan);
+    await updateTechniqueMetrics(completedPlan);
   }
 
   const { error: updateError } = await supabase
@@ -167,7 +168,7 @@ async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[],
     for (const planId of overridePlanIds) {
       const item = planById.get(planId);
       if (!item) continue;
-      const isReview = normalize(item.proposal_type ?? item.focus) === "REPASO";
+      const isReview = isReviewForAttendant(item, attendant);
       const key = `${clase.id}::${attendant.member_id}::${item.technique_id ?? ""}`;
       if (existingKeys.has(key)) continue;
       existingKeys.add(key);
@@ -193,9 +194,9 @@ async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[],
   for (const item of plan) {
     const groupGrade = normalize(item.group_grade);
     const attendants = attendanceByGrade.get(groupGrade) ?? [];
-    const isReview = normalize(item.proposal_type ?? item.focus) === "REPASO";
 
     for (const attendant of attendants) {
+      const isReview = isReviewForAttendant(item, attendant);
       const key = `${clase.id}::${attendant.member_id}::${item.technique_id ?? ""}`;
       if (existingKeys.has(key)) continue;
       existingKeys.add(key);
@@ -222,6 +223,12 @@ async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[],
   const { error: insertError } = await supabase.from("member_technique_assignments").insert(inserts);
   if (insertError) throw insertError;
   return inserts.length;
+}
+
+function isReviewForAttendant(item: PlanRow, attendant: AttendanceRow) {
+  const isReview = normalize(item.proposal_type ?? item.focus) === "REPASO";
+  if (!isReview) return false;
+  return normalize(attendant.trained_grade ?? attendant.official_grade) !== "MINARAI";
 }
 
 async function generateDojoHistory(clase: ClassRow, attendance: AttendanceRow[], plan: PlanRow[]) {
