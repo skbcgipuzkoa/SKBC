@@ -24,12 +24,36 @@ const navItems = [
 ];
 
 export function SidebarNav({ current }: SidebarNavProps) {
+  const currentItem = navItems.find((item) => item.href === current);
+
   return (
     <aside className="sidebar">
       <div className="brand">
         <strong>SKBC Gipuzkoa</strong>
         <span>Admin privado</span>
       </div>
+      <details className="mobile-nav-menu">
+        <summary>
+          <span>
+            <small>Acceso actual</small>
+            <strong>{currentItem?.label ?? "Menu"}</strong>
+          </span>
+          <b>Accesos</b>
+        </summary>
+        <div className="mobile-nav-panel">
+          {navItems.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              aria-current={current === item.href ? "page" : undefined}
+              target={item.external ? "_blank" : undefined}
+              rel={item.external ? "noopener noreferrer external" : undefined}
+            >
+              {item.label}
+            </a>
+          ))}
+        </div>
+      </details>
       <nav className="nav" aria-label="Principal">
         {navItems.map((item) => (
           <a
