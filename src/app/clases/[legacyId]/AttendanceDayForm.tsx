@@ -19,7 +19,9 @@ export function AttendanceDayForm({ action, children }: AttendanceDayFormProps) 
       const summary = target instanceof HTMLElement ? target.closest("summary") : null;
       const group = summary?.closest<HTMLElement>("[data-attendance-group]");
       if (!group || !window.matchMedia("(max-width: 1180px)").matches) return;
+      event.preventDefault();
       group.classList.add("attendance-focus-open");
+      group.setAttribute("open", "");
     };
 
     const closeAttendanceFocus = (event: MouseEvent) => {
