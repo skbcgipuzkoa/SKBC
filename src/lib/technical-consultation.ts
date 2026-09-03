@@ -5,7 +5,7 @@ export async function loadConsultationTechniques() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("techniques")
-    .select("id,legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,active,active_in_planning")
+    .select("id,legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,active,active_in_planning,video_url,video_title,video_id,video_matched_at,video_match_status,video_match_source")
     .order("name", { ascending: true })
     .limit(1200)
     .returns<ConsultationTechnique[]>();

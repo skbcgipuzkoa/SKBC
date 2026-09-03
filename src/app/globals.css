@@ -278,6 +278,31 @@ h1 {
   padding: 10px 12px;
 }
 
+.consult-admin-tools {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.consult-admin-tools button,
+.consult-video-link {
+  align-items: center;
+  background: var(--brand);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 12px;
+}
+
+.consult-admin-tools button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .consult-searchbar input {
   border: 0;
   min-width: 0;
@@ -378,7 +403,8 @@ h1 {
 }
 
 .consult-note,
-.consult-summary {
+.consult-summary,
+.consult-summary p {
   line-height: 1.55;
   margin: 10px 0 0;
 }
@@ -390,6 +416,18 @@ h1 {
 
 .consult-summary {
   color: #27364d;
+}
+
+.consult-video-link {
+  margin-top: 12px;
+  width: fit-content;
+}
+
+.consult-missing-video {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  margin: 12px 0 0;
 }
 
 .consult-edit-form {

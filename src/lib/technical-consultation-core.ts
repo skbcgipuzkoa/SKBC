@@ -15,6 +15,12 @@ export type ConsultationTechnique = {
   summary_es: string | null;
   active: boolean;
   active_in_planning: boolean;
+  video_url: string | null;
+  video_title: string | null;
+  video_id: string | null;
+  video_matched_at: string | null;
+  video_match_status: string | null;
+  video_match_source: string | null;
 };
 
 export type ConsultationTechniqueView = ConsultationTechnique & {
@@ -80,6 +86,18 @@ export function normalize(value: string | null | undefined) {
 
 export function sameNormalized(a: string | null | undefined, b: string | null | undefined) {
   return normalize(a) === normalize(b);
+}
+
+export function normalizeTechniqueVideoKey(value: string | null | undefined) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/\bskbc\b|\bshorinji\b|\bkempo\b|\bkenpo\b|\bgoho\b|\bjuho\b/gi, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function compareConsultationTechniques(a: ConsultationTechnique, b: ConsultationTechnique) {

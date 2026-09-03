@@ -20,6 +20,11 @@ export async function PATCH(request: Request) {
     variant_note: String(formData.get("variantNote") ?? "").trim() || null,
     category: normalizeTechniqueCategoryInput(String(formData.get("category") ?? "")),
     summary_es: String(formData.get("summaryEs") ?? "").trim(),
+    video_url: String(formData.get("videoUrl") ?? "").trim() || null,
+    video_title: String(formData.get("videoTitle") ?? "").trim() || null,
+    video_id: extractYoutubeVideoId(String(formData.get("videoUrl") ?? "")),
+    video_match_status: String(formData.get("videoUrl") ?? "").trim() ? "manual" : "pending",
+    video_match_source: String(formData.get("videoUrl") ?? "").trim() ? "manual" : null,
     active,
     active_in_planning: active && formData.get("activeInPlanning") === "on",
     updated_at: new Date().toISOString()
@@ -34,7 +39,7 @@ export async function PATCH(request: Request) {
     .from("techniques")
     .update(payload)
     .eq("id", id)
-    .select("id,legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,active,active_in_planning")
+    .select("id,legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,active,active_in_planning,video_url,video_title,video_id,video_matched_at,video_match_status,video_match_source")
     .single<ConsultationTechnique>();
 
   if (error || !data) {
@@ -51,6 +56,17 @@ export async function PATCH(request: Request) {
       effective_summary_es: effectiveTechniqueSummary(data)
     }
   });
+}
+
+function extractYoutubeVideoId(value: string) {
+  const text = value.trim();
+  if (!text) return null;
+  const watch = text.match(/[?&]v=([^&]+)/);
+  if (watch?.[1]) return watch[1];
+  const short = text.match(/youtu\.be\/([^?&/]+)/);
+  if (short?.[1]) return short[1];
+  const shorts = text.match(/youtube\.com\/shorts\/([^?&/]+)/);
+  return shorts?.[1] ?? null;
 }
 
 function normalizeTechniqueCategoryInput(value: string) {

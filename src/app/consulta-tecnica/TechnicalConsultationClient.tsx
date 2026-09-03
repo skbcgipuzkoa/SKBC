@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CheckCircle2, Filter, Pencil, Save, Search, X } from "lucide-react";
+import { CheckCircle2, ExternalLink, Filter, Pencil, Play, RefreshCw, Save, Search, X } from "lucide-react";
 import { adultGrades } from "@/lib/grades";
 import { detectVariants, filterConsultationTechniques, type ConsultationTechniqueView } from "@/lib/technical-consultation-core";
 
@@ -38,6 +38,7 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
   const [editingId, setEditingId] = useState<string | null>(null);
   const [savedName, setSavedName] = useState<string | null>(initialSaved ? "Tecnica guardada correctamente" : null);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const visible = useMemo(() => filterConsultationTechniques(techniques, filters), [techniques, filters]);
@@ -62,6 +63,8 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
       variant_note: String(formData.get("variantNote") ?? "").trim() || null,
       category: String(formData.get("category") ?? "").trim(),
       summary_es: String(formData.get("summaryEs") ?? "").trim(),
+      video_url: String(formData.get("videoUrl") ?? "").trim() || null,
+      video_title: String(formData.get("videoTitle") ?? "").trim() || null,
       active,
       active_in_planning: active && formData.get("activeInPlanning") === "on",
       effective_summary_es: String(formData.get("summaryEs") ?? "").trim()
@@ -89,6 +92,21 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
     });
   }
 
+  async function syncYoutubeVideos() {
+    setSyncing(true);
+    setError(null);
+    setSavedName("Buscando videos en YouTube...");
+    const response = await fetch("/api/consulta-tecnica/youtube-sync", { method: "POST" });
+    const result = await response.json();
+    setSyncing(false);
+    if (!response.ok) {
+      setSavedName(null);
+      setError(result.error ?? "No se ha podido buscar en YouTube.");
+      return;
+    }
+    setSavedName(`YouTube revisado: ${result.scannedVideos} videos, ${result.updated} tecnicas enlazadas. Recarga para ver los nuevos enlaces.`);
+  }
+
   return (
     <div className="technical-consultation">
       <section className="consult-hero">
@@ -99,6 +117,15 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
         </div>
         <span className="consult-mode">{canEdit ? "Modo instructor" : maxGrade ? `Modo alumno - hasta ${maxGrade}` : "Modo alumno - entra desde tu ficha"}</span>
       </section>
+
+      {canEdit ? (
+        <section className="consult-admin-tools">
+          <button type="button" onClick={syncYoutubeVideos} disabled={syncing}>
+            <RefreshCw aria-hidden="true" size={16} />
+            {syncing ? "Buscando..." : "Buscar videos en YouTube"}
+          </button>
+        </section>
+      ) : null}
 
       {savedName ? <p className="save-ok consult-toast"><CheckCircle2 aria-hidden="true" size={18} />{savedName}</p> : null}
       {error ? <p className="form-error consult-toast">{error}</p> : null}
@@ -144,6 +171,8 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
                 <label>Base/familia<input name="baseName" defaultValue={technique.base_name ?? ""} /></label>
                 <label>Variante<input name="variant" defaultValue={technique.variant ?? ""} /></label>
                 <label>Nota variante<input name="variantNote" defaultValue={technique.variant_note ?? ""} /></label>
+                <label>URL video<input name="videoUrl" defaultValue={technique.video_url ?? ""} placeholder="https://www.youtube.com/watch?v=..." /></label>
+                <label>Titulo video<input name="videoTitle" defaultValue={technique.video_title ?? ""} /></label>
                 <label className="consult-wide">Descripcion<textarea name="summaryEs" rows={4} defaultValue={technique.effective_summary_es ?? ""} /></label>
                 <label className="checkbox-field"><input name="active" type="checkbox" defaultChecked={technique.active} />Activa</label>
                 <label className="checkbox-field"><input name="activeInPlanning" type="checkbox" defaultChecked={technique.active_in_planning} />Entra en plan tecnico</label>
@@ -165,9 +194,21 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
                   {technique.base_name ? <span>Base: {technique.base_name}</span> : null}
                   {detectVariants(technique).map((variant) => <span key={variant}>{variant}</span>)}
                   {technique.active_in_planning ? <span>Plan tecnico</span> : null}
+                  {technique.video_match_status === "auto" ? <span>Video auto</span> : null}
                 </div>
                 {technique.variant_note ? <p className="consult-note">{technique.variant_note}</p> : null}
-                <p className="consult-summary">{technique.effective_summary_es || "Descripcion pendiente de completar."}</p>
+                <div className="consult-summary">
+                  <p>{technique.effective_summary_es || "Descripcion pendiente de completar."}</p>
+                  {technique.video_url ? (
+                    <a className="consult-video-link" href={technique.video_url} target="_blank" rel="noopener noreferrer">
+                      <Play aria-hidden="true" size={16} />
+                      Ver video
+                      <ExternalLink aria-hidden="true" size={14} />
+                    </a>
+                  ) : canEdit ? (
+                    <p className="consult-missing-video">Sin video enlazado</p>
+                  ) : null}
+                </div>
               </>
             )}
           </article>
