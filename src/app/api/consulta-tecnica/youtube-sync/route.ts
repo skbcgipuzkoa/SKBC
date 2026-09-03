@@ -14,24 +14,30 @@ type YoutubeVideo = {
   publishedAt: string | null;
 };
 
+type YoutubeLoadResult = {
+  source: "oauth" | "api_key" | "feed";
+  videos: YoutubeVideo[];
+};
+
 export async function POST() {
   if (!(await hasInternalAccess())) {
     return NextResponse.json({ error: "Acceso interno requerido." }, { status: 403 });
   }
 
-  let videos: YoutubeVideo[];
+  let youtubeResult: YoutubeLoadResult;
   let techniques: ConsultationTechnique[];
   try {
-    [videos, techniques] = await Promise.all([loadYoutubeVideos(), loadUnlinkedTechniques()]);
+    [youtubeResult, techniques] = await Promise.all([loadYoutubeVideos(), loadUnlinkedTechniques()]);
   } catch (error) {
     console.error("Error loading YouTube videos for technique sync", error);
     return NextResponse.json({ error: "No se ha podido leer el canal de YouTube." }, { status: 502 });
   }
 
+  const videos = youtubeResult.videos;
   const matches = buildMatches(techniques, videos);
 
   if (!matches.length) {
-    return NextResponse.json({ scannedVideos: videos.length, matched: 0, updated: 0 });
+    return NextResponse.json({ source: youtubeResult.source, scannedVideos: videos.length, matched: 0, updated: 0 });
   }
 
   const supabase = createAdminClient();
@@ -55,7 +61,7 @@ export async function POST() {
   revalidatePath("/consulta-tecnica");
   revalidatePath("/tecnicas");
 
-  return NextResponse.json({ scannedVideos: videos.length, matched: matches.length, updated });
+  return NextResponse.json({ source: youtubeResult.source, scannedVideos: videos.length, matched: matches.length, updated });
 }
 
 async function loadUnlinkedTechniques() {
@@ -72,9 +78,71 @@ async function loadUnlinkedTechniques() {
 }
 
 async function loadYoutubeVideos() {
+  const oauthRefreshToken = process.env.YOUTUBE_OAUTH_REFRESH_TOKEN?.trim();
+  const oauthClientId = process.env.YOUTUBE_OAUTH_CLIENT_ID?.trim() || process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+  const oauthClientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET?.trim() || process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+  if (oauthRefreshToken && oauthClientId && oauthClientSecret) {
+    const accessToken = await refreshYoutubeAccessToken(oauthClientId, oauthClientSecret, oauthRefreshToken);
+    return { source: "oauth" as const, videos: await loadYoutubeVideosFromOAuth(accessToken) };
+  }
+
   const apiKey = process.env.YOUTUBE_API_KEY?.trim();
-  if (apiKey) return loadYoutubeVideosFromApi(apiKey);
-  return loadYoutubeVideosFromFeed();
+  if (apiKey) return { source: "api_key" as const, videos: await loadYoutubeVideosFromApi(apiKey) };
+  return { source: "feed" as const, videos: await loadYoutubeVideosFromFeed() };
+}
+
+async function refreshYoutubeAccessToken(clientId: string, clientSecret: string, refreshToken: string) {
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
+    grant_type: "refresh_token"
+  });
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+    next: { revalidate: 0 }
+  });
+  if (!response.ok) throw new Error(`YouTube OAuth token error ${response.status}`);
+  const token = await response.json();
+  if (!token.access_token) throw new Error("YouTube OAuth token missing access_token");
+  return String(token.access_token);
+}
+
+async function loadYoutubeVideosFromOAuth(accessToken: string) {
+  const videos: YoutubeVideo[] = [];
+  let pageToken = "";
+
+  do {
+    const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
+    url.searchParams.set("part", "snippet,status");
+    url.searchParams.set("playlistId", uploadsPlaylistId);
+    url.searchParams.set("maxResults", "50");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${accessToken}` },
+      next: { revalidate: 0 }
+    });
+    if (!response.ok) throw new Error(`YouTube OAuth API error ${response.status}`);
+    const body = await response.json();
+    for (const item of body.items ?? []) {
+      const videoId = item.snippet?.resourceId?.videoId;
+      const title = item.snippet?.title;
+      if (videoId && title && title !== "Private video" && title !== "Deleted video") {
+        videos.push({
+          id: videoId,
+          title,
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          publishedAt: item.snippet?.publishedAt ?? null
+        });
+      }
+    }
+    pageToken = body.nextPageToken ?? "";
+  } while (pageToken);
+
+  return videos;
 }
 
 async function loadYoutubeVideosFromApi(apiKey: string) {
