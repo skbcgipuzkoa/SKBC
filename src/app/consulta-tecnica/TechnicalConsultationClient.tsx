@@ -16,6 +16,7 @@ type Props = {
   initialTechniques: ConsultationTechniqueView[];
   options: Options;
   canEdit: boolean;
+  maxGrade: string | null;
   initialSaved?: boolean;
 };
 
@@ -31,7 +32,7 @@ type Filters = {
 const emptyFilters: Filters = { q: "", grade: "", category: "", base: "", variant: "", planning: "" };
 const categoryOptions = ["goho", "juho", "seiho", "howa", "ukemi", "randori", "embu", "hokei", "kihon"];
 
-export function TechnicalConsultationClient({ initialTechniques, options, canEdit, initialSaved }: Props) {
+export function TechnicalConsultationClient({ initialTechniques, options, canEdit, maxGrade, initialSaved }: Props) {
   const [techniques, setTechniques] = useState(initialTechniques);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -96,7 +97,7 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
           <h1>Consulta tecnica</h1>
           <p>Programa actualizado desde Supabase para buscar durante clase, sin depender del Excel antiguo.</p>
         </div>
-        <span className="consult-mode">{canEdit ? "Modo instructor" : "Modo alumno"}</span>
+        <span className="consult-mode">{canEdit ? "Modo instructor" : maxGrade ? `Modo alumno - hasta ${maxGrade}` : "Modo alumno - entra desde tu ficha"}</span>
       </section>
 
       {savedName ? <p className="save-ok consult-toast"><CheckCircle2 aria-hidden="true" size={18} />{savedName}</p> : null}
@@ -126,6 +127,12 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
       <div className="consult-count"><strong>{visible.length}</strong> tecnicas visibles</div>
 
       <section className="consult-card-list">
+        {!canEdit && !maxGrade ? (
+          <article className="consult-card consult-empty">
+            <h2>Acceso desde ficha personal</h2>
+            <p className="consult-summary">Para ver la consulta tecnica de alumno, abre el boton CONSULTAR TECNICAS desde tu ficha. Asi el sistema limita automaticamente el programa a tu grado objetivo y todos los anteriores.</p>
+          </article>
+        ) : null}
         {visible.map((technique) => (
           <article className="consult-card" key={technique.id}>
             {editingId === technique.id && canEdit ? (

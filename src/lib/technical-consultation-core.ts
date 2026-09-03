@@ -30,6 +30,12 @@ export type ConsultationFilters = {
   planning?: string;
 };
 
+export function limitTechniquesByMaxGrade(techniques: ConsultationTechniqueView[], maxGrade: string | null | undefined) {
+  const maxOrder = gradeOrder(maxGrade ?? "");
+  if (maxOrder === 999) return [];
+  return techniques.filter((technique) => gradeOrder(technique.grade) <= maxOrder);
+}
+
 export function buildConsultationOptions(techniques: ConsultationTechniqueView[]) {
   return {
     grades: adultGrades.filter((grade) => techniques.some((technique) => sameNormalized(technique.grade, grade))),
@@ -78,6 +84,10 @@ export function sameNormalized(a: string | null | undefined, b: string | null | 
 
 export function compareConsultationTechniques(a: ConsultationTechnique, b: ConsultationTechnique) {
   return gradeOrder(a.grade) - gradeOrder(b.grade) || a.name.localeCompare(b.name);
+}
+
+export function isKnownAdultGrade(grade: string | null | undefined) {
+  return gradeOrder(grade ?? "") !== 999;
 }
 
 function gradeOrder(grade: string) {
