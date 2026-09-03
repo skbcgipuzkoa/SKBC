@@ -104,7 +104,10 @@ async function refreshYoutubeAccessToken(clientId: string, clientSecret: string,
     body,
     next: { revalidate: 0 }
   });
-  if (!response.ok) throw new Error(`YouTube OAuth token error ${response.status}`);
+  if (!response.ok) {
+    const detail = await safeReadYoutubeError(response);
+    throw new Error(`YouTube OAuth token error ${response.status}${detail ? `: ${detail}` : ""}`);
+  }
   const token = await response.json();
   if (!token.access_token) throw new Error("YouTube OAuth token missing access_token");
   return String(token.access_token);
@@ -229,4 +232,15 @@ function decodeXml(value: string) {
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
+}
+
+async function safeReadYoutubeError(response: Response) {
+  try {
+    const body = await response.json();
+    const error = typeof body?.error === "string" ? body.error : "";
+    const description = typeof body?.error_description === "string" ? body.error_description : "";
+    return [error, description].filter(Boolean).join(" - ");
+  } catch {
+    return "";
+  }
 }
