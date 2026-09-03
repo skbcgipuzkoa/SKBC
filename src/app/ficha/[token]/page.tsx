@@ -428,7 +428,7 @@ function AdultFicha({
       <section className="ficha-actions">
         {technicalArea.url ? <a href={technicalArea.url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />{technicalArea.label}<ExternalLink aria-hidden="true" size={15} /></a> : null}
         <a href="https://akapi80.github.io/Juego-SKBC/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
-        <a href="https://stirring-madeleine-467faf.netlify.app/technique-consultation/" target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
+        <a href="/consulta-tecnica" target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
 
       <section className="ficha-section">
