@@ -4,14 +4,22 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const env = loadEnvFile(".env.local");
-const supabaseUrl = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL);
-const serviceRoleKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY);
-const targetDir = cleanEnv(process.env.SKBC_LOCAL_BACKUP_DIR ?? env.SKBC_LOCAL_BACKUP_DIR)
+const env = {
+  ...loadEnvFile(".env.local"),
+  ...loadEnvFile(".env.vercel.local")
+};
+const supabaseUrl = firstValidEnv(env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_URL);
+const serviceRoleKey = firstValidEnv(env.SUPABASE_SERVICE_ROLE_KEY, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const targetDir = firstValidEnv(env.SKBC_LOCAL_BACKUP_DIR, process.env.SKBC_LOCAL_BACKUP_DIR)
   || "C:\\Users\\alvar\\Desktop\\BACKUPS SKBC";
 
 if (!supabaseUrl || !serviceRoleKey) {
   console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
+  process.exit(1);
+}
+
+if (!/^https?:\/\//i.test(supabaseUrl)) {
+  console.error("NEXT_PUBLIC_SUPABASE_URL must start with https://.");
   process.exit(1);
 }
 
@@ -81,6 +89,14 @@ function loadEnvFile(filePath) {
 
 function cleanEnv(value) {
   return value?.replace(/^\uFEFF/, "").trim().replace(/^"|"$/g, "");
+}
+
+function firstValidEnv(...values) {
+  for (const value of values) {
+    const cleaned = cleanEnv(value);
+    if (cleaned && cleaned !== "[SENSITIVE]" && cleaned !== "TU_TOKEN") return cleaned;
+  }
+  return undefined;
 }
 
 function formatBytes(value) {
