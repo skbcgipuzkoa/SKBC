@@ -49,7 +49,7 @@ export default async function PedidosCinturonesPage({
   searchParams: Promise<{ saved?: string; error?: string; status?: string; q?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;

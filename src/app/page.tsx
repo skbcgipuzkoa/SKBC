@@ -98,7 +98,7 @@ export default async function Home({
     const cookieStore = await cookies();
     const studentReturn = safeStudentFichaReturn(cookieStore.get("skbc_student_ficha_return")?.value);
     if (studentReturn && !params.error) redirect(studentReturn);
-    return <LoginHome error={params.error} />;
+    return <PublicHome />;
   }
 
   const supabase = createAdminClient();

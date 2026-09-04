@@ -24,7 +24,7 @@ export default async function TechnicalAreasPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string; class?: string }>;
 }) {
-  if (!(await hasInternalAccess())) redirect("/admin");
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
 
   const params = await searchParams;
   const supabase = createAdminClient();

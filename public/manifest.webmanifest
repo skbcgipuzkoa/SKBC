@@ -2,12 +2,12 @@
   "name": "SKBC Gipuzkoa Oficial",
   "short_name": "SKBC",
   "description": "Plataforma oficial de gestion y fichas de SKBC Gipuzkoa",
-  "start_url": "/",
+  "start_url": "/skbc-interno",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#0057b8",
-  "orientation": "portrait",
+  "orientation": "any",
   "icons": [
     {
       "src": "/icon-192.png",

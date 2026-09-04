@@ -47,7 +47,7 @@ const systemItems = [
 
 export default async function SistemaPage() {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const supabase = createAdminClient();

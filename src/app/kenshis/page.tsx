@@ -28,7 +28,7 @@ export default async function KenshisPage({
   searchParams: Promise<{ q?: string; class?: string; status?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;

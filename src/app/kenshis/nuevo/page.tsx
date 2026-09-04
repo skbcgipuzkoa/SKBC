@@ -11,7 +11,7 @@ export default async function NewKenshiPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const notices = await searchParams;

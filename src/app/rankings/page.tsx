@@ -92,7 +92,7 @@ export default async function RankingsPage({
   searchParams: Promise<{ saved?: string; error?: string; view?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;

@@ -52,7 +52,7 @@ export default async function NotificacionesPage({
   searchParams: Promise<{ saved?: string; error?: string; detail?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;

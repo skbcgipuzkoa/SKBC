@@ -34,7 +34,7 @@ const novedades = [
 
 export default async function NovedadesPage() {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   return (

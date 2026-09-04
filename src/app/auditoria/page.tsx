@@ -58,7 +58,7 @@ const countItems = [
 
 export default async function AuditoriaPage({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string }> }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;

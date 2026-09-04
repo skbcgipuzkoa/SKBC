@@ -32,7 +32,7 @@ export default async function ProximosExamenesPage({
   searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;

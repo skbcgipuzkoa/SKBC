@@ -31,7 +31,7 @@ export default async function ClasesPage({
   searchParams: Promise<{ saved?: string; month?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;

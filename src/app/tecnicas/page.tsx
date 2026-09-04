@@ -33,7 +33,7 @@ export default async function TecnicasPage({
   searchParams: Promise<{ q?: string; grade?: string; category?: string; status?: string; edit?: string; saved?: string; error?: string; technique?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;

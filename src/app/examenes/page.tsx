@@ -34,7 +34,7 @@ export default async function ExamenesPage({
   searchParams: Promise<{ error?: string; saved?: string; detail?: string; class?: string; status?: string; q?: string; member?: string; from?: string; to?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/admin");
+    redirect("/skbc-interno");
   }
 
   const params = await searchParams;
