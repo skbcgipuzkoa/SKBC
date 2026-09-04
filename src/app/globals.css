@@ -325,6 +325,27 @@ h1 {
   white-space: nowrap;
 }
 
+.consult-hero-actions {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.consult-back-link {
+  align-items: center;
+  background: var(--brand);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 7px;
+  min-height: 40px;
+  padding: 9px 13px;
+  white-space: nowrap;
+}
+
 .consult-toast {
   align-items: center;
   display: flex;
@@ -594,6 +615,16 @@ h1 {
   .consult-hero {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .consult-hero-actions {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .consult-back-link {
+    justify-content: center;
+    width: 100%;
   }
 
   .consult-hero h1 {

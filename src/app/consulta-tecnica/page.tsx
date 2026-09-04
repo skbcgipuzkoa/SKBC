@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ConsultaTecnicaPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; maxGrade?: string }>;
+  searchParams: Promise<{ saved?: string; maxGrade?: string; returnTo?: string }>;
 }) {
   noStore();
   const [params, techniques, canEdit] = await Promise.all([
@@ -20,6 +20,7 @@ export default async function ConsultaTecnicaPage({
   ]);
 
   const maxGrade = params.maxGrade && isKnownAdultGrade(params.maxGrade) ? params.maxGrade : null;
+  const returnToFicha = canEdit ? null : safeFichaReturnUrl(params.returnTo);
   const visibleTechniques = canEdit ? techniques : limitTechniquesByMaxGrade(techniques, maxGrade);
   const content = (
     <TechnicalConsultationClient
@@ -27,6 +28,7 @@ export default async function ConsultaTecnicaPage({
       options={buildConsultationOptions(visibleTechniques)}
       canEdit={canEdit}
       maxGrade={canEdit ? null : maxGrade}
+      returnToFicha={returnToFicha}
       initialSaved={params.saved === "technique"}
     />
   );
@@ -47,4 +49,15 @@ export default async function ConsultaTecnicaPage({
       {content}
     </main>
   );
+}
+
+function safeFichaReturnUrl(value?: string) {
+  if (!value) return null;
+  try {
+    const decoded = decodeURIComponent(value);
+    if (/^\/ficha\/[A-Za-z0-9_-]+$/.test(decoded)) return decoded;
+  } catch {
+    return null;
+  }
+  return null;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CheckCircle2, ExternalLink, Filter, Pencil, Play, RefreshCw, Save, Search, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ExternalLink, Filter, Pencil, Play, RefreshCw, Save, Search, X } from "lucide-react";
 import { adultGrades } from "@/lib/grades";
 import { detectVariants, filterConsultationTechniques, type ConsultationTechniqueView } from "@/lib/technical-consultation-core";
 
@@ -17,6 +17,7 @@ type Props = {
   options: Options;
   canEdit: boolean;
   maxGrade: string | null;
+  returnToFicha?: string | null;
   initialSaved?: boolean;
 };
 
@@ -32,7 +33,7 @@ type Filters = {
 const emptyFilters: Filters = { q: "", grade: "", category: "", base: "", variant: "", planning: "" };
 const categoryOptions = ["goho", "juho", "seiho", "howa", "ukemi", "randori", "embu", "hokei", "kihon"];
 
-export function TechnicalConsultationClient({ initialTechniques, options, canEdit, maxGrade, initialSaved }: Props) {
+export function TechnicalConsultationClient({ initialTechniques, options, canEdit, maxGrade, returnToFicha, initialSaved }: Props) {
   const [techniques, setTechniques] = useState(initialTechniques);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -116,7 +117,15 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
           <h1>Consulta tecnica</h1>
           <p>Programa actualizado desde Supabase para buscar durante clase, sin depender del Excel antiguo.</p>
         </div>
-        <span className="consult-mode">{canEdit ? "Modo instructor" : maxGrade ? `Modo alumno - hasta ${maxGrade}` : "Modo alumno - entra desde tu ficha"}</span>
+        <div className="consult-hero-actions">
+          <span className="consult-mode">{canEdit ? "Modo instructor" : maxGrade ? `Modo alumno - hasta ${maxGrade}` : "Modo alumno - entra desde tu ficha"}</span>
+          {returnToFicha ? (
+            <a className="consult-back-link" href={returnToFicha}>
+              <ArrowLeft aria-hidden="true" size={16} />
+              Volver a mi ficha
+            </a>
+          ) : null}
+        </div>
       </section>
 
       {canEdit ? (

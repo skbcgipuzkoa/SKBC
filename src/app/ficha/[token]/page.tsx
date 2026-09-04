@@ -375,7 +375,7 @@ export default async function PublicFichaPage({
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} />;
+  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} />;
 }
 
 function AdultFicha({
@@ -392,7 +392,8 @@ function AdultFicha({
   showBusen,
   shakujoAttendance,
   technicalArea,
-  adminBackUrl
+  adminBackUrl,
+  fichaUrl
 }: {
   member: Member;
   attendance: Attendance[];
@@ -408,6 +409,7 @@ function AdultFicha({
   shakujoAttendance: ShakujoAttendanceRow[];
   technicalArea: { url: string; label: string };
   adminBackUrl: string | null;
+  fichaUrl: string;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const nacionales = courses.filter((course) => course.kind === "national");
@@ -428,7 +430,7 @@ function AdultFicha({
       <section className="ficha-actions">
         {technicalArea.url ? <a href={technicalArea.url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />{technicalArea.label}<ExternalLink aria-hidden="true" size={15} /></a> : null}
         <a href="https://akapi80.github.io/Juego-SKBC/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
-        <a href={`/consulta-tecnica?maxGrade=${encodeURIComponent(technicalProgress.targetGrade || member.grade || "MINARAI")}`} target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
+        <a href={`/consulta-tecnica?maxGrade=${encodeURIComponent(technicalProgress.targetGrade || member.grade || "MINARAI")}&returnTo=${encodeURIComponent(fichaUrl)}`} target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
 
       <section className="ficha-section">
