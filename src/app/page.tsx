@@ -92,7 +92,7 @@ export default async function Home({
   searchParams: Promise<{ error?: string }>;
 }) {
   const [isAuthed, params] = await Promise.all([hasInternalAccess(), searchParams]);
-  if (!isAuthed) return <LoginHome error={params.error} />;
+  if (!isAuthed) return <PublicHome />;
 
   const supabase = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -367,7 +367,25 @@ function combinedClassName(adults: ClassPreview, kids: ClassPreview) {
   return "Clase adultos + ninos";
 }
 
-function LoginHome({ error }: { error?: string }) {
+function PublicHome() {
+  return (
+    <main className="public-home">
+      <section className="public-home-card">
+        <div className="official-lockup public-lockup">
+          <img src="/skbc-icon.png" alt="SKBC Gipuzkoa" />
+        </div>
+        <p className="eyebrow">SKBC Gipuzkoa</p>
+        <h1>Zona privada del club</h1>
+        <p>
+          Las fichas personales se consultan desde el enlace privado de cada kenshi. Si necesitas acceder a tu ficha
+          o crees que hay un error, contacta con el club.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+export function LoginHome({ error }: { error?: string }) {
   return (
     <div className="shell">
       <SidebarNav current="/" />

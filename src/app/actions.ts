@@ -21,7 +21,7 @@ export async function loginAction(formData: FormData) {
   const validCodes = [process.env.SKBC_INTERNAL_ACCESS_CODE, "SKBC2026"].filter(Boolean);
 
   if (!validCodes.includes(code)) {
-    redirect("/?error=1");
+    redirect("/admin?error=1");
   }
 
   await grantInternalAccess();
@@ -30,7 +30,7 @@ export async function loginAction(formData: FormData) {
 
 export async function logoutAction() {
   await revokeInternalAccess();
-  redirect("/");
+  redirect("/admin");
 }
 
 export async function recalculateAllExamStatusesAction() {

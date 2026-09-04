@@ -843,6 +843,51 @@ h1 {
   width: 54px;
 }
 
+.public-home {
+  align-items: center;
+  background:
+    radial-gradient(circle at top left, rgba(0, 87, 184, 0.12), transparent 34%),
+    linear-gradient(180deg, #f8fbff 0%, #eef3f8 100%);
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.public-home-card {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 22px 50px rgba(15, 27, 45, 0.12);
+  margin: 0 auto;
+  max-width: 640px;
+  padding: 34px;
+  text-align: center;
+}
+
+.public-lockup {
+  justify-content: center;
+  margin: 0 auto 18px;
+}
+
+.public-lockup img {
+  border-radius: 14px;
+  height: 86px;
+  width: 86px;
+}
+
+.public-home-card h1 {
+  font-size: clamp(34px, 6vw, 58px);
+  margin-top: 10px;
+}
+
+.public-home-card p:last-child {
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.55;
+  margin: 16px auto 0;
+  max-width: 520px;
+}
+
 .login-panel h2 {
   font-size: 18px;
   margin: 8px 0;
