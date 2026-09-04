@@ -1778,6 +1778,92 @@ tbody tr:hover {
   padding: 5px 8px;
 }
 
+.technique-grade-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.technique-grade-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.technique-grade-panel > summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto auto 1fr auto;
+  list-style: none;
+  min-height: 64px;
+  padding: 14px 16px;
+}
+
+.technique-grade-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.technique-grade-panel > summary::after {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  content: "+";
+  display: inline-grid;
+  font-size: 22px;
+  font-weight: 900;
+  height: 36px;
+  place-items: center;
+  width: 36px;
+}
+
+.technique-grade-panel[open] > summary::after {
+  content: "-";
+}
+
+.technique-grade-panel > summary strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.technique-grade-panel > summary small {
+  color: var(--muted);
+  justify-self: end;
+}
+
+.technique-card-grid {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 14px;
+}
+
+.technique-admin-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.technique-admin-card > strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.technique-card-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
 .technical-review-grid {
   display: grid;
   gap: 10px;
@@ -5629,6 +5715,20 @@ tbody tr:hover {
     .ranking-columns,
     .public-profile {
     grid-template-columns: 1fr;
+  }
+
+  .technique-card-grid {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .technique-grade-panel > summary {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .technique-grade-panel > summary small {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 
   .stats {

@@ -71,6 +71,12 @@ export default async function TecnicasPage({
       average: rows.length ? Math.round(totalRepetitions / rows.length) : 0
     };
   });
+  const visibleByGrade = grades
+    .map((grade) => ({
+      grade,
+      rows: visibleTechniques.filter((tecnica) => normalize(tecnica.grade) === normalize(grade))
+    }))
+    .filter((group) => group.rows.length);
 
   return (
     <div className="shell">
@@ -228,113 +234,130 @@ export default async function TecnicasPage({
         </section>
 
         <div className="section-heading-row">
-          <h2 className="section-title">Listado tecnico</h2>
+          <div>
+            <h2 className="section-title">Programa por grados</h2>
+            <p className="muted">Despliega solo el grado que quieras revisar o editar.</p>
+          </div>
           <span className="pill">{visibleTechniques.length} visibles</span>
         </div>
-        <section className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Grado</th>
-                <th>Tecnica</th>
-                <th>Categoria</th>
-                <th>Repeticiones</th>
-                <th>Ultima vez</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleTechniques.length ? visibleTechniques.map((tecnica) => (
-                <tr
-                  className={params.technique === tecnica.legacy_id ? "saved-row" : undefined}
-                  key={`${tecnica.legacy_id ?? tecnica.name}-${params.saved ?? ""}-${params.technique ?? ""}-${params.edit ?? ""}`}
-                >
-                  <td data-label="ID">{tecnica.legacy_id}</td>
-                  <td data-label="Grado"><span className={`grade-chip grade-${slugGrade(tecnica.grade)}`}>{tecnica.grade}</span></td>
-                  <td data-label="Tecnica">
-                    <strong>{tecnica.name}</strong>
-                    <div className="technique-meta-line">
-                      {tecnica.base_name ? <span>Base: {tecnica.base_name}</span> : null}
-                      {tecnica.variant ? <span>Variante: {tecnica.variant}</span> : null}
-                      {tecnica.variant_note ? <span>{tecnica.variant_note}</span> : null}
-                    </div>
-                    {effectiveSummary(tecnica) ? <p className="technique-summary compact">{effectiveSummary(tecnica)}</p> : null}
-                    <details className="inline-edit-details" open={params.saved !== "technique" && params.edit === tecnica.legacy_id}>
-                      <summary>Editar tecnica</summary>
-                      <form action={updateTechniqueAction} className="technique-edit-form">
-                        <input type="hidden" name="legacyId" value={tecnica.legacy_id ?? ""} />
-                        <input type="hidden" name="returnPath" value={returnPath} />
-                        <label>
-                          Nombre
-                          <input name="name" defaultValue={tecnica.name} required />
-                        </label>
-                        <label>
-                          Tecnica base / familia
-                          <input name="baseName" defaultValue={tecnica.base_name ?? ""} placeholder="Ej. Juji gote" />
-                        </label>
-                        <label>
-                          Variante
-                          <input name="variant" defaultValue={tecnica.variant ?? ""} placeholder="Katate, Morote, Ryote, Ura..." />
-                        </label>
-                        <label>
-                          Nota variante
-                          <input name="variantNote" defaultValue={tecnica.variant_note ?? ""} placeholder="Agarre 1 a 1, por fuera..." />
-                        </label>
-                        <label>
-                          Grado
-                          <select name="grade" defaultValue={tecnica.grade}>
-                            {adultGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-                            {!adultGrades.some((grade) => normalize(grade) === normalize(tecnica.grade)) ? <option value={tecnica.grade}>{tecnica.grade}</option> : null}
-                          </select>
-                        </label>
-                        <label>
-                          Categoria
-                          <select name="category" defaultValue={tecnica.category}>
-                            {["goho", "juho", "seiho", "ukemi", "randori", "embu", "hokei", "kihon"].map((category) => (
-                              <option key={category} value={category}>{category}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Tipo contenido
-                          <input name="contentType" defaultValue={tecnica.content_type ?? ""} />
-                        </label>
-                        <label className="checkbox-field">
-                          <input name="active" type="checkbox" defaultChecked={tecnica.active} />
-                          Activa
-                        </label>
-                        <label className="checkbox-field">
-                          <input name="activeInPlanning" type="checkbox" defaultChecked={tecnica.active_in_planning} />
-                          Entra en plan tecnico
-                        </label>
-                        <label className="wide">
-                          Resumen en castellano
-                          <textarea name="summaryEs" rows={4} defaultValue={effectiveSummary(tecnica) ?? ""} placeholder="Explicacion breve para el plan tecnico" />
-                        </label>
-                        <SubmitButton pendingLabel="Guardando tecnica...">Guardar tecnica</SubmitButton>
-                      </form>
-                    </details>
-                  </td>
-                  <td data-label="Categoria">{tecnica.category}{tecnica.content_type ? ` - ${tecnica.content_type}` : ""}</td>
-                  <td data-label="Repeticiones">{tecnica.repetitions}</td>
-                  <td data-label="Ultima vez">{tecnica.last_trained_on ?? "-"}</td>
-                  <td data-label="Estado">
-                    <span className={`state-badge ${tecnica.active && tecnica.active_in_planning ? "state-completada" : tecnica.active ? "state-en-progreso" : "state-pendiente"}`}>
-                      {tecnica.active && tecnica.active_in_planning ? "Plan" : tecnica.active ? "Activa" : "Inactiva"}
-                    </span>
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan={7} className="muted">Pendiente de normalizar desde legacy_rows.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <section className="technique-grade-list">
+          {visibleByGrade.length ? visibleByGrade.map((group) => (
+            <details className="technique-grade-panel" key={group.grade} open={params.grade === group.grade || Boolean(params.edit)}>
+              <summary>
+                <span className={`grade-chip grade-${slugGrade(group.grade)}`}>{group.grade}</span>
+                <strong>{group.rows.length} tecnicas</strong>
+                <small>{group.rows.filter((tecnica) => tecnica.active_in_planning).length} en plan · {group.rows.filter((tecnica) => !tecnica.last_trained_on || tecnica.repetitions === 0).length} sin repetir</small>
+              </summary>
+              <div className="technique-card-grid">
+                {group.rows.map((tecnica) => (
+                  <TechniqueAdminCard
+                    key={`${tecnica.legacy_id ?? tecnica.name}-${params.saved ?? ""}-${params.technique ?? ""}-${params.edit ?? ""}`}
+                    tecnica={tecnica}
+                    isSaved={params.technique === tecnica.legacy_id}
+                    isEditing={params.saved !== "technique" && params.edit === tecnica.legacy_id}
+                    returnPath={returnPath}
+                  />
+                ))}
+              </div>
+            </details>
+          )) : (
+            <article className="card">
+              <p className="muted">No hay tecnicas con estos filtros.</p>
+            </article>
+          )}
         </section>
       </main>
     </div>
+  );
+}
+
+function TechniqueAdminCard({
+  tecnica,
+  isSaved,
+  isEditing,
+  returnPath
+}: {
+  tecnica: Tecnica;
+  isSaved: boolean;
+  isEditing: boolean;
+  returnPath: string;
+}) {
+  return (
+    <article className={isSaved ? "technique-admin-card saved-row" : "technique-admin-card"}>
+      <div className="technique-card-head">
+        <span className="muted">{tecnica.legacy_id ?? "-"}</span>
+        <span className={`state-badge ${tecnica.active && tecnica.active_in_planning ? "state-completada" : tecnica.active ? "state-en-progreso" : "state-pendiente"}`}>
+          {tecnica.active && tecnica.active_in_planning ? "Plan" : tecnica.active ? "Activa" : "Inactiva"}
+        </span>
+      </div>
+      <strong>{tecnica.name}</strong>
+      <div className="technique-meta-line">
+        <span>{tecnica.category}{tecnica.content_type ? ` - ${tecnica.content_type}` : ""}</span>
+        <span>Rep. {tecnica.repetitions}</span>
+        <span>Ultima: {tecnica.last_trained_on ?? "-"}</span>
+      </div>
+      <div className="technique-meta-line">
+        {tecnica.base_name ? <span>Base: {tecnica.base_name}</span> : null}
+        {tecnica.variant ? <span>Variante: {tecnica.variant}</span> : null}
+        {tecnica.variant_note ? <span>{tecnica.variant_note}</span> : null}
+      </div>
+      {effectiveSummary(tecnica) ? <p className="technique-summary compact">{effectiveSummary(tecnica)}</p> : null}
+      <details className="inline-edit-details" open={isEditing}>
+        <summary>Editar tecnica</summary>
+        <form action={updateTechniqueAction} className="technique-edit-form">
+          <input type="hidden" name="legacyId" value={tecnica.legacy_id ?? ""} />
+          <input type="hidden" name="returnPath" value={returnPath} />
+          <label>
+            Nombre
+            <input name="name" defaultValue={tecnica.name} required />
+          </label>
+          <label>
+            Tecnica base / familia
+            <input name="baseName" defaultValue={tecnica.base_name ?? ""} placeholder="Ej. Juji gote" />
+          </label>
+          <label>
+            Variante
+            <input name="variant" defaultValue={tecnica.variant ?? ""} placeholder="Katate, Morote, Ryote, Ura..." />
+          </label>
+          <label>
+            Nota variante
+            <input name="variantNote" defaultValue={tecnica.variant_note ?? ""} placeholder="Agarre 1 a 1, por fuera..." />
+          </label>
+          <label>
+            Grado
+            <select name="grade" defaultValue={tecnica.grade}>
+              {adultGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              {!adultGrades.some((grade) => normalize(grade) === normalize(tecnica.grade)) ? <option value={tecnica.grade}>{tecnica.grade}</option> : null}
+            </select>
+          </label>
+          <label>
+            Categoria
+            <select name="category" defaultValue={tecnica.category}>
+              {["goho", "juho", "seiho", "ukemi", "randori", "embu", "hokei", "kihon"].map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Tipo contenido
+            <input name="contentType" defaultValue={tecnica.content_type ?? ""} />
+          </label>
+          <label className="checkbox-field">
+            <input name="active" type="checkbox" defaultChecked={tecnica.active} />
+            Activa
+          </label>
+          <label className="checkbox-field">
+            <input name="activeInPlanning" type="checkbox" defaultChecked={tecnica.active_in_planning} />
+            Entra en plan tecnico
+          </label>
+          <label className="wide">
+            Resumen en castellano
+            <textarea name="summaryEs" rows={4} defaultValue={effectiveSummary(tecnica) ?? ""} placeholder="Explicacion breve para el plan tecnico" />
+          </label>
+          <SubmitButton pendingLabel="Guardando tecnica...">Guardar tecnica</SubmitButton>
+        </form>
+      </details>
+    </article>
   );
 }
 
