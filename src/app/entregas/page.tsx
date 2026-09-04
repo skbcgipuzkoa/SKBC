@@ -212,7 +212,7 @@ export default async function EntregasPage({
                 <label className="full-width">
                   Casillas
                   <textarea name="itemLabelsText" defaultValue={campaignItems.map((item) => item.label).join("\n") || "Entregado"} />
-                  <small className="field-hint">Una por linea. Si cambias las casillas, se reinician las marcas de este control.</small>
+                  <small className="field-hint">Una por linea. Las casillas con el mismo nombre conservan sus marcas aunque edites el control.</small>
                 </label>
                 <label className="full-width">Notas<textarea name="notes" defaultValue={selectedCampaign.notes ?? ""} /></label>
                 <button type="submit">Guardar control</button>
@@ -220,9 +220,9 @@ export default async function EntregasPage({
               <form action={deleteDistributionCampaignAction} className="delete-delivery-form">
                 <input type="hidden" name="campaignId" value={selectedCampaign.id} />
                 <button className="mini-action danger" type="submit">
-                  Eliminar este control
+                  Archivar este control
                 </button>
-                <p className="muted">Borra el control y todas sus marcas. Usalo para controles terminados o pruebas.</p>
+                <p className="muted">Lo quita de activos pero conserva todas las marcas y el historial.</p>
               </form>
 
               <div className="delivery-member-grid">

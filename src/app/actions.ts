@@ -492,28 +492,64 @@ export async function updateDistributionCampaignAction(formData: FormData) {
     redirect(`/entregas?campaign=${campaignId}&error=campaign`);
   }
 
-  const { error: deleteItemsError } = await supabase
+  const { data: existingItems, error: existingItemsError } = await supabase
     .from("distribution_campaign_items")
-    .delete()
-    .eq("campaign_id", campaignId);
+    .select("id,label")
+    .eq("campaign_id", campaignId)
+    .returns<Array<{ id: string; label: string }>>();
 
-  if (deleteItemsError) {
-    console.error("Error replacing distribution campaign items", deleteItemsError);
+  if (existingItemsError) {
+    console.error("Error loading distribution campaign items", existingItemsError);
     redirect(`/entregas?campaign=${campaignId}&error=campaign`);
   }
 
-  const { error: insertItemsError } = await supabase.from("distribution_campaign_items").insert(
-    itemLabels.map((label, index) => ({
-      campaign_id: campaignId,
-      label,
-      position: index + 1,
-      active: true
-    }))
-  );
+  const existingByLabel = new Map((existingItems ?? []).map((item) => [normalizeDistributionLabelKey(item.label), item]));
+  const keptItemIds: string[] = [];
 
-  if (insertItemsError) {
-    console.error("Error saving distribution campaign items", insertItemsError);
-    redirect(`/entregas?campaign=${campaignId}&error=campaign`);
+  for (const [index, label] of itemLabels.entries()) {
+    const existing = existingByLabel.get(normalizeDistributionLabelKey(label));
+    if (existing) {
+      keptItemIds.push(existing.id);
+      const { error: updateItemError } = await supabase
+        .from("distribution_campaign_items")
+        .update({ label, position: index + 1, active: true, updated_at: new Date().toISOString() })
+        .eq("id", existing.id);
+
+      if (updateItemError) {
+        console.error("Error updating distribution campaign item", updateItemError);
+        redirect(`/entregas?campaign=${campaignId}&error=campaign`);
+      }
+    } else {
+      const { data: insertedItem, error: insertItemError } = await supabase
+        .from("distribution_campaign_items")
+        .insert({
+          campaign_id: campaignId,
+          label,
+          position: index + 1,
+          active: true
+        })
+        .select("id")
+        .single<{ id: string }>();
+
+      if (insertItemError || !insertedItem?.id) {
+        console.error("Error saving distribution campaign item", insertItemError);
+        redirect(`/entregas?campaign=${campaignId}&error=campaign`);
+      }
+      keptItemIds.push(insertedItem.id);
+    }
+  }
+
+  const removedItems = (existingItems ?? []).filter((item) => !keptItemIds.includes(item.id));
+  if (removedItems.length) {
+    const { error: deactivateItemsError } = await supabase
+      .from("distribution_campaign_items")
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .in("id", removedItems.map((item) => item.id));
+
+    if (deactivateItemsError) {
+      console.error("Error deactivating distribution campaign items", deactivateItemsError);
+      redirect(`/entregas?campaign=${campaignId}&error=campaign`);
+    }
   }
 
   revalidatePath("/entregas");
@@ -529,11 +565,11 @@ export async function deleteDistributionCampaignAction(formData: FormData) {
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("distribution_campaigns")
-    .delete()
+    .update({ active: false, updated_at: new Date().toISOString() })
     .eq("id", campaignId);
 
   if (error) {
-    console.error("Error deleting distribution campaign", error);
+    console.error("Error archiving distribution campaign", error);
     redirect(`/entregas?campaign=${campaignId}&error=campaign`);
   }
 
@@ -606,6 +642,10 @@ function parseDistributionItemLabels(formData: FormData) {
     return true;
   });
   return unique.length ? unique.slice(0, 12) : ["Entregado"];
+}
+
+function normalizeDistributionLabelKey(value: string) {
+  return value.trim().toLocaleLowerCase("es");
 }
 
 export async function generateAdultPlanAction(formData: FormData) {
