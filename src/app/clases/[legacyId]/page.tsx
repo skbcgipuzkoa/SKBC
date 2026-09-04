@@ -248,8 +248,25 @@ export default async function ClaseDetailPage({
   const kidsAttendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === kidsDayClass?.id).map((item) => item.member_id));
   const kidsDayMembers = (dayMembers ?? []).filter((member) => member.class === "kids");
   const pendingKidsDayMembers = kidsDayMembers.filter((member) => !kidsAttendedIds.has(member.id));
+  const adultDayMembers = (dayMembers ?? []).filter((member) => member.class === "adults");
+  const adultAttendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === clase.id && item.members?.class === "adults").map((item) => item.member_id));
+  const adultPendingMembers = adultDayMembers.filter((member) => !adultAttendedIds.has(member.id));
+  const kidsRegisteredCount = kidsDayMembers.length - pendingKidsDayMembers.length;
+  const adultRegisteredCount = adultDayMembers.length - adultPendingMembers.length;
+  const classMission = buildClassMission({
+    classGroup: clase.class_group,
+    activeStep,
+    closed: clase.closed,
+    isCombinedDay,
+    kidsRegistered: kidsRegisteredCount,
+    kidsTotal: kidsDayMembers.length,
+    adultRegistered: adultRegisteredCount,
+    adultTotal: adultDayMembers.length,
+    completedPlan,
+    totalPlan: (plan ?? []).length
+  });
   const kidsEarlyAttendancePanel = clase.class_group === "adults" && activeStep === "techniques" && kidsDayClass && !kidsDayClass.closed ? (
-    <details className="card early-kids-attendance">
+    <details className="card early-kids-attendance" id="asistencia-ninos-rapida">
       <summary>
         <strong>Asistencia de ninos antes de tecnica</strong>
         <span>{kidsDayMembers.length - pendingKidsDayMembers.length}/{kidsDayMembers.length} registrados</span>
@@ -723,6 +740,24 @@ export default async function ClaseDetailPage({
           </section>
         )}
 
+        <section className="card class-mission-card">
+          <div>
+            <p className="eyebrow">Siguiente accion</p>
+            <h2>{classMission.title}</h2>
+            <p className="muted">{classMission.description}</p>
+          </div>
+          <div className="class-mission-actions">
+            {classMission.primaryHref ? <a className="primary-link" href={classMission.primaryHref}>{classMission.primaryLabel}</a> : null}
+            {classMission.secondaryHref ? <a className="secondary-link" href={classMission.secondaryHref}>{classMission.secondaryLabel}</a> : null}
+          </div>
+          <div className="class-mission-checks" aria-label="Revision rapida">
+            {isCombinedDay ? <StatusPill label="Ninos" value={`${kidsRegisteredCount}/${kidsDayMembers.length}`} done={kidsDayMembers.length > 0 && pendingKidsDayMembers.length === 0} /> : null}
+            {clase.class_group === "adults" ? <StatusPill label="Tecnicas" value={`${completedPlan}/${(plan ?? []).length}`} done={hasPlan && completedPlan > 0} /> : null}
+            <StatusPill label={clase.class_group === "kids" ? "Asistencia" : "Adultos"} value={clase.class_group === "kids" ? `${attendance?.length ?? 0}/${classMembers?.length ?? 0}` : `${adultRegisteredCount}/${adultDayMembers.length}`} done={clase.class_group === "kids" ? Boolean(attendance?.length) : adultRegisteredCount > 0} />
+            <StatusPill label="Cierre" value={clase.closed ? "Cerrada" : "Abierta"} done={clase.closed} />
+          </div>
+        </section>
+
         {clase.class_group === "adults" && activeStep === "techniques" ? <section className="split-section class-workbench">
           <article className="card">
             <h2>Grupos tecnicos</h2>
@@ -751,7 +786,7 @@ export default async function ClaseDetailPage({
         {clase.class_group === "adults" && activeStep === "techniques" ? (
           <>
             <div className="section-heading-row">
-              <h2 className="section-title">Plan tecnico</h2>
+              <h2 className="section-title" id="plan-tecnico">Plan tecnico</h2>
               <span className="status" data-plan-total-count data-plan-total-label=" realizadas">{completedPlan}/{(plan ?? []).length} realizadas</span>
             </div>
             <PlanTechniqueForm action={updateClassPlanTechniquesAction}>
@@ -836,6 +871,21 @@ export default async function ClaseDetailPage({
           <h2 className="section-title">{clase.class_group === "kids" ? "Asistencia infantil" : "Asistencia final"}</h2>
           {clase.class_group === "adults" ? <a className="secondary-link" href={techniqueStepHref}>Volver a tecnicas</a> : null}
         </div>
+        {clase.class_group === "adults" ? (
+          <section className="card class-final-review" id="revision-final">
+            <div>
+              <p className="eyebrow">Revision antes de cerrar</p>
+              <h2>Comprueba y cierra todo junto</h2>
+              <p className="muted">Esta es la ultima mirada antes de actualizar fichas, ranking, historiales y progreso tecnico.</p>
+            </div>
+            <div className="class-final-grid">
+              {isCombinedDay ? <StatusPill label="Ninos" value={`${kidsRegisteredCount}/${kidsDayMembers.length}`} done={kidsDayMembers.length > 0 && pendingKidsDayMembers.length === 0} /> : null}
+              <StatusPill label="Adultos" value={`${adultRegisteredCount}/${adultDayMembers.length}`} done={adultRegisteredCount > 0} />
+              <StatusPill label="Tecnicas hechas" value={`${completedPlan}/${(plan ?? []).length}`} done={completedPlan > 0} />
+              <StatusPill label="Estado" value={clase.closed ? "Cerrada" : "Lista para cerrar"} done={clase.closed} />
+            </div>
+          </section>
+        ) : null}
         <section className="card mobile-attendance-note">
           {clase.class_group === "adults" ? (
             <>
@@ -929,6 +979,92 @@ export default async function ClaseDetailPage({
       </main>
     </div>
   );
+}
+
+function StatusPill({ label, value, done }: { label: string; value: string; done: boolean }) {
+  return (
+    <span className={done ? "class-status-pill done" : "class-status-pill"}>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
+function buildClassMission({
+  classGroup,
+  activeStep,
+  closed,
+  isCombinedDay,
+  kidsRegistered,
+  kidsTotal,
+  adultRegistered,
+  adultTotal,
+  completedPlan,
+  totalPlan
+}: {
+  classGroup: "kids" | "adults";
+  activeStep: "techniques" | "attendance";
+  closed: boolean;
+  isCombinedDay: boolean;
+  kidsRegistered: number;
+  kidsTotal: number;
+  adultRegistered: number;
+  adultTotal: number;
+  completedPlan: number;
+  totalPlan: number;
+}) {
+  if (closed) {
+    return {
+      title: "Clase cerrada",
+      description: "La clase ya esta guardada. Puedes revisar asistencia, fichas y datos generados.",
+      primaryHref: "",
+      primaryLabel: "",
+      secondaryHref: "/clases",
+      secondaryLabel: "Volver al calendario"
+    };
+  }
+
+  if (classGroup === "kids") {
+    return {
+      title: "Pasa asistencia infantil",
+      description: "Marca los ninos que han venido y cierra la clase infantil para actualizar sus fichas.",
+      primaryHref: "#asistencia",
+      primaryLabel: "Ir a asistencia",
+      secondaryHref: "",
+      secondaryLabel: ""
+    };
+  }
+
+  if (activeStep === "techniques") {
+    if (isCombinedDay && kidsTotal > 0 && kidsRegistered === 0) {
+      return {
+        title: "Primero registra ninos",
+        description: "La clase infantil va antes. Guarda esa asistencia aqui arriba y despues marca las tecnicas adultas.",
+        primaryHref: "#asistencia-ninos-rapida",
+        primaryLabel: "Marcar ninos",
+        secondaryHref: "#plan-tecnico",
+        secondaryLabel: "Ir al plan"
+      };
+    }
+
+    return {
+      title: "Marca tecnicas adultas",
+      description: "Despliega cada grado, marca todo lo realizado y despues pulsa Guardar y pasar asistencia.",
+      primaryHref: "#plan-tecnico",
+      primaryLabel: "Ir al plan",
+      secondaryHref: "/clases",
+      secondaryLabel: "Calendario"
+    };
+  }
+
+  return {
+    title: "Pasa asistencia y cierra",
+    description: "Marca adultos y ninos si falta alguno. Despues usa Guardar todo y cerrar clase para actualizar todo el sistema.",
+    primaryHref: "#asistencia",
+    primaryLabel: "Ir a asistencia",
+    secondaryHref: totalPlan > 0 && completedPlan === 0 ? "" : "#revision-final",
+    secondaryLabel: totalPlan > 0 && completedPlan === 0 ? "" : "Ver revision"
+  };
 }
 
 function groupPlanByGrade(plan: PlanRow[]) {

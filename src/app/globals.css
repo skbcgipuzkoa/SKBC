@@ -2422,6 +2422,66 @@ tbody tr:hover {
   justify-content: flex-end;
 }
 
+.class-mission-card,
+.class-final-review {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.1fr) auto;
+}
+
+.class-mission-card h2,
+.class-final-review h2 {
+  font-size: 22px;
+  margin: 2px 0 6px;
+}
+
+.class-mission-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.class-mission-checks,
+.class-final-grid {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.class-status-pill {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.class-status-pill.done {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+  color: #067647;
+}
+
+.class-status-pill small {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.class-status-pill strong {
+  color: inherit;
+  font-size: 18px;
+}
+
 .step {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -5149,6 +5209,25 @@ tbody tr:hover {
     margin: 14px 0;
   }
 
+  .class-mission-card,
+  .class-final-review {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .class-mission-actions {
+    justify-content: stretch;
+  }
+
+  .class-mission-actions a {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .class-mission-checks,
+  .class-final-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .combined-flow-guide {
     grid-template-columns: 1fr;
   }
@@ -5712,6 +5791,41 @@ tbody tr:hover {
     display: grid;
     grid-template-columns: 1fr;
     width: 100%;
+  }
+
+  .class-mission-card,
+  .class-final-review {
+    gap: 10px;
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .class-mission-card h2,
+  .class-final-review h2 {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .class-mission-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .class-mission-actions a {
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .class-mission-checks,
+  .class-final-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .class-status-pill {
+    min-height: 52px;
+    padding: 9px 10px;
   }
 
   .step {
