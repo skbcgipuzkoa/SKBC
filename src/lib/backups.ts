@@ -34,10 +34,7 @@ const BACKUP_TABLES = [
   "internal_notices",
   "telegram_notification_settings",
   "telegram_notification_logs",
-  "email_notification_logs",
-  "legacy_sheets",
-  "legacy_rows",
-  "legacy_sheet_sync_jobs"
+  "email_notification_logs"
 ];
 
 type BackupRun = {
