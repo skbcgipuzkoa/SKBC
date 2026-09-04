@@ -2637,6 +2637,15 @@ tbody tr:hover {
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
 }
 
+.class-flow-focus {
+  border-color: rgba(0, 87, 184, 0.38);
+  box-shadow: 0 18px 40px rgba(0, 87, 184, 0.12);
+}
+
+.class-flow-note {
+  margin: 10px 0 14px;
+}
+
 .early-kids-attendance summary {
   align-items: center;
   cursor: pointer;
