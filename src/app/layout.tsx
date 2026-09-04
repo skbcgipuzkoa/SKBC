@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { InteractionFeedback } from "./components/InteractionFeedback";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -41,7 +42,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        {children}
+        <InteractionFeedback />
+      </body>
     </html>
   );
 }

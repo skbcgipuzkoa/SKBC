@@ -169,6 +169,66 @@ textarea {
   transition: box-shadow 160ms ease, transform 160ms ease;
 }
 
+.primary-link:active,
+button:active,
+a:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.is-pressed-action {
+  opacity: 0.72;
+  pointer-events: none;
+  position: relative;
+}
+
+.interaction-feedback {
+  align-items: center;
+  background: rgba(15, 27, 45, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  bottom: 18px;
+  box-shadow: 0 14px 36px rgba(15, 27, 45, 0.28);
+  color: #fff;
+  display: inline-flex;
+  gap: 9px;
+  left: 50%;
+  min-height: 42px;
+  opacity: 0;
+  padding: 10px 15px;
+  pointer-events: none;
+  position: fixed;
+  transform: translate(-50%, 14px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  z-index: 200;
+}
+
+.interaction-feedback.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.interaction-feedback strong {
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.interaction-spinner {
+  animation: spin 780ms linear infinite;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  border-top-color: #fff;
+  border-radius: 50%;
+  display: block;
+  height: 16px;
+  width: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .secondary-link {
   background: #eef4fb;
   border: 1px solid #d6e6f7;
