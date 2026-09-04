@@ -2729,6 +2729,43 @@ tbody tr:hover {
   justify-content: space-between;
 }
 
+.audit-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.audit-card {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.audit-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.audit-card strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.audit-card p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.35;
+  margin: 0;
+}
+
 .plan-board {
   display: grid;
   gap: 14px;
@@ -6333,6 +6370,14 @@ tbody tr:hover {
     justify-content: center;
     text-align: center;
     width: 100%;
+  }
+
+  .audit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-card {
+    padding: 12px;
   }
 
   .mobile-close-bar {

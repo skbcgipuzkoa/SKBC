@@ -34,6 +34,8 @@ type Member = {
   photo_url: string | null;
   ficha_token: string | null;
   legacy_ficha_url: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type Attendance = {
@@ -62,6 +64,19 @@ type Course = {
   competition_result: string | null;
   competition_medal: string | null;
   competition_notes: string | null;
+};
+
+type TechnicalHistory = {
+  class_date: string;
+  technique_name: string;
+  group_grade: string | null;
+  target_grade: string | null;
+  category: string | null;
+  proposal_type: string | null;
+  counts_as_progression: boolean;
+  counts_as_review: boolean;
+  counts_for_stats: boolean;
+  created_at: string;
 };
 
 type ChildRanking = {
@@ -156,7 +171,7 @@ export default async function KenshiDetailPage({
   const { data: member, error } = await supabase
     .from("members")
     .select(
-      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,ficha_token,legacy_ficha_url"
+      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,ficha_token,legacy_ficha_url,created_at,updated_at"
     )
     .eq("legacy_id", legacyId)
     .single<Member>();
@@ -164,7 +179,7 @@ export default async function KenshiDetailPage({
   if (error || !member) notFound();
   const photoSrc = driveImageUrl(member.photo_url);
 
-  const [{ data: attendance }, { data: exams }, { data: courses }, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult] = await Promise.all([
+  const [{ data: attendance }, { data: exams }, { data: courses }, technicalHistoryResult, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("attended_on,official_grade,trained_grade,technical_role,classes(name)")
@@ -184,6 +199,14 @@ export default async function KenshiDetailPage({
       .eq("member_id", member.id)
       .order("course_date", { ascending: false })
       .returns<Course[]>(),
+    supabase
+      .from("member_technical_history")
+      .select("class_date,technique_name,group_grade,target_grade,category,proposal_type,counts_as_progression,counts_as_review,counts_for_stats,created_at")
+      .eq("member_id", member.id)
+      .order("class_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .returns<TechnicalHistory[]>(),
     member.class === "kids"
       ? supabase
           .from("child_rankings")
@@ -250,6 +273,11 @@ export default async function KenshiDetailPage({
   const today = new Date().toISOString().slice(0, 10);
   const blackBeltSpecial = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
   const shakujoAttendance = shakujoResult.error ? [] : shakujoResult.data ?? [];
+  const latestAttendance = attendance?.[0] ?? null;
+  const technicalHistory = technicalHistoryResult.error ? [] : technicalHistoryResult.data ?? [];
+  const latestTechnique = technicalHistory[0] ?? null;
+  const latestExam = exams?.[0] ?? null;
+  const latestCourse = courses?.[0] ?? null;
 
   return (
     <div className="shell">
@@ -395,6 +423,62 @@ export default async function KenshiDetailPage({
           <article className="card"><h2>Proximo examen</h2><div className="metric small">{member.next_exam_on ?? "-"}</div></article>
           <article className="card"><h2>Semaforo</h2><div className="metric small">{member.semaphore ?? "-"}</div></article>
           <article className="card"><h2>Aviso</h2><p className="muted">{member.exam_notice ?? "-"}</p></article>
+        </section>
+
+        <h2 className="section-title">Auditoria del sistema</h2>
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Ultimos movimientos guardados</h2>
+              <p className="muted">Control interno para comprobar rapidamente que la ficha y la base de datos han recibido los ultimos datos.</p>
+            </div>
+            <span className="pill neutral">Solo admin</span>
+          </div>
+          <div className="audit-grid">
+            <AuditCard
+              title="Asistencia"
+              value={latestAttendance?.attended_on ?? "-"}
+              body={latestAttendance ? `${latestAttendance.classes?.name ?? "Clase"} · ${latestAttendance.trained_grade ?? latestAttendance.official_grade ?? "Sin grado"} · ${roleLabel(latestAttendance.technical_role)}` : "Sin asistencias registradas."}
+            />
+            <AuditCard
+              title="Tecnica"
+              value={latestTechnique?.technique_name ?? "-"}
+              body={latestTechnique ? `${latestTechnique.class_date} · ${latestTechnique.group_grade ?? "-"} para ${latestTechnique.target_grade ?? "-"} · ${technicalHistoryLabel(latestTechnique)}` : "Sin tecnicas en historial."}
+            />
+            <AuditCard
+              title="Examen"
+              value={latestExam?.exam_date ?? "-"}
+              body={latestExam ? `${latestExam.grade} · ${latestExam.examiner ?? "Sin examinador"} · ${latestExam.report_url ? "informe" : "sin informe"} · ${latestExam.diploma_url ? "diploma" : "sin diploma"}` : "Sin examenes guardados."}
+            />
+            <AuditCard
+              title="Curso / Taikai"
+              value={latestCourse?.course_date ?? "-"}
+              body={latestCourse ? `${courseKindLabel(latestCourse.kind)} · ${latestCourse.title ?? latestCourse.location ?? "Sin titulo"}${latestCourse.kind === "taikai" ? ` · ${formatTaikaiCourseResult(latestCourse)}` : ""}` : "Sin cursos guardados."}
+            />
+            <AuditCard
+              title="Ficha"
+              value={formatDateTime(member.updated_at)}
+              body={`Creada ${formatDateTime(member.created_at)} · ${member.ficha_token ? "ficha nueva activa" : "sin ficha nueva"} · ${member.status === "active" ? "activa" : "inactiva"}`}
+            />
+          </div>
+          <details className="advanced-details">
+            <summary>Ver ultimas tecnicas guardadas</summary>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Fecha</th><th>Tecnica</th><th>Grupo</th><th>Cuenta como</th></tr></thead>
+                <tbody>
+                  {technicalHistory.length ? technicalHistory.map((item) => (
+                    <tr key={`${item.created_at}-${item.technique_name}`}>
+                      <td data-label="Fecha">{item.class_date}</td>
+                      <td data-label="Tecnica">{item.technique_name}</td>
+                      <td data-label="Grupo">{item.group_grade ?? "-"} para {item.target_grade ?? "-"}</td>
+                      <td data-label="Cuenta como">{technicalHistoryLabel(item)}</td>
+                    </tr>
+                  )) : <tr><td colSpan={4} className="muted">Sin tecnicas guardadas todavia.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </section>
 
         {member.class === "kids" ? (
@@ -652,6 +736,43 @@ function medalLabel(value: string | null) {
   if (value === "bronze") return "Bronce";
   if (value === "participant") return "Participacion";
   return "";
+}
+
+function AuditCard({ title, value, body }: { title: string; value: string; body: string }) {
+  return (
+    <article className="audit-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <p>{body}</p>
+    </article>
+  );
+}
+
+function roleLabel(value: string) {
+  if (value === "teacher") return "ensenando";
+  if (value === "observer") return "observando";
+  return "entrenando";
+}
+
+function technicalHistoryLabel(item: TechnicalHistory) {
+  const parts = [];
+  if (item.counts_as_progression) parts.push("progreso");
+  if (item.counts_as_review) parts.push("repaso");
+  if (item.counts_for_stats) parts.push("historial");
+  return parts.length ? parts.join(" + ") : "solo registro";
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function SelectOptions({ name, options, value }: { name: string; options: string[]; value: string | null | undefined }) {
