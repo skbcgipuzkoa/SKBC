@@ -5,7 +5,7 @@ import {
   CheckCircle2,
   Database,
   FileText,
-  Bell,
+    Bell,
   LogOut,
   NotebookTabs,
   Newspaper,
@@ -30,6 +30,12 @@ const systemItems = [
     body: "Estado de hojas legacy importadas, filas copiadas y datos normalizados desde el archivo viejo.",
     href: "/importacion",
     icon: Database
+  },
+  {
+    title: "Avisos internos",
+    body: "Tablon privado de recordatorios, incidencias y tareas pendientes del club.",
+    href: "/avisos",
+    icon: AlertTriangle
   },
   {
     title: "Notificaciones",
@@ -58,6 +64,7 @@ export default async function SistemaPage() {
     pendingPlans,
     pendingReports,
     pendingDiplomas,
+    activeInternalNotices,
     failedLegacySync,
     pendingLegacySync,
     legacySheets
@@ -68,12 +75,13 @@ export default async function SistemaPage() {
     countRows("classes", (query) => query.eq("closed", false).eq("class_group", "adults").eq("plan_generated", false)),
     countRows("exams", (query) => query.is("report_url", null)),
     countRows("exams", (query) => query.is("diploma_url", null)),
+    countRows("internal_notices", (query) => query.in("status", ["open", "in_progress"])),
     countRows("legacy_sheet_sync_jobs", (query) => query.eq("status", "failed")),
     countRows("legacy_sheet_sync_jobs", (query) => query.in("status", ["pending", "running"])),
     countRows("legacy_sheets")
   ]);
 
-  const importantPending = pendingPlans + pendingReports + pendingDiplomas + failedLegacySync;
+  const importantPending = pendingPlans + pendingReports + pendingDiplomas + failedLegacySync + activeInternalNotices;
 
   return (
     <div className="shell">
@@ -161,6 +169,12 @@ export default async function SistemaPage() {
             <h2>Areas tecnicas personales</h2>
             <p className="muted">Enlaces por grado que aparecen automaticamente en las fichas nuevas y existentes.</p>
             <span className="text-link">Editar enlaces</span>
+          </a>
+          <a className={`card system-card ${activeInternalNotices ? "attention-card" : ""}`} href="/avisos">
+            <AlertTriangle aria-hidden="true" size={22} />
+            <h2>Avisos internos</h2>
+            <p className="muted">{activeInternalNotices} avisos abiertos o en curso para revisar.</p>
+            <span className="text-link">Abrir avisos</span>
           </a>
         </section>
 

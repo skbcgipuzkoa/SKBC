@@ -164,6 +164,101 @@ export async function updateTelegramScheduledPauseAction(formData: FormData) {
   redirect("/notificaciones?saved=settings");
 }
 
+export async function createInternalNoticeAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim() || null;
+  const area = normalizeInternalNoticeArea(String(formData.get("area") ?? ""));
+  const priority = normalizeInternalNoticePriority(String(formData.get("priority") ?? ""));
+  const dueOn = String(formData.get("dueOn") ?? "").trim() || null;
+  const pinned = formData.get("pinned") === "on";
+  const createdBy = String(formData.get("createdBy") ?? "").trim() || "Alvaro";
+
+  if (!title) {
+    redirect("/avisos?error=notice");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("internal_notices").insert({
+    title,
+    body,
+    area,
+    priority,
+    due_on: dueOn,
+    pinned,
+    created_by: createdBy
+  });
+
+  if (error) {
+    console.error("Error creating internal notice", error);
+    redirect("/avisos?error=notice");
+  }
+
+  revalidatePath("/avisos");
+  revalidatePath("/sistema");
+  redirect("/avisos?saved=notice");
+}
+
+export async function updateInternalNoticeStatusAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const id = String(formData.get("id") ?? "").trim();
+  const status = normalizeInternalNoticeStatus(String(formData.get("status") ?? ""));
+  const resolvedBy = String(formData.get("resolvedBy") ?? "").trim() || "Alvaro";
+
+  if (!id) {
+    redirect("/avisos?error=notice");
+  }
+
+  const payload: Record<string, string | null> = {
+    status,
+    updated_at: new Date().toISOString()
+  };
+  if (status === "done") {
+    payload.resolved_on = new Date().toISOString().slice(0, 10);
+    payload.resolved_by = resolvedBy;
+  }
+  if (status === "open" || status === "in_progress") {
+    payload.resolved_on = null;
+    payload.resolved_by = null;
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("internal_notices").update(payload).eq("id", id);
+
+  if (error) {
+    console.error("Error updating internal notice", error);
+    redirect("/avisos?error=notice");
+  }
+
+  revalidatePath("/avisos");
+  revalidatePath("/sistema");
+  redirect("/avisos?saved=notice");
+}
+
+function normalizeInternalNoticeArea(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (["clases", "kenshis", "examenes", "cursos", "entregas", "fichas", "sistema"].includes(normalized)) return normalized;
+  return "general";
+}
+
+function normalizeInternalNoticePriority(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (["low", "normal", "high", "urgent"].includes(normalized)) return normalized;
+  return "normal";
+}
+
+function normalizeInternalNoticeStatus(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (["open", "in_progress", "done", "archived"].includes(normalized)) return normalized;
+  return "open";
+}
+
 async function getNextSkbcLegacyId(supabase: ReturnType<typeof createAdminClient>) {
   const { data, error } = await supabase
     .from("members")
