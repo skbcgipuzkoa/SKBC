@@ -22,6 +22,8 @@ import { loginAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { LucideIcon } from "lucide-react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 type ClassPreview = {
   legacy_id: string | null;
@@ -92,7 +94,12 @@ export default async function Home({
   searchParams: Promise<{ error?: string }>;
 }) {
   const [isAuthed, params] = await Promise.all([hasInternalAccess(), searchParams]);
-  if (!isAuthed) return <LoginHome error={params.error} />;
+  if (!isAuthed) {
+    const cookieStore = await cookies();
+    const studentReturn = safeStudentFichaReturn(cookieStore.get("skbc_student_ficha_return")?.value);
+    if (studentReturn && !params.error) redirect(studentReturn);
+    return <LoginHome error={params.error} />;
+  }
 
   const supabase = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -383,6 +390,16 @@ function PublicHome() {
       </section>
     </main>
   );
+}
+
+function safeStudentFichaReturn(value?: string) {
+  if (!value) return null;
+  try {
+    const decoded = decodeURIComponent(value);
+    return /^\/ficha\/[A-Za-z0-9_-]+$/.test(decoded) ? decoded : null;
+  } catch {
+    return null;
+  }
 }
 
 export function LoginHome({ error }: { error?: string }) {

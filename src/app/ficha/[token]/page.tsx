@@ -4,6 +4,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
+import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const LOGO_IKA_URL = "https://lh3.googleusercontent.com/d/1F1VTa2ygk4PRG4wEukoeRWkBAt_vKORy=w300";
@@ -293,7 +294,12 @@ export default async function PublicFichaPage({
 
     const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures);
     const automaticNotices = buildAutomaticChildNotices(visibleChildRanking);
-    return <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} technicalArea={technicalArea} adminBackUrl={adminBackUrl} />;
+    return (
+      <>
+        <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
+        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} technicalArea={technicalArea} adminBackUrl={adminBackUrl} />
+      </>
+    );
   }
 
   const targetGrade = nextAdultGrade(member.grade);
@@ -375,7 +381,12 @@ export default async function PublicFichaPage({
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
-  return <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} />;
+  return (
+    <>
+      <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
+      <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} />
+    </>
+  );
 }
 
 function AdultFicha({
