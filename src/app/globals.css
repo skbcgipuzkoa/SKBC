@@ -2266,6 +2266,26 @@ tbody tr:hover {
   margin: 18px 0;
 }
 
+.combined-flow-guide {
+  align-items: center;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 14px;
+}
+
+.combined-flow-guide h2 {
+  font-size: 22px;
+  margin: 2px 0 6px;
+}
+
+.combined-flow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .step {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -4889,6 +4909,18 @@ tbody tr:hover {
     margin: 14px 0;
   }
 
+  .combined-flow-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .combined-flow-actions {
+    justify-content: stretch;
+  }
+
+  .combined-flow-actions a {
+    flex: 1 1 180px;
+  }
+
   .step {
     font-size: 12px;
     min-height: 40px;
@@ -5423,6 +5455,23 @@ tbody tr:hover {
     overflow: visible;
     padding-bottom: 0;
     position: static;
+  }
+
+  .combined-flow-guide {
+    gap: 10px;
+    margin-top: 10px;
+    padding: 12px;
+  }
+
+  .combined-flow-guide h2 {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .combined-flow-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .step {

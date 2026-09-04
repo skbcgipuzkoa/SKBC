@@ -1117,6 +1117,8 @@ export async function addBulkAttendanceAction(formData: FormData) {
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
   const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
+  const returnStep = String(formData.get("returnStep") ?? "asistencia");
+  const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
   const memberIdsByClass = getDelegateMemberIdsByClass(formData);
   const hasGroupedMembers = memberIdsByClass.size > 0;
   const groupedClassIds = formData.getAll("groupClassIds").map((value) => String(value)).filter(Boolean);
@@ -1124,7 +1126,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
   const closeAfter = String(formData.get("closeAfter") ?? "") === "true";
 
   if (!classId || !legacyId || (!memberIds.length && !hasGroupedMembers && !(closeAfter && groupedClassIds.length))) {
-    redirect(`/clases/${returnLegacyId || legacyId || ""}?error=attendance&step=asistencia`);
+    redirect(`/clases/${returnLegacyId || legacyId || ""}?error=attendance${returnStepQuery}`);
   }
 
   if (hasGroupedMembers || (closeAfter && groupedClassIds.length)) {
@@ -1137,7 +1139,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
       .returns<Array<{ id: string; class_group: "kids" | "adults" }>>();
 
     if (classesError || !classes?.length) {
-      redirect(`/clases/${returnLegacyId || legacyId}?error=attendance&step=asistencia`);
+      redirect(`/clases/${returnLegacyId || legacyId}?error=attendance${returnStepQuery}`);
     }
 
     try {
@@ -1166,10 +1168,10 @@ export async function addBulkAttendanceAction(formData: FormData) {
       }
     } catch (error) {
       console.error("Error saving grouped attendance", error);
-      redirect(`/clases/${returnLegacyId || legacyId}?error=${closeAfter ? "close" : "attendance"}&step=asistencia`);
+      redirect(`/clases/${returnLegacyId || legacyId}?error=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
     }
 
-    redirect(`/clases/${returnLegacyId || legacyId}?saved=${closeAfter ? "close" : "attendance"}&step=asistencia`);
+    redirect(`/clases/${returnLegacyId || legacyId}?saved=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
   }
 
   const supabase = createAdminClient();
@@ -1187,7 +1189,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
   ]);
 
   if (classError || !clase || membersError || !members?.length) {
-    redirect(`/clases/${returnLegacyId || legacyId}?error=attendance&step=asistencia`);
+    redirect(`/clases/${returnLegacyId || legacyId}?error=attendance${returnStepQuery}`);
   }
 
   const rows = members.map((member) => {
@@ -1212,7 +1214,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
     .returns<Array<{ id: string }>>();
 
   if (error) {
-    redirect(`/clases/${returnLegacyId || legacyId}?error=attendance&step=asistencia`);
+    redirect(`/clases/${returnLegacyId || legacyId}?error=attendance${returnStepQuery}`);
   }
 
   try {
@@ -1243,13 +1245,13 @@ export async function addBulkAttendanceAction(formData: FormData) {
       }
     } catch (closeError) {
       console.error("Error closing class after bulk attendance", closeError);
-      redirect(`/clases/${returnLegacyId || legacyId}?error=close&step=asistencia`);
+      redirect(`/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
     }
 
-    redirect(`/clases/${returnLegacyId || legacyId}?saved=close&step=asistencia`);
+    redirect(`/clases/${returnLegacyId || legacyId}?saved=close${returnStepQuery}`);
   }
 
-  redirect(`/clases/${returnLegacyId || legacyId}?saved=attendance&step=asistencia`);
+  redirect(`/clases/${returnLegacyId || legacyId}?saved=attendance${returnStepQuery}`);
 }
 
 export async function removeAttendanceAction(formData: FormData) {

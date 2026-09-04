@@ -221,6 +221,7 @@ export default async function ClaseDetailPage({
     console.error("Error auto creating kids attendance class", autoKidsError);
   }
   const attendanceClasses = ["adults", "kids"].map((group) => (dayClasses ?? []).find((item) => item.class_group === group)).filter(Boolean) as AttendanceClassOption[];
+  const isCombinedDay = clase.class_group === "adults" && attendanceClasses.some((item) => item.class_group === "kids");
   const registeredAttendanceGroups = clase.class_group === "adults" && activeStep === "attendance"
     ? attendanceClasses.map((dayClass) => ({
       title: dayClass.class_group === "kids" ? "Ninos" : "Adultos",
@@ -257,6 +258,7 @@ export default async function ClaseDetailPage({
         <input type="hidden" name="classId" value={kidsDayClass.id} />
         <input type="hidden" name="legacyId" value={kidsDayClass.legacy_id ?? legacyId} />
         <input type="hidden" name="returnLegacyId" value={legacyId} />
+        <input type="hidden" name="returnStep" value="" />
         <input type="hidden" name="groupClassIds" value={kidsDayClass.id} />
         <div className="attendance-checklist">
           {pendingKidsDayMembers.length ? pendingKidsDayMembers.map((member) => (
@@ -280,6 +282,7 @@ export default async function ClaseDetailPage({
       <input type="hidden" name="classId" value={clase.id} />
       <input type="hidden" name="legacyId" value={legacyId} />
       <input type="hidden" name="returnLegacyId" value={legacyId} />
+      <input type="hidden" name="returnStep" value="asistencia" />
       <div className="attendance-group-stack">
         {attendanceClasses.map((dayClass) => {
           const attendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === dayClass.id).map((item) => item.member_id));
@@ -591,6 +594,24 @@ export default async function ClaseDetailPage({
           <article className="card"><h2>Estado</h2><div className="metric small">{clase.status}</div></article>
           <article className="card"><h2>Asistentes</h2><div className="metric">{totalDayAttendance}</div></article>
         </section>
+
+        {isCombinedDay ? (
+          <section className="card combined-flow-guide">
+            <div>
+              <p className="eyebrow">Clase combinada</p>
+              <h2>{activeStep === "techniques" ? "1. Ninos y tecnica adulta" : "2. Asistencia adulta y cierre"}</h2>
+              <p className="muted">
+                {activeStep === "techniques"
+                  ? "Pasa primero la asistencia infantil en esta misma pantalla. Al guardar, sigues aqui para marcar el plan tecnico adulto."
+                  : "Revisa adultos y ninos, guarda todo junto y cierra la clase para actualizar fichas, ranking e historial tecnico."}
+              </p>
+            </div>
+            <div className="combined-flow-actions">
+              <a className={activeStep === "techniques" ? "primary-link" : "secondary-link"} href={techniqueStepHref}>Tecnicas adultos</a>
+              <a className={activeStep === "attendance" ? "primary-link" : "secondary-link"} href={attendanceStepHref}>Asistencia y cierre</a>
+            </div>
+          </section>
+        ) : null}
 
         <section className="delegate-visible-panel">
           <div className="delegate-visible-head">
