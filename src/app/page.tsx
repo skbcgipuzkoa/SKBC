@@ -92,7 +92,7 @@ export default async function Home({
   searchParams: Promise<{ error?: string }>;
 }) {
   const [isAuthed, params] = await Promise.all([hasInternalAccess(), searchParams]);
-  if (!isAuthed) return <PublicHome />;
+  if (!isAuthed) return <LoginHome error={params.error} />;
 
   const supabase = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
