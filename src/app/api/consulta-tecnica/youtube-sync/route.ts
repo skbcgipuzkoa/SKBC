@@ -30,7 +30,8 @@ export async function POST() {
     [youtubeResult, techniques] = await Promise.all([loadYoutubeVideos(), loadUnlinkedTechniques()]);
   } catch (error) {
     console.error("Error loading YouTube videos for technique sync", error);
-    return NextResponse.json({ error: "No se ha podido leer el canal de YouTube." }, { status: 502 });
+    const detail = error instanceof Error ? error.message : "";
+    return NextResponse.json({ error: "No se ha podido leer el canal de YouTube.", detail }, { status: 502 });
   }
 
   const videos = youtubeResult.videos;

@@ -101,7 +101,8 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
     setSyncing(false);
     if (!response.ok) {
       setSavedName(null);
-      setError(result.error ?? "No se ha podido buscar en YouTube.");
+      const detail = result.detail ? ` Detalle: ${result.detail}` : "";
+      setError(`${result.error ?? "No se ha podido buscar en YouTube."}${detail}`);
       return;
     }
     setSavedName(`YouTube revisado (${result.source}): ${result.scannedVideos} videos, ${result.updated} tecnicas enlazadas. Recarga para ver los nuevos enlaces.`);
