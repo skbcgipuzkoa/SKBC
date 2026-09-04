@@ -19,9 +19,9 @@ const BACKUP_TABLES = [
   "child_behavior_reports",
   "skbc_exam_calls",
   "skbc_exam_requirements",
-  "club_calendar_closures",
+  "skbc_calendar_closures",
   "adult_ranking_bonuses",
-  "black_belt_special_members",
+  "black_belt_class_eligibility",
   "black_belt_special_classes",
   "black_belt_special_attendance",
   "shakujo_classes",
@@ -74,7 +74,7 @@ export async function runSkbcBackup(triggerSource: "manual" | "cron" = "manual",
         tables[table] = rows;
         tableCounts[table] = rows.length;
       } catch (error) {
-        tableErrors[table] = error instanceof Error ? error.message : "Error desconocido";
+        tableErrors[table] = describeBackupError(error);
         tables[table] = [];
         tableCounts[table] = 0;
       }
@@ -129,6 +129,19 @@ export async function runSkbcBackup(triggerSource: "manual" | "cron" = "manual",
       .eq("id", run.id);
     return { id: run.id, status: "failed" as const, error: message };
   }
+}
+
+function describeBackupError(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const candidate = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const parts = [candidate.message, candidate.details, candidate.hint, candidate.code]
+      .filter(Boolean)
+      .map(String);
+    if (parts.length) return parts.join(" - ");
+    return JSON.stringify(error);
+  }
+  return "Error desconocido";
 }
 
 async function exportTable(supabase: ReturnType<typeof createAdminClient>, table: string) {
