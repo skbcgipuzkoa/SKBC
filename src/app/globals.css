@@ -4820,8 +4820,12 @@ tbody tr:hover {
   }
 
   .sidebar {
+    align-items: center;
     border-right: 0;
     box-shadow: 0 8px 22px rgba(15, 27, 45, 0.14);
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
     padding: 10px 14px;
     position: sticky;
     top: 0;
@@ -4829,9 +4833,11 @@ tbody tr:hover {
   }
 
   .brand {
+    align-items: center;
     gap: 8px;
-    grid-template-columns: 38px minmax(0, 1fr);
-    margin-bottom: 8px;
+    grid-template-columns: 38px auto auto;
+    margin-bottom: 0;
+    min-width: 0;
   }
 
   .brand::before {
@@ -4841,10 +4847,16 @@ tbody tr:hover {
 
   .brand strong {
     font-size: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .brand span {
     font-size: 11px;
+    justify-self: end;
+    margin-top: 0;
+    white-space: nowrap;
   }
 
   .mobile-nav-menu {
