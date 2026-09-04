@@ -115,7 +115,7 @@ export default async function ClaseDetailPage({
   searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const [{ legacyId }, query] = await Promise.all([params, searchParams]);

@@ -63,7 +63,7 @@ export default async function ControlDiaPage({
   searchParams: Promise<{ date?: string; saved?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const params = await searchParams;

@@ -24,7 +24,7 @@ export default async function TechnicalAreasPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string; class?: string }>;
 }) {
-  if (!(await hasInternalAccess())) redirect("/");
+  if (!(await hasInternalAccess())) redirect("/admin");
 
   const params = await searchParams;
   const supabase = createAdminClient();

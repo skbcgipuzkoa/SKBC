@@ -10,7 +10,7 @@ export default async function NuevaClasePage({
   searchParams: Promise<{ error?: string; delegado?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const params = await searchParams;

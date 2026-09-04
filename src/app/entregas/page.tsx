@@ -48,7 +48,7 @@ export default async function EntregasPage({
 }: {
   searchParams: Promise<{ campaign?: string; saved?: string; error?: string }>;
 }) {
-  if (!(await hasInternalAccess())) redirect("/");
+  if (!(await hasInternalAccess())) redirect("/admin");
 
   const params = await searchParams;
   const supabase = createAdminClient();

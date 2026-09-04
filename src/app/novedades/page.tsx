@@ -34,7 +34,7 @@ const novedades = [
 
 export default async function NovedadesPage() {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   return (

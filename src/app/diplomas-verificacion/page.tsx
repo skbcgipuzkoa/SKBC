@@ -5,7 +5,7 @@ import { verifyDiplomaSetup } from "@/lib/diplomas";
 
 export default async function DiplomaVerificationPage() {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   let result:

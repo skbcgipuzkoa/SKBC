@@ -42,7 +42,7 @@ export default async function BlackBeltClassesPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string; classId?: string }>;
 }) {
-  if (!(await hasInternalAccess())) redirect("/");
+  if (!(await hasInternalAccess())) redirect("/admin");
 
   const params = await searchParams;
   const supabase = createAdminClient();

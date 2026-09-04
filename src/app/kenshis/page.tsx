@@ -28,7 +28,7 @@ export default async function KenshisPage({
   searchParams: Promise<{ q?: string; class?: string; status?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const params = await searchParams;

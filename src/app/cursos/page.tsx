@@ -50,7 +50,7 @@ export default async function CursosPage({
   searchParams: Promise<{ saved?: string; error?: string; kind?: string; q?: string; year?: string; memberId?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const params = await searchParams;

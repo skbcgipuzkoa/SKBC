@@ -20,7 +20,7 @@ export default async function CalendarioPage({
   searchParams: Promise<{ saved?: string; error?: string; year?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const params = await searchParams;

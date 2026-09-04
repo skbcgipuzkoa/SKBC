@@ -146,7 +146,7 @@ export default async function KenshiDetailPage({
   searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const { legacyId } = await params;

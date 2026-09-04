@@ -27,7 +27,7 @@ const countItems: CountItem[] = [
 
 export default async function ImportacionPage() {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const supabase = createAdminClient();

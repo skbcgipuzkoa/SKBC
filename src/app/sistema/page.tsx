@@ -47,7 +47,7 @@ const systemItems = [
 
 export default async function SistemaPage() {
   if (!(await hasInternalAccess())) {
-    redirect("/");
+    redirect("/admin");
   }
 
   const supabase = createAdminClient();
