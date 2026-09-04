@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
+import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const LOGO_IKA_URL = "https://lh3.googleusercontent.com/d/1F1VTa2ygk4PRG4wEukoeRWkBAt_vKORy=w300";
@@ -205,8 +206,8 @@ export default async function PublicFichaPage({
   searchParams: Promise<{ admin?: string; returnTo?: string }>;
 }) {
   noStore();
-  const [{ token }, queryParams] = await Promise.all([params, searchParams]);
-  const adminBackUrl = queryParams.admin === "1" ? safeInternalReturnUrl(queryParams.returnTo) : null;
+  const [{ token }, queryParams, isInternalAccess] = await Promise.all([params, searchParams, hasInternalAccess()]);
+  const adminBackUrl = isInternalAccess && queryParams.admin === "1" ? safeInternalReturnUrl(queryParams.returnTo) : null;
   const supabase = createAdminClient();
 
   const { data: member, error } = await supabase
