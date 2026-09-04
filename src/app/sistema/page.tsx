@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Database,
+  DatabaseBackup,
   FileText,
     Bell,
   LogOut,
@@ -38,6 +39,12 @@ const systemItems = [
     icon: AlertTriangle
   },
   {
+    title: "Backups",
+    body: "Copias de seguridad del sistema nuevo, historial de ejecuciones y ultima copia correcta.",
+    href: "/backups",
+    icon: DatabaseBackup
+  },
+  {
     title: "Notificaciones",
     body: "Telegram privado: ranking diario, listos para examen y resumenes mensuales, semestrales y anuales.",
     href: "/notificaciones",
@@ -65,6 +72,7 @@ export default async function SistemaPage() {
     pendingReports,
     pendingDiplomas,
     activeInternalNotices,
+    latestBackup,
     failedLegacySync,
     pendingLegacySync,
     legacySheets
@@ -76,12 +84,20 @@ export default async function SistemaPage() {
     countRows("exams", (query) => query.is("report_url", null)),
     countRows("exams", (query) => query.is("diploma_url", null)),
     countRows("internal_notices", (query) => query.in("status", ["open", "in_progress"])),
+    supabase
+      .from("backup_runs")
+      .select("completed_at,started_at,status")
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle(),
     countRows("legacy_sheet_sync_jobs", (query) => query.eq("status", "failed")),
     countRows("legacy_sheet_sync_jobs", (query) => query.in("status", ["pending", "running"])),
     countRows("legacy_sheets")
   ]);
 
   const importantPending = pendingPlans + pendingReports + pendingDiplomas + failedLegacySync + activeInternalNotices;
+  const latestBackupDate = latestBackup.data?.completed_at ?? latestBackup.data?.started_at ?? null;
 
   return (
     <div className="shell">
@@ -123,6 +139,12 @@ export default async function SistemaPage() {
             <h2>Hojas copiadas</h2>
             <div className="metric">{legacySheets}</div>
             <p className="muted">Pestanas del archivo viejo disponibles para consulta.</p>
+          </article>
+          <article className={latestBackupDate ? "card" : "card attention-card"}>
+            <DatabaseBackup aria-hidden="true" size={20} />
+            <h2>Backup</h2>
+            <div className="metric small">{latestBackupDate ? formatShortDate(latestBackupDate) : "Pendiente"}</div>
+            <p className="muted">Ultima copia correcta del sistema nuevo.</p>
           </article>
         </section>
 
@@ -176,6 +198,12 @@ export default async function SistemaPage() {
             <p className="muted">{activeInternalNotices} avisos abiertos o en curso para revisar.</p>
             <span className="text-link">Abrir avisos</span>
           </a>
+          <a className={`card system-card ${latestBackupDate ? "" : "attention-card"}`} href="/backups">
+            <DatabaseBackup aria-hidden="true" size={22} />
+            <h2>Backups</h2>
+            <p className="muted">{latestBackupDate ? `Ultima copia correcta: ${formatShortDate(latestBackupDate)}.` : "Todavia no hay una copia correcta registrada."}</p>
+            <span className="text-link">Abrir backups</span>
+          </a>
         </section>
 
         <h2 className="section-title">Herramientas tecnicas</h2>
@@ -202,4 +230,12 @@ export default async function SistemaPage() {
     const { count, error } = await query;
     return error ? 0 : count ?? 0;
   }
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(new Date(value));
 }

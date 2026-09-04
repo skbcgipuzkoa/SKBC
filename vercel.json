@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/telegram/yearly-stats",
       "schedule": "0 8 1 1 *"
+    },
+    {
+      "path": "/api/cron/backups/daily",
+      "schedule": "30 2 * * *"
     }
   ]
 }

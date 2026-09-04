@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
 import { generateAdultTechnicalGroups, resolveTrainingGroupGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
+import { runSkbcBackup } from "@/lib/backups";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { sendStudentEmailNotification, type EmailAudience } from "@/lib/email-notifications";
@@ -31,6 +32,21 @@ export async function loginAction(formData: FormData) {
 export async function logoutAction() {
   await revokeInternalAccess();
   redirect("/skbc-interno");
+}
+
+export async function runManualBackupAction() {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const result = await runSkbcBackup("manual", "Alvaro");
+  if (result.status === "failed") {
+    redirect(`/backups?error=backup&detail=${encodeURIComponent(result.error ?? "Error desconocido")}`);
+  }
+
+  revalidatePath("/backups");
+  revalidatePath("/sistema");
+  redirect("/backups?saved=backup");
 }
 
 export async function recalculateAllExamStatusesAction() {

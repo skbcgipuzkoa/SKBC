@@ -21,6 +21,7 @@ const navItems = [
   { label: "Proximos examenes", href: "/proximos-examenes" },
   { label: "Rankings", href: "/rankings" },
   { label: "Avisos", href: "/avisos" },
+  { label: "Backups", href: "/backups" },
   { label: "Notificaciones", href: "/notificaciones" },
   { label: "Sistema", href: "/sistema" }
 ];

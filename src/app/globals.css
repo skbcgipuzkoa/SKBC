@@ -1253,6 +1253,60 @@ h1 {
   margin: 0;
 }
 
+.backup-run-list {
+  display: grid;
+  gap: 14px;
+}
+
+.backup-run-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+}
+
+.backup-run-card.backup-completed {
+  border-color: #b7e4c7;
+}
+
+.backup-run-card.backup-failed {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.backup-run-card.backup-running {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.backup-run-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.backup-run-head h3 {
+  margin: 8px 0 0;
+  font-size: 1rem;
+}
+
+.backup-run-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.backup-run-meta span {
+  border-radius: 999px;
+  background: #eef5ff;
+  color: var(--primary-dark);
+  font-weight: 800;
+  padding: 6px 10px;
+  font-size: 0.84rem;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;
