@@ -83,7 +83,7 @@ export default async function BackupsPage({
             <span className="tag">{latestOk ? "Ultima copia correcta" : "Sin copia correcta todavia"}</span>
             <h2>{latestOk ? formatDateTime(latestOk.completed_at ?? latestOk.started_at) : "Crea la primera copia ahora"}</h2>
             <p className="muted">
-              Guarda una copia logica en Supabase Storage con las tablas importantes del club. No toca el sistema viejo ni guarda claves.
+              Guarda una copia logica en Supabase Storage con las tablas importantes del club. Conserva solo la ultima copia correcta y limpia archivos antiguos.
             </p>
           </div>
           <form action={runManualBackupAction}>
@@ -176,6 +176,7 @@ export default async function BackupsPage({
           <p className="muted">
             Kenshis, clases, asistencias, plan tecnico, historial tecnico, examenes, cursos, taikai,
             calendario, rankings, Busen, Shakujo, entregas, avisos, notificaciones y copia legacy importada.
+            Los registros historicos se mantienen, pero los archivos antiguos se borran automaticamente para no ocupar espacio de mas.
           </p>
         </section>
       </main>

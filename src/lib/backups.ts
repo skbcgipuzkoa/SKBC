@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const BACKUP_BUCKET = "skbc-backups";
+const COMPLETED_BACKUPS_TO_KEEP = 1;
 const BACKUP_TABLES = [
   "members",
   "classes",
@@ -116,6 +117,9 @@ export async function runSkbcBackup(triggerSource: "manual" | "cron" = "manual",
       .eq("id", run.id);
 
     if (updateError) throw updateError;
+    if (status === "completed") {
+      await pruneOldCompletedBackups(supabase);
+    }
     return { id: run.id, status, path, tableCounts, tableErrors };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";
@@ -129,6 +133,42 @@ export async function runSkbcBackup(triggerSource: "manual" | "cron" = "manual",
       .eq("id", run.id);
     return { id: run.id, status: "failed" as const, error: message };
   }
+}
+
+async function pruneOldCompletedBackups(supabase: ReturnType<typeof createAdminClient>) {
+  const { data, error } = await supabase
+    .from("backup_runs")
+    .select("id,storage_bucket,storage_path")
+    .eq("status", "completed")
+    .not("storage_path", "is", null)
+    .order("completed_at", { ascending: false, nullsFirst: false })
+    .order("started_at", { ascending: false })
+    .range(COMPLETED_BACKUPS_TO_KEEP, 500)
+    .returns<Array<{ id: string; storage_bucket: string; storage_path: string | null }>>();
+
+  if (error || !data?.length) return;
+
+  const byBucket = new Map<string, string[]>();
+  for (const run of data) {
+    if (!run.storage_path) continue;
+    const paths = byBucket.get(run.storage_bucket) ?? [];
+    paths.push(run.storage_path);
+    byBucket.set(run.storage_bucket, paths);
+  }
+
+  for (const [bucket, paths] of byBucket) {
+    if (!paths.length) continue;
+    await supabase.storage.from(bucket).remove(paths);
+  }
+
+  await supabase
+    .from("backup_runs")
+    .update({
+      storage_path: null,
+      file_size_bytes: null,
+      error_message: `Archivo eliminado automaticamente. Se conservan las ultimas ${COMPLETED_BACKUPS_TO_KEEP} copias correctas.`
+    })
+    .in("id", data.map((run) => run.id));
 }
 
 function describeBackupError(error: unknown) {
