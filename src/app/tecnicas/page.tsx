@@ -23,6 +23,9 @@ type Tecnica = {
   active_in_planning: boolean;
   content_type: string | null;
   summary_es: string | null;
+  summary_updated_at: string | null;
+  summary_updated_by: string | null;
+  updated_at: string | null;
 };
 
 export const dynamic = "force-dynamic";
@@ -40,7 +43,7 @@ export default async function TecnicasPage({
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("techniques")
-    .select("legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,active,active_in_planning,repetitions,last_trained_on")
+    .select("legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,summary_updated_at,summary_updated_by,updated_at,active,active_in_planning,repetitions,last_trained_on")
     .order("name", { ascending: true })
     .limit(900)
     .returns<Tecnica[]>();
@@ -159,9 +162,13 @@ export default async function TecnicasPage({
               <option value="inactive">Inactivas</option>
               <option value="never">Sin repeticiones</option>
               <option value="missing-summary">Sin resumen</option>
+              <option value="short-summary">Resumen corto</option>
+              <option value="suspicious">Sospechosas</option>
               <option value="missing-variant">Sin variante</option>
               <option value="duplicate-name">Nombre duplicado</option>
               <option value="duplicate-base">Base sin variantes</option>
+              <option value="rare-category">Categoria rara</option>
+              <option value="incoherent-grade">Grado incoherente</option>
               <option value="planning-non-core">Plan no goho/juho</option>
             </select>
             <button type="submit">Filtrar</button>
@@ -182,10 +189,20 @@ export default async function TecnicasPage({
 
         <h2 className="section-title">Revision tecnica</h2>
         <section className="technical-review-grid">
+          <a className={review.suspiciousRows.length ? "review-card danger" : "review-card ok"} href="/tecnicas?status=suspicious">
+            <strong>{review.suspiciousRows.length}</strong>
+            <span>Sospechosas</span>
+            <small>Todo lo que conviene revisar antes de dar por cerrado el kamoku.</small>
+          </a>
           <a className={missingSummary ? "review-card danger" : "review-card ok"} href="/tecnicas?status=missing-summary">
             <strong>{missingSummary}</strong>
             <span>Sin resumen</span>
             <small>Faltan explicaciones para plan, PDF o sustituto.</small>
+          </a>
+          <a className={review.shortSummaryRows.length ? "review-card warn" : "review-card ok"} href="/tecnicas?status=short-summary">
+            <strong>{review.shortSummaryRows.length}</strong>
+            <span>Resumen corto</span>
+            <small>Puede faltar guardia, ataque, agarre o respuesta principal.</small>
           </a>
           <a className={missingVariant ? "review-card danger" : "review-card ok"} href="/tecnicas?status=missing-variant">
             <strong>{missingVariant}</strong>
@@ -206,6 +223,11 @@ export default async function TecnicasPage({
             <strong>{review.planningNonCoreRows.length}</strong>
             <span>Plan no goho/juho</span>
             <small>Activas en planificacion fuera del nucleo Goho/Juho.</small>
+          </a>
+          <a className={review.incoherentGradeRows.length ? "review-card warn" : "review-card ok"} href="/tecnicas?status=incoherent-grade">
+            <strong>{review.incoherentGradeRows.length}</strong>
+            <span>Grado incoherente</span>
+            <small>Grados no reconocidos por el orden oficial adulto.</small>
           </a>
           <article className={review.unbalancedGrades.length ? "review-card warn" : "review-card ok"}>
             <strong>{review.unbalancedGrades.length}</strong>
@@ -302,6 +324,10 @@ function TechniqueAdminCard({
         {tecnica.variant_note ? <span>{tecnica.variant_note}</span> : null}
       </div>
       {effectiveSummary(tecnica) ? <p className="technique-summary compact">{effectiveSummary(tecnica)}</p> : null}
+      <div className="technique-audit-line">
+        <span>Descripcion: {formatDateTime(tecnica.summary_updated_at ?? tecnica.updated_at) ?? "sin registro"}</span>
+        <span>Modificado por: {tecnica.summary_updated_by ?? "Admin SKBC"}</span>
+      </div>
       <details className="inline-edit-details" open={isEditing}>
         <summary>Editar tecnica</summary>
         <form action={updateTechniqueAction} className="technique-edit-form">
@@ -372,9 +398,13 @@ function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; 
   if (params.status === "inactive" && tecnica.active) return false;
   if (params.status === "never" && tecnica.last_trained_on && tecnica.repetitions > 0) return false;
   if (params.status === "missing-summary" && effectiveSummary(tecnica)) return false;
+  if (params.status === "short-summary" && !review.shortSummaryIds.has(rowKey(tecnica))) return false;
+  if (params.status === "suspicious" && !review.suspiciousIds.has(rowKey(tecnica))) return false;
   if (params.status === "missing-variant" && (!needsVariant(tecnica.name) || tecnica.variant)) return false;
   if (params.status === "duplicate-name" && !review.duplicateNameIds.has(rowKey(tecnica))) return false;
   if (params.status === "duplicate-base" && !review.baseWithoutVariantIds.has(rowKey(tecnica))) return false;
+  if (params.status === "rare-category" && !review.rareCategoryIds.has(rowKey(tecnica))) return false;
+  if (params.status === "incoherent-grade" && !review.incoherentGradeIds.has(rowKey(tecnica))) return false;
   if (params.status === "planning-non-core" && !isPlanningNonCore(tecnica)) return false;
   return true;
 }
@@ -412,12 +442,16 @@ function slugGrade(grade: string) {
 }
 
 function needsVariant(name: string) {
-  return /\b(katate|morote|ryote|ura|omote)\b/i.test(name);
+  return /\b(katate|morote|ryote|ura|omote|mae|ushiro)\b/i.test(name);
 }
 
 function buildTechnicalReview(techniques: Tecnica[]) {
   const duplicateNameIds = new Set<string>();
   const baseWithoutVariantIds = new Set<string>();
+  const shortSummaryIds = new Set<string>();
+  const rareCategoryIds = new Set<string>();
+  const incoherentGradeIds = new Set<string>();
+  const allowedCategories = new Set(["GOHO", "JUHO", "SEIHO", "UKEMI", "RANDORI", "EMBU", "HOKEI", "KIHON"]);
   const byName = groupBy(techniques, (item) => `${normalize(item.grade)}::${normalize(item.name)}`);
   const byBase = groupBy(
     techniques.filter((item) => item.base_name),
@@ -436,8 +470,17 @@ function buildTechnicalReview(techniques: Tecnica[]) {
   });
 
   const planningNonCoreRows = techniques.filter(isPlanningNonCore);
+  techniques.forEach((row) => {
+    const summary = effectiveSummary(row);
+    if (summary && summary.length < 90) shortSummaryIds.add(rowKey(row));
+    if (!allowedCategories.has(normalize(row.category))) rareCategoryIds.add(rowKey(row));
+    if (!adultGrades.some((grade) => normalize(grade) === normalize(row.grade))) incoherentGradeIds.add(rowKey(row));
+  });
   const duplicateNameRows = techniques.filter((row) => duplicateNameIds.has(rowKey(row)));
   const baseWithoutVariantRows = techniques.filter((row) => baseWithoutVariantIds.has(rowKey(row)));
+  const shortSummaryRows = techniques.filter((row) => shortSummaryIds.has(rowKey(row)));
+  const rareCategoryRows = techniques.filter((row) => rareCategoryIds.has(rowKey(row)));
+  const incoherentGradeRows = techniques.filter((row) => incoherentGradeIds.has(rowKey(row)));
   const gradeBalance = adultGrades
     .map((grade) => {
       const rows = techniques.filter((row) => normalize(row.grade) === normalize(grade) && row.active_in_planning);
@@ -448,11 +491,31 @@ function buildTechnicalReview(techniques: Tecnica[]) {
     })
     .filter((item) => item.goho || item.juho);
 
+  const suspiciousIds = new Set<string>();
+  [
+    techniques.filter((row) => !effectiveSummary(row)),
+    techniques.filter((row) => needsVariant(row.name) && !row.variant),
+    planningNonCoreRows,
+    duplicateNameRows,
+    baseWithoutVariantRows,
+    shortSummaryRows,
+    rareCategoryRows,
+    incoherentGradeRows
+  ].flat().forEach((row) => suspiciousIds.add(rowKey(row)));
+
   return {
     duplicateNameIds,
     baseWithoutVariantIds,
+    shortSummaryIds,
+    rareCategoryIds,
+    incoherentGradeIds,
+    suspiciousIds,
     duplicateNameRows,
     baseWithoutVariantRows,
+    shortSummaryRows,
+    rareCategoryRows,
+    incoherentGradeRows,
+    suspiciousRows: techniques.filter((row) => suspiciousIds.has(rowKey(row))),
     planningNonCoreRows,
     gradeBalance,
     unbalancedGrades: gradeBalance.filter((item) => item.issue)
@@ -472,6 +535,19 @@ function groupBy<T>(items: T[], keyFor: (item: T) => string) {
 
 function rowKey(tecnica: Tecnica) {
   return tecnica.legacy_id ?? `${tecnica.grade}:${tecnica.name}`;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function isPlanningNonCore(tecnica: Tecnica) {

@@ -325,6 +325,15 @@ export async function updateTechniqueAction(formData: FormData) {
 
   const active = formData.get("active") === "on";
   const activeInPlanning = active && formData.get("activeInPlanning") === "on";
+  const supabase = createAdminClient();
+  const { data: currentTechnique } = await supabase
+    .from("techniques")
+    .select("summary_es")
+    .eq("legacy_id", legacyId)
+    .maybeSingle<{ summary_es: string | null }>();
+  const now = new Date().toISOString();
+  const nextSummary = String(formData.get("summaryEs") ?? "").trim();
+  const summaryChanged = (currentTechnique?.summary_es ?? "").trim() !== nextSummary;
   const payload = {
     name: String(formData.get("name") ?? "").trim(),
     grade: String(formData.get("grade") ?? "").trim() || "SIN GRADO",
@@ -333,17 +342,17 @@ export async function updateTechniqueAction(formData: FormData) {
     variant_note: String(formData.get("variantNote") ?? "").trim() || null,
     category: normalizeTechniqueCategoryInput(String(formData.get("category") ?? "")),
     content_type: String(formData.get("contentType") ?? "").trim() || null,
-    summary_es: String(formData.get("summaryEs") ?? "").trim(),
+    summary_es: nextSummary,
     active,
     active_in_planning: activeInPlanning,
-    updated_at: new Date().toISOString()
+    updated_at: now,
+    ...(summaryChanged ? { summary_updated_at: now, summary_updated_by: "Admin SKBC" } : {})
   };
 
   if (!payload.name || !payload.category) {
     redirect(addTechniqueParams(returnPath, { error: "technique", edit: legacyId }));
   }
 
-  const supabase = createAdminClient();
   const { error } = await supabase
     .from("techniques")
     .update(payload)
