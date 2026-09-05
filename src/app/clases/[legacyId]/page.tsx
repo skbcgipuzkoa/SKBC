@@ -25,6 +25,7 @@ import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
 import { AttendanceDayForm } from "./AttendanceDayForm";
+import { ManualTechniqueForm } from "./ManualTechniqueForm";
 import { PlanTechniqueForm } from "./PlanTechniqueForm";
 
 type ClassRow = {
@@ -205,6 +206,8 @@ export default async function ClaseDetailPage({
   const attendanceMemberIds = new Set((attendance ?? []).map((item) => item.member_id));
   const pendingClassMembers = (classMembers ?? []).filter((member) => !attendanceMemberIds.has(member.id));
   const completedPlan = (plan ?? []).filter((item) => item.completed).length;
+  const manualCommonPlan = (plan ?? []).filter((item) => normalizeGradeLabel(item.proposal_type) === "COMUN MANUAL");
+  const manualCommonSummary = summarizeManualCommonPlan(manualCommonPlan);
   const groupedPlan = groupPlanByGrade(plan ?? []);
   const adultTrainingGradeOptions = buildAdultTrainingGradeOptions(groups ?? []);
   const hasGroups = Boolean((groups ?? []).length);
@@ -922,41 +925,26 @@ export default async function ClaseDetailPage({
                   <details>
                     <summary>
                       <strong>Tecnica comun fuera del plan</strong>
-                      <span>Opcional</span>
+                      <span>{manualCommonSummary.length ? `${manualCommonSummary.length} anadidas` : "Opcional"}</span>
                     </summary>
-                    <form action={addManualClassTechniqueAction} className="manual-technique-form">
-                      <input type="hidden" name="classId" value={clase.id} />
-                      <input type="hidden" name="legacyId" value={legacyId} />
-                      <p className="muted">Usalo cuando toda la clase, o varios grados, trabajen una tecnica que no estaba en el plan automatico.</p>
-                      <label>
-                        Tecnica
-                        <select name="techniqueId" required>
-                          <option value="">Seleccionar tecnica</option>
-                          {groupTechniqueOptionsByGrade(techniqueOptions ?? []).map(([grade, rows]) => (
-                            <optgroup key={grade} label={grade}>
-                              {rows.map((technique) => (
-                                <option key={technique.id} value={technique.id}>
-                                  {technique.name} - {technique.category ?? "tecnica"}
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </label>
-                      <fieldset className="manual-technique-scope">
-                        <legend>Alcance</legend>
-                        <p className="muted">Si no marcas ningun grado, se aplicara a todos los adultos asistentes de la clase.</p>
-                        <div className="chip-checkbox-grid">
-                          {(groups ?? []).map((group) => (
-                            <label className={`grade-check grade-${slugGrade(group.grade)}`} key={group.id}>
-                              <input name="grades" type="checkbox" value={group.grade} />
-                              <span>{group.grade}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
-                      <button type="submit">Anadir tecnica comun hecha</button>
-                    </form>
+                    {manualCommonSummary.length ? (
+                      <div className="manual-technique-added-list">
+                        <strong>Extras manuales de esta clase</strong>
+                        {manualCommonSummary.map((item) => (
+                          <div className="manual-technique-added-row" key={item.key}>
+                            <span>{item.name}</span>
+                            <small>{item.scope} - {item.category ?? "tecnica"}</small>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <ManualTechniqueForm
+                      action={addManualClassTechniqueAction}
+                      classId={clase.id}
+                      legacyId={legacyId}
+                      techniques={techniqueOptions ?? []}
+                      groups={groups ?? []}
+                    />
                   </details>
                 </section>
               ) : null}
@@ -1202,17 +1190,27 @@ function groupPlanByGrade(plan: PlanRow[]) {
   return [...groups.entries()].sort(([gradeA], [gradeB]) => gradeSortValue(gradeA) - gradeSortValue(gradeB));
 }
 
-function groupTechniqueOptionsByGrade(techniques: TechniqueOption[]) {
-  const groups = new Map<string, TechniqueOption[]>();
-  techniques
-    .sort((a, b) => gradeSortValue(a.grade) - gradeSortValue(b.grade) || a.name.localeCompare(b.name, "es"))
-    .forEach((technique) => {
-      const key = technique.grade ?? "Sin grado";
-      const current = groups.get(key) ?? [];
-      current.push(technique);
-      groups.set(key, current);
-    });
-  return [...groups.entries()].sort(([gradeA], [gradeB]) => gradeSortValue(gradeA) - gradeSortValue(gradeB));
+function summarizeManualCommonPlan(plan: PlanRow[]) {
+  const grouped = new Map<string, { key: string; name: string; category: string | null; grades: string[] }>();
+  plan.forEach((item) => {
+    const key = `${normalizeGradeLabel(item.technique_name)}::${normalizeGradeLabel(item.category)}`;
+    const current = grouped.get(key) ?? {
+      key,
+      name: item.technique_name,
+      category: item.category,
+      grades: []
+    };
+    if (item.group_grade && !current.grades.includes(item.group_grade)) current.grades.push(item.group_grade);
+    grouped.set(key, current);
+  });
+
+  return [...grouped.values()].map((item) => {
+    const sortedGrades = item.grades.sort((a, b) => gradeSortValue(a) - gradeSortValue(b));
+    return {
+      ...item,
+      scope: sortedGrades.length ? sortedGrades.join(", ") : "todos"
+    };
+  });
 }
 
 function effectivePlanSummary(item: PlanRow) {

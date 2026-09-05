@@ -1981,6 +1981,65 @@ tbody tr:hover {
   width: 100%;
 }
 
+.manual-technique-search span {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  padding: 0 10px;
+}
+
+.manual-technique-search input {
+  border: 0;
+  min-height: 44px;
+  padding: 0;
+  width: 100%;
+}
+
+.manual-technique-search input:focus {
+  outline: none;
+}
+
+.manual-technique-added-list {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px;
+}
+
+.manual-technique-added-list > strong {
+  color: var(--ink);
+}
+
+.manual-technique-added-row {
+  align-items: center;
+  border-top: 1px solid #e6edf6;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.manual-technique-added-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.manual-technique-added-row span {
+  font-weight: 850;
+}
+
+.manual-technique-added-row small {
+  color: var(--muted);
+  font-weight: 750;
+  text-align: right;
+}
+
 .manual-technique-scope {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2016,6 +2075,17 @@ tbody tr:hover {
 .grade-check input {
   inline-size: 16px;
   min-height: 16px;
+}
+
+@media (max-width: 720px) {
+  .manual-technique-added-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .manual-technique-added-row small {
+    text-align: left;
+  }
 }
 
 .technique-grade-list {
