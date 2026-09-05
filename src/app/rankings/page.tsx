@@ -472,9 +472,8 @@ function uniqueSorted(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
 }
 
-function possibleClubDays(clubDates: string[], since: string, joinedOn: string | null | undefined) {
-  const start = joinedOn && joinedOn > since ? joinedOn : since;
-  return clubDates.filter((date) => date >= start).length;
+function possibleClubDays(clubDates: string[], since: string, _joinedOn: string | null | undefined) {
+  return clubDates.filter((date) => date >= since).length;
 }
 
 function attendanceRate(attendanceCount: number, possibleDays: number) {

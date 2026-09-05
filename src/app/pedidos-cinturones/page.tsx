@@ -224,13 +224,14 @@ export default async function PedidosPage({
           </article>
         </section>
 
-        <section className="card">
-          <div className="section-heading-row">
+        <details className="card">
+          <summary className="section-heading-row">
             <div>
               <h2>Catalogo de articulos</h2>
-              <p className="muted">Edita nombre, categoria, color/modelo, talla/medida y precio. Los articulos inactivos no aparecen al crear pedidos.</p>
+              <p className="muted">{(catalog ?? []).length} articulos. Pulsa para ver, editar o borrar.</p>
             </div>
-          </div>
+            <span className="tag">Ver catalogo</span>
+          </summary>
           <div className="catalog-list">
             {(catalog ?? []).length ? (catalog ?? []).map((item) => (
               <details className="catalog-item" key={item.id}>
@@ -263,7 +264,7 @@ export default async function PedidosPage({
               <p className="muted">Todavia no hay articulos creados.</p>
             )}
           </div>
-        </section>
+        </details>
 
         <section className="card">
           <h2>Resumen para comprar</h2>
