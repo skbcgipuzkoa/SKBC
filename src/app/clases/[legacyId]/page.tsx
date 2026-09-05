@@ -304,6 +304,14 @@ export default async function ClaseDetailPage({
           <button type="submit" disabled={!pendingKidsDayMembers.length}>Guardar ninos y abrir plan adulto</button>
         </div>
       </form>
+      <form action={closeKidsClassAction} className="skip-kids-class-form">
+        <input type="hidden" name="classId" value={kidsDayClass.id} />
+        <input type="hidden" name="legacyId" value={kidsDayClass.legacy_id ?? legacyId} />
+        <input type="hidden" name="returnLegacyId" value={legacyId} />
+        <input type="hidden" name="returnStep" value="" />
+        <button className="secondary-button button-reset" type="submit">Saltar clase de ninos y seguir con adultos</button>
+        <p className="muted">Usalo solo si hoy no hay clase infantil. No crea asistencias de ninos.</p>
+      </form>
     </details>
   ) : null;
   const attendancePanel = (
@@ -576,6 +584,7 @@ export default async function ClaseDetailPage({
         {query.saved === "prepare" ? <p className="save-ok">Clase preparada: grupos y plan tecnico listos.</p> : null}
         {query.saved === "groups" ? <p className="save-ok">Grupos tecnicos generados.</p> : null}
         {query.saved === "attendance" ? <p className="save-ok">Asistencia anadida.</p> : null}
+        {query.saved === "kids-skipped" ? <p className="save-ok">Clase de ninos saltada. Puedes continuar con el plan adulto.</p> : null}
         {query.saved === "attendance-removed" ? <p className="save-ok">Asistencia quitada.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}

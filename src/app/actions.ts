@@ -788,6 +788,9 @@ export async function prepareAdultClassAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
+  const returnStep = String(formData.get("returnStep") ?? "");
+  const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
 
   if (!classId || !legacyId) {
     redirect("/clases");
@@ -1612,6 +1615,9 @@ export async function closeKidsClassAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
+  const returnStep = String(formData.get("returnStep") ?? "");
+  const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
 
   if (!classId || !legacyId) {
     redirect("/clases");
@@ -1625,7 +1631,7 @@ export async function closeKidsClassAction(formData: FormData) {
     .eq("class_group", "kids");
 
   if (error) {
-    redirect(`/clases/${legacyId}?error=close`);
+    redirect(`/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
   }
 
   try {
@@ -1635,7 +1641,7 @@ export async function closeKidsClassAction(formData: FormData) {
     console.error("Error recalculating kids class exam status", error);
   }
 
-  redirect(`/clases/${legacyId}?saved=close`);
+  redirect(`/clases/${returnLegacyId || legacyId}?saved=kids-skipped${returnStepQuery}`);
 }
 
 export async function registerExamAction(formData: FormData) {

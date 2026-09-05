@@ -2973,6 +2973,22 @@ tbody tr:hover {
   padding: 5px 12px;
 }
 
+.skip-kids-class-form {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.skip-kids-class-form button {
+  justify-self: flex-start;
+}
+
+.skip-kids-class-form p {
+  margin: 0;
+}
+
 .exam-member-picker {
   border: 1px solid var(--line);
   border-radius: 8px;
