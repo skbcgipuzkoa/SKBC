@@ -5300,6 +5300,79 @@ tbody tr:hover {
   margin: 0;
 }
 
+.global-technical-grades {
+  display: grid;
+  gap: 10px;
+}
+
+.global-technical-grade {
+  background: #ffffff;
+  border: 1px solid var(--ficha-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.global-technical-grade summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  list-style: none;
+  padding: 12px;
+}
+
+.global-technical-grade summary::-webkit-details-marker {
+  display: none;
+}
+
+.global-technical-grade summary strong {
+  color: var(--ficha-text);
+  font-size: 16px;
+}
+
+.global-technical-grade summary small {
+  color: var(--ficha-muted);
+  font-weight: 800;
+}
+
+.global-grade-chip {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 950;
+  justify-content: center;
+  min-width: 74px;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.global-technical-grade summary::after {
+  color: var(--ficha-blue);
+  content: "Ver";
+  font-size: 12px;
+  font-weight: 950;
+  grid-column: 3;
+}
+
+.global-technical-grade[open] summary {
+  border-bottom: 1px solid var(--ficha-line);
+}
+
+.global-technical-grade[open] summary::after {
+  content: "Cerrar";
+}
+
+.global-technical-grade .ficha-table-wrap {
+  border: 0;
+  border-radius: 0;
+}
+
+.ficha-empty-note {
+  color: var(--ficha-muted);
+  margin: 0;
+}
+
 .ficha-triple {
   display: grid;
   gap: 12px;

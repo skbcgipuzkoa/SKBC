@@ -589,19 +589,29 @@ function AdultFicha({
             <Field label="Goho / Juho" value={`${fullTechnicalHistory.gohoRepetitions} / ${fullTechnicalHistory.juhoRepetitions}`} />
           </div>
         </div>
-        <ResponsiveTable
-          columns={["Tecnica", "Grado", "Categoria", "Veces", "Cuenta examen", "General", "Ultima vez"]}
-          rows={fullTechnicalHistory.techniques.map((technique) => [
-            technique.name,
-            technique.grade,
-            technique.category,
-            String(technique.repetitions),
-            String(technique.progressionRepetitions),
-            String(technique.generalRepetitions),
-            formatDate(technique.lastDate)
-          ])}
-          empty="Sin historial tecnico registrado."
-        />
+        <div className="global-technical-grades">
+          {fullTechnicalHistory.groups.length ? fullTechnicalHistory.groups.map((group) => (
+            <details className="global-technical-grade" key={group.grade}>
+              <summary>
+                <span className={`global-grade-chip adult-grade-${adultGradeColor(group.grade)}`}>{group.grade}</span>
+                <strong>{group.repetitions} practicas</strong>
+                <small>{group.techniques.length} tecnicas</small>
+              </summary>
+              <ResponsiveTable
+                columns={["Tecnica", "Categoria", "Veces", "Cuenta examen", "General", "Ultima vez"]}
+                rows={group.techniques.map((technique) => [
+                  technique.name,
+                  technique.category,
+                  String(technique.repetitions),
+                  String(technique.progressionRepetitions),
+                  String(technique.generalRepetitions),
+                  formatDate(technique.lastDate)
+                ])}
+                empty="Sin historial tecnico registrado en este grado."
+              />
+            </details>
+          )) : <p className="ficha-empty-note">Sin historial tecnico registrado.</p>}
+        </div>
       </FoldableSection>
 
       <FoldableSection title="Examenes" meta={`${exams.length} registros`}>
@@ -1274,9 +1284,18 @@ function buildFullTechnicalHistory(history: TechnicalHistory[]) {
     if (b.repetitions !== a.repetitions) return b.repetitions - a.repetitions;
     return a.name.localeCompare(b.name, "es");
   });
+  const groups = ADULT_GRADES.map((grade) => {
+    const groupTechniques = techniques.filter((technique) => sameGrade(technique.grade, grade));
+    return {
+      grade,
+      techniques: groupTechniques,
+      repetitions: groupTechniques.reduce((sum, technique) => sum + technique.repetitions, 0)
+    };
+  }).filter((group) => group.techniques.length > 0);
 
   return {
     techniques,
+    groups,
     totalRepetitions: techniques.reduce((sum, technique) => sum + technique.repetitions, 0),
     progressionRepetitions: techniques.reduce((sum, technique) => sum + technique.progressionRepetitions, 0),
     generalRepetitions: techniques.reduce((sum, technique) => sum + technique.generalRepetitions, 0),
