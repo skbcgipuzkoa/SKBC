@@ -304,6 +304,7 @@ export default async function PublicFichaPage({
   }
 
   const targetGrade = nextAdultGrade(member.grade);
+  const date60 = daysAgo(60);
   const date180 = daysAgo(180);
   const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
     supabase
@@ -330,7 +331,7 @@ export default async function PublicFichaPage({
     supabase
       .from("courses")
       .select("member_id,course_date,kind")
-      .gte("course_date", date180)
+      .gte("course_date", date60)
       .returns<Array<{ member_id: string; course_date: string; kind: "national" | "international" | "taikai" }>>(),
     supabase
       .from("adult_ranking_bonuses")
@@ -1296,7 +1297,8 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
       const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
       const attendanceVolume = Math.min(a90, 12);
-      const activityScore = constancyScore + attendanceVolume + (coursePoints.get(member.id) ?? 0) + (bonusPoints.get(member.id) ?? 0);
+      const bonusScore = (bonusPoints.get(member.id) ?? 0) * 8;
+      const activityScore = constancyScore + attendanceVolume + (coursePoints.get(member.id) ?? 0) + bonusScore;
       const score = Math.max(0, activityScore - adultInactivityPenalty(daysWithoutAttendance));
       return { ...member, score, constancy90: c90, attendance30: a30 };
     })

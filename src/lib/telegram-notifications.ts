@@ -121,6 +121,7 @@ type NotificationSetting = {
 
 const today = new Date();
 const date30 = daysAgo(30);
+const date60 = daysAgo(60);
 const date90 = daysAgo(90);
 const date180 = daysAgo(180);
 
@@ -299,7 +300,7 @@ async function buildDailyDigest() {
       .gte("class_date", date90)
       .eq("completed", true)
       .returns<TechnicalHistory[]>(),
-    supabase.from("courses").select("member_id,course_date,kind").gte("course_date", date180).returns<Course[]>(),
+    supabase.from("courses").select("member_id,course_date,kind").gte("course_date", date60).returns<Course[]>(),
     supabase.from("adult_ranking_bonuses").select("member_id,bonus_date,points,active,permanent").returns<AdultBonus[]>(),
     supabase
       .from("child_rankings")
@@ -596,6 +597,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
       const attendanceVolume = Math.min(a90, 12);
+      const bonusScore = (manualBonus.get(member.id) ?? 0) * 8;
       const score = Math.max(
         0,
         constancyScore +
@@ -603,7 +605,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
           (nationalCoursePoints.get(member.id) ?? 0) +
           (internationalCoursePoints.get(member.id) ?? 0) +
           (taikaiCoursePoints.get(member.id) ?? 0) +
-          (manualBonus.get(member.id) ?? 0) +
+          bonusScore +
           (blackBeltPoints.get(member.id) ?? 0) +
           (shakujoPoints.get(member.id) ?? 0) -
           adultInactivityPenalty(daysWithoutAttendance)

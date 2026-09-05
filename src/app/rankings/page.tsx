@@ -88,6 +88,7 @@ type CalendarClosure = {
 
 const today = new Date();
 const date30 = daysAgo(30);
+const date60 = daysAgo(60);
 const date90 = daysAgo(90);
 const date180 = daysAgo(180);
 
@@ -122,7 +123,7 @@ export default async function RankingsPage({
       supabase
         .from("courses")
         .select("member_id,course_date,kind")
-        .gte("course_date", date180)
+        .gte("course_date", date60)
         .returns<Course[]>(),
       supabase
         .from("child_rankings")
@@ -428,11 +429,12 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const taikai = taikaiCoursePoints.get(member.id) ?? 0;
       const bonus = manualBonus.get(member.id) ?? 0;
+      const bonusScore = bonus * 8;
       const black = blackBeltPoints.get(member.id) ?? 0;
       const shakujo = shakujoPoints.get(member.id) ?? 0;
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
       const attendanceVolume = Math.min(a90, 12);
-      const activityScore = constancyScore + attendanceVolume + nac + intl + taikai + bonus + black + shakujo;
+      const activityScore = constancyScore + attendanceVolume + nac + intl + taikai + bonusScore + black + shakujo;
       const inactivityPenalty = adultInactivityPenalty(daysWithoutAttendance);
       return {
         ...member,
