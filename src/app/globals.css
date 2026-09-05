@@ -1949,6 +1949,75 @@ tbody tr:hover {
   padding-top: 7px;
 }
 
+.manual-technique-panel {
+  margin-top: 12px;
+}
+
+.manual-technique-panel summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.manual-technique-panel summary span {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 12px;
+  font-weight: 850;
+  padding: 5px 9px;
+}
+
+.manual-technique-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.manual-technique-form select,
+.manual-technique-form button {
+  width: 100%;
+}
+
+.manual-technique-scope {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.manual-technique-scope legend {
+  color: var(--ink);
+  font-weight: 900;
+  padding: 0 6px;
+}
+
+.chip-checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.grade-check {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 6px;
+  padding: 7px 10px;
+}
+
+.grade-check input {
+  inline-size: 16px;
+  min-height: 16px;
+}
+
 .technique-grade-list {
   display: grid;
   gap: 12px;

@@ -3,6 +3,7 @@ import { SidebarNav } from "@/app/components/SidebarNav";
 import { notFound, redirect } from "next/navigation";
 import {
   closeAdultClassAction,
+  addManualClassTechniqueAction,
   addAttendanceAction,
   addBulkAttendanceAction,
   closeKidsClassAction,
@@ -107,6 +108,14 @@ type TechnicalOverrideRow = {
   plan_id: string;
 };
 
+type TechniqueOption = {
+  id: string;
+  grade: string;
+  name: string;
+  category: string | null;
+  active: boolean;
+};
+
 export default async function ClaseDetailPage({
   params,
   searchParams
@@ -129,7 +138,7 @@ export default async function ClaseDetailPage({
 
   if (error || !clase) notFound();
 
-  const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }, { data: dayClasses }, { data: dayMembers }, { data: dayAttendance }] = await Promise.all([
+  const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }, { data: dayClasses }, { data: dayMembers }, { data: dayAttendance }, { data: techniqueOptions }] = await Promise.all([
     supabase
       .from("technical_plans")
       .select("id,legacy_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score,summary_es)")
@@ -183,7 +192,14 @@ export default async function ClaseDetailPage({
       .from("attendance_logs")
       .select("id,class_id,attended_on,member_id,official_grade,trained_grade,technical_note,members(first_name,last_name,legacy_id,class)")
       .in("class_id", (await supabase.from("classes").select("id").eq("class_date", clase.class_date).in("class_group", ["adults", "kids"]).returns<Array<{ id: string }>>()).data?.map((item) => item.id) ?? [])
-      .returns<Array<AttendanceRow & { class_id: string }>>()
+      .returns<Array<AttendanceRow & { class_id: string }>>(),
+    supabase
+      .from("techniques")
+      .select("id,grade,name,category,active")
+      .eq("active", true)
+      .order("grade")
+      .order("name")
+      .returns<TechniqueOption[]>()
   ]);
 
   const attendanceMemberIds = new Set((attendance ?? []).map((item) => item.member_id));
@@ -587,6 +603,7 @@ export default async function ClaseDetailPage({
         {query.saved === "kids-skipped" ? <p className="save-ok">Clase de ninos saltada. Puedes continuar con el plan adulto.</p> : null}
         {query.saved === "attendance-removed" ? <p className="save-ok">Asistencia quitada.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
+        {query.saved === "manual-technique" ? <p className="save-ok">Tecnica comun anadida al plan de clase.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.saved === "delegate" ? <p className="save-ok">Enlace de sustituto generado.</p> : null}
         {query.error === "plan" ? (
@@ -609,6 +626,9 @@ export default async function ClaseDetailPage({
         ) : null}
         {query.error === "plan-technique" ? (
           <p className="form-error">No se ha podido actualizar la tecnica.</p>
+        ) : null}
+        {query.error === "manual-technique" ? (
+          <p className="form-error">No se ha podido anadir la tecnica comun{query.detail ? `: ${query.detail}` : "."}</p>
         ) : null}
         {query.error === "close" ? (
           <p className="form-error">No se ha podido cerrar la clase.</p>
@@ -897,6 +917,49 @@ export default async function ClaseDetailPage({
                 </div>
               ) : null}
               </PlanTechniqueForm>
+              {!clase.closed ? (
+                <section className="card manual-technique-panel">
+                  <details>
+                    <summary>
+                      <strong>Tecnica comun fuera del plan</strong>
+                      <span>Opcional</span>
+                    </summary>
+                    <form action={addManualClassTechniqueAction} className="manual-technique-form">
+                      <input type="hidden" name="classId" value={clase.id} />
+                      <input type="hidden" name="legacyId" value={legacyId} />
+                      <p className="muted">Usalo cuando toda la clase, o varios grados, trabajen una tecnica que no estaba en el plan automatico.</p>
+                      <label>
+                        Tecnica
+                        <select name="techniqueId" required>
+                          <option value="">Seleccionar tecnica</option>
+                          {groupTechniqueOptionsByGrade(techniqueOptions ?? []).map(([grade, rows]) => (
+                            <optgroup key={grade} label={grade}>
+                              {rows.map((technique) => (
+                                <option key={technique.id} value={technique.id}>
+                                  {technique.name} - {technique.category ?? "tecnica"}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </label>
+                      <fieldset className="manual-technique-scope">
+                        <legend>Alcance</legend>
+                        <p className="muted">Si no marcas ningun grado, se aplicara a todos los adultos asistentes de la clase.</p>
+                        <div className="chip-checkbox-grid">
+                          {(groups ?? []).map((group) => (
+                            <label className={`grade-check grade-${slugGrade(group.grade)}`} key={group.id}>
+                              <input name="grades" type="checkbox" value={group.grade} />
+                              <span>{group.grade}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <button type="submit">Anadir tecnica comun hecha</button>
+                    </form>
+                  </details>
+                </section>
+              ) : null}
           </>
         ) : null}
 
@@ -1136,6 +1199,19 @@ function groupPlanByGrade(plan: PlanRow[]) {
     current.push(item);
     groups.set(key, current);
   });
+  return [...groups.entries()].sort(([gradeA], [gradeB]) => gradeSortValue(gradeA) - gradeSortValue(gradeB));
+}
+
+function groupTechniqueOptionsByGrade(techniques: TechniqueOption[]) {
+  const groups = new Map<string, TechniqueOption[]>();
+  techniques
+    .sort((a, b) => gradeSortValue(a.grade) - gradeSortValue(b.grade) || a.name.localeCompare(b.name, "es"))
+    .forEach((technique) => {
+      const key = technique.grade ?? "Sin grado";
+      const current = groups.get(key) ?? [];
+      current.push(technique);
+      groups.set(key, current);
+    });
   return [...groups.entries()].sort(([gradeA], [gradeB]) => gradeSortValue(gradeA) - gradeSortValue(gradeB));
 }
 

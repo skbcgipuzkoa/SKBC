@@ -768,6 +768,18 @@ function normalizeDistributionLabelKey(value: string) {
   return value.trim().toLocaleLowerCase("es");
 }
 
+function normalizeActionGrade(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function resolveActionTargetGrade(value: string | null | undefined) {
+  const grade = normalizeActionGrade(value);
+  const order = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
+  const index = order.indexOf(grade);
+  if (index === -1) return grade || null;
+  return order[Math.min(index + 1, order.length - 1)];
+}
+
 export async function generateAdultPlanAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -788,6 +800,112 @@ export async function generateAdultPlanAction(formData: FormData) {
   }
 
   redirect(`/clases/${legacyId}?saved=plan`);
+}
+
+export async function addManualClassTechniqueAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const techniqueId = String(formData.get("techniqueId") ?? "");
+  const selectedGrades = formData.getAll("grades").map((value) => String(value)).filter(Boolean);
+
+  if (!classId || !legacyId || !techniqueId) {
+    redirect(`/clases/${legacyId || ""}?error=manual-technique`);
+  }
+
+  const supabase = createAdminClient();
+
+  try {
+    const [{ data: clase, error: classError }, { data: technique, error: techniqueError }, { data: groups, error: groupsError }, { data: maxPlan }] =
+      await Promise.all([
+        supabase
+          .from("classes")
+          .select("id,class_date,class_group,class_type,closed")
+          .eq("id", classId)
+          .single<{ id: string; class_date: string; class_group: "kids" | "adults"; class_type: string | null; closed: boolean }>(),
+        supabase
+          .from("techniques")
+          .select("id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,score")
+          .eq("id", techniqueId)
+          .single<{
+            id: string;
+            grade: string;
+            base_name: string | null;
+            name: string;
+            variant: string | null;
+            variant_note: string | null;
+            category: string | null;
+            content_type: string | null;
+            summary_es: string | null;
+            score: number | null;
+          }>(),
+        supabase
+          .from("class_technical_groups")
+          .select("id,grade,active")
+          .eq("class_id", classId)
+          .eq("active", true)
+          .returns<Array<{ id: string; grade: string; active: boolean }>>(),
+        supabase
+          .from("technical_plans")
+          .select("suggested_order")
+          .eq("class_id", classId)
+          .order("suggested_order", { ascending: false })
+          .limit(1)
+          .returns<Array<{ suggested_order: number | null }>>()
+      ]);
+
+    if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
+    if (techniqueError || !technique) throw techniqueError ?? new Error("Tecnica no encontrada.");
+    if (groupsError) throw groupsError;
+    if (clase.closed || clase.class_group !== "adults") throw new Error("Solo se pueden anadir tecnicas manuales a clases adultas abiertas.");
+
+    const normalizedSelected = new Set(selectedGrades.map(normalizeActionGrade));
+    const targetGroups = (groups ?? []).filter((group) => !normalizedSelected.size || normalizedSelected.has(normalizeActionGrade(group.grade)));
+    if (!targetGroups.length) throw new Error("No hay grupos tecnicos para ese alcance.");
+
+    const baseOrder = (maxPlan?.[0]?.suggested_order ?? 0) + 1;
+    const legacyPrefix = `PLA_MAN_${Date.now().toString(36).toUpperCase()}`;
+    const now = new Date().toISOString();
+    const inserts = targetGroups.map((group, index) => ({
+      legacy_id: `${legacyPrefix}_${String(index + 1).padStart(3, "0")}`,
+      class_id: clase.id,
+      technical_group_id: group.id,
+      class_date: clase.class_date,
+      session_type: clase.class_type,
+      grade: group.grade,
+      group_grade: group.grade,
+      target_grade: resolveActionTargetGrade(group.grade),
+      technique_id: technique.id,
+      technique_grade: technique.grade,
+      technique_base: technique.base_name,
+      technique_name: technique.name,
+      variant: technique.variant,
+      variant_note: technique.variant_note,
+      category: normalizeTechniqueCategoryInput(technique.category ?? ""),
+      content_type: technique.content_type,
+      summary_es: technique.summary_es,
+      proposal_type: "COMUN MANUAL",
+      focus: "TECNICA COMUN",
+      suggested_order: baseOrder + index,
+      score_at_that_moment: technique.score ?? 0,
+      completed: true,
+      notes: normalizedSelected.size ? "Tecnica comun anadida manualmente para grados seleccionados." : "Tecnica comun anadida manualmente para toda la clase.",
+      used_for_history: true,
+      updated_at: now
+    }));
+
+    const { error: insertError } = await supabase.from("technical_plans").insert(inserts);
+    if (insertError) throw insertError;
+  } catch (error) {
+    console.error("Error adding manual class technique", error);
+    redirect(`/clases/${legacyId}?error=manual-technique&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath(`/clases/${legacyId}`);
+  redirect(`/clases/${legacyId}?saved=manual-technique#plan-tecnico`);
 }
 
 export async function prepareAdultClassAction(formData: FormData) {
