@@ -377,9 +377,9 @@ export default async function ClaseDetailPage({
                           </select>
                           <select name={`technicalRole:${dayClass.id}:${member.id}`} defaultValue="student">
                             <option value="student">Entrena</option>
+                            <option value="reviewing">Parcial / salio antes</option>
                             <option value="teaching">Ensenando +1</option>
                             <option value="support">Apoyo</option>
-                            <option value="reviewing">Repaso</option>
                             <option value="observing">Observa</option>
                           </select>
                         </span>
@@ -416,7 +416,7 @@ export default async function ClaseDetailPage({
       <form action={saveAttendanceTechnicalReviewAction} className="technical-review-form">
         <input type="hidden" name="classId" value={clase.id} />
         <input type="hidden" name="legacyId" value={legacyId} />
-        <p className="muted">Abre esto solo si alguien cambio de grupo, enseno parte de la clase o necesitas corregir exactamente que tecnicas se adjuntan antes de cerrar.</p>
+        <p className="muted">Abre esto solo si alguien cambio de grupo, enseno parte de la clase o salio antes. Por defecto aparecen marcadas las tecnicas de su grupo; desmarca las que no hizo para que no se adjunten por error.</p>
         <div className="technical-review-stack">
           {reviewableAdultAttendanceRows.map((row) => {
             const selectedOverrides = technicalOverridesByAttendance.get(row.id);

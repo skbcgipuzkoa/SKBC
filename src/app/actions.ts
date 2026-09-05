@@ -3549,6 +3549,13 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
     const technicalRole = clase.class_group === "adults" && ["student", "teaching", "support", "reviewing", "observing"].includes(roleOverride)
       ? roleOverride
       : "student";
+    const roleNote = technicalRole === "observing"
+      ? "OBSERVA: asistencia registrada sin historial tecnico automatico."
+      : technicalRole === "teaching"
+        ? "ENSENA: asistencia registrada con bonus de ayuda en clase."
+        : technicalRole === "reviewing"
+          ? "PARCIAL/REPASO: revisar tecnicas exactas antes de cerrar si no hizo toda la clase."
+          : technicalNote;
     const trainedGrade = clase.class_group === "adults"
       ? trainedGradeOverride || resolveTrainingGroupGrade(officialGrade)
       : officialGrade;
@@ -3560,8 +3567,8 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
       official_grade: officialGrade || null,
       trained_grade: trainedGrade || null,
       technical_role: technicalRole,
-      technical_note: technicalNote,
-      use_for_history: true
+      technical_note: roleNote,
+      use_for_history: technicalRole !== "observing"
     };
   });
 
