@@ -55,7 +55,6 @@ export default async function BackupsPage({
   const latestOk = runs.find((run) => run.status === "completed") ?? null;
   const latest = runs[0] ?? null;
   const failed = runs.filter((run) => run.status === "failed").length;
-  const signedUrls = await buildSignedUrls(supabase, runs);
 
   return (
     <div className="shell">
@@ -155,8 +154,12 @@ export default async function BackupsPage({
                     </details>
                   ) : null}
                   <div className="form-actions">
-                    {signedUrls.get(run.id) ? (
-                      <a className="secondary-link" href={signedUrls.get(run.id)} target="_blank" rel="noopener noreferrer">
+                    {run.status === "completed" && run.storage_path ? (
+                      <a
+                        className="secondary-link"
+                        href={`/api/admin/backups/${run.id}/download`}
+                        download
+                      >
                         Descargar JSON
                       </a>
                     ) : (
@@ -175,25 +178,13 @@ export default async function BackupsPage({
           <h2>Que incluye</h2>
           <p className="muted">
             Kenshis, clases, asistencias, plan tecnico, historial tecnico, examenes, cursos, taikai,
-            calendario, rankings, Busen, Shakujo, entregas, avisos, notificaciones y copia legacy importada.
+            calendario, rankings, Busen, Shakujo, entregas, avisos y notificaciones del sistema nuevo.
             Los registros historicos se mantienen, pero los archivos antiguos se borran automaticamente para no ocupar espacio de mas.
           </p>
         </section>
       </main>
     </div>
   );
-}
-
-async function buildSignedUrls(supabase: ReturnType<typeof createAdminClient>, runs: BackupRun[]) {
-  const urls = new Map<string, string>();
-  for (const run of runs) {
-    if (!run.storage_path || run.status !== "completed") continue;
-    const { data } = await supabase.storage
-      .from(run.storage_bucket)
-      .createSignedUrl(run.storage_path, 60 * 10);
-    if (data?.signedUrl) urls.set(run.id, data.signedUrl);
-  }
-  return urls;
 }
 
 function statusLabel(status: BackupRun["status"]) {
