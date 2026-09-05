@@ -176,9 +176,18 @@ a:active {
 }
 
 .is-pressed-action {
-  opacity: 0.72;
-  pointer-events: none;
+  filter: saturate(0.92);
+  opacity: 0.78;
   position: relative;
+}
+
+.is-pressed-action::after {
+  border: 2px solid rgba(0, 87, 184, 0.28);
+  border-radius: inherit;
+  content: "";
+  inset: -3px;
+  pointer-events: none;
+  position: absolute;
 }
 
 .interaction-feedback {
@@ -192,6 +201,7 @@ a:active {
   display: inline-flex;
   gap: 9px;
   left: 50%;
+  max-width: min(360px, calc(100vw - 28px));
   min-height: 42px;
   opacity: 0;
   padding: 10px 15px;
@@ -210,6 +220,8 @@ a:active {
 .interaction-feedback strong {
   font-size: 14px;
   line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

@@ -3,6 +3,59 @@
 import { useEffect, useRef, useState } from "react";
 
 const FEEDBACK_DURATION = 4500;
+const PRESS_DURATION = 900;
+
+function normalizeLabel(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getActionMessage(element: HTMLElement | null, fallback = "Procesando...") {
+  const label = normalizeLabel(
+    [
+      element?.dataset.feedbackMessage,
+      element?.getAttribute("aria-label"),
+      element?.textContent,
+      element?.getAttribute("title"),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  if (!label) return fallback;
+  if (/(guardar|actualizar|registrar|anadir|añadir|crear|cerrar|confirmar|enviar|reintentar|pausar|activar|desactivar)/.test(label)) {
+    return "Guardando...";
+  }
+  if (/(preparar|generar|calcular|duplicar|importar|exportar|sincronizar|backup|copia)/.test(label)) {
+    return "Preparando...";
+  }
+  if (/(pdf|imprimir|descargar|compartir|diploma|informe)/.test(label)) {
+    return "Preparando documento...";
+  }
+  if (/(eliminar|borrar|quitar)/.test(label)) {
+    return "Eliminando...";
+  }
+  if (/(abrir|ver|volver|entrar|accesos|ficha|detalle|consulta|app examenes|inicio)/.test(label)) {
+    return "Abriendo...";
+  }
+  return fallback;
+}
+
+function isIgnoredControl(element: HTMLElement) {
+  if (element.dataset.noGlobalFeedback === "true") return true;
+  if (element.closest("[data-no-global-feedback='true']")) return true;
+  if (element instanceof HTMLButtonElement) {
+    return element.disabled || element.type === "reset";
+  }
+  if (element instanceof HTMLInputElement) {
+    return element.disabled || !["button", "submit"].includes(element.type);
+  }
+  return false;
+}
 
 export function InteractionFeedback() {
   const [message, setMessage] = useState("");
@@ -29,20 +82,32 @@ export function InteractionFeedback() {
       setTimeout(() => {
         element.classList.remove("is-pressed-action");
         element.removeAttribute("aria-busy");
-      }, FEEDBACK_DURATION);
+      }, PRESS_DURATION);
     };
 
     const onSubmit = (event: SubmitEvent) => {
       const form = event.target instanceof HTMLFormElement ? event.target : null;
       if (!form || form.dataset.noGlobalFeedback === "true") return;
       const submitter = event.submitter instanceof HTMLElement ? event.submitter : form.querySelector<HTMLElement>("button[type='submit']");
+      if (submitter && isIgnoredControl(submitter)) return;
       markElement(submitter);
-      showFeedback(submitter?.textContent?.toLowerCase().includes("eliminar") ? "Procesando accion..." : "Guardando...");
+      showFeedback(getActionMessage(submitter, "Guardando..."));
     };
 
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
+      const action = target?.closest<HTMLElement>("button, input[type='button'], input[type='submit'], [role='button']");
+      if (action && !isIgnoredControl(action)) {
+        const isSubmitter =
+          (action instanceof HTMLButtonElement && action.type === "submit") ||
+          (action instanceof HTMLInputElement && action.type === "submit");
+        if (!isSubmitter) {
+          markElement(action);
+          showFeedback(getActionMessage(action));
+        }
+      }
+
       const link = target?.closest<HTMLAnchorElement>("a[href]");
       if (!link || link.dataset.noGlobalFeedback === "true") return;
       if (link.target && link.target !== "_self") return;
