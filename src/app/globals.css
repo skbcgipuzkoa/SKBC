@@ -3974,6 +3974,159 @@ tbody tr:hover {
   margin-top: 10px;
 }
 
+.ranking-compare-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+}
+
+.ranking-compare-form {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+}
+
+.ranking-compare-form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 5px;
+}
+
+.ranking-compare-form select {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
+.ranking-compare-form button {
+  min-height: 42px;
+}
+
+.ranking-compare-panel {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.compare-columns {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compare-person-card {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 10px;
+}
+
+.compare-person-card strong,
+.compare-person-card span {
+  display: block;
+}
+
+.compare-person-card strong {
+  color: var(--ink);
+  font-weight: 950;
+}
+
+.compare-person-card span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.compare-person-card b {
+  color: var(--brand);
+  white-space: nowrap;
+}
+
+.compare-metric-table {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.compare-metric-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(130px, 1.3fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) minmax(52px, auto);
+  padding: 9px 10px;
+}
+
+.compare-metric-row + .compare-metric-row {
+  border-top: 1px solid var(--line);
+}
+
+.compare-metric-row span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.compare-metric-row em {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.compare-metric-row strong {
+  color: var(--ink);
+  font-weight: 950;
+}
+
+.compare-metric-row small {
+  color: var(--muted);
+  font-weight: 800;
+  text-align: right;
+}
+
+.compare-winner {
+  background: #ecfdf3;
+  border-radius: 999px;
+  color: var(--ok) !important;
+  padding: 4px 8px;
+  width: fit-content;
+}
+
+.compare-insights {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: var(--muted);
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 12px;
+}
+
+.compare-insights strong {
+  color: var(--ink);
+}
+
+.compare-insights p {
+  margin: 0;
+}
+
 .ranking-position {
   align-items: center;
   background: #eef6ff;
@@ -7011,6 +7164,40 @@ tbody tr:hover {
   .ranking-chip {
     font-size: 11px;
     padding: 5px 8px;
+  }
+
+  .ranking-compare-card {
+    padding: 10px;
+  }
+
+  .ranking-compare-form {
+    grid-template-columns: 1fr;
+  }
+
+  .ranking-compare-form .mini-action,
+  .ranking-compare-form button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .compare-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-person-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .compare-person-card b {
+    grid-column: 2;
+  }
+
+  .compare-metric-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .compare-metric-row span {
+    grid-column: 1 / -1;
   }
 
   .inline-report-form,

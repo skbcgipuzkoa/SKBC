@@ -102,7 +102,7 @@ const date180 = daysAgo(180);
 export default async function RankingsPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; error?: string; view?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; view?: string; compareA?: string; compareB?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -137,7 +137,6 @@ export default async function RankingsPage({
         .select("member_id,attendance_30d,attendance_90d,last_attendance_on,days_without_attendance,score,position,level,members(legacy_id,ika_id,display_name,grade,status)")
         .order("position", { ascending: true, nullsFirst: false })
         .order("score", { ascending: false })
-        .limit(10)
         .returns<ChildRanking[]>()
       ,
       supabase
@@ -187,10 +186,20 @@ export default async function RankingsPage({
   const blackBeltRows = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
   const shakujoRows = shakujoResult.error ? [] : shakujoResult.data ?? [];
   const closures = closuresResult.error ? [] : closuresResult.data ?? [];
-  const adults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, shakujoRows, closures).slice(0, 10);
+  const allAdults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, shakujoRows, closures);
+  const adults = allAdults.slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
-  const kids = (childRankings ?? []).filter((row) => row.members?.status === "active").slice(0, 10);
+  const allKids = (childRankings ?? []).filter((row) => row.members?.status === "active");
+  const kids = allKids.slice(0, 10);
   const selectedView = params.view === "kids" ? "kids" : "adults";
+  const compareA = params.compareA ?? "";
+  const compareB = params.compareB ?? "";
+  const selectedAdultA = selectedView === "adults" ? allAdults.find((row) => row.id === compareA) : null;
+  const selectedAdultB = selectedView === "adults" ? allAdults.find((row) => row.id === compareB) : null;
+  const selectedKidA = selectedView === "kids" ? allKids.find((row) => row.member_id === compareA) : null;
+  const selectedKidB = selectedView === "kids" ? allKids.find((row) => row.member_id === compareB) : null;
+  const adultPosition = new Map(allAdults.map((row, index) => [row.id, index + 1]));
+  const kidPosition = new Map(allKids.map((row, index) => [row.member_id, row.position ?? index + 1]));
 
   return (
     <div className="shell">
@@ -217,6 +226,49 @@ export default async function RankingsPage({
             <Award aria-hidden="true" size={17} />
             Ninos
           </a>
+        </section>
+
+        <section className="ranking-compare-card">
+          <div className="section-heading-row">
+            <div>
+              <h2 className="section-title">Comparar kenshis</h2>
+              <p className="muted">Elige dos kenshis de la categoria activa para ver por que uno queda por encima del otro.</p>
+            </div>
+            <span className="tag">{selectedView === "adults" ? "Adultos" : "Ninos"}</span>
+          </div>
+          <form action="/rankings" className="ranking-compare-form">
+            <input type="hidden" name="view" value={selectedView} />
+            <label>
+              Kenshi A
+              <select name="compareA" defaultValue={compareA} required>
+                <option value="">Seleccionar</option>
+                {selectedView === "adults" ? allAdults.map((row, index) => (
+                  <option value={row.id} key={row.id}>#{index + 1} {row.display_name}</option>
+                )) : allKids.map((row, index) => (
+                  <option value={row.member_id} key={row.member_id}>#{row.position ?? index + 1} {row.members?.display_name ?? "-"}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Kenshi B
+              <select name="compareB" defaultValue={compareB} required>
+                <option value="">Seleccionar</option>
+                {selectedView === "adults" ? allAdults.map((row, index) => (
+                  <option value={row.id} key={row.id}>#{index + 1} {row.display_name}</option>
+                )) : allKids.map((row, index) => (
+                  <option value={row.member_id} key={row.member_id}>#{row.position ?? index + 1} {row.members?.display_name ?? "-"}</option>
+                ))}
+              </select>
+            </label>
+            <button type="submit">Comparar</button>
+            <a className="mini-action" href={`/rankings?view=${selectedView}`}>Limpiar</a>
+          </form>
+          {selectedView === "adults" && selectedAdultA && selectedAdultB ? (
+            <AdultComparison left={selectedAdultA} right={selectedAdultB} leftPosition={adultPosition.get(selectedAdultA.id) ?? 0} rightPosition={adultPosition.get(selectedAdultB.id) ?? 0} />
+          ) : null}
+          {selectedView === "kids" && selectedKidA && selectedKidB ? (
+            <KidComparison left={selectedKidA} right={selectedKidB} leftPosition={kidPosition.get(selectedKidA.member_id) ?? 0} rightPosition={kidPosition.get(selectedKidB.member_id) ?? 0} />
+          ) : null}
         </section>
 
         <section className="ranking-board">
@@ -507,6 +559,152 @@ function AuditMetric({ label, value, detail }: { label: string; value: string | 
       <em>{detail}</em>
     </span>
   );
+}
+
+function AdultComparison({ left, right, leftPosition, rightPosition }: { left: AdultRankingRow; right: AdultRankingRow; leftPosition: number; rightPosition: number }) {
+  const insights = adultCompareInsights(left, right);
+  return (
+    <div className="ranking-compare-panel">
+      <div className="compare-columns">
+        <ComparePerson name={left.display_name} position={leftPosition} score={left.score} detail={`${left.grade ?? "-"} · ID ${left.legacy_id ?? "-"}`} />
+        <ComparePerson name={right.display_name} position={rightPosition} score={right.score} detail={`${right.grade ?? "-"} · ID ${right.legacy_id ?? "-"}`} />
+      </div>
+      <div className="compare-metric-table">
+        <CompareMetric label="Score total" left={left.score} right={right.score} higherIsBetter />
+        <CompareMetric label="Constancia 30 dias" left={left.constancy30} right={right.constancy30} suffix="%" higherIsBetter />
+        <CompareMetric label="Constancia 90 dias" left={left.constancy90} right={right.constancy90} suffix="%" higherIsBetter />
+        <CompareMetric label="Historico 180 dias" left={left.constancy180} right={right.constancy180} suffix="%" higherIsBetter />
+        <CompareMetric label="Asistencias 30 dias" left={left.attendance30} right={right.attendance30} higherIsBetter />
+        <CompareMetric label="Asistencias 90 dias" left={left.attendance90} right={right.attendance90} higherIsBetter />
+        <CompareMetric label="Dias sin entrenar" left={left.daysWithoutAttendance} right={right.daysWithoutAttendance} lowerIsBetter />
+        <CompareMetric label="Cursos 60 dias" left={left.nationalCoursePoints + left.internationalCoursePoints + left.taikaiCoursePoints} right={right.nationalCoursePoints + right.internationalCoursePoints + right.taikaiCoursePoints} higherIsBetter />
+        <CompareMetric label="Bonus manual" left={left.manualBonus} right={right.manualBonus} higherIsBetter />
+        <CompareMetric label="Busen" left={left.blackBeltPoints} right={right.blackBeltPoints} higherIsBetter />
+        <CompareMetric label="Shakujo" left={left.shakujoPoints} right={right.shakujoPoints} higherIsBetter />
+        <CompareMetric label="Tecnicas 90 dias" left={left.technical90} right={right.technical90} higherIsBetter note="informativo" />
+      </div>
+      <CompareInsights items={insights} />
+    </div>
+  );
+}
+
+function KidComparison({ left, right, leftPosition, rightPosition }: { left: ChildRanking; right: ChildRanking; leftPosition: number; rightPosition: number }) {
+  const leftName = left.members?.display_name ?? "-";
+  const rightName = right.members?.display_name ?? "-";
+  const insights = kidCompareInsights(left, right);
+  return (
+    <div className="ranking-compare-panel">
+      <div className="compare-columns">
+        <ComparePerson name={leftName} position={leftPosition} score={left.score} detail={`${left.members?.grade ?? "-"} · ID ${left.members?.legacy_id ?? "-"}`} />
+        <ComparePerson name={rightName} position={rightPosition} score={right.score} detail={`${right.members?.grade ?? "-"} · ID ${right.members?.legacy_id ?? "-"}`} />
+      </div>
+      <div className="compare-metric-table">
+        <CompareMetric label="Score total" left={left.score} right={right.score} higherIsBetter />
+        <CompareMetric label="Asistencias 30 dias" left={left.attendance_30d} right={right.attendance_30d} higherIsBetter />
+        <CompareMetric label="Asistencias 90 dias" left={left.attendance_90d} right={right.attendance_90d} higherIsBetter />
+        <CompareMetric label="Dias sin entrenar" left={left.days_without_attendance ?? 999} right={right.days_without_attendance ?? 999} lowerIsBetter />
+        <CompareMetric label="Ultima asistencia" left={left.last_attendance_on ?? "-"} right={right.last_attendance_on ?? "-"} />
+        <CompareMetric label="Nivel" left={left.level ?? "-"} right={right.level ?? "-"} />
+      </div>
+      <CompareInsights items={insights} />
+    </div>
+  );
+}
+
+function ComparePerson({ name, position, score, detail }: { name: string; position: number; score: number; detail: string }) {
+  return (
+    <article className="compare-person-card">
+      <span className="ranking-position">{position || "-"}</span>
+      <div>
+        <strong>{name}</strong>
+        <span>{detail}</span>
+      </div>
+      <b>{score} pts</b>
+    </article>
+  );
+}
+
+function CompareMetric({
+  label,
+  left,
+  right,
+  suffix = "",
+  higherIsBetter = false,
+  lowerIsBetter = false,
+  note
+}: {
+  label: string;
+  left: string | number;
+  right: string | number;
+  suffix?: string;
+  higherIsBetter?: boolean;
+  lowerIsBetter?: boolean;
+  note?: string;
+}) {
+  const numeric = typeof left === "number" && typeof right === "number";
+  const leftWins = numeric && left !== right && ((higherIsBetter && left > right) || (lowerIsBetter && left < right));
+  const rightWins = numeric && left !== right && ((higherIsBetter && right > left) || (lowerIsBetter && right < left));
+  const diff = numeric ? left - right : null;
+  return (
+    <div className="compare-metric-row">
+      <span>{label}{note ? <em>{note}</em> : null}</span>
+      <strong className={leftWins ? "compare-winner" : ""}>{formatCompareValue(left, suffix)}</strong>
+      <strong className={rightWins ? "compare-winner" : ""}>{formatCompareValue(right, suffix)}</strong>
+      <small>{diff === null || diff === 0 ? "=" : `${diff > 0 ? "+" : ""}${diff}${suffix}`}</small>
+    </div>
+  );
+}
+
+function CompareInsights({ items }: { items: string[] }) {
+  if (!items.length) return <p className="compare-insights">Los dos kenshis estan practicamente empatados en los factores principales.</p>;
+  return (
+    <div className="compare-insights">
+      <strong>Lectura rapida</strong>
+      {items.map((item) => <p key={item}>{item}</p>)}
+    </div>
+  );
+}
+
+function adultCompareInsights(left: AdultRankingRow, right: AdultRankingRow) {
+  const leftName = firstName(left.display_name);
+  const rightName = firstName(right.display_name);
+  const items = [
+    insight(leftName, rightName, "constancia 90 dias", left.constancy90 - right.constancy90, "%"),
+    insight(leftName, rightName, "asistencias recientes", left.attendance30 - right.attendance30),
+    insight(leftName, rightName, "historico de 180 dias", left.constancy180 - right.constancy180, "%"),
+    insight(leftName, rightName, "bonus manual", left.bonusScore - right.bonusScore),
+    insight(leftName, rightName, "cursos recientes", left.nationalCoursePoints + left.internationalCoursePoints + left.taikaiCoursePoints - right.nationalCoursePoints - right.internationalCoursePoints - right.taikaiCoursePoints),
+    insight(leftName, rightName, "Busen y Shakujo", left.blackBeltPoints + left.shakujoPoints - right.blackBeltPoints - right.shakujoPoints),
+    insight(leftName, rightName, "menos penalizacion por inactividad", right.inactivityPenalty - left.inactivityPenalty)
+  ].filter(Boolean) as string[];
+  return items.slice(0, 4);
+}
+
+function kidCompareInsights(left: ChildRanking, right: ChildRanking) {
+  const leftName = firstName(left.members?.display_name ?? "Kenshi A");
+  const rightName = firstName(right.members?.display_name ?? "Kenshi B");
+  const items = [
+    insight(leftName, rightName, "asistencias de 30 dias", left.attendance_30d - right.attendance_30d),
+    insight(leftName, rightName, "asistencias de 90 dias", left.attendance_90d - right.attendance_90d),
+    insight(leftName, rightName, "menos dias sin entrenar", (right.days_without_attendance ?? 999) - (left.days_without_attendance ?? 999)),
+    insight(leftName, rightName, "score total", left.score - right.score)
+  ].filter(Boolean) as string[];
+  return items.slice(0, 4);
+}
+
+function insight(leftName: string, rightName: string, label: string, diff: number, suffix = "") {
+  if (Math.abs(diff) < 1) return "";
+  const winner = diff > 0 ? leftName : rightName;
+  const loser = diff > 0 ? rightName : leftName;
+  return `${winner} supera a ${loser} en ${label} por ${Math.abs(diff)}${suffix}.`;
+}
+
+function firstName(name: string) {
+  return name.split(" ")[0] || name;
+}
+
+function formatCompareValue(value: string | number, suffix: string) {
+  return typeof value === "number" ? `${value}${suffix}` : value;
 }
 
 function signed(value: number) {
