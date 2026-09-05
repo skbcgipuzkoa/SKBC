@@ -1729,10 +1729,12 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
   const closeAfter = String(formData.get("closeAfter") ?? "") === "true";
+  const returnStep = String(formData.get("returnStep") ?? "asistencia");
+  const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
   const attendanceIds = formData.getAll("attendanceIds").map((value) => String(value)).filter(Boolean);
 
   if (!classId || !legacyId || !attendanceIds.length) {
-    redirect(`/clases/${legacyId || ""}?error=technical-review&step=asistencia`);
+    redirect(`/clases/${legacyId || ""}?error=technical-review${returnStepQuery}`);
   }
 
   const supabase = createAdminClient();
@@ -1782,10 +1784,10 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
     }
   } catch (error) {
     console.error("Error saving attendance technical review", error);
-    redirect(`/clases/${legacyId}?error=technical-review&step=asistencia`);
+    redirect(`/clases/${legacyId}?error=technical-review${returnStepQuery}`);
   }
 
-  redirect(`/clases/${legacyId}?saved=${closeAfter ? "close" : "technical-review"}&step=asistencia`);
+  redirect(`/clases/${legacyId}?saved=${closeAfter ? "close" : "technical-review"}${returnStepQuery}`);
 }
 
 export async function closeAdultClassAction(formData: FormData) {

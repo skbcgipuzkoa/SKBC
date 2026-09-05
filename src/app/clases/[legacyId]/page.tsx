@@ -80,6 +80,7 @@ type AttendanceRow = {
   member_id: string;
   official_grade: string | null;
   trained_grade: string | null;
+  technical_role: string | null;
   technical_note: string | null;
   members: { first_name: string; last_name: string | null; legacy_id: string | null; class: "kids" | "adults" } | null;
 };
@@ -150,7 +151,7 @@ export default async function ClaseDetailPage({
       .returns<PlanRow[]>(),
     supabase
       .from("attendance_logs")
-      .select("id,attended_on,member_id,official_grade,trained_grade,technical_note,members(first_name,last_name,legacy_id,class)")
+      .select("id,attended_on,member_id,official_grade,trained_grade,technical_role,technical_note,members(first_name,last_name,legacy_id,class)")
       .eq("class_id", clase.id)
       .order("attended_on", { ascending: false })
       .returns<AttendanceRow[]>(),
@@ -192,7 +193,7 @@ export default async function ClaseDetailPage({
       .returns<Array<MemberOption & { class: "kids" | "adults" }>>(),
     supabase
       .from("attendance_logs")
-      .select("id,class_id,attended_on,member_id,official_grade,trained_grade,technical_note,members(first_name,last_name,legacy_id,class)")
+      .select("id,class_id,attended_on,member_id,official_grade,trained_grade,technical_role,technical_note,members(first_name,last_name,legacy_id,class)")
       .in("class_id", (await supabase.from("classes").select("id").eq("class_date", clase.class_date).in("class_group", ["adults", "kids"]).returns<Array<{ id: string }>>()).data?.map((item) => item.id) ?? [])
       .returns<Array<AttendanceRow & { class_id: string }>>(),
     supabase
@@ -254,7 +255,13 @@ export default async function ClaseDetailPage({
     : (attendance?.length ?? 0);
   const kidsDayClass = (dayClasses ?? []).find((item) => item.class_group === "kids");
   const adultAttendanceRows = (dayAttendance ?? []).filter((item) => item.class_id === clase.id && item.members?.class === "adults");
-  const reviewableAdultAttendanceRows = adultAttendanceRows;
+  const specialAdultAttendanceRows = adultAttendanceRows.filter((item) => {
+    const role = normalizeGradeLabel(item.technical_role ?? "student");
+    const trainedGrade = normalizeGradeLabel(item.trained_grade);
+    const officialGrade = normalizeGradeLabel(item.official_grade);
+    return role !== "STUDENT" || (trainedGrade && officialGrade && trainedGrade !== officialGrade);
+  });
+  const reviewableAdultAttendanceRows = specialAdultAttendanceRows.length ? specialAdultAttendanceRows : adultAttendanceRows;
   const completedHistoryPlan = (plan ?? []).filter((item) => item.completed && item.id);
   const { data: technicalOverrides } = reviewableAdultAttendanceRows.length
     ? await supabase
@@ -415,21 +422,22 @@ export default async function ClaseDetailPage({
       </div>
     </AttendanceDayForm>
   );
-  const technicalReviewPanel = clase.class_group === "adults" && activeStep === "attendance" && !clase.closed && hasPlan ? (
+  const technicalReviewPanel = clase.class_group === "adults" && (activeStep === "attendance" || showCombinedCloseStep) && !clase.closed && hasPlan ? (
     <details className="card technical-review-panel">
       <summary>
-        <strong>Ajustes tecnicos especiales</strong>
-        <span>{reviewableAdultAttendanceRows.length ? `${reviewableAdultAttendanceRows.length} kenshi${reviewableAdultAttendanceRows.length === 1 ? "" : "s"}` : "opcional"}</span>
+        <strong>Ajustar tecnicas por salida parcial</strong>
+        <span>{specialAdultAttendanceRows.length ? `${specialAdultAttendanceRows.length} especial${specialAdultAttendanceRows.length === 1 ? "" : "es"}` : "opcional"}</span>
       </summary>
       {!reviewableAdultAttendanceRows.length ? (
-        <p className="muted">Primero guarda la asistencia de adultos. Despues podras corregir aqui si alguien entreno con mas de un grupo.</p>
+        <p className="muted">Primero guarda la asistencia de adultos. Despues podras corregir aqui si alguien salio antes, observo, enseno o entreno con otro grupo.</p>
       ) : !completedHistoryPlan.length ? (
         <p className="muted">Primero marca y guarda las tecnicas realizadas. Despues podras elegir exactamente cuales se adjuntan a cada asistente.</p>
       ) : (
       <form action={saveAttendanceTechnicalReviewAction} className="technical-review-form">
         <input type="hidden" name="classId" value={clase.id} />
         <input type="hidden" name="legacyId" value={legacyId} />
-        <p className="muted">Abre esto solo si alguien cambio de grupo, enseno parte de la clase o salio antes. Por defecto aparecen marcadas las tecnicas de su grupo; desmarca las que no hizo para que no se adjunten por error.</p>
+        <input type="hidden" name="returnStep" value={showCombinedCloseStep ? "cierre" : "asistencia"} />
+        <p className="muted">Abre esto solo si alguien cambio de grupo, enseno parte de la clase, observo o salio antes. Por defecto aparecen marcadas las tecnicas de su grupo; desmarca las que no hizo para que no se adjunten por error.</p>
         <div className="technical-review-stack">
           {reviewableAdultAttendanceRows.map((row) => {
             const selectedOverrides = technicalOverridesByAttendance.get(row.id);
@@ -1024,7 +1032,13 @@ export default async function ClaseDetailPage({
         {!showCombinedCloseStep ? <section className="mobile-work-anchor" id="asistencia">
           {attendanceClasses.length > 1 ? attendancePanel : attendanceQuickPanel}
         </section> : null}
-        {!showCombinedCloseStep ? technicalReviewPanel : null}
+        {showCombinedCloseStep ? (
+          <section className="card mobile-attendance-note">
+            <h2>Ajustes antes de cerrar</h2>
+            <p className="muted">Si alguien salio antes, observo, enseno o entreno con otro grupo, abre el panel de ajustes y deja marcadas solo las tecnicas que realmente hizo.</p>
+          </section>
+        ) : null}
+        {technicalReviewPanel}
         </> : null}
 
         {readyToClose && (activeStep === "attendance" || showCombinedCloseStep) && (attendance ?? []).length ? (
