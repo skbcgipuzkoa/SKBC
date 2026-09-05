@@ -66,9 +66,16 @@ type AdultRankingRow = Member & {
   attendance30: number;
   attendance90: number;
   attendance180: number;
+  possible30: number;
+  possible90: number;
+  possible180: number;
   constancy30: number;
   constancy90: number;
   constancy180: number;
+  constancyScore: number;
+  attendanceVolume: number;
+  bonusScore: number;
+  inactivityPenalty: number;
   technical90: number;
   daysWithoutAttendance: number;
   nationalCoursePoints: number;
@@ -228,44 +235,68 @@ export default async function RankingsPage({
           <div className="ranking-focus-list">
             {selectedView === "adults" ? (
               adults.length ? adults.map((row, index) => (
-                <a className={`ranking-card top-${index + 1}`} href={row.legacy_id ? `/kenshis/${row.legacy_id}` : "#"} key={row.id}>
-                  <span className="ranking-position">{index + 1}</span>
-                  <span className="ranking-main">
-                    <span className="ranking-name">
-                      <strong>{row.display_name}</strong>
-                      <span className="ranking-score">{row.score} pts</span>
+                <details className={`ranking-card ranking-audit-card top-${index + 1}`} key={row.id}>
+                  <summary>
+                    <span className="ranking-position">{index + 1}</span>
+                    <span className="ranking-main">
+                      <span className="ranking-name">
+                        <strong>{row.display_name}</strong>
+                        <span className="ranking-score">{row.score} pts</span>
+                      </span>
+                      <span className="ranking-id">ID {row.legacy_id ?? "-"} - IKA {row.ika_id ?? "pendiente"} - {row.grade ?? "-"}</span>
+                      <span className="ranking-chip-grid">
+                        <span className="ranking-chip">30/90: {row.attendance30}/{row.attendance90}</span>
+                        <span className="ranking-chip">Const. 90: {row.constancy90}%</span>
+                        <span className="ranking-chip">{formatDaysWithout(row.daysWithoutAttendance)}</span>
+                        <span className="ranking-chip">Cursos {row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}</span>
+                        <span className="ranking-chip">Busen {row.blackBeltPoints}</span>
+                        <span className="ranking-chip">Shakujo {row.shakujoPoints}</span>
+                        {row.manualBonus ? <span className="ranking-chip">Bonus {row.manualBonus}</span> : null}
+                      </span>
                     </span>
-                    <span className="ranking-id">ID {row.legacy_id ?? "-"} - IKA {row.ika_id ?? "pendiente"} - {row.grade ?? "-"}</span>
-                    <span className="ranking-chip-grid">
-                      <span className="ranking-chip">30/90: {row.attendance30}/{row.attendance90}</span>
-                      <span className="ranking-chip">{formatDaysWithout(row.daysWithoutAttendance)}</span>
-                      <span className="ranking-chip">Tecnicas {row.technical90}</span>
-                      <span className="ranking-chip">Cursos {row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}</span>
-                      <span className="ranking-chip">Busen {row.blackBeltPoints}</span>
-                      <span className="ranking-chip">Shakujo {row.shakujoPoints}</span>
-                      {row.manualBonus ? <span className="ranking-chip">Bonus {row.manualBonus}</span> : null}
-                    </span>
-                  </span>
-                </a>
+                  </summary>
+                  <div className="ranking-audit-grid">
+                    <AuditMetric label="Constancia 30 dias" value={`${row.attendance30}/${row.possible30}`} detail={`${row.constancy30}%`} />
+                    <AuditMetric label="Constancia 90 dias" value={`${row.attendance90}/${row.possible90}`} detail={`${row.constancy90}%`} />
+                    <AuditMetric label="Historico 180 dias" value={`${row.attendance180}/${row.possible180}`} detail={`${row.constancy180}%`} />
+                    <AuditMetric label="Base constancia" value={`+${row.constancyScore}`} detail="30/90/180 ponderado" />
+                    <AuditMetric label="Volumen asistencia" value={`+${row.attendanceVolume}`} detail="maximo 12" />
+                    <AuditMetric label="Cursos 60 dias" value={`+${row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}`} detail={`N ${row.nationalCoursePoints} · I ${row.internationalCoursePoints} · T ${row.taikaiCoursePoints}`} />
+                    <AuditMetric label="Bonus manual" value={`+${row.bonusScore}`} detail={`${row.manualBonus} x 8`} />
+                    <AuditMetric label="Busen / Shakujo" value={`${signed(row.blackBeltPoints)} / ${signed(row.shakujoPoints)}`} detail="ultimos 180 dias" />
+                    <AuditMetric label="Inactividad" value={`-${row.inactivityPenalty}`} detail={formatDaysWithout(row.daysWithoutAttendance)} />
+                    <AuditMetric label="Tecnicas" value={`${row.technical90}`} detail="solo informativo" />
+                  </div>
+                  {row.legacy_id ? <a className="mini-action" href={`/kenshis/${row.legacy_id}`}>Abrir kenshi</a> : null}
+                </details>
               )) : <p className="ranking-empty">Sin datos suficientes para ranking adulto.</p>
             ) : (
               kids.length ? kids.map((row, index) => (
-                <a className={`ranking-card top-${index + 1}`} href={row.members?.legacy_id ? `/kenshis/${row.members.legacy_id}` : "#"} key={row.member_id}>
-                  <span className="ranking-position">{row.position ?? index + 1}</span>
-                  <span className="ranking-main">
-                    <span className="ranking-name">
-                      <strong>{row.members?.display_name ?? "-"}</strong>
-                      <span className="ranking-score">{row.score} pts</span>
+                <details className={`ranking-card ranking-audit-card top-${index + 1}`} key={row.member_id}>
+                  <summary>
+                    <span className="ranking-position">{row.position ?? index + 1}</span>
+                    <span className="ranking-main">
+                      <span className="ranking-name">
+                        <strong>{row.members?.display_name ?? "-"}</strong>
+                        <span className="ranking-score">{row.score} pts</span>
+                      </span>
+                      <span className="ranking-id">ID {row.members?.legacy_id ?? "-"} - IKA {row.members?.ika_id ?? "pendiente"} - {row.members?.grade ?? "-"}</span>
+                      <span className="ranking-chip-grid">
+                        <span className="ranking-chip">30/90: {row.attendance_30d}/{row.attendance_90d}</span>
+                        <span className="ranking-chip">Ultima {row.last_attendance_on ?? "-"}</span>
+                        <span className="ranking-chip">{formatDaysWithout(row.days_without_attendance)}</span>
+                        <span className="ranking-chip">Nivel {row.level ?? "-"}</span>
+                      </span>
                     </span>
-                    <span className="ranking-id">ID {row.members?.legacy_id ?? "-"} - IKA {row.members?.ika_id ?? "pendiente"} - {row.members?.grade ?? "-"}</span>
-                    <span className="ranking-chip-grid">
-                      <span className="ranking-chip">30/90: {row.attendance_30d}/{row.attendance_90d}</span>
-                      <span className="ranking-chip">Ultima {row.last_attendance_on ?? "-"}</span>
-                      <span className="ranking-chip">{formatDaysWithout(row.days_without_attendance)}</span>
-                      <span className="ranking-chip">Nivel {row.level ?? "-"}</span>
-                    </span>
-                  </span>
-                </a>
+                  </summary>
+                  <div className="ranking-audit-grid">
+                    <AuditMetric label="Asistencias 30 dias" value={`${row.attendance_30d}`} detail={`${row.attendance_30d} x 3 puntos`} />
+                    <AuditMetric label="Asistencias 90 dias" value={`${row.attendance_90d}`} detail={`${row.attendance_90d} x 1 punto`} />
+                    <AuditMetric label="Score infantil" value={`${row.score}`} detail={`${row.attendance_30d * 3} + ${row.attendance_90d}`} />
+                    <AuditMetric label="Ultima asistencia" value={row.last_attendance_on ?? "-"} detail={formatDaysWithout(row.days_without_attendance)} />
+                  </div>
+                  {row.members?.legacy_id ? <a className="mini-action" href={`/kenshis/${row.members.legacy_id}`}>Abrir kenshi</a> : null}
+                </details>
               )) : <p className="ranking-empty">Sin ranking infantil calculado.</p>
             )}
           </div>
@@ -422,9 +453,12 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const t90 = technical90.get(member.id) ?? 0;
       const last = lastAttendance.get(member.id);
       const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10), closures) : 999;
-      const c30 = attendanceRate(a30, possibleClubDays(clubTrainingDates, date30, member.joined_on));
-      const c90 = attendanceRate(a90, possibleClubDays(clubTrainingDates, date90, member.joined_on));
-      const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
+      const possible30 = possibleClubDays(clubTrainingDates, date30, member.joined_on);
+      const possible90 = possibleClubDays(clubTrainingDates, date90, member.joined_on);
+      const possible180 = possibleClubDays(clubTrainingDates, date180, member.joined_on);
+      const c30 = attendanceRate(a30, possible30);
+      const c90 = attendanceRate(a90, possible90);
+      const c180 = attendanceRate(a180, possible180);
       const nac = nationalCoursePoints.get(member.id) ?? 0;
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const taikai = taikaiCoursePoints.get(member.id) ?? 0;
@@ -441,9 +475,16 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         attendance30: a30,
         attendance90: a90,
         attendance180: a180,
+        possible30,
+        possible90,
+        possible180,
         constancy30: Math.round(c30 * 100),
         constancy90: Math.round(c90 * 100),
         constancy180: Math.round(c180 * 100),
+        constancyScore,
+        attendanceVolume,
+        bonusScore,
+        inactivityPenalty,
         technical90: t90,
         daysWithoutAttendance,
         nationalCoursePoints: nac,
@@ -456,6 +497,20 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       };
     })
     .sort((a, b) => b.score - a.score || b.constancy90 - a.constancy90 || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));
+}
+
+function AuditMetric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
+  return (
+    <span className="ranking-audit-metric">
+      <small>{label}</small>
+      <strong>{value}</strong>
+      <em>{detail}</em>
+    </span>
+  );
+}
+
+function signed(value: number) {
+  return value > 0 ? `+${value}` : String(value);
 }
 
 function countByMember(rows: Array<{ member_id: string }>) {
