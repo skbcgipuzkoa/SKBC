@@ -3457,6 +3457,26 @@ tbody tr:hover {
   color: #4b5563;
 }
 
+.inline-form {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inline-form input,
+.inline-form select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.inline-form input {
+  max-width: 92px;
+}
+
 .link-stack {
   display: inline-flex;
   flex-wrap: wrap;

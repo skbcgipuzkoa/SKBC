@@ -27,6 +27,8 @@ const BACKUP_TABLES = [
   "black_belt_special_attendance",
   "shakujo_classes",
   "shakujo_attendance",
+  "order_catalog_items",
+  "belt_order_lines",
   "distribution_campaigns",
   "distribution_campaign_items",
   "distribution_delivery_checks",

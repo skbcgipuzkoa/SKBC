@@ -2511,32 +2511,42 @@ export async function createBeltOrderLineAction(formData: FormData) {
     redirect("/");
   }
 
+  const catalogItemId = String(formData.get("catalogItemId") ?? "").trim() || null;
   const memberId = String(formData.get("memberId") ?? "").trim() || null;
   const studentName = String(formData.get("studentName") ?? "").trim();
-  const examTitle = String(formData.get("examTitle") ?? "").trim() || null;
-  const program = String(formData.get("program") ?? "").trim() || null;
-  const grade = String(formData.get("grade") ?? "").trim() || null;
-  const item = String(formData.get("item") ?? "").trim() || "Cinturon";
-  const color = String(formData.get("color") ?? "").trim();
-  const size = String(formData.get("size") ?? "").trim();
+  const requestTitle = String(formData.get("requestTitle") ?? "").trim() || "Pedido general";
+  const item = String(formData.get("item") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim() || null;
+  const size = String(formData.get("size") ?? "").trim() || null;
   const quantity = Math.max(1, Number.parseInt(String(formData.get("quantity") ?? "1"), 10) || 1);
+  const unitPriceCents = parseEuroCents(String(formData.get("unitPrice") ?? ""));
+  const paidAmountCents = parseEuroCents(String(formData.get("paidAmount") ?? ""));
+  const paymentStatus = normalizePaymentStatus(String(formData.get("paymentStatus") ?? "")) ?? inferPaymentStatus(unitPriceCents * quantity, paidAmountCents);
+  const status = normalizeBeltStatus(String(formData.get("status") ?? "")) ?? "pending";
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
-  if ((!memberId && !studentName) || !item || !color || !size) {
+  if ((!memberId && !studentName) || !item) {
     redirect("/pedidos-cinturones?error=belt");
   }
 
+  const today = new Date().toISOString().slice(0, 10);
   const supabase = createAdminClient();
   const { error } = await supabase.from("belt_order_lines").insert({
-    exam_title: examTitle,
-    program,
-    grade,
+    catalog_item_id: catalogItemId,
+    exam_title: requestTitle,
     member_id: memberId,
     student_name: studentName || null,
     item,
     color,
     size,
     quantity,
+    unit_price_cents: unitPriceCents,
+    total_price_cents: unitPriceCents * quantity,
+    paid_amount_cents: paidAmountCents,
+    payment_status: paymentStatus,
+    paid_on: paidAmountCents > 0 ? today : null,
+    requested_on: today,
+    status,
     notes,
     created_by: "WEB SKBC"
   });
@@ -2547,6 +2557,35 @@ export async function createBeltOrderLineAction(formData: FormData) {
   }
 
   redirect("/pedidos-cinturones?saved=belt");
+}
+
+export async function createOrderCatalogItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const name = String(formData.get("name") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim() || "general";
+  const defaultColor = String(formData.get("defaultColor") ?? "").trim() || null;
+  const defaultSize = String(formData.get("defaultSize") ?? "").trim() || null;
+  const unitPriceCents = parseEuroCents(String(formData.get("unitPrice") ?? ""));
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!name) redirect("/pedidos-cinturones?error=catalog");
+
+  const { error } = await createAdminClient().from("order_catalog_items").insert({
+    name,
+    category,
+    default_color: defaultColor,
+    default_size: defaultSize,
+    unit_price_cents: unitPriceCents,
+    notes
+  });
+
+  if (error) {
+    console.error("Error creating order catalog item", error);
+    redirect("/pedidos-cinturones?error=catalog");
+  }
+
+  redirect("/pedidos-cinturones?saved=catalog");
 }
 
 export async function updateBeltOrderStatusAction(formData: FormData) {
@@ -2579,6 +2618,30 @@ export async function updateBeltOrderStatusAction(formData: FormData) {
   }
 
   redirect("/pedidos-cinturones?saved=belt-status");
+}
+
+export async function updateOrderPaymentAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const lineId = String(formData.get("lineId") ?? "").trim();
+  const paymentStatus = normalizePaymentStatus(String(formData.get("paymentStatus") ?? ""));
+  const paidAmountCents = parseEuroCents(String(formData.get("paidAmount") ?? ""));
+  if (!lineId || !paymentStatus) redirect("/pedidos-cinturones?error=payment");
+
+  const { error } = await createAdminClient()
+    .from("belt_order_lines")
+    .update({
+      payment_status: paymentStatus,
+      paid_amount_cents: paidAmountCents,
+      paid_on: paymentStatus === "paid" || paidAmountCents > 0 ? new Date().toISOString().slice(0, 10) : null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", lineId);
+
+  if (error) {
+    console.error("Error updating order payment", error);
+    redirect("/pedidos-cinturones?error=payment");
+  }
+  redirect("/pedidos-cinturones?saved=payment");
 }
 
 export async function saveBlackBeltEligibilityAction(formData: FormData) {
@@ -2989,6 +3052,25 @@ function normalizeStatus(value: string) {
 
 function normalizeBeltStatus(value: string) {
   return ["pending", "ordered", "received", "delivered"].includes(value) ? value : null;
+}
+
+function normalizePaymentStatus(value: string) {
+  return ["unpaid", "partial", "paid"].includes(value) ? value : null;
+}
+
+function inferPaymentStatus(totalCents: number, paidCents: number) {
+  if (totalCents <= 0 && paidCents <= 0) return "unpaid";
+  if (paidCents >= totalCents) return "paid";
+  if (paidCents > 0) return "partial";
+  return "unpaid";
+}
+
+function parseEuroCents(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return 0;
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed * 100);
 }
 
 function normalizeTechniqueCategoryInput(value: string) {

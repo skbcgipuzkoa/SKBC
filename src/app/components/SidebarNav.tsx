@@ -17,7 +17,7 @@ const navItems = [
   { label: "App examenes", href: "https://akapi80.github.io/EXAMENES/", external: true },
   { label: "Cursos", href: "/cursos" },
   { label: "Calendario", href: "/calendario" },
-  { label: "Cinturones", href: "/pedidos-cinturones" },
+  { label: "Pedidos", href: "/pedidos-cinturones" },
   { label: "Proximos examenes", href: "/proximos-examenes" },
   { label: "Rankings", href: "/rankings" },
   { label: "Avisos", href: "/avisos" },

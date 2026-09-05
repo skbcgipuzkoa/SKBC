@@ -79,7 +79,7 @@ const moduleGroups: Array<{ title: string; items: ModuleLink[] }> = [
     title: "Sistema",
     items: [
       { label: "Tecnicas", href: "/tecnicas", icon: GraduationCap },
-      { label: "Cinturones", href: "/pedidos-cinturones", icon: Medal },
+      { label: "Pedidos", href: "/pedidos-cinturones", icon: PackageCheck },
       { label: "Calendario club", href: "/calendario", icon: CalendarCheck },
       { label: "Notificaciones", href: "/notificaciones", icon: Bell },
       { label: "Sistema", href: "/sistema", icon: ShieldCheck }
