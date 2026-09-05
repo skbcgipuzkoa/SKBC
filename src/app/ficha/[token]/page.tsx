@@ -319,10 +319,10 @@ export default async function PublicFichaPage({
       .returns<TechnicalHistory[]>(),
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,status")
+      .select("id,legacy_id,display_name,class,status,joined_on")
       .eq("class", "adults")
       .eq("status", "active")
-      .returns<Array<Pick<Member, "id" | "legacy_id" | "display_name" | "class" | "status">>>(),
+      .returns<Array<Pick<Member, "id" | "legacy_id" | "display_name" | "class" | "status" | "joined_on">>>(),
     supabase
       .from("attendance_logs")
       .select("member_id,attended_on")
@@ -1273,26 +1273,34 @@ function adultGradeIndex(grade: string | null | undefined) {
   return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
 }
 
-function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" | "taikai" }>, bonuses: AdultBonus[], closures: CalendarClosure[]) {
+function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string; joined_on?: string | null }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" | "taikai" }>, bonuses: AdultBonus[], closures: CalendarClosure[]) {
   const date30 = daysAgo(30);
   const date90 = daysAgo(90);
+  const date180 = daysAgo(180);
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
+  const attendance180 = countByMember(attendance.filter((row) => row.attended_on >= date180));
+  const clubTrainingDates = uniqueSorted(attendance.map((row) => row.attended_on));
   const lastAttendance = latestByMember(attendance);
   const coursePoints = countCoursePoints(courses);
-  const date180 = daysAgo(180);
   const bonusPoints = sumByMember(bonuses.filter((row) => row.active && (row.permanent || row.bonus_date >= date180)));
   const ranked = members
     .filter((member) => member.legacy_id !== "13")
     .map((member) => {
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
+      const a180 = attendance180.get(member.id) ?? 0;
       const daysWithoutAttendance = lastAttendance.get(member.id) ? trainingDaysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10), closures) : 999;
-      const activityScore = a30 * 8 + a90 * 2 + (coursePoints.get(member.id) ?? 0) + (bonusPoints.get(member.id) ?? 0);
+      const c30 = attendanceRate(a30, possibleClubDays(clubTrainingDates, date30, member.joined_on));
+      const c90 = attendanceRate(a90, possibleClubDays(clubTrainingDates, date90, member.joined_on));
+      const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
+      const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
+      const attendanceVolume = Math.min(a90, 12);
+      const activityScore = constancyScore + attendanceVolume + (coursePoints.get(member.id) ?? 0) + (bonusPoints.get(member.id) ?? 0);
       const score = Math.max(0, activityScore - adultInactivityPenalty(daysWithoutAttendance));
-      return { ...member, score };
+      return { ...member, score, constancy90: c90, attendance30: a30 };
     })
-    .sort((a, b) => b.score - a.score || a.display_name.localeCompare(b.display_name));
+    .sort((a, b) => b.score - a.score || b.constancy90 - a.constancy90 || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));
   const index = ranked.findIndex((row) => row.id === memberId);
   if (index === -1) return null;
   const row = ranked[index];
@@ -1616,6 +1624,20 @@ function sumByMember(rows: Array<{ member_id: string; points: number }>) {
   const counts = new Map<string, number>();
   rows.forEach((row) => counts.set(row.member_id, (counts.get(row.member_id) ?? 0) + row.points));
   return counts;
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function possibleClubDays(clubDates: string[], since: string, joinedOn: string | null | undefined) {
+  const start = joinedOn && joinedOn > since ? joinedOn : since;
+  return clubDates.filter((date) => date >= start).length;
+}
+
+function attendanceRate(attendanceCount: number, possibleDays: number) {
+  if (possibleDays <= 0) return 0;
+  return Math.min(1, attendanceCount / possibleDays);
 }
 
 function countCoursePoints(rows: Array<{ member_id: string; kind: "national" | "international" | "taikai" }>) {

@@ -13,6 +13,7 @@ type Member = {
   class: "kids" | "adults";
   grade: string | null;
   status: "active" | "inactive";
+  joined_on: string | null;
 };
 
 type Attendance = {
@@ -64,6 +65,10 @@ type ChildRanking = {
 type AdultRankingRow = Member & {
   attendance30: number;
   attendance90: number;
+  attendance180: number;
+  constancy30: number;
+  constancy90: number;
+  constancy180: number;
   technical90: number;
   daysWithoutAttendance: number;
   nationalCoursePoints: number;
@@ -101,7 +106,7 @@ export default async function RankingsPage({
     await Promise.all([
       supabase
         .from("members")
-        .select("id,legacy_id,ika_id,display_name,class,grade,status")
+        .select("id,legacy_id,ika_id,display_name,class,grade,status,joined_on")
         .eq("status", "active")
         .returns<Member[]>(),
       supabase
@@ -312,7 +317,7 @@ export default async function RankingsPage({
           <article>
             <div className="section-heading-row">
               <h2 className="section-title">Adultos</h2>
-              <span className="tag">Constancia: 30d*8 + 90d*2 + cursos + bonus - inactividad</span>
+              <span className="tag">Constancia real 30/90/180 + cursos + bonus - inactividad</span>
             </div>
             <div className="table-wrap">
               <table>
@@ -328,7 +333,7 @@ export default async function RankingsPage({
                         <span className="ranking-id">ID {row.legacy_id ?? "-"} · IKA {row.ika_id ?? "pendiente"}</span>
                       </td>
                       <td data-label="Grado">{row.grade ?? "-"}</td>
-                      <td data-label="Asist. 30/90">{row.attendance30}/{row.attendance90}</td>
+                      <td data-label="Asist. 30/90">{row.attendance30}/{row.attendance90} ({row.constancy90}%)</td>
                       <td data-label="Dias sin venir">{row.daysWithoutAttendance}</td>
                       <td data-label="Cursos">{row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}</td>
                       <td data-label="Busen">{row.blackBeltPoints}</td>
@@ -385,6 +390,8 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
+  const attendance180 = countByMember(attendance.filter((row) => row.attended_on >= date180));
+  const clubTrainingDates = uniqueSorted(attendance.map((row) => row.attended_on));
   const technical90 = countByMember(technical);
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national").map((row) => ({ member_id: row.member_id, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international").map((row) => ({ member_id: row.member_id, points: 3 })));
@@ -410,21 +417,31 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
     .map((member) => {
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
+      const a180 = attendance180.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
       const last = lastAttendance.get(member.id);
       const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10), closures) : 999;
+      const c30 = attendanceRate(a30, possibleClubDays(clubTrainingDates, date30, member.joined_on));
+      const c90 = attendanceRate(a90, possibleClubDays(clubTrainingDates, date90, member.joined_on));
+      const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
       const nac = nationalCoursePoints.get(member.id) ?? 0;
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const taikai = taikaiCoursePoints.get(member.id) ?? 0;
       const bonus = manualBonus.get(member.id) ?? 0;
       const black = blackBeltPoints.get(member.id) ?? 0;
       const shakujo = shakujoPoints.get(member.id) ?? 0;
-      const activityScore = a30 * 8 + a90 * 2 + nac + intl + taikai + bonus + black + shakujo;
+      const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
+      const attendanceVolume = Math.min(a90, 12);
+      const activityScore = constancyScore + attendanceVolume + nac + intl + taikai + bonus + black + shakujo;
       const inactivityPenalty = adultInactivityPenalty(daysWithoutAttendance);
       return {
         ...member,
         attendance30: a30,
         attendance90: a90,
+        attendance180: a180,
+        constancy30: Math.round(c30 * 100),
+        constancy90: Math.round(c90 * 100),
+        constancy180: Math.round(c180 * 100),
         technical90: t90,
         daysWithoutAttendance,
         nationalCoursePoints: nac,
@@ -436,7 +453,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         score: Math.max(0, activityScore - inactivityPenalty)
       };
     })
-    .sort((a, b) => b.score - a.score || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));
+    .sort((a, b) => b.score - a.score || b.constancy90 - a.constancy90 || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));
 }
 
 function countByMember(rows: Array<{ member_id: string }>) {
@@ -449,6 +466,20 @@ function sumByMember(rows: Array<{ member_id: string; points: number }>) {
   const counts = new Map<string, number>();
   rows.forEach((row) => counts.set(row.member_id, (counts.get(row.member_id) ?? 0) + row.points));
   return counts;
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function possibleClubDays(clubDates: string[], since: string, joinedOn: string | null | undefined) {
+  const start = joinedOn && joinedOn > since ? joinedOn : since;
+  return clubDates.filter((date) => date >= start).length;
+}
+
+function attendanceRate(attendanceCount: number, possibleDays: number) {
+  if (possibleDays <= 0) return 0;
+  return Math.min(1, attendanceCount / possibleDays);
 }
 
 function latestAttendanceByMember(rows: Attendance[]) {

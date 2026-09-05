@@ -289,7 +289,7 @@ async function buildDailyDigest() {
   ] = await Promise.all([
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,status,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice")
+      .select("id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice")
       .eq("status", "active")
       .returns<Member[]>(),
     supabase.from("attendance_logs").select("member_id,attended_on").returns<Attendance[]>(),
@@ -560,6 +560,8 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
+  const attendance180 = countByMember(attendance.filter((row) => row.attended_on >= date180));
+  const clubTrainingDates = uniqueSorted(attendance.map((row) => row.attended_on));
   const technical90 = countByMember(technical);
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 3 })));
@@ -585,13 +587,19 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
     .map((member) => {
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
+      const a180 = attendance180.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
       const last = lastAttendance.get(member.id);
       const daysWithoutAttendance = last ? trainingDaysBetween(last, todayIso(), closures) : 999;
+      const c30 = attendanceRate(a30, possibleClubDays(clubTrainingDates, date30, member.joined_on));
+      const c90 = attendanceRate(a90, possibleClubDays(clubTrainingDates, date90, member.joined_on));
+      const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
+      const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
+      const attendanceVolume = Math.min(a90, 12);
       const score = Math.max(
         0,
-        a30 * 8 +
-          a90 * 2 +
+        constancyScore +
+          attendanceVolume +
           (nationalCoursePoints.get(member.id) ?? 0) +
           (internationalCoursePoints.get(member.id) ?? 0) +
           (taikaiCoursePoints.get(member.id) ?? 0) +
@@ -604,7 +612,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         name: member.display_name,
         grade: member.grade ?? "-",
         score,
-        detail: `asist. 30/90: ${a30}/${a90} - tecnicas registradas ${t90}`,
+        detail: `asist. 30/90/180: ${a30}/${a90}/${a180} - constancia ${Math.round(c90 * 100)}% - tecnicas ${t90}`,
         position: 0
       };
     })
@@ -986,6 +994,20 @@ function sumByMember(rows: Array<{ member_id: string; points: number }>) {
   const counts = new Map<string, number>();
   rows.forEach((row) => counts.set(row.member_id, (counts.get(row.member_id) ?? 0) + row.points));
   return counts;
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function possibleClubDays(clubDates: string[], since: string, joinedOn: string | null | undefined) {
+  const start = joinedOn && joinedOn > since ? joinedOn : since;
+  return clubDates.filter((date) => date >= start).length;
+}
+
+function attendanceRate(attendanceCount: number, possibleDays: number) {
+  if (possibleDays <= 0) return 0;
+  return Math.min(1, attendanceCount / possibleDays);
 }
 
 function latestAttendanceByMember(rows: Attendance[]) {
