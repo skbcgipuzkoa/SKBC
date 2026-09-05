@@ -3477,6 +3477,42 @@ tbody tr:hover {
   max-width: 92px;
 }
 
+.catalog-list {
+  display: grid;
+  gap: 12px;
+}
+
+.catalog-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.catalog-item summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.catalog-item summary span {
+  display: grid;
+  gap: 3px;
+}
+
+.catalog-item summary small {
+  color: var(--muted);
+}
+
+.catalog-item .quick-form {
+  margin-top: 14px;
+}
+
+.danger-inline-form {
+  margin-top: 10px;
+}
+
 .link-stack {
   display: inline-flex;
   flex-wrap: wrap;

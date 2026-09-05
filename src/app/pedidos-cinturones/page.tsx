@@ -4,8 +4,10 @@ import { SubmitButton } from "@/app/components/SubmitButton";
 import {
   createBeltOrderLineAction,
   createOrderCatalogItemAction,
+  deleteOrderCatalogItemAction,
   logoutAction,
   updateBeltOrderStatusAction,
+  updateOrderCatalogItemAction,
   updateOrderPaymentAction
 } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
@@ -28,6 +30,7 @@ type CatalogItem = {
   default_size: string | null;
   unit_price_cents: number;
   active: boolean;
+  notes: string | null;
 };
 
 type OrderLine = {
@@ -84,8 +87,7 @@ export default async function PedidosPage({
       .returns<Member[]>(),
     supabase
       .from("order_catalog_items")
-      .select("id,name,category,default_color,default_size,unit_price_cents,active")
-      .eq("active", true)
+      .select("id,name,category,default_color,default_size,unit_price_cents,active,notes")
       .order("category")
       .order("name")
       .returns<CatalogItem[]>(),
@@ -126,7 +128,7 @@ export default async function PedidosPage({
         </div>
 
         {params.saved ? <p className="save-ok">Cambios guardados correctamente.</p> : null}
-        {params.error ? <p className="form-error">No se pudo guardar el pedido.</p> : null}
+        {params.error ? <p className="form-error">No se pudo guardar el cambio.</p> : null}
 
         <section className="grid stats compact" aria-label="Resumen pedidos">
           <article className="card">
@@ -171,7 +173,7 @@ export default async function PedidosPage({
                 Articulo guardado
                 <select name="catalogItemId">
                   <option value="">Elegir o escribir manual</option>
-                  {(catalog ?? []).map((item) => (
+                  {(catalog ?? []).filter((item) => item.active).map((item) => (
                     <option value={item.id} key={item.id}>
                       {item.name} - {formatMoney(item.unit_price_cents)}
                     </option>
@@ -220,6 +222,47 @@ export default async function PedidosPage({
               <SubmitButton pendingLabel="Guardando articulo...">Guardar articulo</SubmitButton>
             </form>
           </article>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Catalogo de articulos</h2>
+              <p className="muted">Edita nombre, categoria, color/modelo, talla/medida y precio. Los articulos inactivos no aparecen al crear pedidos.</p>
+            </div>
+          </div>
+          <div className="catalog-list">
+            {(catalog ?? []).length ? (catalog ?? []).map((item) => (
+              <details className="catalog-item" key={item.id}>
+                <summary>
+                  <span>
+                    <strong>{item.name}</strong>
+                    <small>{item.category} - {formatMoney(item.unit_price_cents)}{item.active ? "" : " - inactivo"}</small>
+                  </span>
+                  <b>Editar</b>
+                </summary>
+                <form action={updateOrderCatalogItemAction} className="quick-form">
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <label>Nombre<input name="name" defaultValue={item.name} required /></label>
+                  <label>Categoria<input name="category" defaultValue={item.category} /></label>
+                  <label>Color/modelo por defecto<input name="defaultColor" defaultValue={item.default_color ?? ""} /></label>
+                  <label>Talla/medida por defecto<input name="defaultSize" defaultValue={item.default_size ?? ""} /></label>
+                  <label>Precio unidad<input name="unitPrice" inputMode="decimal" defaultValue={formatMoneyInput(item.unit_price_cents)} /></label>
+                  <label className="check-row"><input type="checkbox" name="active" defaultChecked={item.active} /> Activo</label>
+                  <label className="wide">Notas<textarea name="notes" rows={3} defaultValue={item.notes ?? ""} /></label>
+                  <div className="form-actions wide">
+                    <SubmitButton pendingLabel="Guardando articulo...">Guardar cambios</SubmitButton>
+                  </div>
+                </form>
+                <form action={deleteOrderCatalogItemAction} className="danger-inline-form">
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <SubmitButton className="danger-button" pendingLabel="Borrando...">Borrar articulo</SubmitButton>
+                </form>
+              </details>
+            )) : (
+              <p className="muted">Todavia no hay articulos creados.</p>
+            )}
+          </div>
         </section>
 
         <section className="card">

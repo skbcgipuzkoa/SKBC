@@ -2588,6 +2588,61 @@ export async function createOrderCatalogItemAction(formData: FormData) {
   redirect("/pedidos-cinturones?saved=catalog");
 }
 
+export async function updateOrderCatalogItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const itemId = String(formData.get("itemId") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim() || "general";
+  const defaultColor = String(formData.get("defaultColor") ?? "").trim() || null;
+  const defaultSize = String(formData.get("defaultSize") ?? "").trim() || null;
+  const unitPriceCents = parseEuroCents(String(formData.get("unitPrice") ?? ""));
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const active = formData.get("active") === "on";
+
+  if (!itemId || !name) redirect("/pedidos-cinturones?error=catalog");
+
+  const { error } = await createAdminClient()
+    .from("order_catalog_items")
+    .update({
+      name,
+      category,
+      default_color: defaultColor,
+      default_size: defaultSize,
+      unit_price_cents: unitPriceCents,
+      notes,
+      active,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", itemId);
+
+  if (error) {
+    console.error("Error updating order catalog item", error);
+    redirect("/pedidos-cinturones?error=catalog");
+  }
+
+  redirect("/pedidos-cinturones?saved=catalog");
+}
+
+export async function deleteOrderCatalogItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const itemId = String(formData.get("itemId") ?? "").trim();
+  if (!itemId) redirect("/pedidos-cinturones?error=catalog");
+
+  const { error } = await createAdminClient()
+    .from("order_catalog_items")
+    .delete()
+    .eq("id", itemId);
+
+  if (error) {
+    console.error("Error deleting order catalog item", error);
+    redirect("/pedidos-cinturones?error=catalog");
+  }
+
+  redirect("/pedidos-cinturones?saved=catalog");
+}
+
 export async function updateBeltOrderStatusAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
