@@ -5275,6 +5275,31 @@ tbody tr:hover {
   line-height: 1.25;
 }
 
+.global-technical-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.global-technical-summary > div:first-child {
+  background: #eef4fb;
+  border: 1px solid #bed6f2;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.global-technical-summary > div:first-child strong {
+  color: var(--ficha-blue);
+  display: block;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.global-technical-summary > div:first-child p {
+  color: var(--ficha-muted);
+  line-height: 1.45;
+  margin: 0;
+}
+
 .ficha-triple {
   display: grid;
   gap: 12px;

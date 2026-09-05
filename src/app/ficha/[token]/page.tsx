@@ -574,20 +574,30 @@ function AdultFicha({
         />
       </FoldableSection>
 
-      <FoldableSection title="Historial tecnico completo" meta={`${fullTechnicalHistory.totalRepetitions} practicas · ${fullTechnicalHistory.techniques.length} tecnicas`}>
-        <div className="ficha-card ficha-fields small-fields">
-          <Field label="Practicas registradas" value={String(fullTechnicalHistory.totalRepetitions)} />
-          <Field label="Tecnicas distintas" value={String(fullTechnicalHistory.techniques.length)} />
-          <Field label="Ultima tecnica" value={fullTechnicalHistory.lastDate ? formatDate(fullTechnicalHistory.lastDate) : "-"} />
-          <Field label="Solo progreso examen" value="No, aqui cuenta todo lo entrenado" />
+      <FoldableSection title="Historial tecnico global" meta={`${fullTechnicalHistory.totalRepetitions} practicas acumuladas · ${fullTechnicalHistory.techniques.length} tecnicas`}>
+        <div className="ficha-card global-technical-summary">
+          <div>
+            <strong>Practica acumulada general</strong>
+            <p>Este bloque guarda todo lo entrenado por el kenshi, aunque no siempre cuente para el examen actual. El progreso hacia examen esta en el bloque anterior.</p>
+          </div>
+          <div className="ficha-fields small-fields">
+            <Field label="Practicas totales" value={String(fullTechnicalHistory.totalRepetitions)} />
+            <Field label="Tecnicas distintas" value={String(fullTechnicalHistory.techniques.length)} />
+            <Field label="Ultima tecnica" value={fullTechnicalHistory.lastDate ? formatDate(fullTechnicalHistory.lastDate) : "-"} />
+            <Field label="Cuenta para examen" value={String(fullTechnicalHistory.progressionRepetitions)} />
+            <Field label="Practica general" value={String(fullTechnicalHistory.generalRepetitions)} />
+            <Field label="Goho / Juho" value={`${fullTechnicalHistory.gohoRepetitions} / ${fullTechnicalHistory.juhoRepetitions}`} />
+          </div>
         </div>
         <ResponsiveTable
-          columns={["Tecnica", "Grado", "Categoria", "Veces", "Ultima vez"]}
+          columns={["Tecnica", "Grado", "Categoria", "Veces", "Cuenta examen", "General", "Ultima vez"]}
           rows={fullTechnicalHistory.techniques.map((technique) => [
             technique.name,
             technique.grade,
             technique.category,
             String(technique.repetitions),
+            String(technique.progressionRepetitions),
+            String(technique.generalRepetitions),
             formatDate(technique.lastDate)
           ])}
           empty="Sin historial tecnico registrado."
@@ -1231,6 +1241,8 @@ function buildFullTechnicalHistory(history: TechnicalHistory[]) {
     grade: string;
     category: string;
     repetitions: number;
+    progressionRepetitions: number;
+    generalRepetitions: number;
     lastDate: string | null;
     seeded: number;
   }>();
@@ -1243,10 +1255,14 @@ function buildFullTechnicalHistory(history: TechnicalHistory[]) {
       grade: row.technique_grade ?? "-",
       category: row.category ? row.category.toUpperCase() : "-",
       repetitions: 0,
+      progressionRepetitions: 0,
+      generalRepetitions: 0,
       lastDate: null,
       seeded: 0
     };
     current.repetitions += 1;
+    if (row.counts_as_progression) current.progressionRepetitions += 1;
+    else current.generalRepetitions += 1;
     if (row.proposal_type === "HISTORIAL_INICIAL") current.seeded += 1;
     if (!current.lastDate || row.class_date > current.lastDate) current.lastDate = row.class_date;
     byTechnique.set(key, current);
@@ -1262,6 +1278,10 @@ function buildFullTechnicalHistory(history: TechnicalHistory[]) {
   return {
     techniques,
     totalRepetitions: techniques.reduce((sum, technique) => sum + technique.repetitions, 0),
+    progressionRepetitions: techniques.reduce((sum, technique) => sum + technique.progressionRepetitions, 0),
+    generalRepetitions: techniques.reduce((sum, technique) => sum + technique.generalRepetitions, 0),
+    gohoRepetitions: techniques.filter((technique) => technique.category === "GOHO").reduce((sum, technique) => sum + technique.repetitions, 0),
+    juhoRepetitions: techniques.filter((technique) => technique.category === "JUHO").reduce((sum, technique) => sum + technique.repetitions, 0),
     lastDate: techniques
       .map((technique) => technique.lastDate)
       .filter((date): date is string => Boolean(date))
