@@ -1307,25 +1307,58 @@ export async function deleteClassAction(formData: FormData) {
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
   const confirmText = String(formData.get("confirmText") ?? "").trim().toUpperCase();
+  const deleteScope = String(formData.get("deleteScope") ?? "");
 
   if (!classId || !legacyId || confirmText !== "ELIMINAR") {
     redirect(`/clases/${legacyId || ""}?error=delete`);
   }
 
   const supabase = createAdminClient();
+  const { data: currentClass, error: currentClassError } = await supabase
+    .from("classes")
+    .select("id,class_date,class_group")
+    .eq("id", classId)
+    .single<{ id: string; class_date: string; class_group: "kids" | "adults" }>();
+
+  if (currentClassError || !currentClass) {
+    redirect(`/clases/${legacyId}?error=delete`);
+  }
+
+  let classIdsToDelete = [classId];
+  if (deleteScope === "combined-day") {
+    const { data: dayClasses, error: dayClassesError } = await supabase
+      .from("classes")
+      .select("id,class_group")
+      .eq("class_date", currentClass.class_date)
+      .in("class_group", ["adults", "kids"])
+      .returns<Array<{ id: string; class_group: "kids" | "adults" }>>();
+
+    if (dayClassesError || !dayClasses?.length) {
+      redirect(`/clases/${legacyId}?error=delete`);
+    }
+
+    const hasAdults = dayClasses.some((item) => item.class_group === "adults");
+    const hasKids = dayClasses.some((item) => item.class_group === "kids");
+    if (hasAdults && hasKids) {
+      classIdsToDelete = dayClasses.map((item) => item.id);
+    }
+  }
+
   const { data: affectedRows } = await supabase
     .from("attendance_logs")
     .select("member_id")
-    .eq("class_id", classId)
+    .in("class_id", classIdsToDelete)
     .returns<Array<{ member_id: string }>>();
   const affectedMemberIds = Array.from(new Set((affectedRows ?? []).map((row) => row.member_id).filter(Boolean)));
   const deletions = [
-    supabase.from("member_technical_history").delete().eq("class_id", classId),
-    supabase.from("dojo_technical_history").delete().eq("class_id", classId),
-    supabase.from("member_technique_assignments").delete().eq("class_id", classId),
-    supabase.from("attendance_logs").delete().eq("class_id", classId),
-    supabase.from("technical_plans").delete().eq("class_id", classId),
-    supabase.from("class_technical_groups").delete().eq("class_id", classId)
+    supabase.from("attendance_technical_overrides").delete().in("class_id", classIdsToDelete),
+    supabase.from("member_technical_history").delete().in("class_id", classIdsToDelete),
+    supabase.from("dojo_technical_history").delete().in("class_id", classIdsToDelete),
+    supabase.from("member_technique_assignments").delete().in("class_id", classIdsToDelete),
+    supabase.from("attendance_logs").delete().in("class_id", classIdsToDelete),
+    supabase.from("technical_plans").delete().in("class_id", classIdsToDelete),
+    supabase.from("class_technical_groups").delete().in("class_id", classIdsToDelete),
+    supabase.from("class_delegate_links").delete().in("class_id", classIdsToDelete)
   ];
 
   const results = await Promise.all(deletions);
@@ -1334,7 +1367,7 @@ export async function deleteClassAction(formData: FormData) {
     redirect(`/clases/${legacyId}?error=delete`);
   }
 
-  const { error } = await supabase.from("classes").delete().eq("id", classId);
+  const { error } = await supabase.from("classes").delete().in("id", classIdsToDelete);
   if (error) {
     redirect(`/clases/${legacyId}?error=delete`);
   }

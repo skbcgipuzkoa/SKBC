@@ -736,8 +736,13 @@ export default async function ClaseDetailPage({
             <form action={deleteClassAction} className="edit-form danger-zone">
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
+              <input type="hidden" name="deleteScope" value={isCombinedDay ? "combined-day" : "single"} />
               <h2>Eliminar clase</h2>
-              <p className="muted">Elimina esta clase del sistema nuevo junto con asistencia, plan, grupos e historiales tecnicos asociados.</p>
+              <p className="muted">
+                {isCombinedDay
+                  ? "Elimina la clase combinada completa del sistema nuevo: ninos, adultos, asistencia, plan, grupos e historiales tecnicos asociados."
+                  : "Elimina esta clase del sistema nuevo junto con asistencia, plan, grupos e historiales tecnicos asociados."}
+              </p>
               <label>Confirmacion<input name="confirmText" placeholder="Escribe ELIMINAR" /></label>
               <div className="form-actions">
                 <button type="submit">Eliminar clase</button>
