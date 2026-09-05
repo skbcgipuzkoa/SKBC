@@ -908,6 +908,49 @@ export async function addManualClassTechniqueAction(formData: FormData) {
   redirect(`/clases/${legacyId}?saved=manual-technique#plan-tecnico`);
 }
 
+export async function removeManualClassTechniqueAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const planIds = String(formData.get("planIds") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!classId || !legacyId || !planIds.length) {
+    redirect(`/clases/${legacyId || ""}?error=manual-technique-remove`);
+  }
+
+  const supabase = createAdminClient();
+
+  try {
+    const { data: clase, error: classError } = await supabase
+      .from("classes")
+      .select("id,closed")
+      .eq("id", classId)
+      .single<{ id: string; closed: boolean }>();
+    if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
+    if (clase.closed) throw new Error("No se pueden quitar tecnicas manuales de una clase cerrada.");
+
+    const { error } = await supabase
+      .from("technical_plans")
+      .delete()
+      .eq("class_id", classId)
+      .eq("proposal_type", "COMUN MANUAL")
+      .in("id", planIds);
+    if (error) throw error;
+  } catch (error) {
+    console.error("Error removing manual class technique", error);
+    redirect(`/clases/${legacyId}?error=manual-technique-remove&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath(`/clases/${legacyId}`);
+  redirect(`/clases/${legacyId}?saved=manual-technique-remove#plan-tecnico`);
+}
+
 export async function prepareAdultClassAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

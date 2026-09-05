@@ -26,6 +26,7 @@ type ManualTechniqueFormProps = {
 export function ManualTechniqueForm({ action, classId, legacyId, techniques, groups }: ManualTechniqueFormProps) {
   const [query, setQuery] = useState("");
   const [selectedTechniqueId, setSelectedTechniqueId] = useState("");
+  const selectedTechnique = techniques.find((technique) => technique.id === selectedTechniqueId) ?? null;
   const visibleTechniques = useMemo(() => {
     const normalized = normalize(query);
     const filtered = normalized
@@ -58,6 +59,34 @@ export function ManualTechniqueForm({ action, classId, legacyId, techniques, gro
           />
         </span>
       </label>
+      {query.trim() ? (
+        <div className="manual-technique-results" role="listbox" aria-label="Resultados de busqueda de tecnicas">
+          {visibleTechniques.length ? (
+            visibleTechniques.map((technique) => (
+              <button
+                className={selectedTechniqueId === technique.id ? "selected" : ""}
+                key={technique.id}
+                onClick={() => setSelectedTechniqueId(technique.id)}
+                type="button"
+              >
+                <strong>{technique.name}</strong>
+                <small>{technique.grade} - {technique.category ?? "tecnica"}</small>
+              </button>
+            ))
+          ) : (
+            <p className="muted">No hay tecnicas con esa busqueda.</p>
+          )}
+        </div>
+      ) : null}
+      {selectedTechnique ? (
+        <div className="manual-technique-current">
+          <span>
+            Seleccionada: <strong>{selectedTechnique.name}</strong>
+            <small>{selectedTechnique.grade} - {selectedTechnique.category ?? "tecnica"}</small>
+          </span>
+          <button type="button" onClick={() => setSelectedTechniqueId("")}>Quitar</button>
+        </div>
+      ) : null}
       <label>
         Tecnica
         <select value={selectedTechniqueId} onChange={(event) => setSelectedTechniqueId(event.target.value)} required>

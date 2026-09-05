@@ -13,6 +13,7 @@ import {
   generateAdultPlanAction,
   logoutAction,
   prepareAdultClassAction,
+  removeManualClassTechniqueAction,
   removeAttendanceAction,
   saveAttendanceTechnicalReviewAction,
   updateClassAction,
@@ -607,6 +608,7 @@ export default async function ClaseDetailPage({
         {query.saved === "attendance-removed" ? <p className="save-ok">Asistencia quitada.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "manual-technique" ? <p className="save-ok">Tecnica comun anadida al plan de clase.</p> : null}
+        {query.saved === "manual-technique-remove" ? <p className="save-ok">Tecnica comun quitada de la clase.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.saved === "delegate" ? <p className="save-ok">Enlace de sustituto generado.</p> : null}
         {query.error === "plan" ? (
@@ -632,6 +634,9 @@ export default async function ClaseDetailPage({
         ) : null}
         {query.error === "manual-technique" ? (
           <p className="form-error">No se ha podido anadir la tecnica comun{query.detail ? `: ${query.detail}` : "."}</p>
+        ) : null}
+        {query.error === "manual-technique-remove" ? (
+          <p className="form-error">No se ha podido quitar la tecnica comun{query.detail ? `: ${query.detail}` : "."}</p>
         ) : null}
         {query.error === "close" ? (
           <p className="form-error">No se ha podido cerrar la clase.</p>
@@ -932,8 +937,16 @@ export default async function ClaseDetailPage({
                         <strong>Extras manuales de esta clase</strong>
                         {manualCommonSummary.map((item) => (
                           <div className="manual-technique-added-row" key={item.key}>
-                            <span>{item.name}</span>
-                            <small>{item.scope} - {item.category ?? "tecnica"}</small>
+                            <span>
+                              {item.name}
+                              <small>{item.scope} - {item.category ?? "tecnica"}</small>
+                            </span>
+                            <form action={removeManualClassTechniqueAction}>
+                              <input type="hidden" name="classId" value={clase.id} />
+                              <input type="hidden" name="legacyId" value={legacyId} />
+                              <input type="hidden" name="planIds" value={item.ids.join(",")} />
+                              <button type="submit">Quitar</button>
+                            </form>
                           </div>
                         ))}
                       </div>
@@ -1191,15 +1204,17 @@ function groupPlanByGrade(plan: PlanRow[]) {
 }
 
 function summarizeManualCommonPlan(plan: PlanRow[]) {
-  const grouped = new Map<string, { key: string; name: string; category: string | null; grades: string[] }>();
+  const grouped = new Map<string, { key: string; ids: string[]; name: string; category: string | null; grades: string[] }>();
   plan.forEach((item) => {
     const key = `${normalizeGradeLabel(item.technique_name)}::${normalizeGradeLabel(item.category)}`;
     const current = grouped.get(key) ?? {
       key,
+      ids: [],
       name: item.technique_name,
       category: item.category,
       grades: []
     };
+    current.ids.push(item.id);
     if (item.group_grade && !current.grades.includes(item.group_grade)) current.grades.push(item.group_grade);
     grouped.set(key, current);
   });

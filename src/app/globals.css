@@ -2002,6 +2002,66 @@ tbody tr:hover {
   outline: none;
 }
 
+.manual-technique-results {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.manual-technique-results button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e3edf8;
+  border-radius: 8px;
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 9px 11px;
+  text-align: left;
+}
+
+.manual-technique-results button.selected {
+  background: #eaf4ff;
+  border-color: #0b63c7;
+}
+
+.manual-technique-results small,
+.manual-technique-current small {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 750;
+  margin-top: 2px;
+}
+
+.manual-technique-current {
+  align-items: center;
+  background: #ecfdf3;
+  border: 1px solid #b8ebc8;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.manual-technique-current button,
+.manual-technique-added-row button {
+  background: #fff;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-weight: 850;
+  min-height: 38px;
+  padding: 7px 12px;
+  width: auto;
+}
+
 .manual-technique-added-list {
   background: #f8fbff;
   border: 1px solid var(--line);
@@ -2030,12 +2090,13 @@ tbody tr:hover {
   padding-top: 0;
 }
 
-.manual-technique-added-row span {
+.manual-technique-added-row > span {
   font-weight: 850;
 }
 
-.manual-technique-added-row small {
+.manual-technique-added-row > span small {
   color: var(--muted);
+  display: block;
   font-weight: 750;
   text-align: right;
 }
@@ -2085,6 +2146,12 @@ tbody tr:hover {
 
   .manual-technique-added-row small {
     text-align: left;
+  }
+
+  .manual-technique-current,
+  .manual-technique-results button {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
