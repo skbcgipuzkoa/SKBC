@@ -218,7 +218,7 @@ export default async function ClaseDetailPage({
   const delegateLink = delegateLinks?.[0] ?? null;
   const delegateMode = delegateModeFromCreatedBy(delegateLink?.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
   const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}?mode=${delegateMode}` : null;
-  const activeStep = clase.class_group === "adults" ? (query.step === "asistencia" ? "attendance" : "techniques") : "attendance";
+  const activeStep = clase.class_group === "adults" ? (["asistencia", "cierre"].includes(String(query.step ?? "")) ? "attendance" : "techniques") : "attendance";
   const techniqueStepHref = `/clases/${legacyId}`;
   const attendanceStepHref = `/clases/${legacyId}?step=asistencia`;
   if (clase.class_group === "adults" && activeStep === "attendance" && !(dayClasses ?? []).some((item) => item.class_group === "kids")) {
@@ -242,6 +242,7 @@ export default async function ClaseDetailPage({
   }
   const attendanceClasses = ["adults", "kids"].map((group) => (dayClasses ?? []).find((item) => item.class_group === group)).filter(Boolean) as AttendanceClassOption[];
   const isCombinedDay = clase.class_group === "adults" && attendanceClasses.some((item) => item.class_group === "kids");
+  const attendancePanelClasses = isCombinedDay ? attendanceClasses.filter((item) => item.class_group === "adults") : attendanceClasses;
   const registeredAttendanceGroups = clase.class_group === "adults" && activeStep === "attendance"
     ? attendanceClasses.map((dayClass) => ({
       title: dayClass.class_group === "kids" ? "Ninos" : "Adultos",
@@ -280,12 +281,24 @@ export default async function ClaseDetailPage({
     !kidsDayClass?.closed &&
     kidsDayMembers.length > 0 &&
     kidsRegisteredCount === 0;
-  const showKidsPrelude = clase.class_group === "adults" && activeStep === "techniques" && Boolean(kidsDayClass) && !kidsDayClass?.closed;
-  const showAdultTechniques = clase.class_group === "adults" && activeStep === "techniques" && !mustRegisterKidsFirst;
+  const combinedStep = isCombinedDay
+    ? clase.closed || query.step === "cierre"
+      ? "close"
+      : mustRegisterKidsFirst
+        ? "kids"
+        : query.step === "asistencia"
+          ? "adult-attendance"
+          : "techniques"
+    : null;
+  const showKidsPrelude = clase.class_group === "adults" && activeStep === "techniques" && Boolean(kidsDayClass) && !kidsDayClass?.closed && (!isCombinedDay || combinedStep === "kids");
+  const showAdultTechniques = clase.class_group === "adults" && activeStep === "techniques" && !mustRegisterKidsFirst && (!isCombinedDay || combinedStep === "techniques");
   const showAttendanceStep = clase.class_group !== "adults" || activeStep === "attendance";
+  const showAdultAttendancePanel = showAttendanceStep && (!isCombinedDay || combinedStep === "adult-attendance");
+  const showCombinedCloseStep = isCombinedDay && combinedStep === "close";
   const classMission = buildClassMission({
     classGroup: clase.class_group,
     activeStep,
+    combinedStep,
     closed: clase.closed,
     isCombinedDay,
     kidsRegistered: kidsRegisteredCount,
@@ -302,7 +315,7 @@ export default async function ClaseDetailPage({
         <strong>1. Asistencia de ninos</strong>
         <span>{kidsDayMembers.length - pendingKidsDayMembers.length}/{kidsDayMembers.length} registrados</span>
       </summary>
-      <p className="muted class-flow-note">Primero marca los ninos que han venido. Al guardar, esta misma clase pasa al plan tecnico adulto.</p>
+      <p className="muted class-flow-note">Primero marca los ninos que han venido. Al guardar, la pantalla cambia al plan tecnico adulto.</p>
       <form action={addBulkAttendanceAction} className="attendance-day-form">
         <input type="hidden" name="classId" value={kidsDayClass.id} />
         <input type="hidden" name="legacyId" value={kidsDayClass.legacy_id ?? legacyId} />
@@ -339,9 +352,9 @@ export default async function ClaseDetailPage({
       <input type="hidden" name="classId" value={clase.id} />
       <input type="hidden" name="legacyId" value={legacyId} />
       <input type="hidden" name="returnLegacyId" value={legacyId} />
-      <input type="hidden" name="returnStep" value="asistencia" />
+      <input type="hidden" name="returnStep" value={isCombinedDay ? "cierre" : "asistencia"} />
       <div className="attendance-group-stack">
-        {attendanceClasses.map((dayClass) => {
+        {attendancePanelClasses.map((dayClass) => {
           const attendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === dayClass.id).map((item) => item.member_id));
           const membersForGroup = (dayMembers ?? []).filter((member) => member.class === dayClass.class_group);
           const pendingMembers = membersForGroup.filter((member) => !attendedIds.has(member.id));
@@ -753,10 +766,10 @@ export default async function ClaseDetailPage({
 
         {clase.class_group === "adults" && isCombinedDay ? (
           <section className="class-stepper combined-class-stepper" aria-label="Flujo de clase combinada">
-            <span className={kidsRegisteredCount > 0 || kidsDayClass?.closed ? "step done" : "step current"}>1 Ninos</span>
-            <a className={activeStep === "techniques" && !mustRegisterKidsFirst ? "step current" : completedPlan ? "step done" : "step"} href={mustRegisterKidsFirst ? "#asistencia-ninos-rapida" : techniqueStepHref}>2 Tecnicas</a>
-            <a className={activeStep === "attendance" ? "step current" : adultRegisteredCount ? "step done" : "step"} href={mustRegisterKidsFirst ? "#asistencia-ninos-rapida" : attendanceStepHref}>3 Adultos</a>
-            <span className={clase.closed ? "step done" : "step"}>4 Cerrar todo</span>
+            <span className={combinedStep === "kids" ? "step current" : kidsRegisteredCount > 0 || kidsDayClass?.closed ? "step done" : "step"}>1 Ninos</span>
+            <a className={combinedStep === "techniques" ? "step current" : completedPlan ? "step done" : "step"} href={mustRegisterKidsFirst ? "#asistencia-ninos-rapida" : techniqueStepHref}>2 Tecnicas</a>
+            <a className={combinedStep === "adult-attendance" ? "step current" : adultRegisteredCount ? "step done" : "step"} href={mustRegisterKidsFirst ? "#asistencia-ninos-rapida" : attendanceStepHref}>3 Adultos</a>
+            <a className={combinedStep === "close" ? "step current" : clase.closed ? "step done" : "step"} href={adultRegisteredCount ? `/clases/${legacyId}?step=cierre` : attendanceStepHref}>4 Cerrar todo</a>
           </section>
         ) : clase.class_group === "adults" ? (
           <section className="class-stepper" aria-label="Flujo de clase">
@@ -799,7 +812,7 @@ export default async function ClaseDetailPage({
               title="Ninos"
               text="Pasa asistencia infantil nada mas terminar su clase."
               done={kidsRegisteredCount > 0 || Boolean(kidsDayClass?.closed)}
-              active={mustRegisterKidsFirst}
+              active={combinedStep === "kids"}
             />
             <FlowGuideItem
               number="2"
@@ -813,14 +826,14 @@ export default async function ClaseDetailPage({
               title="Adultos"
               text="Marca asistencia, grupo entrenado y rol de cada adulto."
               done={adultRegisteredCount > 0}
-              active={activeStep === "attendance" && !clase.closed}
+              active={combinedStep === "adult-attendance"}
             />
             <FlowGuideItem
               number="4"
               title="Cerrar todo"
               text="Un unico cierre actualiza fichas, ranking e historial."
               done={clase.closed}
-              active={activeStep === "attendance" && adultRegisteredCount > 0 && !clase.closed}
+              active={combinedStep === "close"}
             />
           </section>
         ) : null}
@@ -969,9 +982,11 @@ export default async function ClaseDetailPage({
           </>
         ) : null}
 
-        {showAttendanceStep ? <>
+        {(showAdultAttendancePanel || showCombinedCloseStep || (showAttendanceStep && !isCombinedDay)) ? <>
         <div className="section-heading-row">
-          <h2 className="section-title">{clase.class_group === "kids" ? "Asistencia infantil" : "Asistencia final"}</h2>
+          <h2 className="section-title">
+            {showCombinedCloseStep ? "Cerrar clase combinada" : clase.class_group === "kids" ? "Asistencia infantil" : "Asistencia adultos"}
+          </h2>
           {clase.class_group === "adults" ? <a className="secondary-link" href={techniqueStepHref}>Volver a tecnicas</a> : null}
         </div>
         {clase.class_group === "adults" ? (
@@ -989,7 +1004,7 @@ export default async function ClaseDetailPage({
             </div>
           </section>
         ) : null}
-        <section className="card mobile-attendance-note">
+        {!showCombinedCloseStep ? <section className="card mobile-attendance-note">
           {clase.class_group === "adults" ? (
             <>
               <h2>Como se adjuntan las tecnicas</h2>
@@ -1004,28 +1019,45 @@ export default async function ClaseDetailPage({
               <p className="muted">La asistencia infantil actualiza la actividad del alumno y sirve para ranking, constancia y revision de fichas.</p>
             </>
           )}
-        </section>
+        </section> : null}
 
-        <section className="mobile-work-anchor" id="asistencia">
+        {!showCombinedCloseStep ? <section className="mobile-work-anchor" id="asistencia">
           {attendanceClasses.length > 1 ? attendancePanel : attendanceQuickPanel}
-        </section>
-        {technicalReviewPanel}
+        </section> : null}
+        {!showCombinedCloseStep ? technicalReviewPanel : null}
         </> : null}
 
-        {readyToClose && activeStep === "attendance" && (attendance ?? []).length ? (
+        {readyToClose && (activeStep === "attendance" || showCombinedCloseStep) && (attendance ?? []).length ? (
           <section className="mobile-close-bar" aria-label="Cerrar clase">
             <div>
                 <strong data-plan-total-count>{completedPlan}/{(plan ?? []).length}</strong>
-              <span>tecnicas realizadas. Usa solo si la asistencia ya esta guardada.</span>
+              <span>{isCombinedDay ? "Revisa y cierra ninos + adultos juntos." : "tecnicas realizadas. Usa solo si la asistencia ya esta guardada."}</span>
             </div>
-            <form action={closeAdultClassAction}>
-              <input type="hidden" name="classId" value={clase.id} />
-              <input type="hidden" name="legacyId" value={legacyId} />
-              <button className="primary-link button-reset" type="submit">
-                <Check aria-hidden="true" size={16} />
-                Cerrar clase ya guardada
-              </button>
-            </form>
+            {isCombinedDay ? (
+              <form action={addBulkAttendanceAction}>
+                <input type="hidden" name="classId" value={clase.id} />
+                <input type="hidden" name="legacyId" value={legacyId} />
+                <input type="hidden" name="returnLegacyId" value={legacyId} />
+                <input type="hidden" name="returnStep" value="cierre" />
+                <input type="hidden" name="closeAfter" value="true" />
+                {attendanceClasses.map((dayClass) => (
+                  <input key={dayClass.id} type="hidden" name="groupClassIds" value={dayClass.id} />
+                ))}
+                <button className="primary-link button-reset" type="submit">
+                  <Check aria-hidden="true" size={16} />
+                  Cerrar todo
+                </button>
+              </form>
+            ) : (
+              <form action={closeAdultClassAction}>
+                <input type="hidden" name="classId" value={clase.id} />
+                <input type="hidden" name="legacyId" value={legacyId} />
+                <button className="primary-link button-reset" type="submit">
+                  <Check aria-hidden="true" size={16} />
+                  Cerrar clase ya guardada
+                </button>
+              </form>
+            )}
           </section>
         ) : null}
 
@@ -1121,6 +1153,7 @@ function FlowGuideItem({
 function buildClassMission({
   classGroup,
   activeStep,
+  combinedStep,
   closed,
   isCombinedDay,
   kidsRegistered,
@@ -1133,6 +1166,7 @@ function buildClassMission({
 }: {
   classGroup: "kids" | "adults";
   activeStep: "techniques" | "attendance";
+  combinedStep: "kids" | "techniques" | "adult-attendance" | "close" | null;
   closed: boolean;
   isCombinedDay: boolean;
   kidsRegistered: number;
@@ -1162,6 +1196,17 @@ function buildClassMission({
       primaryLabel: "Ir a asistencia",
       secondaryHref: "",
       secondaryLabel: ""
+    };
+  }
+
+  if (combinedStep === "close") {
+    return {
+      title: "4. Cierra toda la clase",
+      description: "Ultima revision: ninos, adultos y tecnicas quedan listos. Pulsa Cerrar todo para actualizar fichas, ranking e historiales.",
+      primaryHref: "#revision-final",
+      primaryLabel: "Ver cierre",
+      secondaryHref: "/clases",
+      secondaryLabel: "Calendario"
     };
   }
 
