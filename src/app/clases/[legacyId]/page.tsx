@@ -260,6 +260,9 @@ export default async function ClaseDetailPage({
     !kidsDayClass?.closed &&
     kidsDayMembers.length > 0 &&
     kidsRegisteredCount === 0;
+  const showKidsPrelude = clase.class_group === "adults" && activeStep === "techniques" && Boolean(kidsDayClass) && !kidsDayClass?.closed;
+  const showAdultTechniques = clase.class_group === "adults" && activeStep === "techniques" && !mustRegisterKidsFirst;
+  const showAttendanceStep = clase.class_group !== "adults" || activeStep === "attendance";
   const classMission = buildClassMission({
     classGroup: clase.class_group,
     activeStep,
@@ -273,7 +276,7 @@ export default async function ClaseDetailPage({
     totalPlan: (plan ?? []).length,
     mustRegisterKidsFirst
   });
-  const kidsEarlyAttendancePanel = clase.class_group === "adults" && activeStep === "techniques" && kidsDayClass && !kidsDayClass.closed ? (
+  const kidsEarlyAttendancePanel = showKidsPrelude && kidsDayClass && !kidsDayClass.closed ? (
     <details className={mustRegisterKidsFirst ? "card early-kids-attendance class-flow-focus" : "card early-kids-attendance"} id="asistencia-ninos-rapida" open={mustRegisterKidsFirst || undefined}>
       <summary>
         <strong>1. Asistencia de ninos</strong>
@@ -298,7 +301,7 @@ export default async function ClaseDetailPage({
           )) : <p className="muted">Todos los ninos activos estan ya en asistencia.</p>}
         </div>
         <div className="form-actions">
-          <button type="submit" disabled={!pendingKidsDayMembers.length}>Guardar ninos y seguir con adultos</button>
+          <button type="submit" disabled={!pendingKidsDayMembers.length}>Guardar ninos y abrir plan adulto</button>
         </div>
       </form>
     </details>
@@ -362,11 +365,11 @@ export default async function ClaseDetailPage({
         })}
       </div>
       <div className="attendance-day-actions">
-        <p className="muted">Marca adultos y ninos si corresponde. El contador sube despues de guardar.</p>
-        <button type="submit">Guardar asistencia</button>
+        <p className="muted">Marca la asistencia pendiente. Si ya esta todo correcto, usa el boton azul para cerrar todo junto.</p>
+        <button type="submit">Guardar sin cerrar</button>
         <button className="primary-link button-reset" type="submit" name="closeAfter" value="true">
           <Check aria-hidden="true" size={16} />
-          Guardar todo y cerrar clase
+          Guardar y cerrar todo
         </button>
       </div>
     </AttendanceDayForm>
@@ -747,7 +750,40 @@ export default async function ClaseDetailPage({
           </div>
         </section>
 
-        {clase.class_group === "adults" && activeStep === "techniques" && !mustRegisterKidsFirst ? <section className="split-section class-workbench">
+        {isCombinedDay ? (
+          <section className="class-flow-guide" aria-label="Flujo recomendado de clase combinada">
+            <FlowGuideItem
+              number="1"
+              title="Ninos"
+              text="Pasa asistencia infantil nada mas terminar su clase."
+              done={kidsRegisteredCount > 0 || Boolean(kidsDayClass?.closed)}
+              active={mustRegisterKidsFirst}
+            />
+            <FlowGuideItem
+              number="2"
+              title="Tecnicas adultos"
+              text="Marca el plan tecnico por grados y guarda una sola vez."
+              done={completedPlan > 0}
+              active={showAdultTechniques}
+            />
+            <FlowGuideItem
+              number="3"
+              title="Adultos"
+              text="Marca asistencia, grupo entrenado y rol de cada adulto."
+              done={adultRegisteredCount > 0}
+              active={activeStep === "attendance" && !clase.closed}
+            />
+            <FlowGuideItem
+              number="4"
+              title="Cerrar todo"
+              text="Un unico cierre actualiza fichas, ranking e historial."
+              done={clase.closed}
+              active={activeStep === "attendance" && adultRegisteredCount > 0 && !clase.closed}
+            />
+          </section>
+        ) : null}
+
+        {showAdultTechniques ? <section className="split-section class-workbench">
           <article className="card">
             <h2>Grupos tecnicos</h2>
             <div className="chip-list">
@@ -763,16 +799,16 @@ export default async function ClaseDetailPage({
               trabajo al grado entrenado de cada kenshi.
             </p>
           </article>
-        </section> : (
+        </section> : clase.class_group === "kids" ? (
           <section className="card">
             <h2>Clase infantil</h2>
             <p className="muted">Esta sesion no usa plan tecnico. Registra asistencia y abre las fichas para revisar constancia, avisos y datos del alumno.</p>
           </section>
-        )}
+        ) : null}
 
         {kidsEarlyAttendancePanel}
 
-        {clase.class_group === "adults" && activeStep === "techniques" && !mustRegisterKidsFirst ? (
+        {showAdultTechniques ? (
           <>
             <div className="section-heading-row">
               <h2 className="section-title" id="plan-tecnico">Plan tecnico</h2>
@@ -855,7 +891,7 @@ export default async function ClaseDetailPage({
           </>
         ) : null}
 
-        {clase.class_group !== "adults" || activeStep === "attendance" ? <>
+        {showAttendanceStep ? <>
         <div className="section-heading-row">
           <h2 className="section-title">{clase.class_group === "kids" ? "Asistencia infantil" : "Asistencia final"}</h2>
           {clase.class_group === "adults" ? <a className="secondary-link" href={techniqueStepHref}>Volver a tecnicas</a> : null}
@@ -976,6 +1012,31 @@ function StatusPill({ label, value, done }: { label: string; value: string; done
       <small>{label}</small>
       <strong>{value}</strong>
     </span>
+  );
+}
+
+function FlowGuideItem({
+  number,
+  title,
+  text,
+  done,
+  active
+}: {
+  number: string;
+  title: string;
+  text: string;
+  done: boolean;
+  active: boolean;
+}) {
+  const className = done ? "class-flow-guide-item done" : active ? "class-flow-guide-item active" : "class-flow-guide-item";
+  return (
+    <article className={className}>
+      <span>{done ? <Check aria-hidden="true" size={16} /> : number}</span>
+      <div>
+        <strong>{title}</strong>
+        <p>{text}</p>
+      </div>
+    </article>
   );
 }
 

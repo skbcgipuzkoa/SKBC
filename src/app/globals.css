@@ -2666,6 +2666,73 @@ tbody tr:hover {
   justify-content: flex-end;
 }
 
+.class-flow-guide {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 12px 0 16px;
+}
+
+.class-flow-guide-item {
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-height: 92px;
+  padding: 12px;
+}
+
+.class-flow-guide-item > span {
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 950;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.class-flow-guide-item strong {
+  color: var(--ink);
+  display: block;
+  font-size: 15px;
+  line-height: 1.15;
+}
+
+.class-flow-guide-item p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.3;
+  margin: 4px 0 0;
+}
+
+.class-flow-guide-item.active {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  box-shadow: 0 12px 24px rgba(11, 92, 173, 0.1);
+}
+
+.class-flow-guide-item.active > span {
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.class-flow-guide-item.done {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+}
+
+.class-flow-guide-item.done > span {
+  background: #067647;
+  color: #ffffff;
+}
+
 .class-mission-card,
 .class-final-review {
   align-items: start;
@@ -6227,6 +6294,16 @@ tbody tr:hover {
     width: 100%;
   }
 
+  .class-flow-guide {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 10px 0 14px;
+  }
+
+  .class-flow-guide-item {
+    min-height: 78px;
+    padding: 10px;
+  }
+
   .class-mission-card,
   .class-final-review {
     gap: 10px;
@@ -7070,6 +7147,14 @@ tbody tr:hover {
 }
 
 @media (max-width: 430px) {
+  .class-flow-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .class-flow-guide-item {
+    min-height: 0;
+  }
+
   .main {
     padding-left: 8px;
     padding-right: 8px;
