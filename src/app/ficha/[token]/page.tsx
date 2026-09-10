@@ -12,17 +12,17 @@ const LOGO_IKA_URL = "https://lh3.googleusercontent.com/d/1F1VTa2ygk4PRG4wEukoeR
 const LOGO_SKBC_URL = "https://lh3.googleusercontent.com/d/1HL7qwSkhxFsHdwg6lpidBe5EjGE-W1GI=w300";
 const ADULT_GRADES = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
 const KID_GRADES = [
-  "MINARAI",
-  "BLANCO Y AMARILLO",
-  "5 KYU",
-  "AMARILLO Y NARANJA",
-  "4 KYU",
-  "NARANJA Y VERDE",
-  "3 KYU",
-  "VERDE Y AZUL",
-  "2 KYU",
-  "AZUL Y MARRON",
-  "1 KYU",
+  "BLANCO",
+  "BLANCO-AMARILLO",
+  "AMARILLO",
+  "AMARILLO-NARANJA",
+  "NARANJA",
+  "NARANJA-VERDE",
+  "VERDE",
+  "VERDE-AZUL",
+  "AZUL",
+  "AZUL-MARRON",
+  "MARRON",
   "1 DAN"
 ];
 const REPETITION_GOAL = 3;
@@ -1508,6 +1508,7 @@ function safeInternalReturnUrl(value: string | null | undefined) {
 
 function nextKidGrade(grade: string | null) {
   const aliases = new Map([
+    ["MINARAI", "BLANCO"],
     ["AMARILLO", "5KYU"],
     ["NARANJA", "4KYU"],
     ["VERDE", "3KYU"],

@@ -29,11 +29,7 @@ export const kidsGrades = [
   "AZUL",
   "AZUL-MARRON",
   "MARRON",
-  "5 KYU",
-  "4 KYU",
-  "3 KYU",
-  "2 KYU",
-  "1 KYU"
+  "1 DAN"
 ];
 
 export const allGrades = [...new Set([...kidsGrades, ...adultGrades])];
