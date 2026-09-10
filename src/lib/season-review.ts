@@ -40,10 +40,13 @@ type CalendarClosure = {
 };
 
 type AttendanceRow = {
+  id: string;
+  class_id: string | null;
   attended_on: string;
   official_grade: string | null;
   trained_grade: string | null;
   technical_role: string | null;
+  use_for_history: boolean | null;
 };
 
 type TechnicalRow = {
@@ -55,6 +58,28 @@ type TechnicalRow = {
   trained_grade: string | null;
   counts_as_progression: boolean;
   completed: boolean;
+};
+
+type TechnicalPlanRow = {
+  id: string;
+  class_id: string;
+  class_date: string;
+  group_grade: string | null;
+  target_grade: string | null;
+  technique_id: string | null;
+  technique_name: string;
+  technique_grade: string | null;
+  category: string | null;
+  proposal_type: string | null;
+  focus: string | null;
+  completed: boolean;
+  used_for_history: boolean | null;
+};
+
+type TechnicalOverrideRow = {
+  attendance_id: string;
+  plan_id: string;
+  include_in_history: boolean | null;
 };
 
 type CourseRow = {
@@ -165,7 +190,7 @@ async function buildReviewData(memberId: string, from?: string | null, to?: stri
 
   const [classesResult, attendanceResult, techniquesResult, coursesResult, examsResult, behaviorResult, busenResult, shakujoResult, closuresResult] = await Promise.all([
     supabase.from("classes").select("class_date,class_group,closed").eq("class_group", member.class).eq("closed", true).gte("class_date", analysisFrom).lte("class_date", requestedTo).returns<ClassRow[]>(),
-    supabase.from("attendance_logs").select("attended_on,official_grade,trained_grade,technical_role").eq("member_id", member.id).gte("attended_on", analysisFrom).lte("attended_on", requestedTo).order("attended_on", { ascending: true }).returns<AttendanceRow[]>(),
+    supabase.from("attendance_logs").select("id,class_id,attended_on,official_grade,trained_grade,technical_role,use_for_history").eq("member_id", member.id).gte("attended_on", analysisFrom).lte("attended_on", requestedTo).order("attended_on", { ascending: true }).returns<AttendanceRow[]>(),
     supabase.from("member_technical_history").select("class_date,technique_id,technique_name,category,grade,trained_grade,counts_as_progression,completed").eq("member_id", member.id).eq("completed", true).gte("class_date", analysisFrom).lte("class_date", requestedTo).order("class_date", { ascending: true }).returns<TechnicalRow[]>(),
     supabase.from("courses").select("kind,course_date,title,location,sensei,competition_category,competition_result,competition_medal,competition_notes").eq("member_id", member.id).gte("course_date", analysisFrom).lte("course_date", requestedTo).order("course_date", { ascending: true }).returns<CourseRow[]>(),
     supabase.from("exams").select("exam_date,grade,cycle_attendance,examiner,registered_by,result,report_url,diploma_url").eq("member_id", member.id).gte("exam_date", analysisFrom).lte("exam_date", requestedTo).order("exam_date", { ascending: true }).returns<ExamRow[]>(),
@@ -196,6 +221,12 @@ async function buildReviewData(memberId: string, from?: string | null, to?: stri
 
   const legacyExams = await loadLegacyExams(supabase, member.legacy_id, analysisFrom, requestedTo);
   const mergedExams = mergeExams(examsResult.data ?? [], legacyExams);
+  const attendanceRows = attendanceResult.data ?? [];
+  const technicalRows = await mergeTechnicalRowsWithClosedClassPlanFallback(
+    supabase,
+    techniquesResult.data ?? [],
+    member.class === "adults" ? attendanceRows : []
+  );
 
   return {
     member,
@@ -203,10 +234,10 @@ async function buildReviewData(memberId: string, from?: string | null, to?: stri
     to: requestedTo,
     classDates,
     attendedDates,
-    attendance: attendanceResult.data ?? [],
+    attendance: attendanceRows,
     attendanceRate,
     classCoverageReliable,
-    techniques: techniquesResult.data ?? [],
+    techniques: technicalRows,
     courses: coursesResult.data ?? [],
     exams: mergedExams,
     behavior: behaviorResult.error ? [] : behaviorResult.data ?? [],
@@ -667,6 +698,85 @@ function specialLines(input: ReviewData) {
   return lines.length ? lines : ["Sin registros Busen/Shakujo en el periodo consultado."];
 }
 
+async function mergeTechnicalRowsWithClosedClassPlanFallback(
+  supabase: ReturnType<typeof createAdminClient>,
+  historyRows: TechnicalRow[],
+  attendanceRows: AttendanceRow[]
+) {
+  const classIds = unique(
+    attendanceRows
+      .filter((row) => row.class_id && row.use_for_history !== false && row.technical_role !== "observing")
+      .map((row) => row.class_id)
+  );
+  if (!classIds.length) return historyRows;
+
+  const [{ data: plans, error: planError }, { data: overrides, error: overrideError }] = await Promise.all([
+    supabase
+      .from("technical_plans")
+      .select("id,class_id,class_date,group_grade,target_grade,technique_id,technique_name,technique_grade,category,proposal_type,focus,completed,used_for_history")
+      .in("class_id", classIds)
+      .eq("completed", true)
+      .not("technique_id", "is", null)
+      .returns<TechnicalPlanRow[]>(),
+    supabase
+      .from("attendance_technical_overrides")
+      .select("attendance_id,plan_id,include_in_history")
+      .in("attendance_id", unique(attendanceRows.map((row) => row.id)))
+      .returns<TechnicalOverrideRow[]>()
+  ]);
+
+  if (planError || overrideError) return historyRows;
+
+  const planById = new Map((plans ?? []).map((plan) => [plan.id, plan]));
+  const plansByClass = new Map<string, TechnicalPlanRow[]>();
+  for (const plan of plans ?? []) {
+    const list = plansByClass.get(plan.class_id) ?? [];
+    list.push(plan);
+    plansByClass.set(plan.class_id, list);
+  }
+
+  const overridesByAttendance = new Map<string, Set<string>>();
+  for (const row of overrides ?? []) {
+    if (row.include_in_history === false) continue;
+    const set = overridesByAttendance.get(row.attendance_id) ?? new Set<string>();
+    set.add(row.plan_id);
+    overridesByAttendance.set(row.attendance_id, set);
+  }
+
+  const merged = [...historyRows];
+  const seen = new Set(merged.map(technicalRowKey));
+  for (const attendance of attendanceRows) {
+    if (!attendance.class_id || attendance.use_for_history === false || attendance.technical_role === "observing") continue;
+    const overridePlanIds = overridesByAttendance.get(attendance.id);
+    const selectedPlans = overridePlanIds?.size
+      ? Array.from(overridePlanIds).map((id) => planById.get(id)).filter((plan): plan is TechnicalPlanRow => Boolean(plan))
+      : (plansByClass.get(attendance.class_id) ?? []).filter((plan) => sameGrade(plan.group_grade, attendance.trained_grade ?? attendance.official_grade));
+
+    for (const plan of selectedPlans) {
+      if (!plan.technique_id) continue;
+      const isReview = normalizeText(plan.proposal_type ?? plan.focus) === "repaso";
+      const trainedGrade = attendance.trained_grade ?? attendance.official_grade;
+      const countsAsProgression = !isReview || sameGrade(trainedGrade, "MINARAI");
+      const row: TechnicalRow = {
+        class_date: plan.class_date || attendance.attended_on,
+        technique_id: plan.technique_id,
+        technique_name: plan.technique_name,
+        category: plan.category,
+        grade: plan.technique_grade ?? plan.target_grade,
+        trained_grade: trainedGrade,
+        counts_as_progression: countsAsProgression,
+        completed: true
+      };
+      const key = technicalRowKey(row);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(row);
+    }
+  }
+
+  return merged.sort((a, b) => a.class_date.localeCompare(b.class_date) || a.technique_name.localeCompare(b.technique_name));
+}
+
 async function loadLegacyExams(
   supabase: ReturnType<typeof createAdminClient>,
   legacyId: string | null,
@@ -832,6 +942,18 @@ function kindLabel(kind: string) {
 
 function normalizeText(value: string | null | undefined) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeGrade(value: string | null | undefined) {
+  return normalizeText(value).replace(/\s+/g, " ");
+}
+
+function sameGrade(a: string | null | undefined, b: string | null | undefined) {
+  return normalizeGrade(a) === normalizeGrade(b);
+}
+
+function technicalRowKey(row: TechnicalRow) {
+  return `${row.class_date.slice(0, 10)}::${row.technique_id ?? normalizeText(row.technique_name)}::${normalizeGrade(row.trained_grade)}::${row.counts_as_progression ? "progress" : "global"}`;
 }
 
 function sameLegacyId(value: unknown, legacyId: string) {
