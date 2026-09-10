@@ -8,13 +8,14 @@ import { hasInternalAccess } from "@/lib/auth";
 export default async function NewKenshiPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; returnTo?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
   }
 
   const notices = await searchParams;
+  const returnTo = sanitizeKenshiReturnTo(notices.returnTo);
 
   return (
     <div className="shell">
@@ -23,7 +24,7 @@ export default async function NewKenshiPage({
         <div className="topbar">
           <div>
             <p className="eyebrow">
-              <a className="text-link" href="/kenshis"><ArrowLeft size={14} aria-hidden="true" /> Volver</a>
+              <a className="text-link" href={returnTo}><ArrowLeft size={14} aria-hidden="true" /> Volver</a>
             </p>
             <h1>Nuevo kenshi</h1>
           </div>
@@ -40,4 +41,14 @@ export default async function NewKenshiPage({
       </main>
     </div>
   );
+}
+
+function sanitizeKenshiReturnTo(value: string | null | undefined) {
+  if (!value) return "/kenshis";
+  try {
+    const decoded = decodeURIComponent(value);
+    return decoded.startsWith("/kenshis") && !decoded.startsWith("//") ? decoded : "/kenshis";
+  } catch {
+    return "/kenshis";
+  }
 }

@@ -33,6 +33,11 @@ export default async function KenshisPage({
 
   const params = await searchParams;
   const selectedStatus = params.status === "inactive" ? "inactive" : "active";
+  const listParams = new URLSearchParams();
+  if ((params.q ?? "").trim()) listParams.set("q", (params.q ?? "").trim());
+  if (params.class === "kids" || params.class === "adults") listParams.set("class", params.class);
+  listParams.set("status", selectedStatus);
+  const currentListPath = `/kenshis?${listParams.toString()}`;
   const supabase = createAdminClient();
   const [
     { count: activeCount },
@@ -92,7 +97,7 @@ export default async function KenshisPage({
             <h1>Kenshis</h1>
           </div>
           <div className="top-actions">
-            <a className="primary-link" href="/kenshis/nuevo">Nuevo kenshi</a>
+            <a className="primary-link" href={`/kenshis/nuevo?returnTo=${encodeURIComponent(currentListPath)}`}>Nuevo kenshi</a>
             <form action={logoutAction}>
               <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
                 <LogOut aria-hidden="true" size={18} />
@@ -167,7 +172,7 @@ export default async function KenshisPage({
                   <td data-label="ID SKBC">{kenshi.legacy_id}</td>
                   <td data-label="ID IKA">{kenshi.ika_id || <span className="muted">Pendiente</span>}</td>
                   <td data-label="Nombre">
-                    <a className="text-link" href={`/kenshis/${kenshi.legacy_id}`}>
+                    <a className="text-link" href={`/kenshis/${kenshi.legacy_id}?returnTo=${encodeURIComponent(currentListPath)}`}>
                       {driveImageUrl(kenshi.photo_url) ? (
                         <img className="mini-avatar" src={driveImageUrl(kenshi.photo_url) ?? ""} alt="" />
                       ) : null}
@@ -184,7 +189,7 @@ export default async function KenshisPage({
                   </td>
                   <td data-label="Ficha">
                     <span className="link-stack">
-                      {kenshi.ficha_token ? <a className="text-link" href={`/ficha/${kenshi.ficha_token}?admin=1&returnTo=${encodeURIComponent("/kenshis")}`} target="_blank" rel="noopener noreferrer external">Ficha</a> : null}
+                      {kenshi.ficha_token ? <a className="text-link" href={`/ficha/${kenshi.ficha_token}?admin=1&returnTo=${encodeURIComponent(currentListPath)}`} target="_blank" rel="noopener noreferrer external">Ficha</a> : null}
                       {kenshi.legacy_ficha_url ? <a className="text-link" href={kenshi.legacy_ficha_url} target="_blank" rel="noopener noreferrer external">Ficha antigua</a> : null}
                       {!kenshi.ficha_token && !kenshi.legacy_ficha_url ? <span className="muted">-</span> : null}
                     </span>

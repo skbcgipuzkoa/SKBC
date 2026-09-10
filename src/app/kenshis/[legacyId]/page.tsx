@@ -170,7 +170,7 @@ export default async function KenshiDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; returnTo?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -178,6 +178,7 @@ export default async function KenshiDetailPage({
 
   const { legacyId } = await params;
   const notices = await searchParams;
+  const returnTo = sanitizeKenshiReturnTo(notices.returnTo);
   const supabase = createAdminClient();
 
   const { data: member, error } = await supabase
@@ -306,7 +307,7 @@ export default async function KenshiDetailPage({
         <div className="topbar">
           <div>
             <p className="eyebrow">
-              <a className="text-link" href="/kenshis"><ArrowLeft size={14} aria-hidden="true" /> Volver</a>
+              <a className="text-link" href={returnTo}><ArrowLeft size={14} aria-hidden="true" /> Volver</a>
             </p>
             <h1>{member.first_name} {member.last_name}</h1>
           </div>
@@ -364,7 +365,7 @@ export default async function KenshiDetailPage({
             {notices.saved === "transition-undo" ? <p className="save-ok">Paso a adultos deshecho. Kenshi restaurado a ninos.</p> : null}
             {notices.error === "transition-undo" ? <p className="form-error">No se pudo deshacer el paso a adultos.</p> : null}
             <div className="profile-actions">
-              {member.ficha_token ? <a className="text-link" href={`/ficha/${member.ficha_token}?admin=1&returnTo=${encodeURIComponent(`/kenshis/${member.legacy_id ?? ""}`)}`} target="_blank" rel="noopener noreferrer external">Abrir ficha</a> : (
+              {member.ficha_token ? <a className="text-link" href={`/ficha/${member.ficha_token}?admin=1&returnTo=${encodeURIComponent(`/kenshis/${member.legacy_id ?? ""}?returnTo=${encodeURIComponent(returnTo)}`)}`} target="_blank" rel="noopener noreferrer external">Abrir ficha</a> : (
                 <form action={ensureFichaTokenAction}>
                   <input type="hidden" name="memberId" value={member.id} />
                   <input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
@@ -376,7 +377,7 @@ export default async function KenshiDetailPage({
           </article>
         </section>
 
-        <KenshiOnboardingChecklist member={member} hasConfiguredTechnicalArea={hasConfiguredTechnicalArea} />
+        <KenshiOnboardingChecklist member={member} hasConfiguredTechnicalArea={hasConfiguredTechnicalArea} returnTo={returnTo} />
 
         {member.class === "kids" ? (
           <section className="card transition-card">
@@ -746,10 +747,12 @@ const EFFORT_OPTIONS = ["EXCELENTE", "MUY BUENO", "BUENO", "POCO A POCO MEJORAND
 
 function KenshiOnboardingChecklist({
   member,
-  hasConfiguredTechnicalArea
+  hasConfiguredTechnicalArea,
+  returnTo
 }: {
   member: Member;
   hasConfiguredTechnicalArea: boolean;
+  returnTo: string;
 }) {
   const fichaUrl = member.ficha_token ? `/ficha/${member.ficha_token}` : "";
   const hasContact = Boolean(member.family_email || member.guardian_phone || member.student_phone);
@@ -781,7 +784,7 @@ function KenshiOnboardingChecklist({
         ))}
       </div>
       <div className="form-actions onboarding-actions">
-        {fichaUrl ? <a className="primary-link" href={`${fichaUrl}?admin=1&returnTo=${encodeURIComponent(`/kenshis/${member.legacy_id ?? ""}`)}`} target="_blank" rel="noopener noreferrer external">Ver ficha</a> : null}
+        {fichaUrl ? <a className="primary-link" href={`${fichaUrl}?admin=1&returnTo=${encodeURIComponent(`/kenshis/${member.legacy_id ?? ""}?returnTo=${encodeURIComponent(returnTo)}`)}`} target="_blank" rel="noopener noreferrer external">Ver ficha</a> : null}
         <a className="secondary-link" href="/areas-tecnicas">Areas tecnicas</a>
         <a className="secondary-link" href="#datos-kenshi">Editar datos</a>
       </div>
@@ -797,6 +800,16 @@ function hasTechnicalAreaForGrade(links: TechnicalAreaLink[], grade: string | nu
 
 function normalizeText(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function sanitizeKenshiReturnTo(value: string | null | undefined) {
+  if (!value) return "/kenshis";
+  try {
+    const decoded = decodeURIComponent(value);
+    return decoded.startsWith("/kenshis") && !decoded.startsWith("//") ? decoded : "/kenshis";
+  } catch {
+    return "/kenshis";
+  }
 }
 
 function courseKindLabel(value: string) {
