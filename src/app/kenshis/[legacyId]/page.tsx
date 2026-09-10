@@ -19,6 +19,7 @@ type Member = {
   status: "active" | "inactive";
   grade: string | null;
   joined_on: string | null;
+  birth_date: string | null;
   last_exam_on: string | null;
   next_exam_on: string | null;
   exam_notice: string | null;
@@ -34,6 +35,10 @@ type Member = {
   photo_url: string | null;
   ficha_token: string | null;
   legacy_ficha_url: string | null;
+  free_trial_enabled: boolean | null;
+  free_trial_started_on: string | null;
+  free_trial_ends_on: string | null;
+  free_trial_notice_read_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -153,6 +158,13 @@ type ShakujoAttendanceRow = {
   } | null;
 };
 
+type TechnicalAreaLink = {
+  grade: string;
+  member_class: "kids" | "adults";
+  url: string | null;
+  active: boolean | null;
+};
+
 export default async function KenshiDetailPage({
   params,
   searchParams
@@ -171,7 +183,7 @@ export default async function KenshiDetailPage({
   const { data: member, error } = await supabase
     .from("members")
     .select(
-      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,ficha_token,legacy_ficha_url,created_at,updated_at"
+      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,birth_date,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,ficha_token,legacy_ficha_url,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at,created_at,updated_at"
     )
     .eq("legacy_id", legacyId)
     .single<Member>();
@@ -179,7 +191,7 @@ export default async function KenshiDetailPage({
   if (error || !member) notFound();
   const photoSrc = driveImageUrl(member.photo_url);
 
-  const [{ data: attendance }, { data: exams }, { data: courses }, technicalHistoryResult, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult] = await Promise.all([
+  const [{ data: attendance }, { data: exams }, { data: courses }, technicalHistoryResult, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult, technicalAreaResult] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("attended_on,official_grade,trained_grade,technical_role,classes(name)")
@@ -264,6 +276,13 @@ export default async function KenshiDetailPage({
       .eq("member_id", member.id)
       .order("created_at", { ascending: false })
       .returns<ShakujoAttendanceRow[]>()
+    ,
+    supabase
+      .from("technical_area_links")
+      .select("grade,member_class,url,active")
+      .eq("member_class", member.class)
+      .eq("active", true)
+      .returns<TechnicalAreaLink[]>()
   ]);
   const childRanking = childRankingResult.data;
   const childNotes = childNotesResult.data ?? [];
@@ -278,6 +297,7 @@ export default async function KenshiDetailPage({
   const latestTechnique = technicalHistory[0] ?? null;
   const latestExam = exams?.[0] ?? null;
   const latestCourse = courses?.[0] ?? null;
+  const hasConfiguredTechnicalArea = hasTechnicalAreaForGrade(technicalAreaResult.data ?? [], member.grade);
 
   return (
     <div className="shell">
@@ -306,7 +326,7 @@ export default async function KenshiDetailPage({
               <p className="muted">{member.class === "kids" ? "Ninos" : "Adultos"}</p>
             </div>
           </article>
-          <article className="card detail-list">
+          <article className="card detail-list" id="datos-kenshi">
             <h2>Datos</h2>
             <p><strong>ID SKBC:</strong> {member.legacy_id}</p>
             <KenshiForm
@@ -321,6 +341,7 @@ export default async function KenshiDetailPage({
                 ikaId: member.ika_id,
                 grade: member.grade,
                 joinedOn: member.joined_on,
+                birthDate: member.birth_date,
                 class: member.class,
                 status: member.status,
                 familyEmail: member.family_email,
@@ -329,7 +350,10 @@ export default async function KenshiDetailPage({
                 studentPhone: member.student_phone,
                 address: member.address,
                 siteUrl: member.site_url,
-                examHistory: member.exam_history
+                examHistory: member.exam_history,
+                freeTrialEnabled: member.free_trial_enabled,
+                freeTrialStartedOn: member.free_trial_started_on,
+                freeTrialEndsOn: member.free_trial_ends_on
               }}
             />
             {notices.error === "photo" ? <p className="form-error">No se pudo subir la foto.</p> : null}
@@ -351,6 +375,8 @@ export default async function KenshiDetailPage({
             </div>
           </article>
         </section>
+
+        <KenshiOnboardingChecklist member={member} hasConfiguredTechnicalArea={hasConfiguredTechnicalArea} />
 
         {member.class === "kids" ? (
           <section className="card transition-card">
@@ -717,6 +743,61 @@ const NOTE_TYPES = ["NOTA DEL SENSEI", "FELICITACION", "SEGUIMIENTO", "AVISO", "
 const BEHAVIOR_OPTIONS = ["EXCELENTE", "MUY BUENA", "BUENA", "NORMAL", "A MEJORAR"];
 const RESPECT_OPTIONS = ["10", "9", "8", "7", "BUENO", "NORMAL", "A MEJORAR"];
 const EFFORT_OPTIONS = ["EXCELENTE", "MUY BUENO", "BUENO", "POCO A POCO MEJORANDO", "A MEJORAR"];
+
+function KenshiOnboardingChecklist({
+  member,
+  hasConfiguredTechnicalArea
+}: {
+  member: Member;
+  hasConfiguredTechnicalArea: boolean;
+}) {
+  const fichaUrl = member.ficha_token ? `/ficha/${member.ficha_token}` : "";
+  const hasContact = Boolean(member.family_email || member.guardian_phone || member.student_phone);
+  const items = [
+    { label: "Ficha personal", done: Boolean(member.ficha_token), hint: member.ficha_token ? "Enlace listo." : "Crea la ficha publica del kenshi." },
+    { label: "Foto de perfil", done: Boolean(member.photo_url), hint: member.photo_url ? "Foto cargada." : "Sube una foto para que la ficha quede completa." },
+    { label: "Area tecnica", done: Boolean(member.site_url || hasConfiguredTechnicalArea), hint: member.site_url || hasConfiguredTechnicalArea ? "Tiene enlace tecnico disponible." : "Configura enlace por grado o enlace individual." },
+    { label: "Contacto", done: hasContact, hint: hasContact ? "Contacto registrado." : "Anade email o telefono de contacto." },
+    { label: "ID IKA", done: Boolean(member.ika_id), hint: member.ika_id ? "ID IKA guardado." : "Puedes completarlo cuando exista." },
+    { label: "Grado y alta", done: Boolean(member.grade && member.joined_on), hint: member.grade && member.joined_on ? "Grado y fecha de ingreso listos." : "Revisa grado actual y fecha de ingreso." }
+  ];
+  const completed = items.filter((item) => item.done).length;
+
+  return (
+    <details className="card onboarding-checklist" open={completed < items.length}>
+      <summary>
+        <span>
+          <strong>Asistente de alta</strong>
+          <small>{completed}/{items.length} pasos listos</small>
+        </span>
+        <b>{completed === items.length ? "Completo" : "Revisar"}</b>
+      </summary>
+      <div className="onboarding-grid">
+        {items.map((item) => (
+          <div className={item.done ? "onboarding-item done" : "onboarding-item"} key={item.label}>
+            <strong>{item.done ? "OK" : "Pendiente"} - {item.label}</strong>
+            <span>{item.hint}</span>
+          </div>
+        ))}
+      </div>
+      <div className="form-actions onboarding-actions">
+        {fichaUrl ? <a className="primary-link" href={`${fichaUrl}?admin=1&returnTo=${encodeURIComponent(`/kenshis/${member.legacy_id ?? ""}`)}`} target="_blank" rel="noopener noreferrer external">Ver ficha</a> : null}
+        <a className="secondary-link" href="/areas-tecnicas">Areas tecnicas</a>
+        <a className="secondary-link" href="#datos-kenshi">Editar datos</a>
+      </div>
+    </details>
+  );
+}
+
+function hasTechnicalAreaForGrade(links: TechnicalAreaLink[], grade: string | null) {
+  const normalizedGrade = normalizeText(grade);
+  if (!normalizedGrade) return false;
+  return links.some((link) => link.active && Boolean(link.url?.trim()) && normalizeText(link.grade) === normalizedGrade);
+}
+
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
 
 function courseKindLabel(value: string) {
   if (value === "international") return "Internacional";

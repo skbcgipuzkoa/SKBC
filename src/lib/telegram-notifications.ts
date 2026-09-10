@@ -16,6 +16,10 @@ type Member = {
   minimum_attendance: number | null;
   missing_attendance: number | null;
   exam_notice: string | null;
+  free_trial_enabled?: boolean | null;
+  free_trial_started_on?: string | null;
+  free_trial_ends_on?: string | null;
+  free_trial_notice_read_at?: string | null;
 };
 
 type Attendance = {
@@ -205,6 +209,8 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
       "",
       formatTodayClasses(digest.todayClasses),
       "",
+      formatFreeTrialAlerts(digest.freeTrialAlerts),
+      "",
       formatRanking("🏆 Top adultos", digest.adults),
       "",
       formatRanking("🌱 Top niños", digest.kids),
@@ -290,7 +296,7 @@ async function buildDailyDigest() {
   ] = await Promise.all([
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice")
+      .select("id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at")
       .eq("status", "active")
       .returns<Member[]>(),
     supabase.from("attendance_logs").select("member_id,attended_on").returns<Attendance[]>(),
@@ -359,6 +365,7 @@ async function buildDailyDigest() {
     adults,
     kids,
     todayClasses: todayClassesResult.data ?? [],
+    freeTrialAlerts: freeTrialAlerts(members),
     readyForExam: readyForExam(members),
     upcomingForExam: upcomingForExam(members)
   };
@@ -407,7 +414,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       .returns<Course[]>(),
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice")
+      .select("id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at")
       .eq("status", "active")
       .returns<Member[]>()
   ]);
@@ -659,6 +666,39 @@ function upcomingForExam(members: Member[]) {
       minimum: member.minimum_attendance,
       missingAttendance: member.missing_attendance
     }));
+}
+
+function freeTrialAlerts(members: Member[]) {
+  const limit = isoDate(addDays(new Date(), 7));
+  return members
+    .filter((member) =>
+      member.status === "active" &&
+      member.free_trial_enabled &&
+      !member.free_trial_notice_read_at &&
+      Boolean(member.free_trial_ends_on) &&
+      member.free_trial_ends_on! <= limit
+    )
+    .sort((a, b) => (a.free_trial_ends_on ?? "9999-12-31").localeCompare(b.free_trial_ends_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name))
+    .map((member) => ({
+      name: member.display_name,
+      grade: member.grade ?? "-",
+      className: member.class === "kids" ? "ninos" : "adultos",
+      joinedOn: member.free_trial_started_on ?? member.joined_on,
+      endsOn: member.free_trial_ends_on ?? null
+    }));
+}
+
+function formatFreeTrialAlerts(rows: ReturnType<typeof freeTrialAlerts>) {
+  if (!rows.length) return "<b>Mes gratis</b>\nSin vencimientos pendientes.";
+  const today = todayIso();
+  return [
+    "<b>Mes gratis pendiente</b>",
+    ...rows.slice(0, 12).map((row) => {
+      const state = row.endsOn && row.endsOn < today ? "vencido" : row.endsOn === today ? "vence hoy" : "proximo";
+      return `• <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${state}${row.endsOn ? ` ${formatHumanDate(row.endsOn)}` : ""}${row.joinedOn ? ` - ingreso ${formatHumanDate(row.joinedOn)}` : ""}`;
+    }),
+    rows.length > 12 ? `Y ${rows.length - 12} mas.` : ""
+  ].filter(Boolean).join("\n");
 }
 
 function studentFriendlyExamReason(member: Member) {

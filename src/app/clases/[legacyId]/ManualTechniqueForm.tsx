@@ -19,11 +19,12 @@ type ManualTechniqueFormProps = {
   action: (formData: FormData) => void | Promise<void>;
   classId: string;
   legacyId: string;
+  returnTo?: string;
   techniques: TechniqueOption[];
   groups: GroupOption[];
 };
 
-export function ManualTechniqueForm({ action, classId, legacyId, techniques, groups }: ManualTechniqueFormProps) {
+export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techniques, groups }: ManualTechniqueFormProps) {
   const [query, setQuery] = useState("");
   const [selectedTechniqueId, setSelectedTechniqueId] = useState("");
   const selectedTechnique = techniques.find((technique) => technique.id === selectedTechniqueId) ?? null;
@@ -46,6 +47,7 @@ export function ManualTechniqueForm({ action, classId, legacyId, techniques, gro
       <input type="hidden" name="classId" value={classId} />
       <input type="hidden" name="legacyId" value={legacyId} />
       <input type="hidden" name="techniqueId" value={selectedTechniqueId} />
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <p className="muted">Usalo cuando toda la clase, o varios grados, trabajen una tecnica que no estaba en el plan automatico.</p>
       <label className="manual-technique-search">
         Buscar tecnica

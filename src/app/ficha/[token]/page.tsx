@@ -38,6 +38,7 @@ type Member = {
   status: "active" | "inactive";
   grade: string | null;
   joined_on: string | null;
+  birth_date: string | null;
   last_exam_on: string | null;
   next_exam_on: string | null;
   exam_notice: string | null;
@@ -212,7 +213,7 @@ export default async function PublicFichaPage({
 
   const { data: member, error } = await supabase
     .from("members")
-    .select("id,legacy_id,ika_id,first_name,last_name,display_name,class,status,grade,joined_on,last_exam_on,next_exam_on,exam_notice,semaphore,photo_url,site_url,attendance_count,attendance_percentage,minimum_attendance,total_cycle_sessions,missing_attendance")
+    .select("id,legacy_id,ika_id,first_name,last_name,display_name,class,status,grade,joined_on,birth_date,last_exam_on,next_exam_on,exam_notice,semaphore,photo_url,site_url,attendance_count,attendance_percentage,minimum_attendance,total_cycle_sessions,missing_attendance")
     .eq("ficha_token", token)
     .single<Member>();
 
@@ -443,7 +444,7 @@ function AdultFicha({
       <section className="ficha-actions">
         {technicalArea.url ? <a href={technicalArea.url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />{technicalArea.label}<ExternalLink aria-hidden="true" size={15} /></a> : null}
         <a href="https://akapi80.github.io/Juego-SKBC/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
-        <a href={`/consulta-tecnica?maxGrade=${encodeURIComponent(technicalProgress.targetGrade || member.grade || "MINARAI")}&returnTo=${encodeURIComponent(fichaUrl)}`} target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
+        <a href={`/alumno/consulta-tecnica?maxGrade=${encodeURIComponent(technicalProgress.targetGrade || member.grade || "MINARAI")}&returnTo=${encodeURIComponent(fichaUrl)}`} target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
 
       <section className="ficha-section">
@@ -461,6 +462,7 @@ function AdultFicha({
           <Field label="Grado" value={member.grade} />
           <Field label="Grado objetivo" value={technicalProgress.targetGrade} />
           <Field label="Fecha ingreso" value={formatDate(member.joined_on)} />
+          <Field label="Fecha nacimiento" value={formatDate(member.birth_date)} />
           <Field label="Antigüedad" value={ageText(member.joined_on)} />
           <Field label="Exámenes" value={String(exams.length)} />
           <Field label="Cursos" value={String(courses.length)} />
@@ -680,6 +682,7 @@ function KidsFicha({
         <KidBadge label="Grado" value={member.grade ?? "-"} tone={kidGradeTone(member.grade)} />
         <KidBadge label="Objetivo" value={objective} tone={kidGradeTone(objective)} />
         <KidBadge label="Antiguedad" value={ageText(member.joined_on) || "-"} tone="blue" />
+        {member.birth_date ? <KidBadge label="Nacimiento" value={formatDate(member.birth_date)} tone="blue" /> : null}
       </section>
 
       <section className="ficha-actions">

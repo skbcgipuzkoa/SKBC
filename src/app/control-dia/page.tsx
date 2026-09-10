@@ -189,8 +189,8 @@ export default async function ControlDiaPage({
       <main className="main control-day-main">
         <div className="topbar">
           <div>
-            <p className="eyebrow">Auditoria real del dia</p>
-            <h1>Control del dia</h1>
+            <p className="eyebrow">Cierre operativo</p>
+            <h1>Control y cierre del dia</h1>
           </div>
           <form action={logoutAction}>
             <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
@@ -203,15 +203,19 @@ export default async function ControlDiaPage({
           <div>
             <span className="tag">{formatDate(selectedDate)}</span>
             <h2>{overall === "ok" ? "Todo lo importante esta grabado" : overall === "warn" ? "Hay puntos para revisar" : "Hay incidencias que corregir"}</h2>
-            <p className="muted">Esta pantalla lee directamente Supabase: clases, asistencia, tecnicas, fichas, rankings y sincronizacion legacy.</p>
+            <p className="muted">Antes de terminar el dia, revisa que asistencia, tecnicas, fichas, rankings y copias hayan quedado reflejadas en Supabase.</p>
           </div>
-          <form className="control-date-form" action="/control-dia" method="get">
-            <label>
-              Fecha
-              <input name="date" type="date" defaultValue={selectedDate} />
-            </label>
-            <button type="submit">Ver</button>
-          </form>
+          <div className="control-date-form">
+            <form action="/control-dia" method="get">
+              <label>
+                Fecha
+                <input name="date" type="date" defaultValue={selectedDate} />
+              </label>
+              <button type="submit">Ver</button>
+            </form>
+            <a className="primary-link" href="/skbc-interno/dojo">Modo dojo</a>
+            <a className="primary-link secondary-link" href="/alertas">Alertas globales</a>
+          </div>
         </section>
 
         <section className="control-summary-grid">

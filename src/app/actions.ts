@@ -16,6 +16,7 @@ import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/m
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/telegram-notifications";
+import { createTrashItem, restoreTrashItem } from "@/lib/trash";
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -47,6 +48,86 @@ export async function runManualBackupAction() {
   revalidatePath("/backups");
   revalidatePath("/sistema");
   redirect("/backups?saved=backup");
+}
+
+export async function dismissAdminAlertAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const alertKey = String(formData.get("alertKey") ?? "").trim();
+  if (!alertKey) {
+    redirect("/alertas?error=dismiss");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("admin_alert_dismissals")
+    .upsert({ alert_key: alertKey, dismissed_by: "Alvaro" }, { onConflict: "alert_key" });
+
+  if (error) {
+    console.error("Error dismissing admin alert", error);
+    redirect(`/alertas?error=dismiss&detail=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/alertas");
+  revalidatePath("/sistema");
+  redirect("/alertas?saved=dismiss");
+}
+
+export async function dismissSelectedAdminAlertsAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const alertKeys = formData
+    .getAll("alertKey")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  if (!alertKeys.length) {
+    redirect("/alertas?error=no-selection");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("admin_alert_dismissals")
+    .upsert(
+      alertKeys.map((alertKey) => ({ alert_key: alertKey, dismissed_by: "Alvaro" })),
+      { onConflict: "alert_key" }
+    );
+
+  if (error) {
+    console.error("Error dismissing selected admin alerts", error);
+    redirect(`/alertas?error=dismiss&detail=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/alertas");
+  revalidatePath("/sistema");
+  redirect("/alertas?saved=dismiss-selected");
+}
+
+export async function restoreTrashItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const trashId = String(formData.get("trashId") ?? "").trim();
+  if (!trashId) {
+    redirect("/papelera?error=restore");
+  }
+
+  try {
+    await restoreTrashItem(trashId);
+  } catch (error) {
+    console.error("Error restoring trash item", error);
+    redirect(`/papelera?error=restore&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath("/papelera");
+  revalidatePath("/sistema");
+  revalidatePath("/control-dia");
+  redirect("/papelera?saved=restore");
 }
 
 export async function recalculateAllExamStatusesAction() {
@@ -392,6 +473,9 @@ export async function updateKenshiAction(formData: FormData) {
     redirect("/kenshis");
   }
 
+  const joinedOn = parseDateInput(String(formData.get("joinedOn") ?? ""));
+  const birthDate = parseDateInput(String(formData.get("birthDate") ?? ""));
+  const freeTrial = resolveFreeTrialFields(formData, joinedOn);
   const payload = {
     first_name: String(formData.get("firstName") ?? "").trim(),
     last_name: String(formData.get("lastName") ?? "").trim() || null,
@@ -399,7 +483,8 @@ export async function updateKenshiAction(formData: FormData) {
     class: normalizeClass(String(formData.get("class") ?? "")),
     status: normalizeStatus(String(formData.get("status") ?? "")),
     grade: String(formData.get("grade") ?? "").trim() || null,
-    joined_on: parseDateInput(String(formData.get("joinedOn") ?? "")),
+    joined_on: joinedOn,
+    birth_date: birthDate,
     exam_history: String(formData.get("examHistory") ?? "").trim() || null,
     site_url: String(formData.get("siteUrl") ?? "").trim() || null,
     family_email: String(formData.get("familyEmail") ?? "").trim() || null,
@@ -407,6 +492,10 @@ export async function updateKenshiAction(formData: FormData) {
     guardian_phone: String(formData.get("guardianPhone") ?? "").trim() || null,
     student_phone: String(formData.get("studentPhone") ?? "").trim() || null,
     address: String(formData.get("address") ?? "").trim() || null,
+    free_trial_enabled: freeTrial.enabled,
+    free_trial_started_on: freeTrial.startedOn,
+    free_trial_ends_on: freeTrial.endsOn,
+    ...(freeTrial.enabled ? {} : { free_trial_notice_read_at: null }),
     updated_at: new Date().toISOString()
   };
 
@@ -440,6 +529,9 @@ export async function updateKenshiAction(formData: FormData) {
 }
 
 export async function createKenshiAction(formData: FormData) {
+  const joinedOn = parseDateInput(String(formData.get("joinedOn") ?? ""));
+  const birthDate = parseDateInput(String(formData.get("birthDate") ?? ""));
+  const freeTrial = resolveFreeTrialFields(formData, joinedOn);
   const payload = {
     first_name: String(formData.get("firstName") ?? "").trim(),
     last_name: String(formData.get("lastName") ?? "").trim() || null,
@@ -447,7 +539,8 @@ export async function createKenshiAction(formData: FormData) {
     class: normalizeClass(String(formData.get("class") ?? "")),
     status: normalizeStatus(String(formData.get("status") ?? "")),
     grade: String(formData.get("grade") ?? "").trim() || null,
-    joined_on: parseDateInput(String(formData.get("joinedOn") ?? "")),
+    joined_on: joinedOn,
+    birth_date: birthDate,
     exam_history: String(formData.get("examHistory") ?? "").trim() || null,
     site_url: String(formData.get("siteUrl") ?? "").trim() || null,
     family_email: String(formData.get("familyEmail") ?? "").trim() || null,
@@ -455,6 +548,9 @@ export async function createKenshiAction(formData: FormData) {
     guardian_phone: String(formData.get("guardianPhone") ?? "").trim() || null,
     student_phone: String(formData.get("studentPhone") ?? "").trim() || null,
     address: String(formData.get("address") ?? "").trim() || null,
+    free_trial_enabled: freeTrial.enabled,
+    free_trial_started_on: freeTrial.startedOn,
+    free_trial_ends_on: freeTrial.endsOn,
     ficha_token: createFichaToken()
   };
 
@@ -503,6 +599,32 @@ export async function createKenshiAction(formData: FormData) {
   }
 
   redirect(`/kenshis/${data.legacy_id}?saved=kenshi`);
+}
+
+export async function markFreeTrialNoticeReadAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const returnPath = safeReturnPath(String(formData.get("returnPath") ?? "")) || "/avisos";
+  if (!memberId) {
+    redirect(`${returnPath}?error=trial`);
+  }
+
+  const { error } = await createAdminClient()
+    .from("members")
+    .update({ free_trial_notice_read_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", memberId);
+
+  if (error) {
+    console.error("Error marking free trial notice as read", error);
+    redirect(`${returnPath}?error=trial`);
+  }
+
+  revalidatePath("/avisos");
+  revalidatePath("/sistema");
+  redirect(`${returnPath}?saved=trial`);
 }
 
 export async function upsertTechnicalAreaLinkAction(formData: FormData) {
@@ -683,6 +805,29 @@ export async function deleteDistributionCampaignAction(formData: FormData) {
   if (!campaignId) redirect("/entregas?error=campaign");
 
   const supabase = createAdminClient();
+  const [{ data: campaign }, { data: items }, { data: checks }] = await Promise.all([
+    supabase.from("distribution_campaigns").select("*").eq("id", campaignId).maybeSingle(),
+    supabase.from("distribution_campaign_items").select("*").eq("campaign_id", campaignId),
+    supabase.from("distribution_delivery_checks").select("*").eq("campaign_id", campaignId)
+  ]);
+
+  if (campaign) {
+    await createTrashItem({
+      supabase,
+      entityType: "distribution_campaign",
+      entityLabel: String((campaign as { title?: string }).title ?? "Entrega"),
+      sourceTable: "distribution_campaigns",
+      sourceId: campaignId,
+      snapshot: campaign,
+      relatedSnapshots: {
+        distribution_campaign_items: items ?? [],
+        distribution_delivery_checks: checks ?? []
+      },
+      affectedMemberIds: Array.from(new Set((checks ?? []).map((row: { member_id?: string }) => row.member_id).filter(Boolean) as string[])),
+      notes: "Entrega archivada desde el panel."
+    });
+  }
+
   const { error } = await supabase
     .from("distribution_campaigns")
     .update({ active: false, updated_at: new Date().toISOString() })
@@ -787,6 +932,7 @@ export async function generateAdultPlanAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
 
   if (!classId || !legacyId) {
     redirect("/clases");
@@ -810,6 +956,7 @@ export async function addManualClassTechniqueAction(formData: FormData) {
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
   const techniqueId = String(formData.get("techniqueId") ?? "");
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
   const selectedGrades = formData.getAll("grades").map((value) => String(value)).filter(Boolean);
 
   if (!classId || !legacyId || !techniqueId) {
@@ -905,7 +1052,7 @@ export async function addManualClassTechniqueAction(formData: FormData) {
   }
 
   revalidatePath(`/clases/${legacyId}`);
-  redirect(`/clases/${legacyId}?saved=manual-technique#plan-tecnico`);
+  redirect(returnTo || `/clases/${legacyId}?saved=manual-technique#plan-tecnico`);
 }
 
 export async function removeManualClassTechniqueAction(formData: FormData) {
@@ -915,6 +1062,7 @@ export async function removeManualClassTechniqueAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
   const planIds = String(formData.get("planIds") ?? "")
     .split(",")
     .map((value) => value.trim())
@@ -948,7 +1096,7 @@ export async function removeManualClassTechniqueAction(formData: FormData) {
   }
 
   revalidatePath(`/clases/${legacyId}`);
-  redirect(`/clases/${legacyId}?saved=manual-technique-remove#plan-tecnico`);
+  redirect(returnTo || `/clases/${legacyId}?saved=manual-technique-remove#plan-tecnico`);
 }
 
 export async function prepareAdultClassAction(formData: FormData) {
@@ -1173,12 +1321,14 @@ export async function createClassAction(formData: FormData) {
   const classGroup = normalizeClass(classGroupRaw) ?? "adults";
   const combinedClass = classGroupRaw === "combined";
   const classType = String(formData.get("classType") ?? "").trim() || null;
+  const specialClass = isSpecialClassType(classType);
   const responsible = String(formData.get("responsible") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const delegateFlow = String(formData.get("delegateFlow") ?? "") === "1";
+  const dojoFlow = String(formData.get("dojoFlow") ?? "") === "1";
 
   if (!classDate || !name) {
-    redirect("/clases/nueva?error=class");
+    redirect(dojoFlow ? "/skbc-interno/dojo?error=class" : "/clases/nueva?error=class");
   }
 
   const supabase = createAdminClient();
@@ -1198,7 +1348,7 @@ export async function createClassAction(formData: FormData) {
     .single<{ id: string; legacy_id: string | null }>();
 
   if (error || !data?.legacy_id) {
-    redirect("/clases/nueva?error=class");
+    redirect(dojoFlow ? "/skbc-interno/dojo?error=class" : "/clases/nueva?error=class");
   }
 
   if (combinedClass) {
@@ -1217,21 +1367,29 @@ export async function createClassAction(formData: FormData) {
 
     if (kidsError) {
       console.error("Error creating combined kids class", kidsError);
+      if (dojoFlow) redirect(`/skbc-interno/dojo/${data.legacy_id}?error=kids-companion`);
       redirect(`/clases/${data.legacy_id}?saved=class&error=kids-companion${delegateFlow ? "&delegate=1" : ""}`);
     }
   }
 
-  if (classGroup === "adults") {
+  if (classGroup === "adults" && !specialClass) {
     try {
       await generateAdultTechnicalGroups(data.id);
       await generateAdultTechnicalPlan(data.id);
     } catch (prepareError) {
       console.error("Error auto preparing adult class", prepareError);
+      if (dojoFlow) redirect(`/skbc-interno/dojo/${data.legacy_id}?error=prepare&detail=${encodeURIComponent(errorMessage(prepareError))}`);
       redirect(`/clases/${data.legacy_id}?saved=class&error=prepare${delegateFlow ? "&delegate=1" : ""}&detail=${encodeURIComponent(errorMessage(prepareError))}`);
     }
   }
 
-  redirect(`/clases/${data.legacy_id}?saved=${classGroup === "adults" ? "class-prepared" : "class"}${delegateFlow ? "&delegate=1" : ""}`);
+  if (dojoFlow) redirect(`/skbc-interno/dojo/${data.legacy_id}`);
+  redirect(`/clases/${data.legacy_id}?saved=${classGroup === "adults" && !specialClass ? "class-prepared" : "class"}${delegateFlow ? "&delegate=1" : ""}`);
+}
+
+function isSpecialClassType(value: string | null) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return ["HOWA", "CURSO_INTERNO", "LIMPIEZA_DOJO", "CENA", "ENTREGA", "TAIKAI", "ESPECIAL", "OTRO"].includes(normalized);
 }
 
 export async function updateClassAction(formData: FormData) {
@@ -1316,9 +1474,9 @@ export async function deleteClassAction(formData: FormData) {
   const supabase = createAdminClient();
   const { data: currentClass, error: currentClassError } = await supabase
     .from("classes")
-    .select("id,class_date,class_group")
+    .select("id,class_date,class_group,name")
     .eq("id", classId)
-    .single<{ id: string; class_date: string; class_group: "kids" | "adults" }>();
+    .single<{ id: string; class_date: string; class_group: "kids" | "adults"; name: string }>();
 
   if (currentClassError || !currentClass) {
     redirect(`/clases/${legacyId}?error=delete`);
@@ -1350,6 +1508,50 @@ export async function deleteClassAction(formData: FormData) {
     .in("class_id", classIdsToDelete)
     .returns<Array<{ member_id: string }>>();
   const affectedMemberIds = Array.from(new Set((affectedRows ?? []).map((row) => row.member_id).filter(Boolean)));
+
+  const [
+    { data: classSnapshots },
+    { data: groupSnapshots },
+    { data: planSnapshots },
+    { data: attendanceSnapshots },
+    { data: overrideSnapshots },
+    { data: dojoHistorySnapshots },
+    { data: memberHistorySnapshots },
+    { data: assignmentSnapshots },
+    { data: delegateSnapshots }
+  ] = await Promise.all([
+    supabase.from("classes").select("*").in("id", classIdsToDelete),
+    supabase.from("class_technical_groups").select("*").in("class_id", classIdsToDelete),
+    supabase.from("technical_plans").select("*").in("class_id", classIdsToDelete),
+    supabase.from("attendance_logs").select("*").in("class_id", classIdsToDelete),
+    supabase.from("attendance_technical_overrides").select("*").in("class_id", classIdsToDelete),
+    supabase.from("dojo_technical_history").select("*").in("class_id", classIdsToDelete),
+    supabase.from("member_technical_history").select("*").in("class_id", classIdsToDelete),
+    supabase.from("member_technique_assignments").select("*").in("class_id", classIdsToDelete),
+    supabase.from("class_delegate_links").select("*").in("class_id", classIdsToDelete)
+  ]);
+
+  await createTrashItem({
+    supabase,
+    entityType: classIdsToDelete.length > 1 ? "combined_class" : "class",
+    entityLabel: classIdsToDelete.length > 1 ? `Clase combinada ${currentClass.class_date}` : currentClass.name,
+    sourceTable: "classes",
+    sourceId: classId,
+    snapshot: classSnapshots ?? [],
+    relatedSnapshots: {
+      class_technical_groups: groupSnapshots ?? [],
+      technical_plans: planSnapshots ?? [],
+      attendance_logs: attendanceSnapshots ?? [],
+      attendance_technical_overrides: overrideSnapshots ?? [],
+      dojo_technical_history: dojoHistorySnapshots ?? [],
+      member_technical_history: memberHistorySnapshots ?? [],
+      member_technique_assignments: assignmentSnapshots ?? [],
+      class_delegate_links: delegateSnapshots ?? []
+    },
+    affectedMemberIds,
+    notes: classIdsToDelete.length > 1 ? "Borrado de clase combinada." : "Borrado de clase."
+  });
+
   const deletions = [
     supabase.from("attendance_technical_overrides").delete().in("class_id", classIdsToDelete),
     supabase.from("member_technical_history").delete().in("class_id", classIdsToDelete),
@@ -1419,9 +1621,9 @@ export async function addAttendanceAction(formData: FormData) {
   const [{ data: clase, error: classError }, { data: member, error: memberError }] = await Promise.all([
     supabase
     .from("classes")
-    .select("class_date")
+    .select("class_date,class_group,closed")
     .eq("id", classId)
-      .single<{ class_date: string }>(),
+      .single<{ class_date: string; class_group: "kids" | "adults"; closed: boolean }>(),
     supabase
       .from("members")
       .select("grade")
@@ -1460,6 +1662,9 @@ export async function addAttendanceAction(formData: FormData) {
     console.error("Error syncing attendance to legacy sheet", syncError);
   }
 
+  if (clase.class_group === "adults" && clase.closed) {
+    await closeAdultClass(classId);
+  }
   await recalculateClassExamStatus(classId);
   await recalculateChildRankings();
 
@@ -1476,6 +1681,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
   const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
   const returnStep = String(formData.get("returnStep") ?? "asistencia");
   const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
   const memberIdsByClass = getDelegateMemberIdsByClass(formData);
   const hasGroupedMembers = memberIdsByClass.size > 0;
   const groupedClassIds = formData.getAll("groupClassIds").map((value) => String(value)).filter(Boolean);
@@ -1491,9 +1697,9 @@ export async function addBulkAttendanceAction(formData: FormData) {
     const classIds = [...new Set([...memberIdsByClass.keys(), ...groupedClassIds])];
     const { data: classes, error: classesError } = await supabase
       .from("classes")
-      .select("id,class_group")
+      .select("id,class_group,closed")
       .in("id", classIds)
-      .returns<Array<{ id: string; class_group: "kids" | "adults" }>>();
+      .returns<Array<{ id: string; class_group: "kids" | "adults"; closed: boolean }>>();
 
     if (classesError || !classes?.length) {
       redirect(`/clases/${returnLegacyId || legacyId}?error=attendance${returnStepQuery}`);
@@ -1519,25 +1725,32 @@ export async function addBulkAttendanceAction(formData: FormData) {
           }
           await recalculateClassExamStatus(dayClass.id);
         }
+      } else {
+        for (const dayClass of classes) {
+          if (dayClass.class_group === "adults" && dayClass.closed) {
+            await closeAdultClass(dayClass.id);
+            await recalculateClassExamStatus(dayClass.id);
+          }
+        }
       }
       if (classes.some((dayClass) => dayClass.class_group === "kids")) {
         await recalculateChildRankings();
       }
     } catch (error) {
       console.error("Error saving grouped attendance", error);
-      redirect(`/clases/${returnLegacyId || legacyId}?error=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
+      redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
     }
 
-    redirect(`/clases/${returnLegacyId || legacyId}?saved=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
+    redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
   }
 
   const supabase = createAdminClient();
   const [{ data: clase, error: classError }, { data: members, error: membersError }] = await Promise.all([
     supabase
       .from("classes")
-      .select("class_date,class_group")
+      .select("class_date,class_group,closed")
       .eq("id", classId)
-      .single<{ class_date: string; class_group: "kids" | "adults" }>(),
+      .single<{ class_date: string; class_group: "kids" | "adults"; closed: boolean }>(),
     supabase
       .from("members")
       .select("id,grade")
@@ -1584,6 +1797,16 @@ export async function addBulkAttendanceAction(formData: FormData) {
     await recalculateChildRankings();
   }
 
+  if (clase.class_group === "adults" && clase.closed && !closeAfter) {
+    try {
+      await closeAdultClass(classId);
+      await recalculateClassExamStatus(classId);
+    } catch (closeError) {
+      console.error("Error recalculating closed adult class after attendance update", closeError);
+      redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
+    }
+  }
+
   if (closeAfter) {
     try {
       if (clase.class_group === "adults") {
@@ -1602,13 +1825,13 @@ export async function addBulkAttendanceAction(formData: FormData) {
       }
     } catch (closeError) {
       console.error("Error closing class after bulk attendance", closeError);
-      redirect(`/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
+      redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
     }
 
-    redirect(`/clases/${returnLegacyId || legacyId}?saved=close${returnStepQuery}`);
+    redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=close${returnStepQuery}`);
   }
 
-  redirect(`/clases/${returnLegacyId || legacyId}?saved=attendance${returnStepQuery}`);
+  redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=attendance${returnStepQuery}`);
 }
 
 export async function removeAttendanceAction(formData: FormData) {
@@ -1627,13 +1850,25 @@ export async function removeAttendanceAction(formData: FormData) {
   const supabase = createAdminClient();
   const { data: attendance, error: attendanceError } = await supabase
     .from("attendance_logs")
-    .select("id,class_id,classes(closed,class_group)")
+    .select("*,classes(closed,class_group)")
     .eq("id", attendanceId)
-    .single<{ id: string; class_id: string | null; classes: { closed: boolean; class_group: "kids" | "adults" } | null }>();
+    .single<{ id: string; class_id: string | null; member_id: string; attended_on: string; classes: { closed: boolean; class_group: "kids" | "adults" } | null }>();
 
-  if (attendanceError || !attendance?.class_id || attendance.classes?.closed) {
+  if (attendanceError || !attendance?.class_id) {
     redirect(`/clases/${returnLegacyId}?error=attendance&step=asistencia`);
   }
+
+  const { classes: _classes, ...attendanceSnapshot } = attendance;
+  await createTrashItem({
+    supabase,
+    entityType: "attendance",
+    entityLabel: `Asistencia ${attendance.attended_on}`,
+    sourceTable: "attendance_logs",
+    sourceId: attendanceId,
+    snapshot: attendanceSnapshot,
+    affectedMemberIds: [attendance.member_id],
+    notes: attendance.classes?.closed ? "Asistencia quitada como correccion de acta cerrada." : "Asistencia quitada en una clase abierta."
+  });
 
   const { error } = await supabase
     .from("attendance_logs")
@@ -1645,6 +1880,9 @@ export async function removeAttendanceAction(formData: FormData) {
   }
 
   try {
+    if (attendance.classes?.class_group === "adults" && attendance.classes.closed) {
+      await closeAdultClass(attendance.class_id);
+    }
     await recalculateClassExamStatus(attendance.class_id);
     if (attendance.classes?.class_group === "kids") {
       await recalculateChildRankings();
@@ -1687,6 +1925,7 @@ export async function updateClassPlanTechniquesAction(formData: FormData) {
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
   const nextStep = String(formData.get("nextStep") ?? "");
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
   const planIds = formData.getAll("planIds").map((value) => String(value)).filter(Boolean);
 
   if (!classId || !legacyId) {
@@ -1697,6 +1936,13 @@ export async function updateClassPlanTechniquesAction(formData: FormData) {
   const now = new Date().toISOString();
 
   try {
+    const { data: clase, error: classError } = await supabase
+      .from("classes")
+      .select("closed,class_group")
+      .eq("id", classId)
+      .single<{ closed: boolean; class_group: "kids" | "adults" }>();
+    if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
+
     const { error: resetError } = await supabase
       .from("technical_plans")
       .update({ completed: false, updated_at: now })
@@ -1713,12 +1959,17 @@ export async function updateClassPlanTechniquesAction(formData: FormData) {
 
       if (updateError) throw updateError;
     }
+
+    if (clase.class_group === "adults" && clase.closed) {
+      await closeAdultClass(classId);
+      await recalculateClassExamStatus(classId);
+    }
   } catch (error) {
     console.error("Error updating class plan techniques", error);
-    redirect(`/clases/${legacyId}?error=plan-technique`);
+    redirect(returnTo || `/clases/${legacyId}?error=plan-technique`);
   }
 
-  redirect(`/clases/${legacyId}?saved=plan-technique${nextStep === "attendance" ? "&step=asistencia" : ""}`);
+  redirect(returnTo || `/clases/${legacyId}?saved=plan-technique${nextStep === "attendance" ? "&step=asistencia" : ""}`);
 }
 
 export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
@@ -1728,6 +1979,7 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
   const closeAfter = String(formData.get("closeAfter") ?? "") === "true";
   const returnStep = String(formData.get("returnStep") ?? "asistencia");
   const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
@@ -1797,6 +2049,7 @@ export async function closeAdultClassAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
 
   if (!classId || !legacyId) {
     redirect("/clases");
@@ -1807,10 +2060,10 @@ export async function closeAdultClassAction(formData: FormData) {
     await recalculateClassExamStatus(classId);
   } catch (error) {
     console.error("Error closing adult class", error);
-    redirect(`/clases/${legacyId}?error=close`);
+    redirect(returnTo || `/clases/${legacyId}?error=close`);
   }
 
-  redirect(`/clases/${legacyId}?saved=close`);
+  redirect(returnTo || `/clases/${legacyId}?saved=close`);
 }
 
 export async function closeKidsClassAction(formData: FormData) {
@@ -1823,6 +2076,7 @@ export async function closeKidsClassAction(formData: FormData) {
   const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
   const returnStep = String(formData.get("returnStep") ?? "");
   const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
 
   if (!classId || !legacyId) {
     redirect("/clases");
@@ -1836,7 +2090,7 @@ export async function closeKidsClassAction(formData: FormData) {
     .eq("class_group", "kids");
 
   if (error) {
-    redirect(`/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
+    redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
   }
 
   try {
@@ -1846,7 +2100,7 @@ export async function closeKidsClassAction(formData: FormData) {
     console.error("Error recalculating kids class exam status", error);
   }
 
-  redirect(`/clases/${returnLegacyId || legacyId}?saved=kids-skipped${returnStepQuery}`);
+  redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=kids-skipped${returnStepQuery}`);
 }
 
 export async function registerExamAction(formData: FormData) {
@@ -1948,7 +2202,26 @@ export async function deleteExamAction(formData: FormData) {
     redirect("/examenes?error=delete");
   }
 
+  const supabase = createAdminClient();
+  const { data: examSnapshot } = await supabase
+    .from("exams")
+    .select("*")
+    .eq("id", examId)
+    .maybeSingle<{ id: string; member_id: string; grade: string; exam_date: string }>();
+
   try {
+    if (examSnapshot) {
+      await createTrashItem({
+        supabase,
+        entityType: "exam",
+        entityLabel: `Examen ${examSnapshot.grade} - ${examSnapshot.exam_date}`,
+        sourceTable: "exams",
+        sourceId: examId,
+        snapshot: examSnapshot,
+        affectedMemberIds: [examSnapshot.member_id],
+        notes: "Examen eliminado desde el panel."
+      });
+    }
     await deleteExam(examId);
   } catch (error) {
     console.error("Error deleting exam", error);
@@ -2645,6 +2918,18 @@ export async function updateCourseGroupAction(formData: FormData) {
   }
 
   if (removeIds.length) {
+    const removedSnapshots = existing.filter((row) => removeIds.includes(row.id));
+    await createTrashItem({
+      supabase,
+      entityType: "course_attendees",
+      entityLabel: `${title} - asistentes quitados`,
+      sourceTable: "courses",
+      sourceId: courseIds[0],
+      snapshot: removedSnapshots,
+      affectedMemberIds: Array.from(new Set(removedSnapshots.map((row) => row.member_id).filter(Boolean))),
+      notes: "Asistentes eliminados al editar curso o taikai."
+    });
+
     const { error: deleteError } = await supabase.from("courses").delete().in("id", removeIds);
     if (deleteError) {
       console.error("Error removing course attendees", deleteError);
@@ -2841,7 +3126,26 @@ export async function deleteOrderCatalogItemAction(formData: FormData) {
   const itemId = String(formData.get("itemId") ?? "").trim();
   if (!itemId) redirect("/pedidos-cinturones?error=catalog");
 
-  const { error } = await createAdminClient()
+  const supabase = createAdminClient();
+  const { data: itemSnapshot } = await supabase
+    .from("order_catalog_items")
+    .select("*")
+    .eq("id", itemId)
+    .maybeSingle<{ id: string; name: string }>();
+
+  if (itemSnapshot) {
+    await createTrashItem({
+      supabase,
+      entityType: "order_catalog_item",
+      entityLabel: itemSnapshot.name,
+      sourceTable: "order_catalog_items",
+      sourceId: itemId,
+      snapshot: itemSnapshot,
+      notes: "Articulo de pedidos eliminado."
+    });
+  }
+
+  const { error } = await supabase
     .from("order_catalog_items")
     .delete()
     .eq("id", itemId);
@@ -3085,15 +3389,34 @@ export async function deleteShakujoClassAction(formData: FormData) {
   if (!classId) redirect("/shakujo?error=session");
 
   const supabase = createAdminClient();
-  const { data: previousRows, error: previousError } = await supabase
+  const [{ data: classSnapshot }, { data: previousRows, error: previousError }] = await Promise.all([
+    supabase.from("shakujo_classes").select("*").eq("id", classId).maybeSingle<{ id: string; title: string; class_date: string }>(),
+    supabase
     .from("shakujo_attendance")
-    .select("member_id")
+    .select("*")
     .eq("shakujo_class_id", classId)
-    .returns<Array<{ member_id: string }>>();
+    .returns<Array<Record<string, unknown> & { member_id: string }>>()
+  ]);
 
   if (previousError) {
     console.error("Error loading shakujo attendance before delete", previousError);
     redirect(`/shakujo?error=session&classId=${encodeURIComponent(classId)}`);
+  }
+
+  if (classSnapshot) {
+    await createTrashItem({
+      supabase,
+      entityType: "shakujo_class",
+      entityLabel: `${classSnapshot.title} - ${classSnapshot.class_date}`,
+      sourceTable: "shakujo_classes",
+      sourceId: classId,
+      snapshot: classSnapshot,
+      relatedSnapshots: {
+        shakujo_attendance: previousRows ?? []
+      },
+      affectedMemberIds: Array.from(new Set((previousRows ?? []).map((row) => row.member_id))),
+      notes: "Clase Shakujo eliminada."
+    });
   }
 
   const { error } = await supabase
@@ -3350,6 +3673,24 @@ function parseDateInput(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
 }
 
+function resolveFreeTrialFields(formData: FormData, joinedOn: string | null) {
+  const enabled = formData.get("freeTrialEnabled") === "on";
+  const startedOn = parseDateInput(String(formData.get("freeTrialStartedOn") ?? "")) ?? joinedOn;
+  const endsOn = parseDateInput(String(formData.get("freeTrialEndsOn") ?? "")) ?? (startedOn ? addMonthsToIsoDate(startedOn, 1) : null);
+
+  return {
+    enabled,
+    startedOn: enabled ? startedOn : null,
+    endsOn: enabled ? endsOn : null
+  };
+}
+
+function addMonthsToIsoDate(value: string, months: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + months, day));
+  return date.toISOString().slice(0, 10);
+}
+
 function addYearsToIsoDate(value: string, years: number) {
   const date = new Date(`${value}T00:00:00`);
   date.setFullYear(date.getFullYear() + years);
@@ -3372,6 +3713,11 @@ function errorMessage(error: unknown) {
     return JSON.stringify(record);
   }
   return String(error || "Error desconocido.");
+}
+
+function safeReturnPath(value: string) {
+  const trimmed = value.trim();
+  return trimmed.startsWith("/") && !trimmed.startsWith("//") ? trimmed : "";
 }
 
 function createFichaToken() {

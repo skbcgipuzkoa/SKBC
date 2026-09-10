@@ -34,7 +34,7 @@ export default async function NewKenshiPage({
             action={createKenshiAction}
             submitLabel="Crear kenshi"
             error={notices.error === "kenshi"}
-            initial={{ class: "adults", status: "active" }}
+            initial={{ class: "adults", status: "active", freeTrialEnabled: true }}
           />
         </section>
       </main>

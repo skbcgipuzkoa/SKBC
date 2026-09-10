@@ -11,6 +11,8 @@ import {
   NotebookTabs,
   Newspaper,
   RefreshCw,
+  ShieldAlert,
+  Trash2,
   Users
 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
@@ -37,6 +39,18 @@ const systemItems = [
     body: "Tablon privado de recordatorios, incidencias y tareas pendientes del club.",
     href: "/avisos",
     icon: AlertTriangle
+  },
+  {
+    title: "Alertas",
+    body: "Incoherencias reales: clases abiertas, fichas incompletas, examenes sin informe, backups y sync.",
+    href: "/alertas",
+    icon: ShieldAlert
+  },
+  {
+    title: "Papelera",
+    body: "Recupera clases, asistencias, examenes, entregas, Shakujo o articulos borrados por error.",
+    href: "/papelera",
+    icon: Trash2
   },
   {
     title: "Backups",

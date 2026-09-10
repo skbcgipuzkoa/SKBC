@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { closeAdultClass } from "@/lib/adult-class-close";
 import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -24,6 +25,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const { data: closedAdultClasses, error: classError } = await supabase
+    .from("classes")
+    .select("id")
+    .eq("class_group", "adults")
+    .eq("closed", true)
+    .returns<Array<{ id: string }>>();
+
+  if (classError) {
+    return NextResponse.json({ error: classError.message }, { status: 500 });
+  }
+
+  let repairedAdultClasses = 0;
+  for (const clase of closedAdultClasses ?? []) {
+    await closeAdultClass(clase.id);
+    repairedAdultClasses += 1;
+  }
+
   let recalculatedMembers = 0;
   for (const member of members ?? []) {
     await recalculateMemberExamStatus(member.id);
@@ -34,6 +52,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    repairedAdultClasses,
     recalculatedMembers,
     recalculatedChildRankings
   });

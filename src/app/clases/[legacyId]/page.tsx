@@ -219,7 +219,7 @@ export default async function ClaseDetailPage({
   const delegateLink = delegateLinks?.[0] ?? null;
   const delegateMode = delegateModeFromCreatedBy(delegateLink?.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
   const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}?mode=${delegateMode}` : null;
-  const activeStep = clase.class_group === "adults" ? (["asistencia", "cierre"].includes(String(query.step ?? "")) ? "attendance" : "techniques") : "attendance";
+  const activeStep = clase.class_group === "adults" ? (clase.closed || ["asistencia", "cierre"].includes(String(query.step ?? "")) ? "attendance" : "techniques") : "attendance";
   const techniqueStepHref = `/clases/${legacyId}`;
   const attendanceStepHref = `/clases/${legacyId}?step=asistencia`;
   if (clase.class_group === "adults" && activeStep === "attendance" && !(dayClasses ?? []).some((item) => item.class_group === "kids")) {
@@ -243,7 +243,7 @@ export default async function ClaseDetailPage({
   }
   const attendanceClasses = ["adults", "kids"].map((group) => (dayClasses ?? []).find((item) => item.class_group === group)).filter(Boolean) as AttendanceClassOption[];
   const isCombinedDay = clase.class_group === "adults" && attendanceClasses.some((item) => item.class_group === "kids");
-  const attendancePanelClasses = isCombinedDay ? attendanceClasses.filter((item) => item.class_group === "adults") : attendanceClasses;
+  const attendancePanelClasses = isCombinedDay && !clase.closed ? attendanceClasses.filter((item) => item.class_group === "adults") : attendanceClasses;
   const registeredAttendanceGroups = clase.class_group === "adults" && activeStep === "attendance"
     ? attendanceClasses.map((dayClass) => ({
       title: dayClass.class_group === "kids" ? "Ninos" : "Adultos",
@@ -299,8 +299,8 @@ export default async function ClaseDetailPage({
     : null;
   const showKidsPrelude = clase.class_group === "adults" && activeStep === "techniques" && Boolean(kidsDayClass) && !kidsDayClass?.closed && (!isCombinedDay || combinedStep === "kids");
   const showAdultTechniques = clase.class_group === "adults" && activeStep === "techniques" && !mustRegisterKidsFirst && (!isCombinedDay || combinedStep === "techniques");
-  const showAttendanceStep = clase.class_group !== "adults" || activeStep === "attendance";
-  const showAdultAttendancePanel = showAttendanceStep && (!isCombinedDay || combinedStep === "adult-attendance");
+  const showAttendanceStep = clase.class_group !== "adults" || activeStep === "attendance" || clase.closed;
+  const showAdultAttendancePanel = showAttendanceStep && (!isCombinedDay || combinedStep === "adult-attendance" || clase.closed);
   const showCombinedCloseStep = isCombinedDay && combinedStep === "close";
   const classMission = buildClassMission({
     classGroup: clase.class_group,
@@ -373,8 +373,8 @@ export default async function ClaseDetailPage({
                 <span>{membersForGroup.length - pendingMembers.length}/{membersForGroup.length} registrados</span>
               </summary>
               <input type="hidden" name="groupClassIds" value={dayClass.id} />
-              {!dayClass.closed ? (
-                <div className="attendance-checklist">
+              <div className="attendance-checklist">
+                  {dayClass.closed ? <p className="muted">Acta cerrada: puedes anadir asistencias que faltaban como correccion.</p> : null}
                   <div className="mobile-focus-head">
                     <div>
                       <small>Pasar asistencia</small>
@@ -407,18 +407,23 @@ export default async function ClaseDetailPage({
                     </label>
                   )) : <p className="muted">Todos los kenshis activos de {title.toLowerCase()} estan ya en asistencia.</p>}
                 </div>
-              ) : <p className="muted">Clase de {title.toLowerCase()} cerrada.</p>}
             </details>
           );
         })}
       </div>
       <div className="attendance-day-actions">
-        <p className="muted">Marca la asistencia pendiente. Si ya esta todo correcto, usa el boton azul para cerrar todo junto.</p>
-        <button type="submit">Guardar sin cerrar</button>
-        <button className="primary-link button-reset" type="submit" name="closeAfter" value="true">
-          <Check aria-hidden="true" size={16} />
-          Guardar y cerrar todo
-        </button>
+        <p className="muted">
+          {clase.closed
+            ? "Marca solo las asistencias que faltaban. Se guardaran como correccion del acta cerrada."
+            : "Marca la asistencia pendiente. Si ya esta todo correcto, usa el boton azul para cerrar todo junto."}
+        </p>
+        <button type="submit">{clase.closed ? "Guardar correcciones" : "Guardar sin cerrar"}</button>
+        {!clase.closed ? (
+          <button className="primary-link button-reset" type="submit" name="closeAfter" value="true">
+            <Check aria-hidden="true" size={16} />
+            Guardar y cerrar todo
+          </button>
+        ) : null}
       </div>
     </AttendanceDayForm>
   );
@@ -494,8 +499,8 @@ export default async function ClaseDetailPage({
   const attendanceQuickPanel = (
     <article className="card">
       <h2>Asistencia final</h2>
-      {!clase.closed ? (
-        <>
+      <>
+          {clase.closed ? <p className="muted">Acta cerrada: puedes anadir asistencias que faltaban como correccion.</p> : null}
           <form action={addBulkAttendanceAction} className="quick-form">
             <input type="hidden" name="classId" value={clase.id} />
             <input type="hidden" name="legacyId" value={legacyId} />
@@ -511,10 +516,14 @@ export default async function ClaseDetailPage({
               )) : <p className="muted">Todos los kenshis activos de esta clase estan ya en asistencia.</p>}
             </div>
             <div className="form-actions">
-              <button type="submit" disabled={!pendingClassMembers.length}>Anadir seleccionados</button>
-              <button className="secondary-button" type="submit" name="closeAfter" value="true" disabled={!pendingClassMembers.length}>
-                Guardar asistencia y cerrar clase
+              <button type="submit" disabled={!pendingClassMembers.length}>
+                {clase.closed ? "Guardar correcciones" : "Anadir seleccionados"}
               </button>
+              {!clase.closed ? (
+                <button className="secondary-button" type="submit" name="closeAfter" value="true" disabled={!pendingClassMembers.length}>
+                  Guardar asistencia y cerrar clase
+                </button>
+              ) : null}
             </div>
           </form>
           {clase.class_group === "adults" ? <details className="advanced-details">
@@ -551,9 +560,6 @@ export default async function ClaseDetailPage({
             </form>
           </details> : null}
         </>
-      ) : (
-        <p className="muted">Clase cerrada.</p>
-      )}
     </article>
   );
 
@@ -1099,7 +1105,7 @@ export default async function ClaseDetailPage({
             <h3>{group.title}</h3>
             <table>
               <thead>
-                <tr><th>Kenshi</th><th>Grado oficial</th><th>Grado entrenado</th><th>Ficha</th>{!clase.closed ? <th>Accion</th> : null}</tr>
+                <tr><th>Kenshi</th><th>Grado oficial</th><th>Grado entrenado</th><th>Ficha</th><th>Accion</th></tr>
               </thead>
               <tbody>
                 {group.rows.map((item) => (
@@ -1108,16 +1114,14 @@ export default async function ClaseDetailPage({
                     <td data-label="Grado oficial">{item.official_grade ?? "-"}</td>
                     <td data-label="Grado entrenado">{item.trained_grade ?? "-"}</td>
                     <td data-label="Ficha">{item.members?.legacy_id ? <a className="text-link" href={`/kenshis/${item.members.legacy_id}`}>Abrir ficha</a> : "-"}</td>
-                    {!clase.closed ? (
-                      <td data-label="Accion">
-                        <form action={removeAttendanceAction}>
-                          <input type="hidden" name="attendanceId" value={item.id} />
-                          <input type="hidden" name="legacyId" value={legacyId} />
-                          <input type="hidden" name="returnLegacyId" value={legacyId} />
-                          <button className="danger-link button-reset" type="submit">Quitar</button>
-                        </form>
-                      </td>
-                    ) : null}
+                    <td data-label="Accion">
+                      <form action={removeAttendanceAction}>
+                        <input type="hidden" name="attendanceId" value={item.id} />
+                        <input type="hidden" name="legacyId" value={legacyId} />
+                        <input type="hidden" name="returnLegacyId" value={legacyId} />
+                        <button className="danger-link button-reset" type="submit">Quitar</button>
+                      </form>
+                    </td>
                   </tr>
                 ))}
               </tbody>

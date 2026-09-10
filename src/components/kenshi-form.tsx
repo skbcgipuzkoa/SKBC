@@ -15,6 +15,7 @@ type Props = {
     ikaId?: string | null;
     grade?: string | null;
     joinedOn?: string | null;
+    birthDate?: string | null;
     class?: "kids" | "adults";
     status?: "active" | "inactive";
     familyEmail?: string | null;
@@ -24,6 +25,9 @@ type Props = {
     address?: string | null;
     siteUrl?: string | null;
     examHistory?: string | null;
+    freeTrialEnabled?: boolean | null;
+    freeTrialStartedOn?: string | null;
+    freeTrialEndsOn?: string | null;
   };
 };
 
@@ -48,6 +52,7 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
           </select>
         </label>
         <label>Fecha ingreso<input name="joinedOn" type="date" defaultValue={initial?.joinedOn ?? ""} /></label>
+        <label>Fecha nacimiento<input name="birthDate" type="date" defaultValue={initial?.birthDate ?? ""} /></label>
         <label>
           Clase
           <select name="class" value={memberClass} onChange={(event) => setMemberClass(event.target.value as "kids" | "adults")}>
@@ -67,6 +72,12 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
         <label>Telefono tutor<input name="guardianPhone" defaultValue={initial?.guardianPhone ?? ""} /></label>
         <label>Telefono alumno<input name="studentPhone" defaultValue={initial?.studentPhone ?? ""} /></label>
         <label>Foto perfil<input name="profilePhoto" type="file" accept="image/*" /></label>
+        <label className="checkbox-line">
+          <input type="checkbox" name="freeTrialEnabled" defaultChecked={initial?.freeTrialEnabled ?? false} />
+          Aplicar aviso de mes gratis
+        </label>
+        <label>Inicio mes gratis<input name="freeTrialStartedOn" type="date" defaultValue={initial?.freeTrialStartedOn ?? initial?.joinedOn ?? ""} /></label>
+        <label>Fin mes gratis<input name="freeTrialEndsOn" type="date" defaultValue={initial?.freeTrialEndsOn ?? ""} /></label>
         <label className="wide">Direccion<input name="address" defaultValue={initial?.address ?? ""} /></label>
         <label className="wide">URL material grado<input name="siteUrl" defaultValue={initial?.siteUrl ?? ""} /></label>
         <label className="wide">Historial examenes<textarea name="examHistory" rows={4} defaultValue={initial?.examHistory ?? ""} /></label>

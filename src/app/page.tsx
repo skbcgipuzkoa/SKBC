@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles,
   Bell,
+  FileSearch,
   Trophy,
   UserPlus,
   Users
@@ -54,8 +55,10 @@ const moduleGroups: Array<{ title: string; items: ModuleLink[] }> = [
   {
     title: "Trabajo diario",
     items: [
+      { label: "Modo dojo", href: "/skbc-interno/dojo", icon: ClipboardCheck, tone: "primary" },
       { label: "Nueva clase", href: "/clases/nueva", icon: CalendarCheck, tone: "primary" },
       { label: "Sustituto", href: "/clases/nueva?delegado=1", icon: ShieldCheck, tone: "primary" },
+      { label: "Dia especial", href: "/clases/nueva?especial=1", icon: Sparkles, tone: "primary" },
       { label: "Control del dia", href: "/control-dia", icon: ClipboardCheck, tone: "primary" },
       { label: "Calendario", href: "/clases", icon: NotebookTabs },
       { label: "Clases Busen", href: "/clases-negras", icon: ShieldCheck },
@@ -71,6 +74,7 @@ const moduleGroups: Array<{ title: string; items: ModuleLink[] }> = [
       { label: "Proximos examenes", href: "/proximos-examenes", icon: Medal },
       { label: "Examenes", href: "/examenes", icon: GraduationCap },
       { label: "App examenes", href: "https://akapi80.github.io/EXAMENES/", icon: SquareArrowOutUpRight, external: true },
+      { label: "Actas", href: "/actas-clase", icon: FileSearch },
       { label: "Rankings", href: "/rankings", icon: Trophy },
       { label: "Cursos", href: "/cursos", icon: BarChart3 }
     ]
@@ -191,7 +195,8 @@ export async function AdminDashboard() {
             </p>
           </div>
           <div className="home-hero-actions">
-            <a className="primary-link" href="/clases/nueva">Nueva clase</a>
+            <a className="primary-link" href="/skbc-interno/dojo">Modo dojo</a>
+            <a className="primary-link secondary-link" href="/clases/nueva">Nueva clase</a>
             <a className="primary-link secondary-link" href="/clases/nueva?delegado=1">Modo sustituto</a>
             <a className="primary-link secondary-link" href="/clases">Ver calendario</a>
           </div>
@@ -215,7 +220,7 @@ export async function AdminDashboard() {
             <h2>Clase de hoy</h2>
             <div className="home-class-list">
               {todayDisplayClasses.length ? todayDisplayClasses.map((clase) => (
-                <a className="home-class-row" href={`/clases/${clase.legacy_id}`} key={clase.legacy_id ?? clase.name}>
+                <a className="home-class-row" href={`/skbc-interno/dojo/${clase.legacy_id}`} key={clase.legacy_id ?? clase.name}>
                   <span>
                     <strong>{clase.name}</strong>
                     <small>{clase.display_group === "combined" ? "Adultos + ninos" : clase.class_group === "kids" ? "Ninos" : "Adultos"} - {clase.closed ? "Cerrada" : "Abierta"}</small>

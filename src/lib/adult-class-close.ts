@@ -72,7 +72,7 @@ export async function closeAdultClass(classId: string) {
 
   if (classError || !clase) throw new Error("Clase no encontrada.");
   if (clase.class_group !== "adults") throw new Error("El cierre tecnico replicado solo esta activo para adultos.");
-  if (clase.closed) return { assignments: 0, dojoHistory: 0, memberHistory: 0 };
+  const wasClosed = clase.closed;
 
   const [{ data: attendance, error: attendanceError }, { data: plan, error: planError }] =
     await Promise.all([
@@ -92,6 +92,10 @@ export async function closeAdultClass(classId: string) {
   if (attendanceError) throw attendanceError;
   if (planError) throw planError;
 
+  if (wasClosed) {
+    await clearGeneratedClassTechnicalHistory(supabase, clase.id);
+  }
+
   const validAttendance = (attendance ?? []).filter((row) => row.members?.class === "adults");
   const completedPlan = (plan ?? []).filter((row) => row.completed && row.technique_id);
   const progressionPlan = completedPlan.filter((row) => row.used_for_history);
@@ -106,7 +110,7 @@ export async function closeAdultClass(classId: string) {
     assignmentCount = insertedAssignments;
     dojoHistoryCount = await generateDojoHistory(clase, validAttendance, progressionPlan);
     memberHistoryCount = await generateMemberHistory(clase);
-    await updateTechniqueMetrics(completedPlan);
+    if (!wasClosed) await updateTechniqueMetrics(completedPlan);
   }
 
   const { error: updateError } = await supabase
@@ -117,6 +121,30 @@ export async function closeAdultClass(classId: string) {
   if (updateError) throw updateError;
 
   return { assignments: assignmentCount, dojoHistory: dojoHistoryCount, memberHistory: memberHistoryCount };
+}
+
+async function clearGeneratedClassTechnicalHistory(
+  supabase: ReturnType<typeof createAdminClient>,
+  classId: string
+) {
+  const { error: memberHistoryError } = await supabase
+    .from("member_technical_history")
+    .delete()
+    .eq("class_id", classId);
+  if (memberHistoryError) throw memberHistoryError;
+
+  const { error: assignmentsError } = await supabase
+    .from("member_technique_assignments")
+    .delete()
+    .eq("class_id", classId)
+    .eq("created_by", "system");
+  if (assignmentsError) throw assignmentsError;
+
+  const { error: dojoHistoryError } = await supabase
+    .from("dojo_technical_history")
+    .delete()
+    .eq("class_id", classId);
+  if (dojoHistoryError) throw dojoHistoryError;
 }
 
 async function getTechnicalOverrides(classId: string, attendance: AttendanceRow[]) {
