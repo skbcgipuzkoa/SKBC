@@ -186,7 +186,6 @@ async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[],
   );
   const attendanceByGrade = groupAttendanceByTrainedGrade(attendance.filter((row) => !overrides.has(row.id)));
   const planById = new Map(plan.map((item) => [item.id, item]));
-  let nextCounter = await getNextLegacyCounter("member_technique_assignments", "ATAC_");
 
   const inserts = [];
   for (const attendant of attendance) {
@@ -201,7 +200,7 @@ async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[],
       if (existingKeys.has(key)) continue;
       existingKeys.add(key);
       inserts.push({
-        legacy_id: `ATAC_${String(nextCounter++).padStart(6, "0")}`,
+        legacy_id: buildGeneratedLegacyId("ATAC", clase.id, attendant.member_id, item.technique_id ?? item.id),
         class_id: clase.id,
         plan_id: item.id,
         technique_id: item.technique_id,
@@ -229,7 +228,7 @@ async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[],
       if (existingKeys.has(key)) continue;
       existingKeys.add(key);
       inserts.push({
-        legacy_id: `ATAC_${String(nextCounter++).padStart(6, "0")}`,
+        legacy_id: buildGeneratedLegacyId("ATAC", clase.id, attendant.member_id, item.technique_id ?? item.id),
         class_id: clase.id,
         plan_id: item.id,
         technique_id: item.technique_id,
@@ -274,7 +273,6 @@ async function generateDojoHistory(clase: ClassRow, attendance: AttendanceRow[],
   const existingKeys = new Set(
     (existing ?? []).map((row) => `${row.class_id}::${row.technical_group_id ?? ""}::${row.technique_id ?? ""}`)
   );
-  let nextCounter = await getNextLegacyCounter("dojo_technical_history", "HIS_");
 
   const inserts = plan
     .filter((row) => attendanceGrades.has(normalize(row.group_grade)))
@@ -285,7 +283,7 @@ async function generateDojoHistory(clase: ClassRow, attendance: AttendanceRow[],
       return true;
     })
     .map((row) => ({
-      legacy_id: `HIS_${String(nextCounter++).padStart(6, "0")}`,
+      legacy_id: buildGeneratedLegacyId("HIS", clase.id, row.technical_group_id ?? row.group_grade, row.technique_id ?? row.id),
       class_id: clase.id,
       class_date: row.class_date || clase.class_date,
       technical_group_id: row.technical_group_id,
@@ -330,7 +328,6 @@ async function generateMemberHistory(clase: ClassRow) {
   const existingKeys = new Set(
     (existing ?? []).map((row) => `${row.class_id}::${row.member_id}::${row.technique_id ?? ""}`)
   );
-  let nextCounter = await getNextLegacyCounter("member_technical_history", "HIA_");
 
   const inserts = (assignments ?? [])
     .filter((row: any) => row.completed)
@@ -344,7 +341,7 @@ async function generateMemberHistory(clase: ClassRow) {
     .map((row: any) => {
       const plan = row.technical_plans;
       return {
-        legacy_id: `HIA_${String(nextCounter++).padStart(6, "0")}`,
+        legacy_id: buildGeneratedLegacyId("HIA", row.class_id, row.member_id, plan?.technique_id ?? row.id),
         class_id: row.class_id,
         class_date: row.assigned_on || clase.class_date,
         assignment_id: row.id,
@@ -404,23 +401,6 @@ async function updateTechniqueMetrics(plan: PlanRow[]) {
   }
 }
 
-async function getNextLegacyCounter(table: string, prefix: string) {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from(table)
-    .select("legacy_id")
-    .like("legacy_id", `${prefix}%`)
-    .returns<{ legacy_id: string | null }[]>();
-
-  if (error) throw error;
-  return (
-    (data ?? []).reduce((highest, row) => {
-      const match = row.legacy_id?.match(/(\d+)$/);
-      return match ? Math.max(highest, Number.parseInt(match[1], 10)) : highest;
-    }, 0) + 1
-  );
-}
-
 function groupAttendanceByTrainedGrade(attendance: AttendanceRow[]) {
   const map = new Map<string, AttendanceRow[]>();
   attendance.forEach((row) => {
@@ -435,4 +415,14 @@ function groupAttendanceByTrainedGrade(attendance: AttendanceRow[]) {
 
 function normalize(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase();
+}
+
+function buildGeneratedLegacyId(prefix: string, ...parts: Array<string | null | undefined>) {
+  const body = parts
+    .map((part) => String(part ?? "")
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 12))
+    .filter(Boolean)
+    .join("_");
+  return `${prefix}_${body}`;
 }
