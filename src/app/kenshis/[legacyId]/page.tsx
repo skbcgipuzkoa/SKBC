@@ -1,5 +1,6 @@
 import { ArrowLeft, LogOut } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
+import { CopyFichaLinkButton } from "@/app/kenshis/[legacyId]/CopyFichaLinkButton";
 import { notFound, redirect } from "next/navigation";
 import { ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, transitionChildToAdultAction, undoChildToAdultTransitionAction, updateKenshiAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
@@ -372,6 +373,7 @@ export default async function KenshiDetailPage({
                   <button className="mini-action selected" type="submit">Crear enlace ficha nueva</button>
                 </form>
               )}
+              {member.ficha_token ? <CopyFichaLinkButton token={member.ficha_token} /> : null}
               {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank" rel="noopener noreferrer external">Abrir ficha antigua</a> : null}
             </div>
           </article>

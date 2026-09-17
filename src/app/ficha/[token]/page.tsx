@@ -1,6 +1,7 @@
 import { ExternalLink, Gamepad2, Library, NotebookTabs } from "lucide-react";
 import { notFound } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
@@ -26,6 +27,29 @@ const KID_GRADES = [
   "1 DAN"
 ];
 const REPETITION_GOAL = 3;
+
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const safeToken = /^[A-Za-z0-9_-]+$/.test(token) ? token : "";
+  return {
+    title: "Ficha SKBC Gipuzkoa",
+    description: "Ficha personal privada de SKBC Gipuzkoa",
+    manifest: safeToken ? `/ficha/${safeToken}/manifest.webmanifest` : undefined,
+    icons: {
+      icon: [
+        { url: "/favicon.ico" },
+        { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/icon-512.png", sizes: "512x512", type: "image/png" }
+      ],
+      apple: [{ url: "/icon-180.png", sizes: "180x180", type: "image/png" }]
+    },
+    appleWebApp: {
+      capable: true,
+      title: "Ficha SKBC",
+      statusBarStyle: "default"
+    }
+  };
+}
 
 type Member = {
   id: string;
