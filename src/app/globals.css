@@ -8479,7 +8479,186 @@ tbody tr:hover {
   grid-column: 1 / -1;
 }
 
+.technical-material-form .wide {
+  grid-column: 1 / -1;
+}
+
+.technical-material-list {
+  display: grid;
+  gap: 12px;
+}
+
+.technical-material-card summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.technical-material-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.technical-material-card summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.technical-material-card summary small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.student-area-page {
+  background: #f5f8fc;
+  color: var(--ink);
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.student-area-hero,
+.student-area-section {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  margin: 0 auto 18px;
+  max-width: 1120px;
+  padding: 24px;
+}
+
+.student-area-hero {
+  background: linear-gradient(135deg, #10223e, #174f88);
+  color: #ffffff;
+}
+
+.student-area-hero .eyebrow,
+.student-area-hero p {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.student-area-hero h1 {
+  font-size: clamp(2rem, 5vw, 4rem);
+  margin: 10px 0;
+}
+
+.student-area-grade-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.student-area-grade-row span {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  color: #ffffff;
+  font-weight: 900;
+  padding: 8px 12px;
+}
+
+.student-material-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.student-material-card,
+.student-technique-video {
+  align-items: center;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 16px;
+  text-decoration: none;
+}
+
+.student-material-card.featured {
+  background: #fff8e7;
+  border-color: #d5a62e;
+}
+
+.student-material-card span {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+}
+
+.student-material-card small,
+.student-technique-video span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.student-material-card em {
+  color: #475569;
+  font-style: normal;
+}
+
+.student-technique-video-list {
+  display: grid;
+  gap: 12px;
+}
+
+.student-technique-video {
+  align-items: flex-start;
+}
+
+.student-technique-video h3 {
+  margin: 4px 0;
+}
+
+.student-technique-video p {
+  color: #475569;
+  margin: 0;
+}
+
+.student-technique-video a {
+  align-items: center;
+  background: #0057b8;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-weight: 900;
+  gap: 8px;
+  padding: 10px 14px;
+  text-decoration: none;
+}
+
+.student-empty-material {
+  text-align: center;
+}
+
 @media (max-width: 720px) {
+  .student-area-page {
+    padding: 12px;
+  }
+
+  .student-area-hero,
+  .student-area-section {
+    border-radius: 14px;
+    padding: 18px;
+  }
+
+  .student-material-card,
+  .student-technique-video {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .student-technique-video a {
+    justify-content: center;
+    width: 100%;
+  }
+
   .segmented-links,
   .technical-area-grid {
     grid-template-columns: 1fr;

@@ -682,6 +682,112 @@ export async function upsertTechnicalAreaLinkAction(formData: FormData) {
   redirect(`/areas-tecnicas?saved=link&class=${memberClass}`);
 }
 
+export async function createTechnicalAreaMaterialAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+
+  const memberClass = normalizeTechnicalMaterialClass(String(formData.get("memberClass") ?? ""));
+  const grade = String(formData.get("grade") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const materialType = normalizeTechnicalMaterialType(String(formData.get("materialType") ?? ""));
+  const url = String(formData.get("url") ?? "").trim();
+  const section = String(formData.get("section") ?? "").trim() || "Material";
+  const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
+
+  if (!memberClass || !grade || !title || !url) {
+    redirect(`/areas-tecnicas?error=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
+  }
+
+  const { error } = await createAdminClient()
+    .from("technical_area_materials")
+    .insert({
+      member_class: memberClass,
+      grade,
+      title,
+      description,
+      material_type: materialType,
+      url,
+      section,
+      sort_order: Number.isFinite(sortOrder) ? sortOrder : 100,
+      active: formData.get("active") !== "off"
+    });
+
+  if (error) {
+    console.error("Error creating technical area material", error);
+    redirect(`/areas-tecnicas?error=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/alumno/area-tecnica/[token]", "page");
+  redirect(`/areas-tecnicas?saved=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
+}
+
+export async function updateTechnicalAreaMaterialAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const memberClass = normalizeTechnicalMaterialClass(String(formData.get("memberClass") ?? ""));
+  const grade = String(formData.get("grade") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const materialType = normalizeTechnicalMaterialType(String(formData.get("materialType") ?? ""));
+  const url = String(formData.get("url") ?? "").trim();
+  const section = String(formData.get("section") ?? "").trim() || "Material";
+  const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
+  const active = formData.get("active") === "on";
+
+  if (!id || !memberClass || !grade || !title || !url) {
+    redirect(`/areas-tecnicas?error=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
+  }
+
+  const { error } = await createAdminClient()
+    .from("technical_area_materials")
+    .update({
+      member_class: memberClass,
+      grade,
+      title,
+      description,
+      material_type: materialType,
+      url,
+      section,
+      sort_order: Number.isFinite(sortOrder) ? sortOrder : 100,
+      active,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error updating technical area material", error);
+    redirect(`/areas-tecnicas?error=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/alumno/area-tecnica/[token]", "page");
+  redirect(`/areas-tecnicas?saved=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
+}
+
+export async function deleteTechnicalAreaMaterialAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const memberClass = normalizeTechnicalMaterialClass(String(formData.get("memberClass") ?? "")) || "adults";
+  if (!id) redirect(`/areas-tecnicas?error=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
+
+  const { error } = await createAdminClient()
+    .from("technical_area_materials")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error deleting technical area material", error);
+    redirect(`/areas-tecnicas?error=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/alumno/area-tecnica/[token]", "page");
+  redirect(`/areas-tecnicas?saved=material-deleted&class=${memberClass === "kids" ? "kids" : "adults"}`);
+}
+
 export async function createDistributionCampaignAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/");
 
@@ -3639,6 +3745,15 @@ function childMotivationalMessage(level: string | null, position: number | null,
 
 function normalizeClass(value: string) {
   return value === "kids" || value === "adults" ? value : null;
+}
+
+function normalizeTechnicalMaterialClass(value: string) {
+  return value === "kids" || value === "adults" || value === "both" ? value : null;
+}
+
+function normalizeTechnicalMaterialType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return ["youtube", "drive", "document", "playlist", "link", "site"].includes(normalized) ? normalized : "link";
 }
 
 function normalizeCourseKind(value: string) {

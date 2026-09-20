@@ -323,7 +323,7 @@ export default async function PublicFichaPage({
     return (
       <>
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} technicalArea={technicalArea} adminBackUrl={adminBackUrl} />
+        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
     );
   }
@@ -411,7 +411,7 @@ export default async function PublicFichaPage({
   return (
     <>
       <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-      <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} />
+      <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} fichaToken={token} />
     </>
   );
 }
@@ -431,7 +431,8 @@ function AdultFicha({
   shakujoAttendance,
   technicalArea,
   adminBackUrl,
-  fichaUrl
+  fichaUrl,
+  fichaToken
 }: {
   member: Member;
   attendance: Attendance[];
@@ -448,6 +449,7 @@ function AdultFicha({
   technicalArea: { url: string; label: string };
   adminBackUrl: string | null;
   fichaUrl: string;
+  fichaToken: string;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const nacionales = courses.filter((course) => course.kind === "national");
@@ -466,7 +468,7 @@ function AdultFicha({
       </section>
 
       <section className="ficha-actions">
-        {technicalArea.url ? <a href={technicalArea.url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />{technicalArea.label}<ExternalLink aria-hidden="true" size={15} /></a> : null}
+        <a href={`/alumno/area-tecnica/${encodeURIComponent(fichaToken)}`} target="_blank"><NotebookTabs aria-hidden="true" size={18} />AREA TECNICA PERSONAL<ExternalLink aria-hidden="true" size={15} /></a>
         <a href="https://akapi80.github.io/Juego-SKBC/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
         <a href={`/alumno/consulta-tecnica?maxGrade=${encodeURIComponent(technicalProgress.targetGrade || member.grade || "MINARAI")}&returnTo=${encodeURIComponent(fichaUrl)}`} target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
@@ -681,7 +683,8 @@ function KidsFicha({
   note,
   behavior,
   technicalArea,
-  adminBackUrl
+  adminBackUrl,
+  fichaToken
 }: {
   member: Member;
   attendance: Attendance[];
@@ -693,6 +696,7 @@ function KidsFicha({
   behavior: ChildBehavior | null;
   technicalArea: { url: string; label: string };
   adminBackUrl: string | null;
+  fichaToken: string;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const objective = nextKidGrade(member.grade);
@@ -710,7 +714,7 @@ function KidsFicha({
       </section>
 
       <section className="ficha-actions">
-        {technicalArea.url ? <a href={technicalArea.url} target="_blank"><NotebookTabs aria-hidden="true" size={18} />{technicalArea.label}<ExternalLink aria-hidden="true" size={15} /></a> : null}
+        <a href={`/alumno/area-tecnica/${encodeURIComponent(fichaToken)}`} target="_blank"><NotebookTabs aria-hidden="true" size={18} />AREA TECNICA PERSONAL<ExternalLink aria-hidden="true" size={15} /></a>
         <a href="https://akapi80.github.io/SKBC-KIDS/" target="_blank"><Gamepad2 aria-hidden="true" size={18} />ENTRENAR JUGANDO<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
 
