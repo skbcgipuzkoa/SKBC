@@ -8633,6 +8633,19 @@ tbody tr:hover {
   text-decoration: none;
 }
 
+.student-video-pending {
+  align-items: center;
+  background: #fff7e6;
+  border: 1px solid #d5a62e;
+  border-radius: 999px;
+  color: #8a5b00;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-weight: 900;
+  justify-content: center;
+  padding: 10px 14px;
+}
+
 .student-empty-material {
   text-align: center;
 }
@@ -8656,6 +8669,10 @@ tbody tr:hover {
 
   .student-technique-video a {
     justify-content: center;
+    width: 100%;
+  }
+
+  .student-video-pending {
     width: 100%;
   }
 

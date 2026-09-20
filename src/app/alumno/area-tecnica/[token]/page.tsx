@@ -91,7 +91,6 @@ export default async function StudentTechnicalAreaPage({
           .select("id,grade,base_name,name,variant,variant_note,category,summary_es,video_url,video_title")
           .in("grade", allowedGrades)
           .eq("active", true)
-          .not("video_url", "is", null)
           .order("grade", { ascending: true })
           .order("name", { ascending: true })
           .returns<Technique[]>()
@@ -107,7 +106,7 @@ export default async function StudentTechnicalAreaPage({
         }
       : null;
   const materialsBySection = groupBySection(materials ?? []);
-  const techniqueVideos = (techniques ?? []).filter((technique) => technique.video_url);
+  const techniqueRows = techniques ?? [];
 
   return (
     <main className="student-area-page">
@@ -154,27 +153,31 @@ export default async function StudentTechnicalAreaPage({
         </section>
       ))}
 
-      {techniqueVideos.length ? (
+      {techniqueRows.length ? (
         <section className="student-area-section">
-          <h2>Videos por tecnica</h2>
+          <h2>Tecnicas de tu area</h2>
           <div className="student-technique-video-list">
-            {techniqueVideos.map((technique) => (
+            {techniqueRows.map((technique) => (
               <article className="student-technique-video" key={technique.id}>
                 <div>
                   <span>{technique.grade} - {technique.category}</span>
                   <h3>{technique.name}</h3>
                   <p>{effectiveTechniqueSummary(technique) || "Video de apoyo tecnico."}</p>
                 </div>
-                <a href={technique.video_url ?? "#"} target="_blank" rel="noopener noreferrer external">
-                  Ver video <ExternalLink aria-hidden="true" size={16} />
-                </a>
+                {technique.video_url ? (
+                  <a href={technique.video_url} target="_blank" rel="noopener noreferrer external">
+                    Ver video <ExternalLink aria-hidden="true" size={16} />
+                  </a>
+                ) : (
+                  <span className="student-video-pending">Video pendiente</span>
+                )}
               </article>
             ))}
           </div>
         </section>
       ) : null}
 
-      {!materialsBySection.length && !techniqueVideos.length && !oldSiteLink?.url ? (
+      {!materialsBySection.length && !techniqueRows.length && !oldSiteLink?.url ? (
         <section className="student-area-section">
           <div className="student-empty-material">
             <h2>Material en preparacion</h2>
