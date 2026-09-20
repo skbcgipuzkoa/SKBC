@@ -7,7 +7,7 @@ import { adultGrades } from "@/lib/grades";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
-import { BookOpenCheck, CheckCircle2, Filter, LogOut, RotateCcw } from "lucide-react";
+import { BookOpenCheck, CheckCircle2, ExternalLink, Filter, LogOut, RotateCcw } from "lucide-react";
 
 type Tecnica = {
   legacy_id: string | null;
@@ -26,6 +26,8 @@ type Tecnica = {
   summary_updated_at: string | null;
   summary_updated_by: string | null;
   updated_at: string | null;
+  video_url: string | null;
+  video_title: string | null;
 };
 
 export const dynamic = "force-dynamic";
@@ -43,7 +45,7 @@ export default async function TecnicasPage({
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("techniques")
-    .select("legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,summary_updated_at,summary_updated_by,updated_at,active,active_in_planning,repetitions,last_trained_on")
+    .select("legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,summary_updated_at,summary_updated_by,updated_at,active,active_in_planning,repetitions,last_trained_on,video_url,video_title")
     .order("name", { ascending: true })
     .limit(900)
     .returns<Tecnica[]>();
@@ -322,6 +324,16 @@ function TechniqueAdminCard({
         {tecnica.base_name ? <span>Base: {tecnica.base_name}</span> : null}
         {tecnica.variant ? <span>Variante: {tecnica.variant}</span> : null}
         {tecnica.variant_note ? <span>{tecnica.variant_note}</span> : null}
+      </div>
+      <div className="technique-video-status-line">
+        {tecnica.video_url ? (
+          <a className="technique-video-badge has-video" href={tecnica.video_url} target="_blank" rel="noopener noreferrer external">
+            Video enlazado <ExternalLink aria-hidden="true" size={14} />
+          </a>
+        ) : (
+          <span className="technique-video-badge missing-video">Sin video</span>
+        )}
+        {tecnica.video_title ? <span className="muted">{tecnica.video_title}</span> : null}
       </div>
       {effectiveSummary(tecnica) ? <p className="technique-summary compact">{effectiveSummary(tecnica)}</p> : null}
       <div className="technique-audit-line">
