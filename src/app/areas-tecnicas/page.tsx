@@ -200,7 +200,7 @@ function TechnicalMaterialsAdmin({
                     <strong>{material.title}</strong>
                     <small>{material.grade} - {material.section} - {material.material_type} - {material.active ? "activo" : "inactivo"}</small>
                   </span>
-                  <a href={material.url} target="_blank" rel="noopener noreferrer external" onClick={(event) => event.stopPropagation()}>Abrir</a>
+                  <a href={material.url} target="_blank" rel="noopener noreferrer external">Abrir</a>
                 </summary>
                 <form className="quick-form technical-material-form" action={updateTechnicalAreaMaterialAction}>
                   <input type="hidden" name="id" value={material.id} />
