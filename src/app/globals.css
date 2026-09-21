@@ -8590,6 +8590,36 @@ tbody tr:hover {
   padding: 8px 12px;
 }
 
+.student-area-nav {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 0 auto 18px;
+  max-width: 1120px;
+}
+
+.student-area-nav a {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--brand-strong);
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+  text-decoration: none;
+}
+
+.student-area-nav span {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--ink);
+  font-weight: 900;
+  min-width: 30px;
+  padding: 4px 8px;
+  text-align: center;
+}
+
 .student-material-grid {
   display: grid;
   gap: 12px;
@@ -8608,6 +8638,17 @@ tbody tr:hover {
   justify-content: space-between;
   padding: 16px;
   text-decoration: none;
+}
+
+.student-material-card {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.student-material-card-main {
+  align-items: center;
+  display: flex;
+  gap: 14px;
 }
 
 .student-material-card.featured {
@@ -8650,7 +8691,8 @@ tbody tr:hover {
   margin: 0;
 }
 
-.student-technique-video a {
+.student-open-link,
+.student-technique-video > a {
   align-items: center;
   background: #0057b8;
   border-radius: 999px;
@@ -8660,6 +8702,67 @@ tbody tr:hover {
   font-weight: 900;
   gap: 8px;
   padding: 10px 14px;
+  text-decoration: none;
+}
+
+.student-technique-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.student-technique-filter a {
+  align-items: center;
+  background: #eef4fb;
+  border: 1px solid #d8e5f3;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  padding: 9px 12px;
+  text-decoration: none;
+}
+
+.student-technique-filter a.active {
+  background: #0057b8;
+  border-color: #0057b8;
+  color: #ffffff;
+}
+
+.student-technique-filter span {
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  color: inherit;
+  min-width: 28px;
+  padding: 2px 7px;
+  text-align: center;
+}
+
+.student-video-embed {
+  display: grid;
+  flex-shrink: 0;
+  gap: 8px;
+  width: min(360px, 100%);
+}
+
+.student-video-embed iframe {
+  aspect-ratio: 16 / 9;
+  background: #0f172a;
+  border: 0;
+  border-radius: 12px;
+  width: 100%;
+}
+
+.student-video-embed a {
+  align-items: center;
+  color: var(--brand-strong);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 6px;
+  justify-content: center;
   text-decoration: none;
 }
 
@@ -8697,7 +8800,8 @@ tbody tr:hover {
     flex-direction: column;
   }
 
-  .student-technique-video a {
+  .student-open-link,
+  .student-technique-video > a {
     justify-content: center;
     width: 100%;
   }

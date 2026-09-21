@@ -164,7 +164,9 @@ function TechnicalMaterialsAdmin({
           </label>
           <label>
             Seccion
-            <input name="section" defaultValue="Videos" />
+            <select name="section" defaultValue="Gakka">
+              {technicalAreaSections.map((section) => <option key={section} value={section}>{section}</option>)}
+            </select>
           </label>
           <label className="wide">
             Titulo
@@ -230,7 +232,10 @@ function TechnicalMaterialsAdmin({
               </label>
               <label>
                 Seccion
-                <input name="section" defaultValue={material.section} />
+                <select name="section" defaultValue={material.section}>
+                  {technicalAreaSections.map((section) => <option key={section} value={section}>{section}</option>)}
+                  {!technicalAreaSections.includes(material.section) ? <option value={material.section}>{material.section}</option> : null}
+                </select>
               </label>
               <label className="wide">
                 Titulo
@@ -270,6 +275,8 @@ function TechnicalMaterialsAdmin({
     </>
   );
 }
+
+const technicalAreaSections = ["Gakka", "Katas", "Shakujo", "Filosofia", "Videos", "Documentos", "Recursos"];
 
 function TechnicalAreaGrid({
   title,

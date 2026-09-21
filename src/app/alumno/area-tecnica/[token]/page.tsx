@@ -49,12 +49,15 @@ type Technique = {
 export const dynamic = "force-dynamic";
 
 export default async function StudentTechnicalAreaPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ category?: string }>;
 }) {
   noStore();
   const { token } = await params;
+  const query = await searchParams;
   const supabase = createAdminClient();
 
   const { data: member, error } = await supabase
@@ -107,6 +110,17 @@ export default async function StudentTechnicalAreaPage({
       : null;
   const materialsBySection = groupBySection(materials ?? []);
   const techniqueRows = techniques ?? [];
+  const selectedCategory = normalizeTechniqueCategory(query.category);
+  const visibleTechniqueRows = selectedCategory === "all"
+    ? techniqueRows
+    : techniqueRows.filter((technique) => normalizeGrade(technique.category) === selectedCategory.toUpperCase());
+  const hasGoho = techniqueRows.some((technique) => normalizeGrade(technique.category) === "GOHO");
+  const hasJuho = techniqueRows.some((technique) => normalizeGrade(technique.category) === "JUHO");
+  const portalSections = [
+    techniqueRows.length ? { id: "tecnicas", label: "Tecnicas", count: techniqueRows.length } : null,
+    ...materialsBySection.map(([section, rows]) => ({ id: slug(section), label: section, count: rows.length })),
+    oldSiteLink?.url ? { id: "acceso-anterior", label: "Acceso anterior", count: 1 } : null
+  ].filter(Boolean) as Array<{ id: string; label: string; count: number }>;
 
   return (
     <main className="student-area-page">
@@ -120,8 +134,19 @@ export default async function StudentTechnicalAreaPage({
         </div>
       </section>
 
+      {portalSections.length ? (
+        <nav className="student-area-nav" aria-label="Apartados del area tecnica">
+          {portalSections.map((section) => (
+            <a href={`#${section.id}`} key={section.id}>
+              <strong>{section.label}</strong>
+              <span>{section.count}</span>
+            </a>
+          ))}
+        </nav>
+      ) : null}
+
       {oldSiteLink?.url ? (
-        <section className="student-area-section">
+        <section className="student-area-section" id="acceso-anterior">
           <h2>Acceso anterior</h2>
           <a className="student-material-card featured" href={oldSiteLink.url} target="_blank" rel="noopener noreferrer external">
             <Library aria-hidden="true" size={24} />
@@ -135,29 +160,36 @@ export default async function StudentTechnicalAreaPage({
       ) : null}
 
       {materialsBySection.map(([section, rows]) => (
-        <section className="student-area-section" key={section}>
-          <h2>{section}</h2>
+        <section className="student-area-section" id={slug(section)} key={section}>
+          <div className="section-heading-row">
+            <div>
+              <h2>{section}</h2>
+              <p className="muted">{rows.length} materiales disponibles para tu nivel.</p>
+            </div>
+          </div>
           <div className="student-material-grid">
             {rows.map((material) => (
-              <a className="student-material-card" href={material.url} key={material.id} target="_blank" rel="noopener noreferrer external">
-                {material.material_type === "youtube" || material.material_type === "playlist" ? <PlayCircle aria-hidden="true" size={24} /> : <FileText aria-hidden="true" size={24} />}
-                <span>
-                  <strong>{material.title}</strong>
-                  <small>{material.grade} - {materialTypeLabel(material.material_type)}</small>
-                  {material.description ? <em>{material.description}</em> : null}
-                </span>
-                <ExternalLink aria-hidden="true" size={18} />
-              </a>
+              <MaterialCard material={material} key={material.id} />
             ))}
           </div>
         </section>
       ))}
 
       {techniqueRows.length ? (
-        <section className="student-area-section">
-          <h2>Tecnicas de tu area</h2>
+        <section className="student-area-section" id="tecnicas">
+          <div className="section-heading-row">
+            <div>
+              <h2>Tecnicas de tu area</h2>
+              <p className="muted">Filtra por Goho, Juho o consulta todas las tecnicas visibles para tu progreso.</p>
+            </div>
+          </div>
+          <div className="student-technique-filter">
+            <a className={selectedCategory === "all" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=all#tecnicas`}>Todas <span>{techniqueRows.length}</span></a>
+            {hasGoho ? <a className={selectedCategory === "goho" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=goho#tecnicas`}>Goho <span>{techniqueRows.filter((technique) => normalizeGrade(technique.category) === "GOHO").length}</span></a> : null}
+            {hasJuho ? <a className={selectedCategory === "juho" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=juho#tecnicas`}>Juho <span>{techniqueRows.filter((technique) => normalizeGrade(technique.category) === "JUHO").length}</span></a> : null}
+          </div>
           <div className="student-technique-video-list">
-            {techniqueRows.map((technique) => (
+            {visibleTechniqueRows.map((technique) => (
               <article className="student-technique-video" key={technique.id}>
                 <div>
                   <span>{technique.grade} - {technique.category}</span>
@@ -165,9 +197,7 @@ export default async function StudentTechnicalAreaPage({
                   <p>{effectiveTechniqueSummary(technique) || "Video de apoyo tecnico."}</p>
                 </div>
                 {technique.video_url ? (
-                  <a href={technique.video_url} target="_blank" rel="noopener noreferrer external">
-                    Ver video <ExternalLink aria-hidden="true" size={16} />
-                  </a>
+                  <VideoPreview url={technique.video_url} title={technique.video_title ?? technique.name} />
                 ) : (
                   <span className="student-video-pending">Video pendiente</span>
                 )}
@@ -186,6 +216,50 @@ export default async function StudentTechnicalAreaPage({
         </section>
       ) : null}
     </main>
+  );
+}
+
+function MaterialCard({ material }: { material: TechnicalAreaMaterial }) {
+  return (
+    <article className="student-material-card">
+      <div className="student-material-card-main">
+        {material.material_type === "youtube" || material.material_type === "playlist" ? <PlayCircle aria-hidden="true" size={24} /> : <FileText aria-hidden="true" size={24} />}
+        <span>
+          <strong>{material.title}</strong>
+          <small>{material.grade} - {materialTypeLabel(material.material_type)}</small>
+          {material.description ? <em>{material.description}</em> : null}
+        </span>
+      </div>
+      {material.material_type === "youtube" ? <VideoPreview url={material.url} title={material.title} /> : (
+        <a className="student-open-link" href={material.url} target="_blank" rel="noopener noreferrer external">
+          Abrir <ExternalLink aria-hidden="true" size={16} />
+        </a>
+      )}
+    </article>
+  );
+}
+
+function VideoPreview({ url, title }: { url: string; title: string }) {
+  const embedUrl = youtubeEmbedUrl(url);
+  if (!embedUrl) {
+    return (
+      <a className="student-open-link" href={url} target="_blank" rel="noopener noreferrer external">
+        Ver video <ExternalLink aria-hidden="true" size={16} />
+      </a>
+    );
+  }
+  return (
+    <div className="student-video-embed">
+      <iframe
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        loading="lazy"
+        referrerPolicy="strict-origin-when-cross-origin"
+        src={embedUrl}
+        title={title}
+      />
+      <a href={url} target="_blank" rel="noopener noreferrer external">Abrir en YouTube <ExternalLink aria-hidden="true" size={14} /></a>
+    </div>
   );
 }
 
@@ -228,4 +302,33 @@ function materialTypeLabel(type: TechnicalAreaMaterial["material_type"]) {
     link: "Enlace"
   };
   return labels[type] ?? "Enlace";
+}
+
+function normalizeTechniqueCategory(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "goho" || normalized === "juho" ? normalized : "all";
+}
+
+function slug(value: string) {
+  return normalizeGrade(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "material";
+}
+
+function youtubeEmbedUrl(url: string) {
+  const videoId = youtubeVideoId(url);
+  return videoId ? `https://www.youtube-nocookie.com/embed/${videoId}` : null;
+}
+
+function youtubeVideoId(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("youtu.be")) return parsed.pathname.split("/").filter(Boolean)[0] ?? null;
+    if (parsed.hostname.includes("youtube.com")) {
+      if (parsed.pathname.startsWith("/embed/")) return parsed.pathname.split("/").filter(Boolean)[1] ?? null;
+      if (parsed.pathname.startsWith("/shorts/")) return parsed.pathname.split("/").filter(Boolean)[1] ?? null;
+      return parsed.searchParams.get("v");
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
