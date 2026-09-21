@@ -174,6 +174,10 @@ function TechnicalMaterialsAdmin({
                   {technicalAreaSections.map((section) => <option key={section} value={section}>{section}</option>)}
                 </select>
               </label>
+              <label>
+                Seccion nueva
+                <input name="sectionCustom" placeholder="Howa, Embu, Normativa..." />
+              </label>
               <label className="wide">
                 Titulo
                 <input name="title" placeholder="Kote nuki - explicacion SKBC" required />
@@ -281,6 +285,10 @@ function TechnicalMaterialEditor({
             {technicalAreaSections.map((section) => <option key={section} value={section}>{section}</option>)}
             {!technicalAreaSections.includes(material.section) ? <option value={material.section}>{material.section}</option> : null}
           </select>
+        </label>
+        <label>
+          Seccion nueva
+          <input name="sectionCustom" placeholder="Escribe aqui para cambiarla" />
         </label>
         <label className="wide">
           Titulo

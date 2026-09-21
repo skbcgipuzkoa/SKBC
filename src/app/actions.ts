@@ -694,7 +694,7 @@ export async function createTechnicalAreaMaterialAction(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim() || null;
   const materialType = normalizeTechnicalMaterialType(String(formData.get("materialType") ?? ""));
   const url = String(formData.get("url") ?? "").trim();
-  const section = String(formData.get("section") ?? "").trim() || "Material";
+  const section = normalizeTechnicalMaterialSection(formData);
   const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
 
   if (!memberClass || !grades.length || !title || !url) {
@@ -735,7 +735,7 @@ export async function updateTechnicalAreaMaterialAction(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim() || null;
   const materialType = normalizeTechnicalMaterialType(String(formData.get("materialType") ?? ""));
   const url = String(formData.get("url") ?? "").trim();
-  const section = String(formData.get("section") ?? "").trim() || "Material";
+  const section = normalizeTechnicalMaterialSection(formData);
   const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
   const active = formData.get("active") === "on";
 
@@ -786,7 +786,7 @@ export async function updateTechnicalAreaMaterialGroupAction(formData: FormData)
   const description = String(formData.get("description") ?? "").trim() || null;
   const materialType = normalizeTechnicalMaterialType(String(formData.get("materialType") ?? ""));
   const url = String(formData.get("url") ?? "").trim();
-  const section = String(formData.get("section") ?? "").trim() || "Material";
+  const section = normalizeTechnicalMaterialSection(formData);
   const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
   const active = formData.get("active") === "on";
 
@@ -3866,6 +3866,14 @@ function normalizeTechnicalMaterialClass(value: string) {
 function normalizeTechnicalMaterialType(value: string) {
   const normalized = value.trim().toLowerCase();
   return ["youtube", "drive", "document", "playlist", "link", "site"].includes(normalized) ? normalized : "link";
+}
+
+function normalizeTechnicalMaterialSection(formData: FormData) {
+  return (
+    String(formData.get("sectionCustom") ?? "").trim() ||
+    String(formData.get("section") ?? "").trim() ||
+    "Material"
+  );
 }
 
 function normalizeCourseKind(value: string) {
