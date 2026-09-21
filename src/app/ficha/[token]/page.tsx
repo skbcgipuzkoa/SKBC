@@ -753,20 +753,6 @@ function KidsFicha({
         </div>
       </FoldableSection>
 
-      <FoldableSection title="Historial de examenes" meta={`${exams.length} registros`}>
-        <div className="exam-card-list">
-          {exams.length ? exams.map((exam) => (
-            <article className="ficha-card exam-card" key={`${exam.exam_date}-${exam.grade}`}>
-              <KidBadge label="Grado conseguido" value={exam.grade} tone={kidGradeTone(exam.grade)} />
-              <span>APTO · {formatDate(exam.exam_date)}</span>
-              <p>Examinador: {exam.examiner ?? "-"}</p>
-              <p>Registrado por: {exam.registered_by ?? "-"}</p>
-              <DocumentLinks exam={exam} />
-            </article>
-          )) : <div className="ficha-card">Sin exámenes registrados.</div>}
-        </div>
-      </FoldableSection>
-
       <FoldableSection title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
         <div className="ficha-card ficha-fields">
           <p>{note?.note ?? "Sin nota visible para familia."}</p>
@@ -784,6 +770,20 @@ function KidsFicha({
           <BehaviorField label="Compañerismo" value={behavior?.companionship} />
           <Field label="Última actualización" value={behavior?.report_date ? formatDate(behavior.report_date) : null} />
           <Field label="Observación" value={behavior?.observation} />
+        </div>
+      </FoldableSection>
+
+      <FoldableSection title="Historial de examenes" meta={`${exams.length} registros`}>
+        <div className="exam-card-list">
+          {exams.length ? exams.map((exam) => (
+            <article className="ficha-card exam-card" key={`${exam.exam_date}-${exam.grade}`}>
+              <KidBadge label="Grado conseguido" value={exam.grade} tone={kidGradeTone(exam.grade)} />
+              <span>APTO · {formatDate(exam.exam_date)}</span>
+              <p>Examinador: {exam.examiner ?? "-"}</p>
+              <p>Registrado por: {exam.registered_by ?? "-"}</p>
+              <DocumentLinks exam={exam} />
+            </article>
+          )) : <div className="ficha-card">Sin examenes registrados.</div>}
         </div>
       </FoldableSection>
 
