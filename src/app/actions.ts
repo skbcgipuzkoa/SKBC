@@ -686,7 +686,10 @@ export async function createTechnicalAreaMaterialAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 
   const memberClass = normalizeTechnicalMaterialClass(String(formData.get("memberClass") ?? ""));
-  const grade = String(formData.get("grade") ?? "").trim();
+  const grades = formData
+    .getAll("grades")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const materialType = normalizeTechnicalMaterialType(String(formData.get("materialType") ?? ""));
@@ -694,13 +697,13 @@ export async function createTechnicalAreaMaterialAction(formData: FormData) {
   const section = String(formData.get("section") ?? "").trim() || "Material";
   const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
 
-  if (!memberClass || !grade || !title || !url) {
+  if (!memberClass || !grades.length || !title || !url) {
     redirect(`/areas-tecnicas?error=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
   }
 
   const { error } = await createAdminClient()
     .from("technical_area_materials")
-    .insert({
+    .insert(grades.map((grade) => ({
       member_class: memberClass,
       grade,
       title,
@@ -710,7 +713,7 @@ export async function createTechnicalAreaMaterialAction(formData: FormData) {
       section,
       sort_order: Number.isFinite(sortOrder) ? sortOrder : 100,
       active: formData.get("active") !== "off"
-    });
+    })));
 
   if (error) {
     console.error("Error creating technical area material", error);

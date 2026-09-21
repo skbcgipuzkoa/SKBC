@@ -8640,6 +8640,56 @@ tbody tr:hover {
   grid-column: 1 / -1;
 }
 
+.technical-material-grade-picker {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.technical-material-grade-picker legend {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.technical-material-grade-picker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.grade-select-chip {
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.grade-select-chip input {
+  inline-size: 1px;
+  opacity: 0;
+  position: absolute;
+}
+
+.grade-select-chip span {
+  background: #f5f8fc;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 8px 12px;
+}
+
+.grade-select-chip input:checked + span {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(0, 93, 191, 0.18);
+}
+
 .technical-material-list {
   display: grid;
   gap: 12px;
