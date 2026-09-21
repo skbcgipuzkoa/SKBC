@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const repeatBlockDays = 14;
+const kataSuggestionBlockDays = 28;
 
 const nextGrade = new Map([
   ["MINARAI", "5 KYU"],
@@ -120,7 +121,7 @@ export async function generateAdultTechnicalPlan(classId: string) {
         .from("techniques")
         .select("id,legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,program_order,curriculum_order,active,active_in_planning,force_next,score,repetitions,last_trained_on")
         .eq("active", true)
-        .eq("active_in_planning", true)
+        .or("active_in_planning.eq.true,content_type.in.(KATA_TANEN,KATA_SOTAI)")
         .returns<Technique[]>()
     ]);
 
@@ -138,7 +139,7 @@ export async function generateAdultTechnicalPlan(classId: string) {
     const gradeWork = resolveWorkGrade(group.grade);
     const targetGrade = resolveTargetGrade(group.grade);
     const programGrade = resolveProgramGrade(targetGrade);
-    const selected = selectTechniquesForGroup(programGrade, clase.class_type, enrichedTechniques);
+    const selected = selectTechniquesForGroup(programGrade, clase.class_type, enrichedTechniques, clase.class_date);
 
     return selected.map((item, index) => ({
       legacy_id: `${legacyPrefix}_${String(legacyCounter++).padStart(3, "0")}`,
@@ -227,7 +228,8 @@ async function addRecentPlanHistory(currentClassId: string, techniques: Techniqu
 function selectTechniquesForGroup(
   gradeWork: string,
   sessionType: string | null,
-  techniques: Technique[]
+  techniques: Technique[],
+  classDate: string
 ): SelectedTechnique[] {
   if (normalize(sessionType) === "CONJUNTA" || normalize(gradeWork) === "CONJUNTA") {
     return techniques
@@ -262,9 +264,18 @@ function selectTechniquesForGroup(
 
   const selected: SelectedTechnique[] = selectBalancedProgram(ownGohoJuho);
   const selectedIds = new Set(selected.map((item) => item.technique.id));
+  const kata = selectKataSuggestion(gradeWork, techniques, selectedIds, classDate);
   const review = reviewCandidates.find((technique) => !selectedIds.has(technique.id));
 
-  if (review) {
+  if (kata) {
+    selected.push({
+      technique: kata,
+      proposalType: "KATA",
+      focus: "KATA SUGERIDA",
+      usedForHistory: true
+    });
+    selectedIds.add(kata.id);
+  } else if (review) {
     selected.push({
       technique: review,
       proposalType: "REPASO",
@@ -285,6 +296,21 @@ function selectTechniquesForGroup(
   );
 
   return selected.slice(0, 5);
+}
+
+function selectKataSuggestion(
+  gradeWork: string,
+  techniques: Technique[],
+  selectedIds: Set<string>,
+  classDate: string
+) {
+  const candidates = techniques
+    .filter((technique) => isKata(technique))
+    .filter((technique) => isProgramGradeMatch(technique.grade, gradeWork))
+    .filter((technique) => !selectedIds.has(technique.id))
+    .sort(compareTechniques);
+
+  return candidates.find((technique) => !wasRecentlyPlanned(technique, classDate, kataSuggestionBlockDays)) ?? null;
 }
 
 function selectBalancedProgram(candidates: Technique[]): SelectedTechnique[] {
@@ -378,6 +404,18 @@ function isRecent(technique: Technique) {
   const cutoff = new Date();
   cutoff.setUTCDate(cutoff.getUTCDate() - repeatBlockDays);
   return lastDate >= cutoff;
+}
+
+function wasRecentlyPlanned(technique: Technique, classDate: string, blockDays: number) {
+  if (technique.force_next || !technique.plan_last_trained_on) return false;
+  const lastDate = new Date(`${technique.plan_last_trained_on}T00:00:00Z`);
+  const cutoff = new Date(`${classDate}T00:00:00Z`);
+  cutoff.setUTCDate(cutoff.getUTCDate() - blockDays);
+  return lastDate >= cutoff;
+}
+
+function isKata(technique: Technique) {
+  return normalize(technique.content_type).startsWith("KATA");
 }
 
 function compareDates(a: string | null, b: string | null) {
