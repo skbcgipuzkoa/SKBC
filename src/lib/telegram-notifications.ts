@@ -9,6 +9,7 @@ type Member = {
   class: "kids" | "adults";
   grade: string | null;
   status: "active" | "inactive";
+  birth_date?: string | null;
   joined_on?: string | null;
   semaphore: string | null;
   next_exam_on: string | null;
@@ -209,6 +210,8 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
       "",
       formatTodayClasses(digest.todayClasses),
       "",
+      formatBirthdayAlerts(digest.birthdayAlerts),
+      "",
       formatFreeTrialAlerts(digest.freeTrialAlerts),
       "",
       formatRanking("🏆 Top adultos", digest.adults),
@@ -218,7 +221,7 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
       formatExamReady(digest.readyForExam),
       "",
       formatExamUpcoming(digest.upcomingForExam)
-    ].join("\n").trim();
+    ].filter(Boolean).join("\n").trim();
   }
 
   const stats = await buildPeriodStats(period);
@@ -296,7 +299,7 @@ async function buildDailyDigest() {
   ] = await Promise.all([
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at")
+      .select("id,legacy_id,display_name,class,grade,status,birth_date,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at")
       .eq("status", "active")
       .returns<Member[]>(),
     supabase.from("attendance_logs").select("member_id,attended_on").returns<Attendance[]>(),
@@ -365,6 +368,7 @@ async function buildDailyDigest() {
     adults,
     kids,
     todayClasses: todayClassesResult.data ?? [],
+    birthdayAlerts: birthdayAlerts(members),
     freeTrialAlerts: freeTrialAlerts(members),
     readyForExam: readyForExam(members),
     upcomingForExam: upcomingForExam(members)
@@ -686,6 +690,32 @@ function freeTrialAlerts(members: Member[]) {
       joinedOn: member.free_trial_started_on ?? member.joined_on,
       endsOn: member.free_trial_ends_on ?? null
     }));
+}
+
+function birthdayAlerts(members: Member[]) {
+  const today = todayIso();
+  const todayMonthDay = monthDay(today);
+  return members
+    .filter((member) =>
+      member.status === "active" &&
+      Boolean(member.birth_date) &&
+      monthDay(member.birth_date!) === todayMonthDay
+    )
+    .sort((a, b) => a.display_name.localeCompare(b.display_name, "es"))
+    .map((member) => ({
+      name: member.display_name,
+      grade: member.grade ?? "-",
+      className: member.class === "kids" ? "ninos" : "adultos",
+      age: ageOnDate(member.birth_date!, today)
+    }));
+}
+
+function formatBirthdayAlerts(rows: ReturnType<typeof birthdayAlerts>) {
+  if (!rows.length) return "";
+  return [
+    "<b>Cumpleanos del club</b>",
+    ...rows.map((row) => `- <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) cumple ${row.age} anos hoy.`)
+  ].join("\n");
 }
 
 function formatFreeTrialAlerts(rows: ReturnType<typeof freeTrialAlerts>) {
@@ -1182,6 +1212,18 @@ function isoDate(date: Date) {
 function formatHumanDate(value: string) {
   const [year, month, day] = value.slice(0, 10).split("-");
   return `${day}/${month}/${year}`;
+}
+
+function monthDay(value: string) {
+  return value.slice(5, 10);
+}
+
+function ageOnDate(birthDate: string, date: string) {
+  const [birthYear, birthMonth, birthDay] = birthDate.slice(0, 10).split("-").map(Number);
+  const [year, month, day] = date.slice(0, 10).split("-").map(Number);
+  let age = year - birthYear;
+  if (month < birthMonth || (month === birthMonth && day < birthDay)) age -= 1;
+  return age;
 }
 
 function cleanEnv(value: string | undefined) {
