@@ -320,10 +320,11 @@ export default async function PublicFichaPage({
 
     const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures);
     const automaticNotices = buildAutomaticChildNotices(visibleChildRanking);
+    const familyNotices = filterChildFamilyNotices(childNotices ?? []);
     return (
       <>
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...(childNotices ?? [])]} note={childNote} behavior={behavior} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
+        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
     );
   }
@@ -1210,6 +1211,16 @@ function buildVisibleChildRanking(ranking: ChildRanking | null, attendance: Atte
   };
 }
 
+function filterChildFamilyNotices(notices: ChildNotice[]) {
+  return notices.filter((notice) => {
+    const title = normalizePlainText(notice.title);
+    const body = normalizePlainText(notice.body ?? "");
+    if (title.includes("sin actividad") || title.includes("falta continuidad")) return false;
+    if (body.includes("sin entrenar") || body.includes("volver poco a poco") || body.includes("retomar el habito")) return false;
+    return true;
+  });
+}
+
 function buildAdultActivity(attendance: Attendance[], courses: Course[], closures: CalendarClosure[]) {
   const today = startOfDay(new Date());
   const dates = attendance
@@ -1535,19 +1546,28 @@ function safeInternalReturnUrl(value: string | null | undefined) {
 }
 
 function nextKidGrade(grade: string | null) {
-  const aliases = new Map([
-    ["MINARAI", "BLANCO"],
-    ["AMARILLO", "5KYU"],
-    ["NARANJA", "4KYU"],
-    ["VERDE", "3KYU"],
-    ["AZUL", "2KYU"],
-    ["MARRON", "1KYU"]
-  ]);
-  const key = normalizeGradeKey(grade);
-  const normalized = aliases.get(key) ?? key;
+  const normalized = normalizeKidGrade(grade);
   const index = KID_GRADES.findIndex((item) => normalizeGradeKey(item) === normalized);
   if (index === -1) return grade ?? "-";
   return KID_GRADES[Math.min(index + 1, KID_GRADES.length - 1)];
+}
+
+function normalizeKidGrade(grade: string | null | undefined) {
+  const key = normalizeGradeKey(grade);
+  const aliases = new Map([
+    ["MINARAI", "BLANCO"],
+    ["5KYU", "AMARILLO"],
+    ["4KYU", "NARANJA"],
+    ["3KYU", "VERDE"],
+    ["2KYU", "AZUL"],
+    ["1KYU", "MARRON"],
+    ["BLANCOYAMARILLO", "BLANCOAMARILLO"],
+    ["AMARILLOYNARANJA", "AMARILLONARANJA"],
+    ["NARANJAYVERDE", "NARANJAVERDE"],
+    ["VERDEYAZUL", "VERDEAZUL"],
+    ["AZULYMARRON", "AZULMARRON"]
+  ]);
+  return aliases.get(key) ?? key;
 }
 
 function kidGradeTone(grade: string | null): FichaTone {
