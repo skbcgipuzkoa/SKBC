@@ -2337,6 +2337,107 @@ export async function closeKidsClassAction(formData: FormData) {
   redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=kids-skipped${returnStepQuery}`);
 }
 
+export async function saveChildClassPlanAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
+  const objective = emptyToNull(String(formData.get("objective") ?? ""));
+  const notes = emptyToNull(String(formData.get("notes") ?? ""));
+  const activities = Array.from(new Set(
+    formData.getAll("activities").map((value) => String(value).trim()).filter(Boolean)
+  ));
+  const groupLabel = emptyToNull(String(formData.get("groupLabel") ?? ""));
+  const groupContent = emptyToNull(String(formData.get("groupContent") ?? ""));
+  const groupNotes = emptyToNull(String(formData.get("groupNotes") ?? ""));
+  const memberIds = Array.from(new Set(
+    formData.getAll("groupMemberIds").map((value) => String(value).trim()).filter(Boolean)
+  ));
+
+  if (!classId || !legacyId) {
+    redirect(returnTo || "/clases?error=kids-plan");
+  }
+
+  const supabase = createAdminClient();
+  const { data: clase, error: classError } = await supabase
+    .from("classes")
+    .select("id,class_group")
+    .eq("id", classId)
+    .single<{ id: string; class_group: "kids" | "adults" }>();
+
+  if (classError || !clase || clase.class_group !== "kids") {
+    redirect(returnTo || `/clases/${legacyId}?error=kids-plan`);
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const { error: planError } = await supabase
+      .from("child_class_plans")
+      .upsert(
+        {
+          class_id: classId,
+          objective,
+          activities,
+          notes,
+          updated_at: now
+        },
+        { onConflict: "class_id" }
+      );
+
+    if (planError) throw planError;
+
+    if (groupLabel && groupContent) {
+      const { error: groupError } = await supabase.from("child_class_group_work").insert({
+        class_id: classId,
+        group_label: groupLabel,
+        content: groupContent,
+        member_ids: memberIds,
+        notes: groupNotes,
+        updated_at: now
+      });
+
+      if (groupError) throw groupError;
+    }
+  } catch (error) {
+    console.error("Error saving child class plan", error);
+    redirect(returnTo || `/clases/${legacyId}?error=kids-plan&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath(`/clases/${legacyId}`);
+  redirect(returnTo || `/clases/${legacyId}?saved=kids-plan`);
+}
+
+export async function deleteChildClassGroupWorkAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const id = String(formData.get("id") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
+
+  if (!id || !legacyId) {
+    redirect(returnTo || "/clases?error=kids-plan");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("child_class_group_work")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error deleting child class group work", error);
+    redirect(returnTo || `/clases/${legacyId}?error=kids-plan&detail=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/clases/${legacyId}`);
+  redirect(returnTo || `/clases/${legacyId}?saved=kids-plan-delete`);
+}
+
 export async function registerExamAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -3983,6 +4084,11 @@ function errorMessage(error: unknown) {
     return JSON.stringify(record);
   }
   return String(error || "Error desconocido.");
+}
+
+function emptyToNull(value: string) {
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 function safeReturnPath(value: string) {

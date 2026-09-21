@@ -4,8 +4,10 @@ import {
   addBulkAttendanceAction,
   addManualClassTechniqueAction,
   closeKidsClassAction,
+  deleteChildClassGroupWorkAction,
   logoutAction,
   removeManualClassTechniqueAction,
+  saveChildClassPlanAction,
   updateClassPlanTechniquesAction
 } from "@/app/actions";
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
@@ -58,6 +60,21 @@ type TechniqueOption = {
   name: string;
   category: string | null;
   content_type: string | null;
+};
+
+type ChildClassPlanRow = {
+  objective: string | null;
+  activities: string[] | null;
+  notes: string | null;
+};
+
+type ChildClassGroupWorkRow = {
+  id: string;
+  group_label: string;
+  content: string;
+  member_ids: string[] | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export default async function DojoClassPage({
@@ -155,6 +172,21 @@ export default async function DojoClassPage({
   const trainingGrades = buildAdultTrainingGradeOptions(groupedPlan.map(([grade]) => grade));
   const manualCommonPlan = planRows.filter((item) => normalizeGrade(item.proposal_type) === "COMUN MANUAL");
   const manualCommonSummary = summarizeManualCommonPlan(manualCommonPlan);
+  const [{ data: childClassPlan }, { data: childClassGroupWork }] = kidsClass?.id
+    ? await Promise.all([
+      supabase
+        .from("child_class_plans")
+        .select("objective,activities,notes")
+        .eq("class_id", kidsClass.id)
+        .maybeSingle<ChildClassPlanRow>(),
+      supabase
+        .from("child_class_group_work")
+        .select("id,group_label,content,member_ids,notes,created_at")
+        .eq("class_id", kidsClass.id)
+        .order("created_at", { ascending: true })
+        .returns<ChildClassGroupWorkRow[]>()
+    ])
+    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }];
 
   return (
     <main className="dojo-page dojo-work-page">
@@ -190,6 +222,14 @@ export default async function DojoClassPage({
           <p>Marca los niños que han venido. Si hoy no hay clase infantil, puedes saltar este paso.</p>
           {kidsClass ? (
             <>
+              <DojoChildPlanPanel
+                classId={kidsClass.id}
+                legacyId={kidsClass.legacy_id ?? legacyId}
+                returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids&saved=kids-plan`}
+                plan={childClassPlan}
+                groupWork={childClassGroupWork ?? []}
+                members={kids}
+              />
               <form action={addBulkAttendanceAction} className="dojo-check-list">
                 <input type="hidden" name="classId" value={kidsClass.id} />
                 <input type="hidden" name="legacyId" value={kidsClass.legacy_id ?? legacyId} />
@@ -388,6 +428,108 @@ function DojoCheck({ name, member, children }: { name: string; member: MemberRow
   );
 }
 
+function DojoChildPlanPanel({
+  classId,
+  legacyId,
+  returnTo,
+  plan,
+  groupWork,
+  members
+}: {
+  classId: string;
+  legacyId: string;
+  returnTo: string;
+  plan: ChildClassPlanRow | null;
+  groupWork: ChildClassGroupWorkRow[];
+  members: MemberRow[];
+}) {
+  const activities = new Set(plan?.activities ?? []);
+  const memberNames = new Map(members.map((member) => [member.id, member.display_name]));
+
+  return (
+    <details className="dojo-child-plan">
+      <summary>
+        <span>
+          <strong>Plan infantil opcional</strong>
+          <small>Solo si hoy quieres dejar memoria del trabajo</small>
+        </span>
+        <em>{plan?.objective || groupWork.length ? "Guardado" : "Opcional"}</em>
+      </summary>
+      {plan?.objective || activities.size || plan?.notes ? (
+        <div className="dojo-child-plan-summary">
+          {plan?.objective ? <span>Objetivo: {plan.objective}</span> : null}
+          {[...activities].map((activity) => <span key={activity}>{childActivityLabel(activity)}</span>)}
+          {plan?.notes ? <p>{plan.notes}</p> : null}
+        </div>
+      ) : null}
+      {groupWork.length ? (
+        <div className="dojo-child-groups">
+          {groupWork.map((item) => {
+            const names = (item.member_ids ?? []).map((id) => memberNames.get(id)).filter(Boolean);
+            return (
+              <div className="dojo-child-group-row" key={item.id}>
+                <span>
+                  <strong>{item.group_label}</strong>
+                  <small>{item.content}</small>
+                  <small>{names.length ? names.join(", ") : "Grupo general"}</small>
+                </span>
+                <form action={deleteChildClassGroupWorkAction}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="legacyId" value={legacyId} />
+                  <input type="hidden" name="returnTo" value={returnTo.replace("saved=kids-plan", "saved=kids-plan-delete")} />
+                  <DojoSubmitButton className="dojo-secondary-button" pendingLabel="Quitando...">Quitar</DojoSubmitButton>
+                </form>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      <form action={saveChildClassPlanAction} className="dojo-child-plan-form">
+        <input type="hidden" name="classId" value={classId} />
+        <input type="hidden" name="legacyId" value={legacyId} />
+        <input type="hidden" name="returnTo" value={returnTo} />
+        <label>
+          Objetivo
+          <select name="objective" defaultValue={plan?.objective ?? ""}>
+            <option value="">Sin objetivo concreto</option>
+            {childObjectives.map((objective) => <option key={objective} value={objective}>{objective}</option>)}
+          </select>
+        </label>
+        <fieldset>
+          <legend>Actividades</legend>
+          <div className="dojo-child-activity-grid">
+            {childActivities.map((activity) => (
+              <label key={activity.value}>
+                <input name="activities" type="checkbox" value={activity.value} defaultChecked={activities.has(activity.value)} />
+                <span>{activity.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label>
+          Nota rapida
+          <textarea name="notes" rows={2} defaultValue={plan?.notes ?? ""} placeholder="Opcional: como fue la clase, actitud general, algo a recordar..." />
+        </label>
+        <details className="dojo-child-group-editor">
+          <summary>Grupo puntual</summary>
+          <input name="groupLabel" placeholder="Nombre del grupo" />
+          <input name="groupContent" placeholder="Contenido trabajado" />
+          <textarea name="groupNotes" rows={2} placeholder="Nota opcional" />
+          <div className="dojo-child-member-grid">
+            {members.map((member) => (
+              <label key={member.id}>
+                <input type="checkbox" name="groupMemberIds" value={member.id} />
+                <span>{member.display_name}</span>
+              </label>
+            ))}
+          </div>
+        </details>
+        <DojoSubmitButton pendingLabel="Guardando plan...">Guardar plan infantil</DojoSubmitButton>
+      </form>
+    </details>
+  );
+}
+
 function SummaryBox({ label, value }: { label: string; value: string }) {
   return <div><small>{label}</small><strong>{value}</strong></div>;
 }
@@ -415,6 +557,8 @@ function DojoCorrectionLinks({
 function savedMessage(saved: string) {
   if (saved === "kids") return "Asistencia infantil guardada. Continua con tecnicas.";
   if (saved === "kids-skip") return "Clase infantil saltada para hoy. Continua con adultos.";
+  if (saved === "kids-plan") return "Plan infantil opcional guardado.";
+  if (saved === "kids-plan-delete") return "Trabajo infantil por grupo quitado.";
   if (saved === "techniques") return "Tecnicas guardadas. Continua con asistencia adulta.";
   if (saved === "adults") return "Asistencia adulta guardada. Revisa y cierra la clase.";
   if (saved === "close") return "Clase cerrada. Fichas actualizadas.";
@@ -488,6 +632,37 @@ function normalizeGrade(grade: string | null | undefined) {
 
 function slugGrade(grade: string | null | undefined) {
   return normalizeGrade(grade || "sin-grado").toLowerCase().replace(/\s+/g, "-");
+}
+
+const childObjectives = [
+  "Atencion y disciplina",
+  "Coordinacion",
+  "Ukemi / caidas",
+  "Kihon",
+  "Goho basico",
+  "Juho basico",
+  "Trabajo en pareja",
+  "Juego tecnico",
+  "Preparacion examen",
+  "Trabajo por grados",
+  "Howa / valores"
+];
+
+const childActivities = [
+  { value: "calentamiento", label: "Calentamiento" },
+  { value: "coordinacion", label: "Coordinacion" },
+  { value: "caidas", label: "Caidas" },
+  { value: "kihon", label: "Kihon" },
+  { value: "goho", label: "Goho" },
+  { value: "juho", label: "Juho" },
+  { value: "pareja", label: "Pareja" },
+  { value: "juego-tecnico", label: "Juego tecnico" },
+  { value: "howa", label: "Howa" },
+  { value: "examen", label: "Preparacion grado" }
+];
+
+function childActivityLabel(value: string) {
+  return childActivities.find((activity) => activity.value === value)?.label ?? value;
 }
 
 function formatDate(value: string) {

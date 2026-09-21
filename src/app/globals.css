@@ -3636,6 +3636,99 @@ tbody tr:hover {
   padding: 5px 12px;
 }
 
+.child-light-plan-panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  margin: 16px 0;
+  overflow: hidden;
+}
+
+.child-light-plan-panel.compact {
+  background: #f8fbff;
+}
+
+.child-light-plan-panel summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+
+.child-light-plan-panel summary span,
+.child-plan-summary .tag {
+  background: var(--soft-blue);
+  border-radius: 999px;
+  color: var(--blue);
+  font-weight: 900;
+  padding: 5px 12px;
+}
+
+.child-light-plan-panel > p,
+.child-light-plan-form,
+.child-plan-summary,
+.child-group-work-list {
+  margin: 0;
+  padding: 0 18px 18px;
+}
+
+.child-plan-summary,
+.child-group-work-list,
+.child-light-plan-form {
+  display: grid;
+  gap: 12px;
+}
+
+.child-plan-summary p {
+  margin: 0;
+}
+
+.child-group-work-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.child-group-work-row span {
+  display: grid;
+  gap: 3px;
+}
+
+.child-group-work-row small {
+  color: var(--muted);
+}
+
+.child-light-plan-form fieldset,
+.child-group-work-editor {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.child-activity-grid,
+.child-member-mini-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.child-activity-grid label,
+.child-member-mini-list label {
+  align-items: center;
+  background: #f5f8fc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+}
+
 .skip-kids-class-form {
   border-top: 1px solid var(--line);
   display: grid;
@@ -9322,6 +9415,104 @@ tbody tr:hover {
 
 .dojo-secondary-form {
   margin-top: 4px;
+}
+
+.dojo-child-plan {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  padding: 0;
+}
+
+.dojo-child-plan summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.dojo-child-plan summary span {
+  display: grid;
+  gap: 2px;
+}
+
+.dojo-child-plan summary small,
+.dojo-child-group-row small {
+  color: var(--muted);
+}
+
+.dojo-child-plan summary em,
+.dojo-child-plan-summary span {
+  background: var(--soft-blue);
+  border-radius: 999px;
+  color: var(--blue);
+  font-style: normal;
+  font-weight: 900;
+  padding: 5px 12px;
+}
+
+.dojo-child-plan-form,
+.dojo-child-plan-summary,
+.dojo-child-groups {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.dojo-child-plan-form select,
+.dojo-child-plan-form input[type="text"],
+.dojo-child-plan-form input:not([type]),
+.dojo-child-plan-form textarea {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  padding: 12px;
+  width: 100%;
+}
+
+.dojo-child-plan-form fieldset,
+.dojo-child-group-editor {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.dojo-child-activity-grid,
+.dojo-child-member-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.dojo-child-activity-grid label,
+.dojo-child-member-grid label {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+}
+
+.dojo-child-group-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.dojo-child-group-row span {
+  display: grid;
+  gap: 3px;
 }
 
 .dojo-work-page {

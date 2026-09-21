@@ -8,6 +8,7 @@ import {
   addBulkAttendanceAction,
   closeKidsClassAction,
   createClassDelegateLinkAction,
+  deleteChildClassGroupWorkAction,
   deleteClassAction,
   generateAdultGroupsAction,
   generateAdultPlanAction,
@@ -16,6 +17,7 @@ import {
   removeManualClassTechniqueAction,
   removeAttendanceAction,
   saveAttendanceTechnicalReviewAction,
+  saveChildClassPlanAction,
   updateClassAction,
   updateClassPlanTechniquesAction
 } from "@/app/actions";
@@ -118,6 +120,22 @@ type TechniqueOption = {
   category: string | null;
   content_type: string | null;
   active: boolean;
+};
+
+type ChildClassPlanRow = {
+  objective: string | null;
+  activities: string[] | null;
+  notes: string | null;
+  updated_at: string | null;
+};
+
+type ChildClassGroupWorkRow = {
+  id: string;
+  group_label: string;
+  content: string;
+  member_ids: string[] | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export default async function ClaseDetailPage({
@@ -277,6 +295,22 @@ export default async function ClaseDetailPage({
   const kidsAttendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === kidsDayClass?.id).map((item) => item.member_id));
   const kidsDayMembers = (dayMembers ?? []).filter((member) => member.class === "kids");
   const pendingKidsDayMembers = kidsDayMembers.filter((member) => !kidsAttendedIds.has(member.id));
+  const childPlanClass = clase.class_group === "kids" ? { id: clase.id, legacy_id: clase.legacy_id } : kidsDayClass;
+  const [{ data: childClassPlan }, { data: childClassGroupWork }] = childPlanClass?.id
+    ? await Promise.all([
+      supabase
+        .from("child_class_plans")
+        .select("objective,activities,notes,updated_at")
+        .eq("class_id", childPlanClass.id)
+        .maybeSingle<ChildClassPlanRow>(),
+      supabase
+        .from("child_class_group_work")
+        .select("id,group_label,content,member_ids,notes,created_at")
+        .eq("class_id", childPlanClass.id)
+        .order("created_at", { ascending: true })
+        .returns<ChildClassGroupWorkRow[]>()
+    ])
+    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }];
   const adultDayMembers = (dayMembers ?? []).filter((member) => member.class === "adults");
   const adultAttendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === clase.id && item.members?.class === "adults").map((item) => item.member_id));
   const adultPendingMembers = adultDayMembers.filter((member) => !adultAttendedIds.has(member.id));
@@ -324,6 +358,15 @@ export default async function ClaseDetailPage({
         <span>{kidsDayMembers.length - pendingKidsDayMembers.length}/{kidsDayMembers.length} registrados</span>
       </summary>
       <p className="muted class-flow-note">Primero marca los ninos que han venido. Al guardar, la pantalla cambia al plan tecnico adulto.</p>
+      <ChildLightPlanPanel
+        classId={kidsDayClass.id}
+        legacyId={kidsDayClass.legacy_id ?? legacyId}
+        returnTo={`/clases/${legacyId}?saved=kids-plan`}
+        plan={childClassPlan}
+        groupWork={childClassGroupWork ?? []}
+        members={kidsDayMembers}
+        compact
+      />
       <form action={addBulkAttendanceAction} className="attendance-day-form">
         <input type="hidden" name="classId" value={kidsDayClass.id} />
         <input type="hidden" name="legacyId" value={kidsDayClass.legacy_id ?? legacyId} />
@@ -637,6 +680,8 @@ export default async function ClaseDetailPage({
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "manual-technique" ? <p className="save-ok">Tecnica comun anadida al plan de clase.</p> : null}
         {query.saved === "manual-technique-remove" ? <p className="save-ok">Tecnica comun quitada de la clase.</p> : null}
+        {query.saved === "kids-plan" ? <p className="save-ok">Plan infantil opcional guardado.</p> : null}
+        {query.saved === "kids-plan-delete" ? <p className="save-ok">Trabajo infantil por grupo quitado.</p> : null}
         {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
         {query.saved === "delegate" ? <p className="save-ok">Enlace de sustituto generado.</p> : null}
         {query.error === "plan" ? (
@@ -665,6 +710,9 @@ export default async function ClaseDetailPage({
         ) : null}
         {query.error === "manual-technique-remove" ? (
           <p className="form-error">No se ha podido quitar la tecnica comun{query.detail ? `: ${query.detail}` : "."}</p>
+        ) : null}
+        {query.error === "kids-plan" ? (
+          <p className="form-error">No se ha podido guardar el plan infantil{query.detail ? `: ${query.detail}` : "."}</p>
         ) : null}
         {query.error === "close" ? (
           <p className="form-error">No se ha podido cerrar la clase.</p>
@@ -870,10 +918,20 @@ export default async function ClaseDetailPage({
             </p>
           </article>
         </section> : clase.class_group === "kids" ? (
-          <section className="card">
-            <h2>Clase infantil</h2>
-            <p className="muted">Esta sesion no usa plan tecnico. Registra asistencia y abre las fichas para revisar constancia, avisos y datos del alumno.</p>
-          </section>
+          <>
+            <section className="card">
+              <h2>Clase infantil</h2>
+              <p className="muted">Esta sesion no usa plan tecnico adulto. Registra asistencia y, si quieres, deja un plan infantil ligero como memoria del dia.</p>
+            </section>
+            <ChildLightPlanPanel
+              classId={clase.id}
+              legacyId={legacyId}
+              returnTo={`/clases/${legacyId}?saved=kids-plan`}
+              plan={childClassPlan}
+              groupWork={childClassGroupWork ?? []}
+              members={classMembers ?? []}
+            />
+          </>
         ) : null}
 
         {kidsEarlyAttendancePanel}
@@ -1135,6 +1193,113 @@ export default async function ClaseDetailPage({
   );
 }
 
+function ChildLightPlanPanel({
+  classId,
+  legacyId,
+  returnTo,
+  plan,
+  groupWork,
+  members,
+  compact = false
+}: {
+  classId: string;
+  legacyId: string;
+  returnTo: string;
+  plan: ChildClassPlanRow | null;
+  groupWork: ChildClassGroupWorkRow[];
+  members: MemberOption[];
+  compact?: boolean;
+}) {
+  const activities = new Set(plan?.activities ?? []);
+  const memberNames = new Map(members.map((member) => [member.id, member.display_name]));
+
+  return (
+    <details className={compact ? "child-light-plan-panel compact" : "card child-light-plan-panel"}>
+      <summary>
+        <strong>Plan infantil opcional</strong>
+        <span>{plan?.objective || groupWork.length ? "Guardado" : "Ligero"}</span>
+      </summary>
+      <p className="muted">Solo sirve como memoria interna del dia. No bloquea asistencia ni cambia el progreso tecnico como en adultos.</p>
+      {plan?.objective || activities.size || plan?.notes ? (
+        <div className="child-plan-summary">
+          {plan?.objective ? <span className="tag">Objetivo: {plan.objective}</span> : null}
+          {[...activities].map((activity) => <span className="tag" key={activity}>{childActivityLabel(activity)}</span>)}
+          {plan?.notes ? <p>{plan.notes}</p> : null}
+        </div>
+      ) : null}
+      {groupWork.length ? (
+        <div className="child-group-work-list">
+          <strong>Trabajo por grupo</strong>
+          {groupWork.map((item) => {
+            const names = (item.member_ids ?? []).map((id) => memberNames.get(id)).filter(Boolean);
+            return (
+              <div className="child-group-work-row" key={item.id}>
+                <span>
+                  <strong>{item.group_label}</strong>
+                  <small>{item.content}</small>
+                  <small>{names.length ? names.join(", ") : "Grupo general / segun criterio del sensei"}</small>
+                </span>
+                <form action={deleteChildClassGroupWorkAction}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="legacyId" value={legacyId} />
+                  <input type="hidden" name="returnTo" value={returnTo} />
+                  <button className="danger-link button-reset" type="submit">Quitar</button>
+                </form>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      <form action={saveChildClassPlanAction} className="child-light-plan-form">
+        <input type="hidden" name="classId" value={classId} />
+        <input type="hidden" name="legacyId" value={legacyId} />
+        <input type="hidden" name="returnTo" value={returnTo} />
+        <label>
+          Objetivo del dia
+          <select name="objective" defaultValue={plan?.objective ?? ""}>
+            <option value="">Sin objetivo concreto</option>
+            {childObjectives.map((objective) => <option key={objective} value={objective}>{objective}</option>)}
+          </select>
+        </label>
+        <fieldset>
+          <legend>Actividades generales</legend>
+          <div className="child-activity-grid">
+            {childActivities.map((activity) => (
+              <label key={activity.value}>
+                <input name="activities" type="checkbox" value={activity.value} defaultChecked={activities.has(activity.value)} />
+                <span>{activity.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label>
+          Nota rapida
+          <textarea name="notes" rows={compact ? 2 : 3} defaultValue={plan?.notes ?? ""} placeholder="Ej.: buen trabajo de ukemi, grupo muy atento, preparar examen..." />
+        </label>
+        <details className="child-group-work-editor">
+          <summary>Anadir trabajo por grupo solo si hace falta</summary>
+          <div className="form-grid">
+            <label>Grupo<input name="groupLabel" placeholder="Altos, blancos, 5 KYU..." /></label>
+            <label>Contenido<input name="groupContent" placeholder="Ukemi, kote nuki, repaso examen..." /></label>
+            <label className="wide">Nota grupo<textarea name="groupNotes" rows={2} placeholder="Opcional" /></label>
+          </div>
+          <div className="child-member-mini-list">
+            {members.map((member) => (
+              <label key={member.id}>
+                <input type="checkbox" name="groupMemberIds" value={member.id} />
+                <span>{member.display_name}</span>
+              </label>
+            ))}
+          </div>
+        </details>
+        <div className="form-actions">
+          <button type="submit">Guardar plan infantil</button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
 function StatusPill({ label, value, done }: { label: string; value: string; done: boolean }) {
   return (
     <span className={done ? "class-status-pill done" : "class-status-pill"}>
@@ -1142,6 +1307,37 @@ function StatusPill({ label, value, done }: { label: string; value: string; done
       <strong>{value}</strong>
     </span>
   );
+}
+
+const childObjectives = [
+  "Atencion y disciplina",
+  "Coordinacion",
+  "Ukemi / caidas",
+  "Kihon",
+  "Goho basico",
+  "Juho basico",
+  "Trabajo en pareja",
+  "Juego tecnico",
+  "Preparacion examen",
+  "Trabajo por grados",
+  "Howa / valores"
+];
+
+const childActivities = [
+  { value: "calentamiento", label: "Calentamiento" },
+  { value: "coordinacion", label: "Coordinacion" },
+  { value: "caidas", label: "Caidas" },
+  { value: "kihon", label: "Kihon" },
+  { value: "goho", label: "Goho" },
+  { value: "juho", label: "Juho" },
+  { value: "pareja", label: "Pareja" },
+  { value: "juego-tecnico", label: "Juego tecnico" },
+  { value: "howa", label: "Howa" },
+  { value: "examen", label: "Preparacion grado" }
+];
+
+function childActivityLabel(value: string) {
+  return childActivities.find((activity) => activity.value === value)?.label ?? value;
 }
 
 function FlowGuideItem({
