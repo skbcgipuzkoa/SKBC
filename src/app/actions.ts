@@ -769,6 +769,115 @@ export async function updateTechnicalAreaMaterialAction(formData: FormData) {
   redirect(`/areas-tecnicas?saved=material&class=${memberClass === "kids" ? "kids" : "adults"}`);
 }
 
+export async function updateTechnicalAreaMaterialGroupAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+
+  const ids = String(formData.get("materialIds") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const memberClass = normalizeTechnicalMaterialClass(String(formData.get("memberClass") ?? ""));
+  const selectedClass = normalizeClass(String(formData.get("selectedClass") ?? "")) ?? (memberClass === "kids" ? "kids" : "adults");
+  const grades = formData
+    .getAll("grades")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const materialType = normalizeTechnicalMaterialType(String(formData.get("materialType") ?? ""));
+  const url = String(formData.get("url") ?? "").trim();
+  const section = String(formData.get("section") ?? "").trim() || "Material";
+  const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
+  const active = formData.get("active") === "on";
+
+  if (!ids.length || !memberClass || !grades.length || !title || !url) {
+    redirect(`/areas-tecnicas?error=material&class=${selectedClass}`);
+  }
+
+  const supabase = createAdminClient();
+  const { data: existingRows, error: readError } = await supabase
+    .from("technical_area_materials")
+    .select("id,grade")
+    .in("id", ids);
+
+  if (readError || !existingRows?.length) {
+    console.error("Error reading technical material group", readError);
+    redirect(`/areas-tecnicas?error=material&class=${selectedClass}`);
+  }
+
+  const now = new Date().toISOString();
+  const payload = {
+    member_class: memberClass,
+    title,
+    description,
+    material_type: materialType,
+    url,
+    section,
+    sort_order: Number.isFinite(sortOrder) ? sortOrder : 100,
+    active,
+    updated_at: now
+  };
+  const existingByGrade = new Map(existingRows.map((row) => [String(row.grade), String(row.id)]));
+  const idsToKeep = grades.map((grade) => existingByGrade.get(grade)).filter(Boolean) as string[];
+  const idsToDelete = ids.filter((id) => !idsToKeep.includes(id));
+  const rowsToInsert = grades
+    .filter((grade) => !existingByGrade.has(grade))
+    .map((grade) => ({ ...payload, grade }));
+
+  if (idsToDelete.length) {
+    const { error } = await supabase.from("technical_area_materials").delete().in("id", idsToDelete);
+    if (error) {
+      console.error("Error deleting removed technical material grades", error);
+      redirect(`/areas-tecnicas?error=material&class=${selectedClass}`);
+    }
+  }
+
+  if (idsToKeep.length) {
+    const { error } = await supabase.from("technical_area_materials").update(payload).in("id", idsToKeep);
+    if (error) {
+      console.error("Error updating technical material group", error);
+      redirect(`/areas-tecnicas?error=material&class=${selectedClass}`);
+    }
+  }
+
+  if (rowsToInsert.length) {
+    const { error } = await supabase.from("technical_area_materials").insert(rowsToInsert);
+    if (error) {
+      console.error("Error inserting new technical material grades", error);
+      redirect(`/areas-tecnicas?error=material&class=${selectedClass}`);
+    }
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/alumno/area-tecnica/[token]", "page");
+  redirect(`/areas-tecnicas?saved=material&class=${selectedClass}`);
+}
+
+export async function deleteTechnicalAreaMaterialGroupAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+
+  const ids = String(formData.get("materialIds") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const selectedClass = normalizeClass(String(formData.get("selectedClass") ?? "")) ?? "adults";
+  if (!ids.length) redirect(`/areas-tecnicas?error=material&class=${selectedClass}`);
+
+  const { error } = await createAdminClient()
+    .from("technical_area_materials")
+    .delete()
+    .in("id", ids);
+
+  if (error) {
+    console.error("Error deleting technical material group", error);
+    redirect(`/areas-tecnicas?error=material&class=${selectedClass}`);
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/alumno/area-tecnica/[token]", "page");
+  redirect(`/areas-tecnicas?saved=material-deleted&class=${selectedClass}`);
+}
+
 export async function deleteTechnicalAreaMaterialAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 

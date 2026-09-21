@@ -2,7 +2,7 @@ import { ArrowLeft, ExternalLink, LogOut, NotebookTabs } from "lucide-react";
 import { GradeMultiSelect } from "@/app/components/GradeMultiSelect";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
-import { createTechnicalAreaMaterialAction, deleteTechnicalAreaMaterialAction, logoutAction, updateTechnicalAreaMaterialAction, upsertTechnicalAreaLinkAction } from "@/app/actions";
+import { createTechnicalAreaMaterialAction, deleteTechnicalAreaMaterialGroupAction, logoutAction, updateTechnicalAreaMaterialGroupAction, upsertTechnicalAreaLinkAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -30,6 +30,11 @@ type TechnicalAreaMaterial = {
   sort_order: number;
   active: boolean;
   updated_at: string;
+};
+
+type TechnicalAreaMaterialGroup = TechnicalAreaMaterial & {
+  ids: string[];
+  grades: string[];
 };
 
 export const dynamic = "force-dynamic";
@@ -125,7 +130,7 @@ function TechnicalMaterialsAdmin({
 }) {
   const grades = selectedClass === "kids" ? kidsGrades : adultGrades.filter((grade) => grade !== "10 DAN");
   const visibleMaterials = materials.filter((material) => material.member_class === selectedClass || material.member_class === "both");
-  const materialGroups = groupMaterialsBySectionAndGrade(visibleMaterials, grades);
+  const materialGroups = groupMaterialsBySection(visibleMaterials, grades);
 
   return (
     <>
@@ -194,31 +199,23 @@ function TechnicalMaterialsAdmin({
           </details>
 
           <section className="technical-material-list">
-            {materialGroups.length ? materialGroups.map(([section, gradeGroups]) => (
+            {materialGroups.length ? materialGroups.map(([section, rows]) => (
               <details className="admin-compact-inner" key={section}>
                 <summary>
                   <strong>{section}</strong>
-                  <span>{gradeGroups.reduce((total, [, rows]) => total + rows.length, 0)} materiales</span>
+                  <span>{rows.length} materiales unicos</span>
                 </summary>
                 <div className="admin-compact-body">
-                  {gradeGroups.map(([grade, rows]) => (
-                    <details className="admin-compact-inner" key={`${section}-${grade}`}>
-                      <summary>
-                        <strong>{grade}</strong>
-                        <span>{rows.length} materiales</span>
-                      </summary>
-                      <div className="technical-material-list">
-                        {rows.map((material) => (
-                          <TechnicalMaterialEditor
-                            grades={grades}
-                            key={material.id}
-                            material={material}
-                            selectedClass={selectedClass}
-                          />
-                        ))}
-                      </div>
-                    </details>
-                  ))}
+                  <div className="technical-material-list">
+                    {rows.map((material) => (
+                      <TechnicalMaterialEditor
+                        grades={grades}
+                        key={material.ids.join("-")}
+                        material={material}
+                        selectedClass={selectedClass}
+                      />
+                    ))}
+                  </div>
                 </div>
               </details>
             )) : (
@@ -240,7 +237,7 @@ function TechnicalMaterialEditor({
   selectedClass
 }: {
   grades: string[];
-  material: TechnicalAreaMaterial;
+  material: TechnicalAreaMaterialGroup;
   selectedClass: "kids" | "adults";
 }) {
   return (
@@ -248,12 +245,14 @@ function TechnicalMaterialEditor({
       <summary>
         <span>
           <strong>{material.title}</strong>
-          <small>{material.grade} - {material.section} - {material.material_type} - {material.active ? "activo" : "inactivo"}</small>
+          <small>{material.section} - {material.material_type} - {material.active ? "activo" : "inactivo"}</small>
         </span>
+        <span className="technical-material-grade-summary">{formatMaterialGrades(material.grades, grades)}</span>
         <a href={material.url} target="_blank" rel="noopener noreferrer external">Abrir</a>
       </summary>
-      <form className="quick-form technical-material-form" action={updateTechnicalAreaMaterialAction}>
-        <input type="hidden" name="id" value={material.id} />
+      <form className="quick-form technical-material-form" action={updateTechnicalAreaMaterialGroupAction}>
+        <input type="hidden" name="materialIds" value={material.ids.join(",")} />
+        <input type="hidden" name="selectedClass" value={selectedClass} />
         <label>
           Para
           <select name="memberClass" defaultValue={material.member_class}>
@@ -264,13 +263,7 @@ function TechnicalMaterialEditor({
             ) : null}
           </select>
         </label>
-        <label>
-          Grado
-          <select name="grade" defaultValue={material.grade}>
-            {grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-            {!grades.includes(material.grade) ? <option value={material.grade}>{material.grade}</option> : null}
-          </select>
-        </label>
+        <GradeMultiSelect grades={grades} defaultSelected={material.grades} />
         <label>
           Tipo
           <select name="materialType" defaultValue={material.material_type}>
@@ -311,29 +304,64 @@ function TechnicalMaterialEditor({
         </label>
         <SubmitButton pendingLabel="Guardando...">Guardar material</SubmitButton>
       </form>
-      <form action={deleteTechnicalAreaMaterialAction} className="form-actions">
-        <input type="hidden" name="id" value={material.id} />
-        <input type="hidden" name="memberClass" value={material.member_class} />
-        <button className="danger-button" type="submit">Eliminar material de este grado</button>
+      <form action={deleteTechnicalAreaMaterialGroupAction} className="form-actions">
+        <input type="hidden" name="materialIds" value={material.ids.join(",")} />
+        <input type="hidden" name="selectedClass" value={selectedClass} />
+        <button className="danger-button" type="submit">Eliminar material completo</button>
       </form>
     </details>
   );
 }
 
-function groupMaterialsBySectionAndGrade(materials: TechnicalAreaMaterial[], gradeOrder: string[]) {
-  const sectionMap = new Map<string, Map<string, TechnicalAreaMaterial[]>>();
+function groupMaterialsBySection(materials: TechnicalAreaMaterial[], gradeOrder: string[]) {
+  const groupMap = new Map<string, TechnicalAreaMaterialGroup>();
   for (const material of materials) {
-    const section = material.section?.trim() || "Material";
-    const grade = gradeOrder.find((item) => normalize(item) === normalize(material.grade)) ?? material.grade;
-    if (!sectionMap.has(section)) sectionMap.set(section, new Map());
-    const gradeMap = sectionMap.get(section)!;
-    gradeMap.set(grade, [...(gradeMap.get(grade) ?? []), material]);
+    const key = materialGroupKey(material);
+    const grade = normalizeMaterialGrade(material.grade, gradeOrder);
+    const existing = groupMap.get(key);
+    if (existing) {
+      existing.ids.push(material.id);
+      existing.grades = sortMaterialGrades([...existing.grades, grade], gradeOrder);
+      existing.active = existing.active || material.active;
+      continue;
+    }
+    groupMap.set(key, { ...material, ids: [material.id], grades: sortMaterialGrades([grade], gradeOrder), grade });
   }
 
-  return [...sectionMap.entries()].map(([section, gradeMap]) => [
+  const sectionMap = new Map<string, TechnicalAreaMaterialGroup[]>();
+  for (const material of groupMap.values()) {
+    const section = material.section?.trim() || "Material";
+    sectionMap.set(section, [...(sectionMap.get(section) ?? []), material]);
+  }
+
+  return [...sectionMap.entries()].map(([section, rows]) => [
     section,
-    [...gradeMap.entries()].sort(([a], [b]) => gradeSortIndex(a, gradeOrder) - gradeSortIndex(b, gradeOrder))
+    rows.sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
   ] as const);
+}
+
+function materialGroupKey(material: TechnicalAreaMaterial) {
+  return [
+    normalize(material.section),
+    material.member_class,
+    material.material_type,
+    material.url.trim().toLowerCase(),
+    material.title.trim().toLowerCase()
+  ].join("|");
+}
+
+function normalizeMaterialGrade(grade: string, gradeOrder: string[]) {
+  return gradeOrder.find((item) => normalize(item) === normalize(grade)) ?? grade;
+}
+
+function sortMaterialGrades(grades: string[], gradeOrder: string[]) {
+  return [...new Set(grades)].sort((a, b) => gradeSortIndex(a, gradeOrder) - gradeSortIndex(b, gradeOrder));
+}
+
+function formatMaterialGrades(materialGrades: string[], gradeOrder: string[]) {
+  const orderedGrades = sortMaterialGrades(materialGrades, gradeOrder);
+  if (orderedGrades.length === gradeOrder.length) return "Todos los grados";
+  return `Disponible para: ${orderedGrades.join(", ")}`;
 }
 
 function gradeSortIndex(grade: string, gradeOrder: string[]) {
