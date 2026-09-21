@@ -26,6 +26,10 @@ type TechnicalAreaMaterial = {
   sort_order: number;
 };
 
+type DisplayTechnicalAreaMaterial = TechnicalAreaMaterial & {
+  grades: string[];
+};
+
 type TechnicalAreaLink = {
   grade: string;
   url: string;
@@ -246,14 +250,15 @@ export default async function StudentTechnicalAreaPage({
   );
 }
 
-function MaterialCard({ material }: { material: TechnicalAreaMaterial }) {
+function MaterialCard({ material }: { material: DisplayTechnicalAreaMaterial }) {
+  const gradeLabel = material.grades.length > 1 ? `${material.grades.length} grados` : material.grade;
   return (
     <article className="student-material-card">
       <div className="student-material-card-main">
         {material.material_type === "youtube" || material.material_type === "playlist" ? <PlayCircle aria-hidden="true" size={24} /> : <FileText aria-hidden="true" size={24} />}
         <span>
           <strong>{material.title}</strong>
-          <small>{material.grade} - {materialTypeLabel(material.material_type)}</small>
+          <small>{gradeLabel} - {materialTypeLabel(material.material_type)}</small>
           {material.description ? <em>{material.description}</em> : null}
         </span>
       </div>
@@ -303,12 +308,60 @@ function gradesUntil(grades: string[], targetGrade: string) {
 }
 
 function groupBySection(materials: TechnicalAreaMaterial[]) {
-  const grouped = new Map<string, TechnicalAreaMaterial[]>();
+  const uniqueMaterials = new Map<string, DisplayTechnicalAreaMaterial>();
   for (const material of materials) {
+    const key = materialIdentityKey(material);
+    const existing = uniqueMaterials.get(key);
+    if (existing) {
+      existing.grades = sortMaterialGrades([...existing.grades, material.grade]);
+      if (!existing.description && material.description) existing.description = material.description;
+      continue;
+    }
+    uniqueMaterials.set(key, { ...material, grades: sortMaterialGrades([material.grade]) });
+  }
+
+  const grouped = new Map<string, DisplayTechnicalAreaMaterial[]>();
+  for (const material of uniqueMaterials.values()) {
+    material.grades = sortMaterialGrades(material.grades);
+    material.grade = material.grades[0] ?? material.grade;
     const section = material.section?.trim() || "Material";
     grouped.set(section, [...(grouped.get(section) ?? []), material]);
   }
   return [...grouped.entries()];
+}
+
+function materialIdentityKey(material: TechnicalAreaMaterial) {
+  return [
+    normalizeGrade(material.section),
+    material.member_class,
+    material.material_type,
+    normalizeComparableText(material.title),
+    normalizeComparableText(material.url)
+  ].join("|");
+}
+
+function normalizeComparableText(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function sortMaterialGrades(grades: string[]) {
+  const order = combinedGradeOrder();
+  return [...new Set(grades.filter(Boolean))].sort((a, b) => {
+    const aIndex = order.findIndex((grade) => sameGrade(grade, a));
+    const bIndex = order.findIndex((grade) => sameGrade(grade, b));
+    if (aIndex < 0 && bIndex < 0) return normalizeGrade(a).localeCompare(normalizeGrade(b));
+    if (aIndex < 0) return 1;
+    if (bIndex < 0) return -1;
+    return aIndex - bIndex;
+  });
+}
+
+function combinedGradeOrder() {
+  const ordered: string[] = [];
+  for (const grade of [...kidsGrades, ...adultGrades]) {
+    if (!ordered.some((item) => sameGrade(item, grade))) ordered.push(grade);
+  }
+  return ordered;
 }
 
 function groupTechniquesByGrade(techniques: Technique[], gradeOrder: string[]) {
