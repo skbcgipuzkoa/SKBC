@@ -777,13 +777,14 @@ function KidsFicha({
         </div>
       </FoldableSection>
 
-      <FoldableSection title="Comportamiento en clase" meta={behavior ? "Ver detalle" : "Sin detalle"}>
+      <FoldableSection title="Comportamiento en clase" meta={behavior?.report_date ? `Actualizado: ${formatDate(behavior.report_date)}` : behavior ? "Ver detalle" : "Sin detalle"}>
         <div className="ficha-card ficha-fields behavior-fields">
           <BehaviorField label="Actitud" value={behavior?.attitude} />
           <BehaviorField label="Atención" value={behavior?.attention} />
           <BehaviorField label="Respeto" value={behavior?.respect} />
           <BehaviorField label="Esfuerzo" value={behavior?.effort} />
           <BehaviorField label="Compañerismo" value={behavior?.companionship} />
+          <Field label="Última actualización" value={behavior?.report_date ? formatDate(behavior.report_date) : null} />
           <Field label="Observación" value={behavior?.observation} />
         </div>
       </FoldableSection>
@@ -1652,7 +1653,7 @@ function constancyTone(status: string | null | undefined): FichaTone {
   const value = normalize(status);
   if (value.includes("TOP") || value.includes("CONSTANTE") || value.includes("MUY")) return "green";
   if (value.includes("BIEN") || value.includes("BUEN")) return "blue";
-  if (value.includes("PROGRESO") || value.includes("MEJOR")) return "yellow";
+  if (value.includes("REGULAR") || value.includes("PROGRESO") || value.includes("MEJOR")) return "yellow";
   if (!value || value === "-") return "neutral";
   return "red";
 }
