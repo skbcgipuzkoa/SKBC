@@ -2220,6 +2220,8 @@ tbody tr:hover {
 }
 
 .grade-chip {
+  border: 1px solid rgba(15, 27, 45, 0.14);
+  border-radius: 999px;
   display: inline-flex;
   font-size: 12px;
   font-weight: 900;
@@ -2269,6 +2271,38 @@ tbody tr:hover {
 .grade-10-dan {
   background: #121a27;
   color: #ffffff;
+}
+
+.grade-blanco-amarillo {
+  background: linear-gradient(90deg, #ffffff 0 50%, #fff15a 50% 100%);
+  border-color: #d6c34a;
+  color: #172033;
+}
+
+.grade-amarillo-naranja {
+  background: linear-gradient(90deg, #fff15a 0 50%, #ff9d2e 50% 100%);
+  border-color: #e6a028;
+  color: #172033;
+}
+
+.grade-naranja-verde {
+  background: linear-gradient(90deg, #ff9d2e 0 50%, #5ec77a 50% 100%);
+  border-color: #c58a2d;
+  color: #172033;
+}
+
+.grade-verde-azul {
+  background: linear-gradient(90deg, #5ec77a 0 50%, #458bea 50% 100%);
+  border-color: #459a9a;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(15, 27, 45, 0.35);
+}
+
+.grade-azul-marron {
+  background: linear-gradient(90deg, #458bea 0 50%, #9a5a31 50% 100%);
+  border-color: #6f6f91;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(15, 27, 45, 0.35);
 }
 
 .technique-summary {
@@ -8675,10 +8709,7 @@ tbody tr:hover {
 }
 
 .student-area-grade-row span {
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
-  color: #ffffff;
   font-weight: 900;
   padding: 8px 12px;
 }
@@ -8832,6 +8863,50 @@ tbody tr:hover {
 .student-technique-video-list {
   display: grid;
   gap: 12px;
+}
+
+.student-technique-grade-list {
+  display: grid;
+  gap: 12px;
+}
+
+.student-technique-grade-panel {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.student-technique-grade-panel > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 64px;
+  padding: 12px 14px;
+}
+
+.student-technique-grade-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-technique-grade-panel > summary strong {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 13px;
+  padding: 7px 10px;
+}
+
+.student-technique-grade-panel[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.student-technique-grade-panel .student-technique-video-list {
+  background: #f8fbff;
+  padding: 12px;
 }
 
 .student-technique-video {

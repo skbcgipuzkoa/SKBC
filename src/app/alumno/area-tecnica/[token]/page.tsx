@@ -111,9 +111,7 @@ export default async function StudentTechnicalAreaPage({
   const materialsBySection = groupBySection(materials ?? []);
   const techniqueRows = techniques ?? [];
   const selectedCategory = normalizeTechniqueCategory(query.category);
-  const visibleTechniqueRows = selectedCategory === "all"
-    ? techniqueRows
-    : techniqueRows.filter((technique) => normalizeGrade(technique.category) === selectedCategory.toUpperCase());
+  const techniquesByGrade = groupTechniquesByGrade(techniqueRows, allowedGrades);
   const hasGoho = techniqueRows.some((technique) => normalizeGrade(technique.category) === "GOHO");
   const hasJuho = techniqueRows.some((technique) => normalizeGrade(technique.category) === "JUHO");
   const portalSections = [
@@ -129,7 +127,7 @@ export default async function StudentTechnicalAreaPage({
         <h1>{member.display_name}</h1>
         <p>Material visible hasta tu objetivo: <strong>{targetGrade}</strong>. Incluye tu grado actual, grados anteriores y el siguiente paso de preparacion.</p>
         <div className="student-area-grade-row">
-          {allowedGrades.map((grade) => <span key={grade}>{grade}</span>)}
+          {allowedGrades.map((grade) => <span className={gradeColorClass(grade)} key={grade}>{grade}</span>)}
         </div>
       </section>
 
@@ -178,21 +176,37 @@ export default async function StudentTechnicalAreaPage({
               {hasGoho ? <a className={selectedCategory === "goho" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=goho#tecnicas`}>Goho <span>{techniqueRows.filter((technique) => normalizeGrade(technique.category) === "GOHO").length}</span></a> : null}
               {hasJuho ? <a className={selectedCategory === "juho" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=juho#tecnicas`}>Juho <span>{techniqueRows.filter((technique) => normalizeGrade(technique.category) === "JUHO").length}</span></a> : null}
             </div>
-            <div className="student-technique-video-list">
-              {visibleTechniqueRows.map((technique) => (
-                <article className="student-technique-video" key={technique.id}>
-                  <div>
-                    <span>{technique.grade} - {technique.category}</span>
-                    <h3>{technique.name}</h3>
-                    <p>{effectiveTechniqueSummary(technique) || "Video de apoyo tecnico."}</p>
-                  </div>
-                  {technique.video_url ? (
-                    <VideoPreview url={technique.video_url} title={technique.video_title ?? technique.name} />
-                  ) : (
-                    <span className="student-video-pending">Video pendiente</span>
-                  )}
-                </article>
-              ))}
+            <div className="student-technique-grade-list">
+              {techniquesByGrade.map(([grade, rows]) => {
+                const visibleRows = selectedCategory === "all"
+                  ? rows
+                  : rows.filter((technique) => normalizeGrade(technique.category) === selectedCategory.toUpperCase());
+                if (!visibleRows.length) return null;
+                return (
+                  <details className="student-technique-grade-panel" key={grade}>
+                    <summary>
+                      <span className={gradeColorClass(grade)}>{grade}</span>
+                      <strong>{visibleRows.length} tecnicas</strong>
+                    </summary>
+                    <div className="student-technique-video-list">
+                      {visibleRows.map((technique) => (
+                        <article className="student-technique-video" key={technique.id}>
+                          <div>
+                            <span>{technique.grade} - {technique.category}</span>
+                            <h3>{technique.name}</h3>
+                            <p>{effectiveTechniqueSummary(technique) || "Video de apoyo tecnico."}</p>
+                          </div>
+                          {technique.video_url ? (
+                            <VideoPreview url={technique.video_url} title={technique.video_title ?? technique.name} />
+                          ) : (
+                            <span className="student-video-pending">Video pendiente</span>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
             </div>
           </div>
         </details>
@@ -297,6 +311,16 @@ function groupBySection(materials: TechnicalAreaMaterial[]) {
   return [...grouped.entries()];
 }
 
+function groupTechniquesByGrade(techniques: Technique[], gradeOrder: string[]) {
+  const grouped = new Map<string, Technique[]>();
+  for (const grade of gradeOrder) grouped.set(grade, []);
+  for (const technique of techniques) {
+    const grade = gradeOrder.find((item) => sameGrade(item, technique.grade)) ?? technique.grade;
+    grouped.set(grade, [...(grouped.get(grade) ?? []), technique]);
+  }
+  return [...grouped.entries()].filter(([, rows]) => rows.length);
+}
+
 function sameGrade(a: string | null | undefined, b: string | null | undefined) {
   return normalizeGrade(a) === normalizeGrade(b);
 }
@@ -324,6 +348,25 @@ function normalizeTechniqueCategory(value: string | null | undefined) {
 
 function slug(value: string) {
   return normalizeGrade(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "material";
+}
+
+function gradeColorClass(grade: string) {
+  const normalized = normalizeGrade(grade);
+  const slugged = normalized.toLowerCase().replace(/\s+/g, "-").replace(/ñ/g, "n");
+  const kidMixed: Record<string, string> = {
+    "BLANCO-AMARILLO": "grade-blanco-amarillo",
+    "AMARILLO-NARANJA": "grade-amarillo-naranja",
+    "NARANJA-VERDE": "grade-naranja-verde",
+    "VERDE-AZUL": "grade-verde-azul",
+    "AZUL-MARRON": "grade-azul-marron",
+    "MARRON": "grade-1-kyu",
+    "BLANCO": "grade-minarai",
+    "AMARILLO": "grade-5-kyu",
+    "NARANJA": "grade-4-kyu",
+    "VERDE": "grade-3-kyu",
+    "AZUL": "grade-2-kyu"
+  };
+  return `grade-chip ${kidMixed[normalized] ?? `grade-${slugged}`}`;
 }
 
 function youtubeEmbedUrl(url: string) {
