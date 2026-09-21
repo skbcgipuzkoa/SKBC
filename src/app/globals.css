@@ -8656,6 +8656,25 @@ tbody tr:hover {
   text-transform: uppercase;
 }
 
+.technical-material-grade-picker-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.technical-material-grade-picker-header > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.technical-material-grade-picker-header .secondary-button {
+  min-height: 40px;
+  padding: 8px 14px;
+}
+
 .technical-material-grade-picker > div {
   display: flex;
   flex-wrap: wrap;

@@ -1,4 +1,5 @@
 import { ArrowLeft, ExternalLink, LogOut, NotebookTabs } from "lucide-react";
+import { GradeMultiSelect } from "@/app/components/GradeMultiSelect";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
 import { createTechnicalAreaMaterialAction, deleteTechnicalAreaMaterialAction, logoutAction, updateTechnicalAreaMaterialAction, upsertTechnicalAreaLinkAction } from "@/app/actions";
@@ -149,18 +150,7 @@ function TechnicalMaterialsAdmin({
                   <option value="both">Ambos</option>
                 </select>
               </label>
-              <fieldset className="technical-material-grade-picker wide">
-                <legend>Grados donde aparecera</legend>
-                <p className="muted">Puedes marcar uno o varios grados para no duplicar el mismo enlace a mano.</p>
-                <div>
-                  {grades.map((grade, index) => (
-                    <label className="grade-select-chip" key={grade}>
-                      <input name="grades" type="checkbox" value={grade} defaultChecked={index === 0} />
-                      <span>{grade}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              <GradeMultiSelect grades={grades} />
               <label>
                 Tipo
                 <select name="materialType" defaultValue="youtube">
