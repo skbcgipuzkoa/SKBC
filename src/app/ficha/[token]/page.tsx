@@ -701,6 +701,7 @@ function KidsFicha({
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
   const objective = nextKidGrade(member.grade);
+  const childCourses = courses.filter((course) => course.kind !== "taikai");
   const taikai = courses.filter((course) => course.kind === "taikai");
   return (
     <main className="legacy-ficha kids-ficha">
@@ -766,10 +767,6 @@ function KidsFicha({
         </div>
       </FoldableSection>
 
-      <FoldableSection title="Taikai" meta={`${taikai.length} registros`}>
-        <CourseTable courses={taikai} />
-      </FoldableSection>
-
       <FoldableSection title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
         <div className="ficha-card ficha-fields">
           <p>{note?.note ?? "Sin nota visible para familia."}</p>
@@ -788,6 +785,14 @@ function KidsFicha({
           <Field label="Última actualización" value={behavior?.report_date ? formatDate(behavior.report_date) : null} />
           <Field label="Observación" value={behavior?.observation} />
         </div>
+      </FoldableSection>
+
+      <FoldableSection title="Cursos" meta={`${childCourses.length} registros`}>
+        <CourseTable courses={childCourses} />
+      </FoldableSection>
+
+      <FoldableSection title="Taikai" meta={`${taikai.length} registros`}>
+        <CourseTable courses={taikai} />
       </FoldableSection>
 
       <Footer />
