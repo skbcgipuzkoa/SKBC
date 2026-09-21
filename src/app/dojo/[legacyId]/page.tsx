@@ -57,6 +57,7 @@ type TechniqueOption = {
   grade: string;
   name: string;
   category: string | null;
+  content_type: string | null;
 };
 
 export default async function DojoClassPage({
@@ -124,9 +125,8 @@ export default async function DojoClassPage({
       : Promise.resolve({ data: [] as AttendanceRow[] }),
     supabase
       .from("techniques")
-      .select("id,grade,name,category")
+      .select("id,grade,name,category,content_type")
       .eq("active", true)
-      .eq("active_in_planning", true)
       .order("grade")
       .order("name")
       .returns<TechniqueOption[]>()

@@ -116,6 +116,7 @@ type TechniqueOption = {
   grade: string;
   name: string;
   category: string | null;
+  content_type: string | null;
   active: boolean;
 };
 
@@ -198,7 +199,7 @@ export default async function ClaseDetailPage({
       .returns<Array<AttendanceRow & { class_id: string }>>(),
     supabase
       .from("techniques")
-      .select("id,grade,name,category,active")
+      .select("id,grade,name,category,content_type,active")
       .eq("active", true)
       .order("grade")
       .order("name")

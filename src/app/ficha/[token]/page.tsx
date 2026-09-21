@@ -117,6 +117,7 @@ type Technique = {
   base_name: string | null;
   name: string;
   category: string;
+  content_type: string | null;
   active: boolean;
   active_in_planning: boolean;
 };
@@ -126,6 +127,7 @@ type TechnicalHistory = {
   technique_name: string;
   technique_grade: string | null;
   category: string | null;
+  content_type: string | null;
   class_date: string;
   proposal_type: string | null;
   completed: boolean;
@@ -335,12 +337,13 @@ export default async function PublicFichaPage({
   const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
     supabase
       .from("techniques")
-      .select("id,grade,base_name,name,category,active,active_in_planning")
+      .select("id,grade,base_name,name,category,content_type,active,active_in_planning")
       .eq("grade", targetGrade)
+      .eq("active", true)
       .returns<Technique[]>(),
     supabase
       .from("member_technical_history")
-      .select("technique_id,technique_name,technique_grade,category,class_date,proposal_type,completed,counts_as_progression")
+      .select("technique_id,technique_name,technique_grade,category,content_type,class_date,proposal_type,completed,counts_as_progression")
       .eq("member_id", member.id)
       .eq("completed", true)
       .returns<TechnicalHistory[]>(),
@@ -579,12 +582,15 @@ function AdultFicha({
           <div className="progress-grid">
             <Progress label="GOHO" value={technicalProgress.pctGoho} />
             <Progress label="JUHO" value={technicalProgress.pctJuho} />
+            {technicalProgress.kataTotal ? <Progress label="KATAS" value={technicalProgress.pctKata} /> : null}
             <Progress label="GLOBAL" value={technicalProgress.pctGlobal} />
           </div>
           <div className="ficha-fields small-fields">
-            <Field label="Técnicas objetivo" value={String(technicalProgress.total)} />
+            <Field label="Objetivos técnicos" value={String(technicalProgress.total)} />
             <Field label="Tecnicas iniciadas" value={String(technicalProgress.started)} />
             <Field label="Tecnicas completadas" value={String(technicalProgress.completed)} />
+            <Field label="Katas objetivo" value={String(technicalProgress.kataTotal)} />
+            <Field label="Katas iniciadas" value={String(technicalProgress.kataStarted)} />
             <Field label="Reps registradas" value={`${technicalProgress.totalRepetitionsCapped}/${technicalProgress.totalRepetitionTarget}`} />
             <Field label="Pendientes" value={String(technicalProgress.pending.length)} />
             <Field label="Objetivo por técnica" value={`${REPETITION_GOAL} reps`} />
@@ -594,7 +600,7 @@ function AdultFicha({
           columns={["Técnica", "Categoría", "Progreso", "Faltan", "Estado"]}
           rows={technicalProgress.details.map((technique) => [
             technique.name,
-            technique.category,
+            technique.label,
             `${technique.repetitions}/${REPETITION_GOAL}`,
             String(technique.missing),
             <StateBadge key={technique.id} state={technique.completed ? "COMPLETADA" : technique.repetitions > 0 ? "EN PROGRESO" : "PENDIENTE"} />
@@ -1264,10 +1270,16 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
   const details = techniques.map((technique) => {
     const reps = repetitions.get(`id:${technique.id}`) ?? repetitions.get(`name:${normalize(technique.name)}`) ?? 0;
     const repetitionsCapped = Math.min(reps, REPETITION_GOAL);
+    const contentType = normalize(technique.content_type);
+    const isKata = contentType.startsWith("KATA");
+    const label = isKata ? kataLabel(technique.content_type) : technique.category.toUpperCase();
     return {
       id: technique.id,
       name: technique.name,
       category: technique.category.toUpperCase(),
+      contentType: technique.content_type,
+      isKata,
+      label,
       repetitions: reps,
       missing: Math.max(0, REPETITION_GOAL - reps),
       completed: reps >= REPETITION_GOAL,
@@ -1276,6 +1288,7 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
   }).sort((a, b) => Number(a.completed) - Number(b.completed) || a.name.localeCompare(b.name));
 
   const byCategory = (category: string) => details.filter((item) => item.category === category);
+  const kataDetails = details.filter((item) => item.isKata);
   const average = (items: typeof details) => items.length ? items.reduce((sum, item) => sum + item.pct, 0) / items.length : 0;
   const totalRepetitionTarget = details.length * REPETITION_GOAL;
   const totalRepetitionsCapped = details.reduce((sum, item) => sum + Math.min(item.repetitions, REPETITION_GOAL), 0);
@@ -1290,8 +1303,19 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
     totalRepetitionsCapped,
     pctGoho: average(byCategory("GOHO")),
     pctJuho: average(byCategory("JUHO")),
+    pctKata: average(kataDetails),
+    kataTotal: kataDetails.length,
+    kataStarted: kataDetails.filter((item) => item.repetitions > 0).length,
+    kataCompleted: kataDetails.filter((item) => item.completed).length,
     pctGlobal: average(details)
   };
+}
+
+function kataLabel(contentType: string | null | undefined) {
+  const normalized = normalize(contentType);
+  if (normalized === "KATA_TANEN") return "KATA TANEN";
+  if (normalized === "KATA_SOTAI") return "KATA SOTAI";
+  return "KATA";
 }
 
 function buildFullTechnicalHistory(history: TechnicalHistory[]) {

@@ -8,6 +8,7 @@ type TechniqueOption = {
   grade: string;
   name: string;
   category: string | null;
+  content_type?: string | null;
 };
 
 type GroupOption = {
@@ -31,7 +32,7 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
   const visibleTechniques = useMemo(() => {
     const normalized = normalize(query);
     const filtered = normalized
-      ? techniques.filter((technique) => normalize(`${technique.name} ${technique.grade} ${technique.category ?? ""}`).includes(normalized))
+      ? techniques.filter((technique) => normalize(`${technique.name} ${technique.grade} ${technique.category ?? ""} ${technique.content_type ?? ""}`).includes(normalized))
       : techniques;
     return normalized ? filtered.slice(0, 40) : filtered;
   }, [query, techniques]);
@@ -72,7 +73,7 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
                 type="button"
               >
                 <strong>{technique.name}</strong>
-                <small>{technique.grade} - {technique.category ?? "tecnica"}</small>
+                <small>{technique.grade} - {formatTechniqueKind(technique)}</small>
               </button>
             ))
           ) : (
@@ -84,7 +85,7 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
         <div className="manual-technique-current">
           <span>
             Seleccionada: <strong>{selectedTechnique.name}</strong>
-            <small>{selectedTechnique.grade} - {selectedTechnique.category ?? "tecnica"}</small>
+            <small>{selectedTechnique.grade} - {formatTechniqueKind(selectedTechnique)}</small>
           </span>
           <button type="button" onClick={() => setSelectedTechniqueId("")}>Quitar</button>
         </div>
@@ -95,7 +96,7 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
           <option value="">Seleccionar tecnica</option>
           {visibleTechniques.map((technique) => (
             <option key={technique.id} value={technique.id}>
-              {technique.grade} - {technique.name} - {technique.category ?? "tecnica"}
+              {technique.grade} - {technique.name} - {formatTechniqueKind(technique)}
             </option>
           ))}
         </select>
@@ -123,4 +124,11 @@ function normalize(value: string) {
 
 function slugGrade(grade: string | null | undefined) {
   return String(grade ?? "grado").trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+function formatTechniqueKind(technique: TechniqueOption) {
+  const contentType = normalize(technique.content_type ?? "");
+  if (contentType === "KATA_TANEN") return "kata tanen";
+  if (contentType === "KATA_SOTAI") return "kata sotai";
+  return technique.category ?? "tecnica";
 }
