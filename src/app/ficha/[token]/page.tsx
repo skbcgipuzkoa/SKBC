@@ -770,10 +770,11 @@ function KidsFicha({
         <CourseTable courses={taikai} />
       </FoldableSection>
 
-      <FoldableSection title="Nota del Sensei" meta={note?.note ? "Visible" : "Sin nota"}>
-        <div className="ficha-card">
+      <FoldableSection title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
+        <div className="ficha-card ficha-fields">
           <p>{note?.note ?? "Sin nota visible para familia."}</p>
-          <span className="ficha-muted">{note?.note_date ? `${formatDate(note.note_date)} · ${note.note_type ?? "Nota"}` : ""}</span>
+          <Field label="Ultima actualizacion" value={note?.note_date ? formatDate(note.note_date) : null} />
+          <Field label="Tipo de nota" value={note?.note_type ?? null} />
         </div>
       </FoldableSection>
 
