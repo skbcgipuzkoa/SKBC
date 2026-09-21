@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { logoutAction, recalculateAllExamStatusesAction } from "@/app/actions";
+import { clearFailedLegacySyncJobsAction, logoutAction, recalculateAllExamStatusesAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -60,7 +60,7 @@ type DayStatus = "ok" | "warn" | "danger" | "neutral";
 export default async function ControlDiaPage({
   searchParams
 }: {
-  searchParams: Promise<{ date?: string; saved?: string }>;
+  searchParams: Promise<{ date?: string; saved?: string; error?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -218,6 +218,13 @@ export default async function ControlDiaPage({
           </div>
         </section>
 
+        {params.saved === "legacy-cleared" ? (
+          <p className="save-ok">Fallos de sincronizacion legacy borrados. El sistema nuevo queda igual.</p>
+        ) : null}
+        {params.error === "legacy-clear" ? (
+          <p className="form-error">No se han podido borrar los fallos legacy.</p>
+        ) : null}
+
         <section className="control-summary-grid">
           <MetricCard icon={CalendarCheck} label="Clases del dia" value={String(visualClassCount)} tone={dayClasses.length ? "ok" : "warn"} />
           <MetricCard icon={Users} label="Adultos" value={String(adultAttendance.length)} tone={adultAttendance.length ? "ok" : "neutral"} />
@@ -270,7 +277,15 @@ export default async function ControlDiaPage({
 
         {syncFailed.length ? (
           <section className="card">
-            <h2>Fallos de sincronizacion legacy</h2>
+            <div className="section-heading-row">
+              <div>
+                <h2>Fallos de sincronizacion legacy</h2>
+                <p className="muted">Solo son logs del puente con el sistema viejo. Borrarlos no toca Supabase ni las fichas nuevas.</p>
+              </div>
+              <form action={clearFailedLegacySyncJobsAction}>
+                <button className="danger-button" type="submit">Borrar fallos legacy</button>
+              </form>
+            </div>
             <div className="stack-list compact-stack">
               {syncFailed.map((job) => (
                 <div className="closure-row" key={job.id}>

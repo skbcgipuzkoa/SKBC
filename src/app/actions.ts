@@ -3038,6 +3038,25 @@ export async function retryLegacySheetSyncAction(formData: FormData) {
   redirect("/auditoria?saved=legacy-sync");
 }
 
+export async function clearFailedLegacySyncJobsAction() {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("legacy_sheet_sync_jobs").delete().eq("status", "failed");
+
+  if (error) {
+    console.error("Error clearing failed legacy sync jobs", error);
+    redirect("/control-dia?error=legacy-clear");
+  }
+
+  revalidatePath("/control-dia");
+  revalidatePath("/auditoria");
+  revalidatePath("/sistema");
+  redirect("/control-dia?saved=legacy-cleared");
+}
+
 export async function createCourseAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
