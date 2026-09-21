@@ -118,8 +118,7 @@ export default async function StudentTechnicalAreaPage({
   const hasJuho = techniqueRows.some((technique) => normalizeGrade(technique.category) === "JUHO");
   const portalSections = [
     techniqueRows.length ? { id: "tecnicas", label: "Tecnicas", count: techniqueRows.length } : null,
-    ...materialsBySection.map(([section, rows]) => ({ id: slug(section), label: section, count: rows.length })),
-    oldSiteLink?.url ? { id: "acceso-anterior", label: "Acceso anterior", count: 1 } : null
+    ...materialsBySection.map(([section, rows]) => ({ id: slug(section), label: section, count: rows.length }))
   ].filter(Boolean) as Array<{ id: string; label: string; count: number }>;
 
   return (
@@ -145,66 +144,80 @@ export default async function StudentTechnicalAreaPage({
         </nav>
       ) : null}
 
-      {oldSiteLink?.url ? (
-        <section className="student-area-section" id="acceso-anterior">
-          <h2>Acceso anterior</h2>
-          <a className="student-material-card featured" href={oldSiteLink.url} target="_blank" rel="noopener noreferrer external">
-            <Library aria-hidden="true" size={24} />
-            <span>
-              <strong>{oldSiteLink.label}</strong>
-              <small>Enlace externo configurado hasta completar el area interna.</small>
-            </span>
-            <ExternalLink aria-hidden="true" size={18} />
-          </a>
-        </section>
-      ) : null}
-
       {materialsBySection.map(([section, rows]) => (
-        <section className="student-area-section" id={slug(section)} key={section}>
-          <div className="section-heading-row">
+        <details className="student-area-section student-area-disclosure" id={slug(section)} key={section}>
+          <summary>
             <div>
               <h2>{section}</h2>
               <p className="muted">{rows.length} materiales disponibles para tu nivel.</p>
             </div>
+            <span>Abrir</span>
+          </summary>
+          <div className="student-area-disclosure-body">
+            <div className="student-material-grid">
+              {rows.map((material) => (
+                <MaterialCard material={material} key={material.id} />
+              ))}
+            </div>
           </div>
-          <div className="student-material-grid">
-            {rows.map((material) => (
-              <MaterialCard material={material} key={material.id} />
-            ))}
-          </div>
-        </section>
+        </details>
       ))}
 
       {techniqueRows.length ? (
-        <section className="student-area-section" id="tecnicas">
-          <div className="section-heading-row">
+        <details className="student-area-section student-area-disclosure" id="tecnicas">
+          <summary>
             <div>
               <h2>Tecnicas de tu area</h2>
               <p className="muted">Filtra por Goho, Juho o consulta todas las tecnicas visibles para tu progreso.</p>
             </div>
+            <span>Abrir</span>
+          </summary>
+          <div className="student-area-disclosure-body">
+            <div className="student-technique-filter">
+              <a className={selectedCategory === "all" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=all#tecnicas`}>Todas <span>{techniqueRows.length}</span></a>
+              {hasGoho ? <a className={selectedCategory === "goho" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=goho#tecnicas`}>Goho <span>{techniqueRows.filter((technique) => normalizeGrade(technique.category) === "GOHO").length}</span></a> : null}
+              {hasJuho ? <a className={selectedCategory === "juho" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=juho#tecnicas`}>Juho <span>{techniqueRows.filter((technique) => normalizeGrade(technique.category) === "JUHO").length}</span></a> : null}
+            </div>
+            <div className="student-technique-video-list">
+              {visibleTechniqueRows.map((technique) => (
+                <article className="student-technique-video" key={technique.id}>
+                  <div>
+                    <span>{technique.grade} - {technique.category}</span>
+                    <h3>{technique.name}</h3>
+                    <p>{effectiveTechniqueSummary(technique) || "Video de apoyo tecnico."}</p>
+                  </div>
+                  {technique.video_url ? (
+                    <VideoPreview url={technique.video_url} title={technique.video_title ?? technique.name} />
+                  ) : (
+                    <span className="student-video-pending">Video pendiente</span>
+                  )}
+                </article>
+              ))}
+            </div>
           </div>
-          <div className="student-technique-filter">
-            <a className={selectedCategory === "all" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=all#tecnicas`}>Todas <span>{techniqueRows.length}</span></a>
-            {hasGoho ? <a className={selectedCategory === "goho" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=goho#tecnicas`}>Goho <span>{techniqueRows.filter((technique) => normalizeGrade(technique.category) === "GOHO").length}</span></a> : null}
-            {hasJuho ? <a className={selectedCategory === "juho" ? "active" : ""} href={`/alumno/area-tecnica/${encodeURIComponent(token)}?category=juho#tecnicas`}>Juho <span>{techniqueRows.filter((technique) => normalizeGrade(technique.category) === "JUHO").length}</span></a> : null}
+        </details>
+      ) : null}
+
+      {oldSiteLink?.url ? (
+        <details className="student-area-section student-area-disclosure student-area-legacy" id="acceso-anterior">
+          <summary>
+            <div>
+              <h2>Acceso anterior</h2>
+              <p className="muted">Solo si necesitas consultar el Google Sites antiguo mientras completamos esta area.</p>
+            </div>
+            <span>Abrir</span>
+          </summary>
+          <div className="student-area-disclosure-body">
+            <a className="student-material-card featured" href={oldSiteLink.url} target="_blank" rel="noopener noreferrer external">
+              <Library aria-hidden="true" size={24} />
+              <span>
+                <strong>{oldSiteLink.label}</strong>
+                <small>Enlace externo provisional.</small>
+              </span>
+              <ExternalLink aria-hidden="true" size={18} />
+            </a>
           </div>
-          <div className="student-technique-video-list">
-            {visibleTechniqueRows.map((technique) => (
-              <article className="student-technique-video" key={technique.id}>
-                <div>
-                  <span>{technique.grade} - {technique.category}</span>
-                  <h3>{technique.name}</h3>
-                  <p>{effectiveTechniqueSummary(technique) || "Video de apoyo tecnico."}</p>
-                </div>
-                {technique.video_url ? (
-                  <VideoPreview url={technique.video_url} title={technique.video_title ?? technique.name} />
-                ) : (
-                  <span className="student-video-pending">Video pendiente</span>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
+        </details>
       ) : null}
 
       {!materialsBySection.length && !techniqueRows.length && !oldSiteLink?.url ? (

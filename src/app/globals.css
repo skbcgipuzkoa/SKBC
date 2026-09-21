@@ -8620,6 +8620,69 @@ tbody tr:hover {
   text-align: center;
 }
 
+.student-area-disclosure {
+  padding: 0;
+  overflow: hidden;
+}
+
+.student-area-disclosure > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 86px;
+  padding: 20px 24px;
+}
+
+.student-area-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-area-disclosure > summary h2 {
+  margin: 0 0 4px;
+}
+
+.student-area-disclosure > summary > span {
+  background: #eef4fb;
+  border: 1px solid #d8e5f3;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  flex: 0 0 auto;
+  font-weight: 900;
+  padding: 9px 13px;
+}
+
+.student-area-disclosure[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.student-area-disclosure[open] > summary > span {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #ffffff;
+}
+
+.student-area-disclosure-body {
+  padding: 18px 24px 24px;
+}
+
+.student-area-legacy {
+  box-shadow: none;
+  opacity: 0.82;
+}
+
+.student-area-legacy > summary {
+  min-height: 66px;
+  padding-bottom: 16px;
+  padding-top: 16px;
+}
+
+.student-area-legacy h2 {
+  font-size: 18px;
+}
+
 .student-material-grid {
   display: grid;
   gap: 12px;
@@ -8792,6 +8855,26 @@ tbody tr:hover {
   .student-area-section {
     border-radius: 14px;
     padding: 18px;
+  }
+
+  .student-area-disclosure {
+    padding: 0;
+  }
+
+  .student-area-disclosure > summary {
+    align-items: stretch;
+    flex-direction: column;
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .student-area-disclosure > summary > span {
+    text-align: center;
+    width: 100%;
+  }
+
+  .student-area-disclosure-body {
+    padding: 14px 16px 16px;
   }
 
   .student-material-card,
