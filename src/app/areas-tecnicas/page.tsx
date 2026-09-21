@@ -127,101 +127,37 @@ function TechnicalMaterialsAdmin({
 
   return (
     <>
-      <h2 className="section-title">Material interno {selectedClass === "kids" ? "ninos" : "adultos"}</h2>
-      <section className="card">
-        <div className="section-heading-row">
+      <details className="card admin-compact-section" open>
+        <summary>
           <div>
-            <h2>Anadir material tecnico</h2>
-            <p className="muted">Guarda enlaces externos de YouTube, Drive, documentos o playlists. El sistema solo guarda el enlace, no el archivo.</p>
+            <h2>Material interno {selectedClass === "kids" ? "ninos" : "adultos"}</h2>
+            <p className="muted">{visibleMaterials.length} materiales visibles para esta clase.</p>
           </div>
-          <span className="pill neutral">Nuevo catalogo</span>
-        </div>
-        <form className="quick-form technical-material-form" action={createTechnicalAreaMaterialAction}>
-          <label>
-            Para
-            <select name="memberClass" defaultValue={selectedClass}>
-              <option value="adults">Adultos</option>
-              <option value="kids">Ninos</option>
-              <option value="both">Ambos</option>
-            </select>
-          </label>
-          <label>
-            Grado
-            <select name="grade" defaultValue={grades[0]}>
-              {grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-            </select>
-          </label>
-          <label>
-            Tipo
-            <select name="materialType" defaultValue="youtube">
-              <option value="youtube">Video YouTube</option>
-              <option value="playlist">Playlist</option>
-              <option value="drive">Google Drive</option>
-              <option value="document">Documento</option>
-              <option value="site">Google Sites</option>
-              <option value="link">Enlace</option>
-            </select>
-          </label>
-          <label>
-            Seccion
-            <select name="section" defaultValue="Gakka">
-              {technicalAreaSections.map((section) => <option key={section} value={section}>{section}</option>)}
-            </select>
-          </label>
-          <label className="wide">
-            Titulo
-            <input name="title" placeholder="Kote nuki - explicacion SKBC" required />
-          </label>
-          <label className="wide">
-            URL
-            <input name="url" type="url" placeholder="https://youtube.com/..." required />
-          </label>
-          <label>
-            Orden
-            <input name="sortOrder" type="number" defaultValue={100} />
-          </label>
-          <label className="checkbox-field">
-            <input name="active" type="checkbox" defaultChecked />
-            Activo
-          </label>
-          <label className="wide">
-            Descripcion
-            <textarea name="description" rows={2} placeholder="Nota breve para el alumno..." />
-          </label>
-          <SubmitButton pendingLabel="Guardando...">Anadir material</SubmitButton>
-        </form>
-      </section>
-
-      <section className="technical-material-list">
-        {visibleMaterials.length ? visibleMaterials.map((material) => (
-          <details className={material.active ? "card technical-material-card" : "card technical-material-card muted-card"} key={material.id}>
+          <span>Abrir</span>
+        </summary>
+        <div className="admin-compact-body">
+          <details className="admin-compact-inner">
             <summary>
-              <span>
-                <strong>{material.title}</strong>
-                <small>{material.grade} - {material.section} - {material.material_type} - {material.active ? "activo" : "inactivo"}</small>
-              </span>
-              <a href={material.url} target="_blank" rel="noopener noreferrer external" onClick={(event) => event.stopPropagation()}>Abrir</a>
+              <strong>Anadir material tecnico</strong>
+              <span>Nuevo</span>
             </summary>
-            <form className="quick-form technical-material-form" action={updateTechnicalAreaMaterialAction}>
-              <input type="hidden" name="id" value={material.id} />
+            <form className="quick-form technical-material-form" action={createTechnicalAreaMaterialAction}>
               <label>
                 Para
-                <select name="memberClass" defaultValue={material.member_class}>
-                  <option value="adults">Adultos</option>
-                  <option value="kids">Ninos</option>
+                <select name="memberClass" defaultValue={selectedClass}>
+                  <option value={selectedClass}>{selectedClass === "kids" ? "Ninos" : "Adultos"}</option>
                   <option value="both">Ambos</option>
                 </select>
               </label>
               <label>
                 Grado
-                <select name="grade" defaultValue={material.grade}>
+                <select name="grade" defaultValue={grades[0]}>
                   {grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-                  {!grades.includes(material.grade) ? <option value={material.grade}>{material.grade}</option> : null}
                 </select>
               </label>
               <label>
                 Tipo
-                <select name="materialType" defaultValue={material.material_type}>
+                <select name="materialType" defaultValue="youtube">
                   <option value="youtube">Video YouTube</option>
                   <option value="playlist">Playlist</option>
                   <option value="drive">Google Drive</option>
@@ -232,46 +168,118 @@ function TechnicalMaterialsAdmin({
               </label>
               <label>
                 Seccion
-                <select name="section" defaultValue={material.section}>
+                <select name="section" defaultValue="Gakka">
                   {technicalAreaSections.map((section) => <option key={section} value={section}>{section}</option>)}
-                  {!technicalAreaSections.includes(material.section) ? <option value={material.section}>{material.section}</option> : null}
                 </select>
               </label>
               <label className="wide">
                 Titulo
-                <input name="title" defaultValue={material.title} required />
+                <input name="title" placeholder="Kote nuki - explicacion SKBC" required />
               </label>
               <label className="wide">
                 URL
-                <input name="url" type="url" defaultValue={material.url} required />
+                <input name="url" type="url" placeholder="https://youtube.com/..." required />
               </label>
               <label>
                 Orden
-                <input name="sortOrder" type="number" defaultValue={material.sort_order} />
+                <input name="sortOrder" type="number" defaultValue={100} />
               </label>
               <label className="checkbox-field">
-                <input name="active" type="checkbox" defaultChecked={material.active} />
+                <input name="active" type="checkbox" defaultChecked />
                 Activo
               </label>
               <label className="wide">
                 Descripcion
-                <textarea name="description" rows={2} defaultValue={material.description ?? ""} />
+                <textarea name="description" rows={2} placeholder="Nota breve para el alumno..." />
               </label>
-              <SubmitButton pendingLabel="Guardando...">Guardar material</SubmitButton>
-            </form>
-            <form action={deleteTechnicalAreaMaterialAction} className="form-actions">
-              <input type="hidden" name="id" value={material.id} />
-              <input type="hidden" name="memberClass" value={material.member_class} />
-              <button className="danger-button" type="submit">Eliminar material</button>
+              <SubmitButton pendingLabel="Guardando...">Anadir material</SubmitButton>
             </form>
           </details>
-        )) : (
-          <article className="card">
-            <h2>Sin materiales todavia</h2>
-            <p className="muted">Anade el primer enlace y aparecera automaticamente en el area tecnica de los alumnos que correspondan.</p>
-          </article>
-        )}
-      </section>
+
+          <section className="technical-material-list">
+            {visibleMaterials.length ? visibleMaterials.map((material) => (
+              <details className={material.active ? "card technical-material-card" : "card technical-material-card muted-card"} key={material.id}>
+                <summary>
+                  <span>
+                    <strong>{material.title}</strong>
+                    <small>{material.grade} - {material.section} - {material.material_type} - {material.active ? "activo" : "inactivo"}</small>
+                  </span>
+                  <a href={material.url} target="_blank" rel="noopener noreferrer external" onClick={(event) => event.stopPropagation()}>Abrir</a>
+                </summary>
+                <form className="quick-form technical-material-form" action={updateTechnicalAreaMaterialAction}>
+                  <input type="hidden" name="id" value={material.id} />
+                  <label>
+                    Para
+                    <select name="memberClass" defaultValue={material.member_class}>
+                      <option value={selectedClass}>{selectedClass === "kids" ? "Ninos" : "Adultos"}</option>
+                      <option value="both">Ambos</option>
+                      {material.member_class !== selectedClass && material.member_class !== "both" ? (
+                        <option value={material.member_class}>{material.member_class === "kids" ? "Ninos" : "Adultos"}</option>
+                      ) : null}
+                    </select>
+                  </label>
+                  <label>
+                    Grado
+                    <select name="grade" defaultValue={material.grade}>
+                      {grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                      {!grades.includes(material.grade) ? <option value={material.grade}>{material.grade}</option> : null}
+                    </select>
+                  </label>
+                  <label>
+                    Tipo
+                    <select name="materialType" defaultValue={material.material_type}>
+                      <option value="youtube">Video YouTube</option>
+                      <option value="playlist">Playlist</option>
+                      <option value="drive">Google Drive</option>
+                      <option value="document">Documento</option>
+                      <option value="site">Google Sites</option>
+                      <option value="link">Enlace</option>
+                    </select>
+                  </label>
+                  <label>
+                    Seccion
+                    <select name="section" defaultValue={material.section}>
+                      {technicalAreaSections.map((section) => <option key={section} value={section}>{section}</option>)}
+                      {!technicalAreaSections.includes(material.section) ? <option value={material.section}>{material.section}</option> : null}
+                    </select>
+                  </label>
+                  <label className="wide">
+                    Titulo
+                    <input name="title" defaultValue={material.title} required />
+                  </label>
+                  <label className="wide">
+                    URL
+                    <input name="url" type="url" defaultValue={material.url} required />
+                  </label>
+                  <label>
+                    Orden
+                    <input name="sortOrder" type="number" defaultValue={material.sort_order} />
+                  </label>
+                  <label className="checkbox-field">
+                    <input name="active" type="checkbox" defaultChecked={material.active} />
+                    Activo
+                  </label>
+                  <label className="wide">
+                    Descripcion
+                    <textarea name="description" rows={2} defaultValue={material.description ?? ""} />
+                  </label>
+                  <SubmitButton pendingLabel="Guardando...">Guardar material</SubmitButton>
+                </form>
+                <form action={deleteTechnicalAreaMaterialAction} className="form-actions">
+                  <input type="hidden" name="id" value={material.id} />
+                  <input type="hidden" name="memberClass" value={material.member_class} />
+                  <button className="danger-button" type="submit">Eliminar material</button>
+                </form>
+              </details>
+            )) : (
+              <article className="card">
+                <h2>Sin materiales todavia</h2>
+                <p className="muted">Anade el primer enlace y aparecera automaticamente en el area tecnica de los alumnos que correspondan.</p>
+              </article>
+            )}
+          </section>
+        </div>
+      </details>
     </>
   );
 }
@@ -289,51 +297,60 @@ function TechnicalAreaGrid({
 }) {
   if (hidden) return null;
   return (
-    <>
-      <h2 className="section-title">{title}</h2>
-      <section className="technical-area-grid">
+    <details className="card admin-compact-section">
+      <summary>
+        <div>
+          <h2>Configuracion por grado - {title}</h2>
+          <p className="muted">{rows.length} grados configurables. Despliega solo el grado que quieras tocar.</p>
+        </div>
+        <span>Abrir</span>
+      </summary>
+      <section className="technical-area-grid admin-compact-body">
         {rows.map((row) => (
-          <article className={row.link?.active ? "card technical-area-card" : "card technical-area-card muted-card"} key={`${row.memberClass}-${row.grade}`}>
-            <div className="section-heading-row">
+          <details className={row.link?.active ? "card technical-area-card" : "card technical-area-card muted-card"} key={`${row.memberClass}-${row.grade}`}>
+            <summary>
               <div>
                 <h2>{row.grade}</h2>
                 <p className="muted">Objetivo: {row.link?.target_grade ?? row.targetGrade ?? "-"}</p>
               </div>
+              <span>{row.link?.active ? "Activo" : "Configurar"}</span>
+            </summary>
+            <div className="technical-area-card-body">
               {row.link?.url ? (
                 <a className="icon-button" href={row.link.url} target="_blank" rel="noopener noreferrer external" title="Abrir enlace configurado" aria-label="Abrir enlace configurado">
                   <ExternalLink aria-hidden="true" size={18} />
                 </a>
               ) : null}
+              <form className="quick-form technical-area-form" action={upsertTechnicalAreaLinkAction}>
+                <input type="hidden" name="memberClass" value={row.memberClass} />
+                <input type="hidden" name="grade" value={row.grade} />
+                <label>
+                  Grado objetivo
+                  <input name="targetGrade" defaultValue={row.link?.target_grade ?? row.targetGrade ?? ""} />
+                </label>
+                <label>
+                  Etiqueta
+                  <input name="label" defaultValue={row.link?.label ?? "AREA TECNICA PERSONAL"} />
+                </label>
+                <label className="wide">
+                  URL del area tecnica
+                  <input name="url" type="url" defaultValue={row.link?.url ?? ""} placeholder="https://sites.google.com/..." required />
+                </label>
+                <label className="wide">
+                  Notas internas
+                  <textarea name="notes" rows={2} defaultValue={row.link?.notes ?? ""} placeholder="Contenido incluido, pendiente de completar..." />
+                </label>
+                <label className="checkbox-field">
+                  <input name="active" type="checkbox" defaultChecked={row.link?.active ?? Boolean(row.link?.url)} />
+                  Activo en fichas
+                </label>
+                <SubmitButton pendingLabel="Guardando...">Guardar enlace</SubmitButton>
+              </form>
             </div>
-            <form className="quick-form technical-area-form" action={upsertTechnicalAreaLinkAction}>
-              <input type="hidden" name="memberClass" value={row.memberClass} />
-              <input type="hidden" name="grade" value={row.grade} />
-              <label>
-                Grado objetivo
-                <input name="targetGrade" defaultValue={row.link?.target_grade ?? row.targetGrade ?? ""} />
-              </label>
-              <label>
-                Etiqueta
-                <input name="label" defaultValue={row.link?.label ?? "AREA TECNICA PERSONAL"} />
-              </label>
-              <label className="wide">
-                URL del area tecnica
-                <input name="url" type="url" defaultValue={row.link?.url ?? ""} placeholder="https://sites.google.com/..." required />
-              </label>
-              <label className="wide">
-                Notas internas
-                <textarea name="notes" rows={2} defaultValue={row.link?.notes ?? ""} placeholder="Contenido incluido, pendiente de completar..." />
-              </label>
-              <label className="checkbox-field">
-                <input name="active" type="checkbox" defaultChecked={row.link?.active ?? Boolean(row.link?.url)} />
-                Activo en fichas
-              </label>
-              <SubmitButton pendingLabel="Guardando...">Guardar enlace</SubmitButton>
-            </form>
-          </article>
+          </details>
         ))}
       </section>
-    </>
+    </details>
   );
 }
 
