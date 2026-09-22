@@ -6,8 +6,9 @@ import {
   LogOut,
   TrendingUp
 } from "lucide-react";
+import { SubmitButton } from "@/app/components/SubmitButton";
 import { SidebarNav } from "@/app/components/SidebarNav";
-import { logoutAction } from "@/app/actions";
+import { archiveLegacyRowsAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -31,16 +32,33 @@ type StorageObjectRow = {
   metadata: { size?: number | string } | null;
 };
 
+type LegacyArchiveRun = {
+  id: string;
+  status: string;
+  row_count: number;
+  file_size_bytes: number | null;
+  drive_url: string | null;
+  started_at: string;
+  completed_at: string | null;
+  error_message: string | null;
+};
+
 const FREE_DB_LIMIT_BYTES = 500 * 1024 * 1024;
 const FREE_STORAGE_LIMIT_BYTES = 1024 * 1024 * 1024;
 const BASE_YEARLY_GROWTH_FOR_100_MEMBERS = 60 * 1024 * 1024;
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
-export default async function SupabaseHealthPage() {
+export default async function SupabaseHealthPage({
+  searchParams
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
   }
+  const params = await searchParams;
 
   const supabase = createAdminClient();
   const [
@@ -48,7 +66,8 @@ export default async function SupabaseHealthPage() {
     tableHealth,
     storageHealth,
     activeMembers,
-    backupRows
+    backupRows,
+    archiveRows
   ] = await Promise.all([
     supabase.rpc("skbc_database_health").returns<DatabaseHealthRow[]>(),
     supabase.rpc("skbc_table_health").returns<TableHealthRow[]>(),
@@ -62,7 +81,13 @@ export default async function SupabaseHealthPage() {
       .select("file_size_bytes,started_at,status")
       .eq("status", "completed")
       .order("started_at", { ascending: false })
-      .limit(8)
+      .limit(8),
+    supabase
+      .from("legacy_rows_archive_runs")
+      .select("id,status,row_count,file_size_bytes,drive_url,started_at,completed_at,error_message")
+      .order("started_at", { ascending: false })
+      .limit(5)
+      .returns<LegacyArchiveRun[]>()
   ]);
 
   const databaseRows = toRows<DatabaseHealthRow>(databaseHealth.data);
@@ -79,6 +104,9 @@ export default async function SupabaseHealthPage() {
   const storagePercent = percent(storageHealth.totalBytes, FREE_STORAGE_LIMIT_BYTES);
   const status = dbPercent >= 85 || storagePercent >= 85 ? "warning" : dbPercent >= 65 || storagePercent >= 65 ? "attention" : "ok";
   const latestBackupSize = backupRows.data?.[0]?.file_size_bytes ?? null;
+  const legacyRowsTable = tables.find((table) => table.table_name === "legacy_rows");
+  const legacyRowsCount = Math.max(0, Math.round(legacyRowsTable?.row_estimate ?? 0));
+  const latestArchive = archiveRows.data?.[0] ?? null;
 
   return (
     <div className="shell">
@@ -108,6 +136,13 @@ export default async function SupabaseHealthPage() {
           <a className="primary-link" href="/backups">Ver backups</a>
         </section>
 
+        {(params?.saved === "legacy-archive" || params?.error === "legacy-archive") && (
+          <section className={params?.saved === "legacy-archive" ? "card success-card" : "card attention-card"}>
+            <strong>{params?.saved === "legacy-archive" ? "legacy_rows archivada en Drive y vaciada." : "No se ha podido archivar legacy_rows."}</strong>
+            {params?.detail ? <p className="muted">{String(params.detail)}</p> : null}
+          </section>
+        )}
+
         <section className="grid stats compact">
           <article className={dbPercent >= 85 ? "card attention-card" : "card"}>
             <Database aria-hidden="true" size={20} />
@@ -133,6 +168,60 @@ export default async function SupabaseHealthPage() {
             <div className="metric small">{latestBackupSize ? formatBytes(latestBackupSize) : "-"}</div>
             <p className="muted">El backup sirve como referencia, no como limite real de Supabase.</p>
           </article>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Archivo legacy_rows</h2>
+              <p className="muted">
+                legacy_rows es la copia historica importada del Excel viejo. Puedes guardarla en Drive y vaciarla para recuperar espacio,
+                sin tocar los datos normalizados del sistema nuevo.
+              </p>
+            </div>
+            {legacyRowsCount > 0 ? (
+              <form action={archiveLegacyRowsAction}>
+                <SubmitButton className="danger-button" pendingLabel="Archivando en Drive...">
+                  Archivar y vaciar
+                </SubmitButton>
+              </form>
+            ) : (
+              <span className="tag">Ya esta vacia</span>
+            )}
+          </div>
+          <div className="grid stats compact">
+            <article className="card subtle-card">
+              <h3>Filas actuales</h3>
+              <div className="metric small">{formatNumber(legacyRowsCount)}</div>
+              <p className="muted">{formatBytes(legacyRowsTable?.total_bytes ?? 0)} ocupados ahora.</p>
+            </article>
+            <article className="card subtle-card">
+              <h3>Ultimo archivo</h3>
+              <div className="metric small">{latestArchive ? formatDateTime(latestArchive.completed_at ?? latestArchive.started_at) : "-"}</div>
+              <p className="muted">
+                {latestArchive
+                  ? `${statusLabel(latestArchive.status)} · ${formatNumber(latestArchive.row_count)} filas · ${formatBytes(latestArchive.file_size_bytes)}`
+                  : "Todavia no hay archivado registrado."}
+              </p>
+            </article>
+          </div>
+          {latestArchive?.drive_url ? (
+            <a className="secondary-button" href={latestArchive.drive_url} target="_blank" rel="noreferrer">Abrir archivo en Drive</a>
+          ) : null}
+          {archiveRows.data?.length ? (
+            <details className="compact-details">
+              <summary>Ver historial de archivados</summary>
+              <div className="compact-stack">
+                {archiveRows.data.map((run) => (
+                  <p key={run.id}>
+                    <strong>{statusLabel(run.status)}</strong> · {formatDateTime(run.completed_at ?? run.started_at)} · {formatNumber(run.row_count)} filas
+                    {run.drive_url ? <> · <a href={run.drive_url} target="_blank" rel="noreferrer">Drive</a></> : null}
+                    {run.error_message ? <> · {run.error_message}</> : null}
+                  </p>
+                ))}
+              </div>
+            </details>
+          ) : null}
         </section>
 
         <section className="card">
@@ -245,4 +334,21 @@ function formatBytes(value: number | null | undefined) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("es-ES").format(Math.round(value));
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function statusLabel(value: string) {
+  if (value === "completed") return "Correcto";
+  if (value === "failed") return "Fallido";
+  return "En curso";
 }

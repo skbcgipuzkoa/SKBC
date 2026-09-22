@@ -11,6 +11,7 @@ import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { sendStudentEmailNotification, type EmailAudience } from "@/lib/email-notifications";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
+import { archiveLegacyRowsToDrive } from "@/lib/legacy-rows-archive";
 import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
@@ -69,6 +70,22 @@ export async function runSeasonBackupAction(formData: FormData) {
   revalidatePath("/sistema");
   revalidatePath("/salud-supabase");
   redirect("/backups?saved=season");
+}
+
+export async function archiveLegacyRowsAction() {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const result = await archiveLegacyRowsToDrive("Alvaro");
+  if (result.status === "failed") {
+    redirect(`/salud-supabase?error=legacy-archive&detail=${encodeURIComponent(result.error ?? "Error desconocido")}`);
+  }
+
+  revalidatePath("/salud-supabase");
+  revalidatePath("/backups");
+  revalidatePath("/importacion");
+  redirect("/salud-supabase?saved=legacy-archive");
 }
 
 export async function dismissAdminAlertAction(formData: FormData) {
