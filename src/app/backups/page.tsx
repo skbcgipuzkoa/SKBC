@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
-import { logoutAction, runManualBackupAction } from "@/app/actions";
+import { logoutAction, runManualBackupAction, runSeasonBackupAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -20,6 +20,8 @@ type BackupRun = {
   trigger_source: "manual" | "cron";
   storage_bucket: string;
   storage_path: string | null;
+  storage_provider: "supabase" | "google_drive" | null;
+  drive_url: string | null;
   table_counts: Record<string, number> | null;
   table_errors: Record<string, string> | null;
   file_size_bytes: number | null;
@@ -44,7 +46,7 @@ export default async function BackupsPage({
   const supabase = createAdminClient();
   const { data: backups, error } = await supabase
     .from("backup_runs")
-    .select("id,status,trigger_source,storage_bucket,storage_path,table_counts,table_errors,file_size_bytes,started_at,completed_at,error_message,created_by")
+    .select("id,status,trigger_source,storage_bucket,storage_path,storage_provider,drive_url,table_counts,table_errors,file_size_bytes,started_at,completed_at,error_message,created_by")
     .order("started_at", { ascending: false })
     .limit(40)
     .returns<BackupRun[]>();
@@ -55,6 +57,7 @@ export default async function BackupsPage({
   const latestOk = runs.find((run) => run.status === "completed") ?? null;
   const latest = runs[0] ?? null;
   const failed = runs.filter((run) => run.status === "failed").length;
+  const defaultSeason = getDefaultSeason();
 
   return (
     <div className="shell">
@@ -73,8 +76,12 @@ export default async function BackupsPage({
         </div>
 
         {params.saved === "backup" ? <p className="save-ok">Copia creada correctamente.</p> : null}
+        {params.saved === "season" ? <p className="save-ok">Cierre de temporada guardado en Drive correctamente.</p> : null}
         {params.error === "backup" ? (
           <p className="form-error">No se pudo crear la copia{params.detail ? `: ${params.detail}` : "."}</p>
+        ) : null}
+        {params.error === "season" ? (
+          <p className="form-error">No se pudo guardar el cierre de temporada{params.detail ? `: ${params.detail}` : "."}</p>
         ) : null}
 
         <section className={`control-hero ${latestOk ? "control-ok" : "control-warn"}`}>
@@ -82,13 +89,44 @@ export default async function BackupsPage({
             <span className="tag">{latestOk ? "Ultima copia correcta" : "Sin copia correcta todavia"}</span>
             <h2>{latestOk ? formatDateTime(latestOk.completed_at ?? latestOk.started_at) : "Crea la primera copia ahora"}</h2>
             <p className="muted">
-              Guarda una copia logica en Supabase Storage con las tablas importantes del club. Conserva solo la ultima copia correcta y limpia archivos antiguos.
+              Guarda una copia logica en Google Drive con las tablas importantes del club. Supabase solo conserva el registro ligero y limpia archivos antiguos.
             </p>
           </div>
           <form action={runManualBackupAction}>
             <SubmitButton pendingLabel="Creando copia...">
               <PlayCircle aria-hidden="true" size={18} /> Crear copia ahora
             </SubmitButton>
+          </form>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <p className="eyebrow">Final de temporada</p>
+              <h2>Guardar archivo externo en Drive</h2>
+              <p className="muted">
+                Usalo antes de cualquier limpieza fuerte. Crea una copia completa fuera de Supabase para poder conservar la memoria historica sin ocupar espacio dentro del proyecto.
+              </p>
+            </div>
+          </div>
+          <form className="form-grid" action={runSeasonBackupAction}>
+            <label>
+              Nombre del cierre
+              <input name="seasonName" defaultValue={defaultSeason.name} />
+            </label>
+            <label>
+              Desde
+              <input name="periodFrom" type="date" defaultValue={defaultSeason.from} />
+            </label>
+            <label>
+              Hasta
+              <input name="periodTo" type="date" defaultValue={defaultSeason.to} />
+            </label>
+            <div className="form-actions wide">
+              <SubmitButton pendingLabel="Guardando en Drive...">
+                <CloudDownload aria-hidden="true" size={18} /> Guardar cierre de temporada
+              </SubmitButton>
+            </div>
           </form>
         </section>
 
@@ -140,6 +178,7 @@ export default async function BackupsPage({
                     <span>{tableCount} tablas</span>
                     <span>{rowCount} filas</span>
                     <span>{formatBytes(run.file_size_bytes)}</span>
+                    <span>{run.storage_provider === "google_drive" ? "Drive" : "Supabase"}</span>
                     {errorCount ? <span>{errorCount} errores</span> : null}
                   </div>
                   {run.error_message ? <p className="form-error">{run.error_message}</p> : null}
@@ -154,7 +193,7 @@ export default async function BackupsPage({
                     </details>
                   ) : null}
                   <div className="form-actions">
-                    {run.status === "completed" && run.storage_path ? (
+                    {run.status === "completed" && (run.storage_path || run.drive_url) ? (
                       <a
                         className="secondary-link"
                         href={`/api/admin/backups/${run.id}/download`}
@@ -165,6 +204,9 @@ export default async function BackupsPage({
                     ) : (
                       <span className="muted">Sin archivo descargable.</span>
                     )}
+                    {run.drive_url ? (
+                      <a className="text-link" href={run.drive_url} target="_blank">Abrir en Drive</a>
+                    ) : null}
                   </div>
                 </article>
               );
@@ -179,7 +221,7 @@ export default async function BackupsPage({
           <p className="muted">
             Kenshis, clases, asistencias, plan tecnico, historial tecnico, examenes, cursos, taikai,
             calendario, rankings, Busen, Shakujo, entregas, avisos y notificaciones del sistema nuevo.
-            Los registros historicos se mantienen, pero los archivos antiguos se borran automaticamente para no ocupar espacio de mas.
+            Los registros historicos se mantienen. El archivo pesado de copia queda fuera de Supabase, en Drive, y se conserva solo la ultima copia correcta.
           </p>
         </section>
       </main>
@@ -219,4 +261,17 @@ function formatBytes(value: number | null) {
   if (!value) return "-";
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function getDefaultSeason() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const startYear = month >= 9 ? year : year - 1;
+  const endYear = startYear + 1;
+  return {
+    name: `Temporada ${startYear}-${endYear}`,
+    from: `${startYear}-09-01`,
+    to: `${endYear}-06-30`
+  };
 }

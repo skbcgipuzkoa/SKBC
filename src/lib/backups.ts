@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deleteDriveFiles, getGoogleDriveAccessToken, uploadJsonToDrive } from "@/lib/google-drive-api";
 
 const BACKUP_BUCKET = "skbc-backups";
 const COMPLETED_BACKUPS_TO_KEEP = 1;
@@ -92,22 +93,42 @@ export async function runSkbcBackup(triggerSource: "manual" | "cron" = "manual",
     };
     const json = JSON.stringify(payload);
     const path = `${completedAt.slice(0, 10)}/${run.id}.json`;
+    const backupFolderId = backupDriveFolderId();
+    let storageProvider: "supabase" | "google_drive" = "supabase";
+    let driveFileId: string | null = null;
+    let driveUrl: string | null = null;
 
-    const { error: uploadError } = await supabase.storage
-      .from(BACKUP_BUCKET)
-      .upload(path, new Blob([json], { type: "application/json" }), {
-        contentType: "application/json",
-        upsert: false
+    if (backupFolderId) {
+      const accessToken = await getGoogleDriveAccessToken();
+      const driveFile = await uploadJsonToDrive({
+        accessToken,
+        folderId: backupFolderId,
+        fileName: `SKBC-backup-${completedAt.slice(0, 10)}-${run.id}.json`,
+        json
       });
+      storageProvider = "google_drive";
+      driveFileId = driveFile.id;
+      driveUrl = `https://drive.google.com/file/d/${driveFile.id}/view`;
+    } else {
+      const { error: uploadError } = await supabase.storage
+        .from(BACKUP_BUCKET)
+        .upload(path, new Blob([json], { type: "application/json" }), {
+          contentType: "application/json",
+          upsert: false
+        });
 
-    if (uploadError) throw uploadError;
+      if (uploadError) throw uploadError;
+    }
 
     const status = Object.keys(tableErrors).length ? "failed" : "completed";
     const { error: updateError } = await supabase
       .from("backup_runs")
       .update({
         status,
-        storage_path: path,
+        storage_provider: storageProvider,
+        storage_path: storageProvider === "supabase" ? path : null,
+        drive_file_id: driveFileId,
+        drive_url: driveUrl,
         table_counts: tableCounts,
         table_errors: tableErrors,
         file_size_bytes: Buffer.byteLength(json, "utf8"),
@@ -138,13 +159,12 @@ export async function runSkbcBackup(triggerSource: "manual" | "cron" = "manual",
 async function pruneOldCompletedBackups(supabase: ReturnType<typeof createAdminClient>) {
   const { data, error } = await supabase
     .from("backup_runs")
-    .select("id,storage_bucket,storage_path")
+    .select("id,storage_bucket,storage_path,storage_provider,drive_file_id")
     .eq("status", "completed")
-    .not("storage_path", "is", null)
     .order("completed_at", { ascending: false, nullsFirst: false })
     .order("started_at", { ascending: false })
     .range(COMPLETED_BACKUPS_TO_KEEP, 500)
-    .returns<Array<{ id: string; storage_bucket: string; storage_path: string | null }>>();
+    .returns<Array<{ id: string; storage_bucket: string; storage_path: string | null; storage_provider?: string; drive_file_id?: string | null }>>();
 
   if (error || !data?.length) return;
 
@@ -161,10 +181,24 @@ async function pruneOldCompletedBackups(supabase: ReturnType<typeof createAdminC
     await supabase.storage.from(bucket).remove(paths);
   }
 
+  const driveFileIds = data
+    .filter((run) => run.storage_provider === "google_drive" && run.drive_file_id)
+    .map((run) => run.drive_file_id as string);
+  if (driveFileIds.length) {
+    try {
+      await deleteDriveFiles(await getGoogleDriveAccessToken(), driveFileIds);
+    } catch {
+      // If Drive cleanup fails, keep the backup register intact instead of hiding a file that may still exist.
+      return;
+    }
+  }
+
   await supabase
     .from("backup_runs")
     .update({
       storage_path: null,
+      drive_file_id: null,
+      drive_url: null,
       file_size_bytes: null,
       error_message: `Archivo eliminado automaticamente. Se conservan las ultimas ${COMPLETED_BACKUPS_TO_KEEP} copias correctas.`
     })
@@ -204,6 +238,8 @@ async function exportTable(supabase: ReturnType<typeof createAdminClient>, table
 }
 
 async function ensureBackupBucket(supabase: ReturnType<typeof createAdminClient>) {
+  if (backupDriveFolderId()) return;
+
   const { data: buckets, error } = await supabase.storage.listBuckets();
   if (error) throw error;
   if (buckets?.some((bucket) => bucket.name === BACKUP_BUCKET)) return;
@@ -213,4 +249,15 @@ async function ensureBackupBucket(supabase: ReturnType<typeof createAdminClient>
     fileSizeLimit: 1024 * 1024 * 50
   });
   if (createError) throw createError;
+}
+
+function backupDriveFolderId() {
+  return cleanEnv(process.env.SKBC_BACKUP_DRIVE_FOLDER_ID)
+    || cleanEnv(process.env.BACKUP_DRIVE_FOLDER_ID)
+    || cleanEnv(process.env.DIPLOMA_EXAMEN_FOLDER_ID)
+    || null;
+}
+
+function cleanEnv(value: string | undefined) {
+  return value?.replace(/^\uFEFF/, "").trim() || "";
 }

@@ -50,6 +50,27 @@ export async function runManualBackupAction() {
   redirect("/backups?saved=backup");
 }
 
+export async function runSeasonBackupAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const seasonName = String(formData.get("seasonName") ?? "").trim() || "Cierre de temporada";
+  const periodFrom = String(formData.get("periodFrom") ?? "").trim();
+  const periodTo = String(formData.get("periodTo") ?? "").trim();
+  const label = [seasonName, periodFrom && periodTo ? `${periodFrom} a ${periodTo}` : ""].filter(Boolean).join(" - ");
+
+  const result = await runSkbcBackup("manual", label);
+  if (result.status === "failed") {
+    redirect(`/backups?error=season&detail=${encodeURIComponent(result.error ?? "Error desconocido")}`);
+  }
+
+  revalidatePath("/backups");
+  revalidatePath("/sistema");
+  revalidatePath("/salud-supabase");
+  redirect("/backups?saved=season");
+}
+
 export async function dismissAdminAlertAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
