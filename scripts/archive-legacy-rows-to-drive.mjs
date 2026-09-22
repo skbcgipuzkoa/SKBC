@@ -27,6 +27,7 @@ if (runError || !run) throw runError ?? new Error("No se ha podido crear legacy_
 
 try {
   const startedAt = new Date().toISOString();
+  await markArchiveProgress(run.id, "Exportando legacy_rows por bloques pequenos.");
   const [legacySpreadsheets, legacySheets, legacyRows] = await Promise.all([
     exportTable("legacy_spreadsheets"),
     exportTable("legacy_sheets"),
@@ -45,6 +46,7 @@ try {
       legacy_rows: legacyRows
     }
   });
+  await markArchiveProgress(run.id, "Subiendo archivo historico a Google Drive.");
   const accessToken = await getGoogleDriveAccessToken();
   const driveFile = await uploadJsonToDrive({
     accessToken,
@@ -52,6 +54,7 @@ try {
     fileName: `SKBC-legacy-rows-${completedAt.slice(0, 10)}-${run.id}.json`,
     json
   });
+  await markArchiveProgress(run.id, "Archivo subido a Drive. Vaciando legacy_rows.");
   const { data: removedRows, error: clearError } = await supabase.rpc("clear_legacy_rows_after_archive");
   if (clearError) throw clearError;
 
@@ -73,7 +76,7 @@ try {
   if (updateError) throw updateError;
   console.log(JSON.stringify({ status: "completed", rowCount, driveUrl }, null, 2));
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error || "Error desconocido");
+  const message = describeError(error);
   await supabase
     .from("legacy_rows_archive_runs")
     .update({
@@ -86,19 +89,27 @@ try {
 }
 
 async function exportTable(table) {
-  const pageSize = 1000;
+  const pageSize = table === "legacy_rows" ? 100 : 1000;
   const rows = [];
   for (let from = 0; ; from += pageSize) {
     const to = from + pageSize - 1;
     const { data, error } = await supabase
       .from(table)
       .select("*")
+      .order("id", { ascending: true })
       .range(from, to);
     if (error) throw error;
     rows.push(...(data ?? []));
     if (!data || data.length < pageSize) break;
   }
   return rows;
+}
+
+async function markArchiveProgress(id, message) {
+  await supabase
+    .from("legacy_rows_archive_runs")
+    .update({ error_message: message })
+    .eq("id", id);
 }
 
 async function getGoogleDriveAccessToken() {
@@ -198,6 +209,18 @@ function requiredEnv(name) {
 
 function cleanEnv(value) {
   return value?.replace(/^\uFEFF/, "").trim() || "";
+}
+
+function describeError(error) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const parts = [error.message, error.details, error.hint, error.code]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+    if (parts.length) return parts.join(" - ");
+    return JSON.stringify(error);
+  }
+  return String(error || "Error desconocido");
 }
 
 function base64Url(value) {

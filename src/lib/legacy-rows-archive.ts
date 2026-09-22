@@ -27,6 +27,7 @@ export async function archiveLegacyRowsToDrive(createdBy = "Alvaro") {
 
   try {
     const startedAt = new Date().toISOString();
+    await markArchiveProgress(supabase, run.id, "Exportando legacy_rows por bloques pequenos.");
     const [legacySpreadsheets, legacySheets, legacyRows] = await Promise.all([
       exportTable(supabase, "legacy_spreadsheets"),
       exportTable(supabase, "legacy_sheets"),
@@ -46,6 +47,7 @@ export async function archiveLegacyRowsToDrive(createdBy = "Alvaro") {
       }
     };
     const json = JSON.stringify(payload);
+    await markArchiveProgress(supabase, run.id, "Subiendo archivo historico a Google Drive.");
     const accessToken = await getGoogleDriveAccessToken();
     const driveFile = await uploadJsonToDrive({
       accessToken,
@@ -54,6 +56,7 @@ export async function archiveLegacyRowsToDrive(createdBy = "Alvaro") {
       json
     });
     const driveUrl = `https://drive.google.com/file/d/${driveFile.id}/view`;
+    await markArchiveProgress(supabase, run.id, "Archivo subido a Drive. Vaciando legacy_rows.");
     const { data: removedRows, error: clearError } = await supabase.rpc("clear_legacy_rows_after_archive");
     if (clearError) throw clearError;
 
@@ -79,7 +82,7 @@ export async function archiveLegacyRowsToDrive(createdBy = "Alvaro") {
       driveUrl
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
+    const message = describeError(error);
     await supabase
       .from("legacy_rows_archive_runs")
       .update({
@@ -93,7 +96,7 @@ export async function archiveLegacyRowsToDrive(createdBy = "Alvaro") {
 }
 
 async function exportTable(supabase: ReturnType<typeof createAdminClient>, table: string) {
-  const pageSize = 1000;
+  const pageSize = table === "legacy_rows" ? 100 : 1000;
   const rows: unknown[] = [];
 
   for (let from = 0; ; from += pageSize) {
@@ -101,6 +104,7 @@ async function exportTable(supabase: ReturnType<typeof createAdminClient>, table
     const { data, error } = await supabase
       .from(table)
       .select("*")
+      .order("id", { ascending: true })
       .range(from, to);
 
     if (error) throw error;
@@ -109,6 +113,30 @@ async function exportTable(supabase: ReturnType<typeof createAdminClient>, table
   }
 
   return rows;
+}
+
+async function markArchiveProgress(
+  supabase: ReturnType<typeof createAdminClient>,
+  id: string,
+  message: string
+) {
+  await supabase
+    .from("legacy_rows_archive_runs")
+    .update({ error_message: message })
+    .eq("id", id);
+}
+
+function describeError(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts = [record.message, record.details, record.hint, record.code]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+    if (parts.length) return parts.join(" - ");
+    return JSON.stringify(record);
+  }
+  return String(error || "Error desconocido");
 }
 
 function legacyArchiveDriveFolderId() {
