@@ -9851,6 +9851,54 @@ tbody tr:hover {
   justify-self: center;
 }
 
+.table-health-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.table-health-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(180px, 2fr) minmax(120px, 0.7fr);
+  padding: 12px 14px;
+}
+
+.table-health-row > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.table-health-row span,
+.table-health-size small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.table-health-meter {
+  background: #edf4fb;
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.table-health-meter span {
+  background: linear-gradient(90deg, #0057b8, #c9972f);
+  display: block;
+  height: 100%;
+  min-width: 4px;
+}
+
+.table-health-size {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
 @media (max-width: 900px) {
   .class-audit-calendar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9935,5 +9983,14 @@ tbody tr:hover {
 
   .dojo-correction-links {
     grid-template-columns: 1fr;
+  }
+
+  .table-health-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .table-health-size {
+    text-align: left;
   }
 }

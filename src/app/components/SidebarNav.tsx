@@ -30,6 +30,7 @@ const navItems = [
   { label: "Alertas", href: "/alertas" },
   { label: "Papelera", href: "/papelera" },
   { label: "Backups", href: "/backups" },
+  { label: "Salud Supabase", href: "/salud-supabase" },
   { label: "Notificaciones", href: "/notificaciones" },
   { label: "Sistema", href: "/sistema" }
 ];

@@ -6,7 +6,8 @@ import {
   Database,
   DatabaseBackup,
   FileText,
-    Bell,
+  Bell,
+  HardDrive,
   LogOut,
   NotebookTabs,
   Newspaper,
@@ -57,6 +58,12 @@ const systemItems = [
     body: "Copias de seguridad del sistema nuevo, historial de ejecuciones y ultima copia correcta.",
     href: "/backups",
     icon: DatabaseBackup
+  },
+  {
+    title: "Salud Supabase",
+    body: "Tamano real de base de datos, storage, tablas mas pesadas y margen estimado del plan Free.",
+    href: "/salud-supabase",
+    icon: HardDrive
   },
   {
     title: "Notificaciones",
