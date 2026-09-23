@@ -316,6 +316,7 @@ export default async function ClaseDetailPage({
   const pendingKidsDayMembers = kidsDayMembers.filter((member) => !kidsAttendedIds.has(member.id));
   const childPlanClass = clase.class_group === "kids" ? { id: clase.id, legacy_id: clase.legacy_id } : kidsDayClass;
   const childSyllabusGrades = [...new Set(kidsDayMembers.flatMap((member) => childSyllabusGradeCandidates(member.grade)).filter(Boolean))] as string[];
+  const fallbackChildSyllabusGrades = childSyllabusGradeCandidates(...kidsGrades);
   const [{ data: childClassPlan }, { data: childClassGroupWork }, { data: childSyllabusItems }] = childPlanClass?.id
     ? await Promise.all([
       supabase
@@ -334,7 +335,7 @@ export default async function ClaseDetailPage({
         .select("id,grade,title,category,description,exam_relevant,sort_order")
         .eq("active", true)
         .eq("exam_relevant", true)
-        .in("grade", childSyllabusGrades.length ? childSyllabusGrades : kidsGrades)
+        .in("grade", childSyllabusGrades.length ? childSyllabusGrades : fallbackChildSyllabusGrades)
         .order("sort_order", { ascending: true })
         .returns<ChildSyllabusItemRow[]>()
     ])
@@ -1542,10 +1543,30 @@ function nextKidGrade(grade: string | null | undefined) {
   return kidsGrades[Math.min(index + 1, kidsGrades.length - 1)] ?? current;
 }
 
-function childSyllabusGradeCandidates(grade: string | null | undefined) {
-  const current = normalizeKidGrade(grade);
-  const target = nextKidGrade(grade) ?? current;
-  return [...new Set([target, current].filter(Boolean))] as string[];
+function childSyllabusGradeCandidates(...grades: Array<string | null | undefined>) {
+  const equivalents: Record<string, string[]> = {
+    BLANCO: ["MINARAI"],
+    "BLANCO-AMARILLO": ["5 KYU"],
+    AMARILLO: ["5 KYU"],
+    "AMARILLO-NARANJA": ["4 KYU"],
+    NARANJA: ["4 KYU"],
+    "NARANJA-VERDE": ["3 KYU"],
+    VERDE: ["3 KYU"],
+    "VERDE-AZUL": ["2 KYU"],
+    AZUL: ["2 KYU"],
+    "AZUL-MARRON": ["1 KYU"],
+    MARRON: ["1 KYU"]
+  };
+  const labels = new Set<string>();
+  for (const grade of grades) {
+    const current = normalizeKidGrade(grade);
+    const target = nextKidGrade(grade) ?? current;
+    for (const label of [target, current, normalizeGradeLabel(grade)].filter(Boolean)) {
+      labels.add(label as string);
+      for (const equivalent of equivalents[label as string] ?? []) labels.add(equivalent);
+    }
+  }
+  return [...labels];
 }
 
 function kidGradeSortValue(grade: string | null | undefined) {

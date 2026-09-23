@@ -4462,7 +4462,33 @@ function nextChildSyllabusGrade(value: string | null | undefined) {
 function childSyllabusGradeCandidates(value: string | null | undefined) {
   const current = normalizeChildSyllabusGrade(String(value ?? ""));
   const target = nextChildSyllabusGrade(value) ?? current;
-  return [...new Set([target, current].filter(Boolean))];
+  return childSyllabusGradeSearchLabels(target, current, value);
+}
+
+function childSyllabusGradeSearchLabels(...values: Array<string | null | undefined>) {
+  const equivalents: Record<string, string[]> = {
+    BLANCO: ["MINARAI"],
+    "BLANCO-AMARILLO": ["5 KYU"],
+    AMARILLO: ["5 KYU"],
+    "AMARILLO-NARANJA": ["4 KYU"],
+    NARANJA: ["4 KYU"],
+    "NARANJA-VERDE": ["3 KYU"],
+    VERDE: ["3 KYU"],
+    "VERDE-AZUL": ["2 KYU"],
+    AZUL: ["2 KYU"],
+    "AZUL-MARRON": ["1 KYU"],
+    MARRON: ["1 KYU"]
+  };
+  const labels = new Set<string>();
+  for (const value of values) {
+    const raw = String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+    const normalized = normalizeChildSyllabusGrade(String(value ?? ""));
+    for (const label of [normalized, raw].filter(Boolean)) {
+      labels.add(label);
+      for (const equivalent of equivalents[label] ?? []) labels.add(equivalent);
+    }
+  }
+  return [...labels];
 }
 
 function normalizeChildSyllabusCategory(value: string) {
@@ -4901,10 +4927,10 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
     const targetGrades = mode === "own"
       ? childSyllabusGradeCandidates(attendance.official_grade ?? attendance.trained_grade)
       : mode === "other_grade"
-        ? [normalizeChildSyllabusGrade(String(override?.trained_grade ?? ""))].filter(Boolean)
+        ? childSyllabusGradeSearchLabels(String(override?.trained_grade ?? ""))
         : [];
     const itemsForAttendance = targetGrades.length
-      ? syllabusItems.filter((item) => targetGrades.includes(normalizeChildSyllabusGrade(String(item.grade ?? ""))))
+      ? syllabusItems.filter((item) => targetGrades.includes(String(item.grade ?? "").trim().toUpperCase().replace(/\s+/g, " ")))
       : syllabusItems;
 
     for (const item of itemsForAttendance) {
