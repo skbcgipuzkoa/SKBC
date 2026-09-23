@@ -42,7 +42,7 @@ export default async function IntegratedExamPage({
         </div>
 
         {query.saved === "created" ? <p className="save-ok">Examen integrado creado. Copia los enlaces de examinador si los necesitas.</p> : null}
-        {query.saved === "finalized" ? <p className="save-ok">Examen cerrado. Aprobados registrados en fichas: {query.registered ?? "0"}.</p> : null}
+        {query.saved === "finalized" ? <p className="save-ok">Examen cerrado. Aprobados registrados en fichas y documentos enviados a Drive: {query.registered ?? "0"}.</p> : null}
         {query.error ? <p className="form-error">Ha ocurrido un error{query.detail ? `: ${query.detail}` : "."}</p> : null}
 
         <section className="grid stats compact">
@@ -148,7 +148,7 @@ export default async function IntegratedExamPage({
             </article>
           </div>
           {isCompleted ? (
-            <p className="muted">Este examen ya esta cerrado. Los diplomas e informes se gestionan desde el historial de examenes.</p>
+            <p className="muted">Este examen ya esta cerrado. Los informes y diplomas quedan guardados en Google Drive y enlazados en el historial de examenes.</p>
           ) : (
             <form action={finalizeIntegratedExamEventAction} className="form-actions">
               <input type="hidden" name="eventId" value={event.id} />
@@ -187,7 +187,7 @@ export default async function IntegratedExamPage({
         <section className="card">
           <h2>Siguiente paso</h2>
           <p className="muted">
-            Despues del cierre, cada aprobado aparece en el historial normal de examenes para revisar informe y generar diploma.
+            Despues del cierre, cada aprobado aparece en el historial normal de examenes con informe y diploma enlazados desde Google Drive.
           </p>
           <a className="secondary-link" href="/examenes">Volver a examenes</a>
         </section>

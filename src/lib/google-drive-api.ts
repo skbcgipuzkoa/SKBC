@@ -75,6 +75,101 @@ export async function uploadJsonToDrive({
   return await response.json() as { id: string };
 }
 
+export async function uploadPdfToDrive({
+  accessToken,
+  folderId,
+  fileName,
+  pdf
+}: {
+  accessToken: string;
+  folderId: string;
+  fileName: string;
+  pdf: Buffer;
+}) {
+  const boundary = `skbc_${Date.now()}`;
+  const metadata = JSON.stringify({
+    name: fileName,
+    parents: [folderId],
+    mimeType: "application/pdf"
+  });
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
+    Buffer.from(`--${boundary}\r\ncontent-type: application/pdf\r\n\r\n`),
+    pdf,
+    Buffer.from(`\r\n--${boundary}--`)
+  ]);
+
+  const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": `multipart/related; boundary=${boundary}`
+    },
+    body
+  });
+
+  if (!response.ok) throw new Error(`Google upload error ${response.status}: ${await response.text()}`);
+  return await response.json() as { id: string };
+}
+
+export async function makeDriveFilePublic(accessToken: string, fileId: string) {
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ role: "reader", type: "anyone" })
+  });
+
+  if (!response.ok) throw new Error(`Google permission error ${response.status}: ${await response.text()}`);
+}
+
+export async function ensureDriveFolder({
+  accessToken,
+  parentFolderId,
+  name
+}: {
+  accessToken: string;
+  parentFolderId: string;
+  name: string;
+}) {
+  const escapedName = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const query = [
+    "mimeType = 'application/vnd.google-apps.folder'",
+    "trashed = false",
+    `'${parentFolderId}' in parents`,
+    `name = '${escapedName}'`
+  ].join(" and ");
+  const listUrl = `https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&includeItemsFromAllDrives=true&q=${encodeURIComponent(query)}&fields=files(id,name)`;
+  const listResponse = await fetch(listUrl, {
+    headers: { authorization: `Bearer ${accessToken}` }
+  });
+
+  if (!listResponse.ok) throw new Error(`Google folder lookup error ${listResponse.status}: ${await listResponse.text()}`);
+  const list = await listResponse.json() as { files?: Array<{ id: string; name: string }> };
+  const existing = list.files?.[0];
+  if (existing?.id) return existing.id;
+
+  const createResponse = await fetch("https://www.googleapis.com/drive/v3/files?supportsAllDrives=true", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      name,
+      parents: [parentFolderId],
+      mimeType: "application/vnd.google-apps.folder"
+    })
+  });
+
+  if (!createResponse.ok) throw new Error(`Google folder create error ${createResponse.status}: ${await createResponse.text()}`);
+  const created = await createResponse.json() as { id?: string };
+  if (!created.id) throw new Error("Google no devolvio la carpeta creada.");
+  return created.id;
+}
+
 export async function downloadDriveFile(accessToken: string, fileId: string) {
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
     headers: { authorization: `Bearer ${accessToken}` }

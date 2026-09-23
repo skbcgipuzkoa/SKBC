@@ -1,7 +1,7 @@
-import { createSign } from "crypto";
 import { readFile } from "fs/promises";
 import path from "path";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import { ensureDriveFolder, getGoogleDriveAccessToken, makeDriveFilePublic, uploadPdfToDrive } from "@/lib/google-drive-api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ExamForDiploma = {
@@ -13,13 +13,9 @@ type ExamForDiploma = {
   members: {
     legacy_id: string | null;
     display_name: string;
+    class: "kids" | "adults";
   } | null;
 };
-
-const scopes = [
-  "https://www.googleapis.com/auth/drive",
-  "https://www.googleapis.com/auth/presentations"
-].join(" ");
 
 const gradeEu: Record<string, string> = {
   BLANCO: "ZURIA",
@@ -42,7 +38,7 @@ export async function generateDiplomaForExam(examId: string) {
   const supabase = createAdminClient();
   const { data: exam, error } = await supabase
     .from("exams")
-    .select("id,exam_date,grade,diploma_url,diploma_registry,members(legacy_id,display_name)")
+    .select("id,exam_date,grade,diploma_url,diploma_registry,members(legacy_id,display_name,class)")
     .eq("id", examId)
     .single<ExamForDiploma>();
 
@@ -50,8 +46,15 @@ export async function generateDiplomaForExam(examId: string) {
   if (exam.diploma_url) return exam.diploma_url;
   if (!exam.members?.display_name) throw new Error("El examen no tiene kenshi vinculado.");
 
-  const folderId = requiredEnv("DIPLOMA_EXAMEN_FOLDER_ID");
-  const accessToken = await getGoogleAccessToken();
+  const rootFolderId = examsRootFolderId();
+  const accessToken = await getGoogleDriveAccessToken();
+  const folderId = await ensureStudentExamFolder({
+    accessToken,
+    rootFolderId,
+    legacyId: exam.members.legacy_id,
+    name: exam.members.display_name,
+    memberClass: exam.members.class
+  });
   const examDate = parseDate(exam.exam_date);
   const registry = exam.diploma_registry || await reserveDiplomaRegistry(supabase, exam.id, exam.exam_date);
   const diploma = await generateDiplomaPdf({
@@ -96,8 +99,8 @@ async function reserveDiplomaRegistry(
 }
 
 export async function verifyDiplomaSetup() {
-  const folderId = requiredEnv("DIPLOMA_EXAMEN_FOLDER_ID");
-  const accessToken = await getGoogleAccessToken();
+  const folderId = examsRootFolderId();
+  const accessToken = await getGoogleDriveAccessToken();
   return generateDiplomaPdf({
     accessToken,
     folderId,
@@ -132,14 +135,7 @@ async function generateDiplomaPdf({
     pdf
   });
 
-  await googleJson(
-    `https://www.googleapis.com/drive/v3/files/${pdfFile.id}/permissions?supportsAllDrives=true`,
-    accessToken,
-    {
-      method: "POST",
-      body: JSON.stringify({ role: "reader", type: "anyone" })
-    }
-  );
+  await makeDriveFilePublic(accessToken, pdfFile.id);
 
   return {
     id: pdfFile.id,
@@ -209,110 +205,33 @@ async function renderDiplomaPdf({
   return Buffer.from(await pdfDoc.save());
 }
 
-async function getGoogleAccessToken() {
-  if (process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REFRESH_TOKEN) {
-    return getGoogleOAuthAccessToken();
-  }
-
-  const clientEmail = requiredEnv("GOOGLE_CLIENT_EMAIL");
-  const privateKey = requiredEnv("GOOGLE_PRIVATE_KEY").replace(/\\n/g, "\n");
-  const now = Math.floor(Date.now() / 1000);
-  const jwtHeader = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const jwtClaim = base64Url(JSON.stringify({
-    iss: clientEmail,
-    scope: scopes,
-    aud: "https://oauth2.googleapis.com/token",
-    exp: now + 3600,
-    iat: now
-  }));
-  const unsigned = `${jwtHeader}.${jwtClaim}`;
-  const signature = createSign("RSA-SHA256").update(unsigned).sign(privateKey);
-  const assertion = `${unsigned}.${base64Url(signature)}`;
-  const body = new URLSearchParams({
-    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-    assertion
-  });
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body
-  });
-
-  if (!response.ok) throw new Error(`Google auth error ${response.status}: ${await response.text()}`);
-  const data = await response.json() as { access_token?: string };
-  if (!data.access_token) throw new Error("Google no devolvio access_token.");
-  return data.access_token;
-}
-
-async function getGoogleOAuthAccessToken() {
-  const body = new URLSearchParams({
-    client_id: requiredEnv("GOOGLE_OAUTH_CLIENT_ID"),
-    client_secret: requiredEnv("GOOGLE_OAUTH_CLIENT_SECRET"),
-    refresh_token: requiredEnv("GOOGLE_OAUTH_REFRESH_TOKEN"),
-    grant_type: "refresh_token"
-  });
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body
-  });
-
-  if (!response.ok) throw new Error(`Google OAuth error ${response.status}: ${await response.text()}`);
-  const data = await response.json() as { access_token?: string };
-  if (!data.access_token) throw new Error("Google OAuth no devolvio access_token.");
-  return data.access_token;
-}
-
-async function googleJson<T = unknown>(url: string, accessToken: string, init: RequestInit = {}) {
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
-      ...(init.headers ?? {})
-    }
-  });
-  if (!response.ok) throw new Error(`Google API error ${response.status}: ${await response.text()}`);
-  return response.status === 204 ? ({} as T) : await response.json() as T;
-}
-
-async function uploadPdfToDrive({
+export async function ensureStudentExamFolder({
   accessToken,
-  folderId,
-  fileName,
-  pdf
+  rootFolderId,
+  legacyId,
+  name,
+  memberClass
 }: {
   accessToken: string;
-  folderId: string;
-  fileName: string;
-  pdf: Buffer;
+  rootFolderId: string;
+  legacyId: string | null;
+  name: string;
+  memberClass: "kids" | "adults";
 }) {
-  const boundary = `skbc_${Date.now()}`;
-  const metadata = JSON.stringify({
-    name: fileName,
-    parents: [folderId],
-    mimeType: "application/pdf"
+  const classFolder = await ensureDriveFolder({
+    accessToken,
+    parentFolderId: rootFolderId,
+    name: memberClass === "kids" ? "Ninos" : "Adultos"
   });
-  const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
-    Buffer.from(`--${boundary}\r\ncontent-type: application/pdf\r\n\r\n`),
-    pdf,
-    Buffer.from(`\r\n--${boundary}--`)
-  ]);
-
-  const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      "content-type": `multipart/related; boundary=${boundary}`
-    },
-    body
+  return ensureDriveFolder({
+    accessToken,
+    parentFolderId: classFolder,
+    name: `${legacyId ? `${legacyId} - ` : ""}${cleanFileNameForFolder(name)}`
   });
+}
 
-  if (!response.ok) throw new Error(`Google upload error ${response.status}: ${await response.text()}`);
-  return await response.json() as { id: string };
+export function examsRootFolderId() {
+  return optionalEnv("SKBC_EXAMS_DRIVE_FOLDER_ID") || requiredEnv("DIPLOMA_EXAMEN_FOLDER_ID");
 }
 
 function translateGradeEu(grade: string) {
@@ -348,18 +267,18 @@ function cleanFileName(value: string) {
     .slice(0, 60);
 }
 
+function cleanFileNameForFolder(value: string) {
+  return cleanFileName(value).replace(/_/g, " ") || "Kenshi";
+}
+
+function optionalEnv(name: string) {
+  return process.env[name]?.trim() || "";
+}
+
 function requiredEnv(name: string) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Falta configurar ${name}.`);
   return value;
-}
-
-function base64Url(value: string | Buffer) {
-  return Buffer.from(value)
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
 }
 
 function drawCenteredText(

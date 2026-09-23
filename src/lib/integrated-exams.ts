@@ -1,5 +1,7 @@
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { registerExam } from "@/lib/exams";
+import { generateDiplomaForExam } from "@/lib/diplomas";
+import { generateIntegratedExamDocumentsForStudent } from "@/lib/integrated-exam-documents";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type IntegratedExamProgram = "adults" | "kids_progressive" | "kids" | "dan_tribunal";
@@ -339,6 +341,32 @@ export async function finalizeIntegratedExamEvent(eventId: string, finalizedBy =
     registered.push({ studentId: student.id, examId: result.examId });
   }
 
+  const documentErrors: string[] = [];
+  for (const row of registered) {
+    const student = students.find((item) => item.id === row.studentId);
+    const summary = summaries.find((item) => item.studentId === row.studentId);
+    if (!student || !summary) continue;
+    try {
+      await generateIntegratedExamDocumentsForStudent({
+        examId: row.examId,
+        event,
+        student,
+        items,
+        examiners: submittedExaminers,
+        scores,
+        summary,
+        createdBy: finalizedBy
+      });
+    } catch (error) {
+      documentErrors.push(`${student.members?.display_name ?? "Kenshi"}: informe ${errorMessage(error)}`);
+    }
+    try {
+      await generateDiplomaForExam(row.examId);
+    } catch (error) {
+      documentErrors.push(`${student.members?.display_name ?? "Kenshi"}: diploma ${errorMessage(error)}`);
+    }
+  }
+
   const now = new Date().toISOString();
   for (const row of registered) {
     const { error } = await supabase
@@ -364,6 +392,7 @@ export async function finalizeIntegratedExamEvent(eventId: string, finalizedBy =
 
   return {
     registeredCount: registered.length,
+    documentErrorCount: documentErrors.length,
     passedCount: summaries.filter((summary) => {
       const review = reviewByStudent.get(summary.studentId);
       return review?.final_passed ?? summary.passed;
@@ -555,4 +584,8 @@ function defaultExamTitle(programType: IntegratedExamProgram, examDate: string) 
   if (programType === "kids_progressive") return `Examen infantil progresivo ${examDate}`;
   if (programType === "dan_tribunal") return `Tribunal dan ${examDate}`;
   return `Examen infantil ${examDate}`;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Error desconocido";
 }
