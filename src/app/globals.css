@@ -8871,6 +8871,26 @@ tbody tr:hover {
   justify-content: space-between;
 }
 
+.admin-summary-action {
+  background: #eef4fb;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--brand-strong);
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 8px 12px;
+}
+
+.field-help {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin-top: 6px;
+}
+
 .child-syllabus-admin-card summary,
 .student-child-program-item {
   align-items: center;

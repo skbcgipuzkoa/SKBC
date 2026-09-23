@@ -212,10 +212,10 @@ function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
         <span>Abrir</span>
       </summary>
       <div className="admin-compact-body">
-        <details className="admin-compact-inner">
+        <details className="admin-compact-inner child-syllabus-add-panel" open>
           <summary>
             <strong>Anadir punto al temario infantil</strong>
-            <span>No es un enlace</span>
+            <span>Abrir formulario</span>
           </summary>
           <div className="admin-helper-grid">
             <article>
@@ -251,8 +251,9 @@ function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
               </select>
             </label>
             <label>
-              Orden dentro del grado
+              Posicion en el orden del examen/clase
               <input name="sortOrder" type="number" defaultValue={100} />
+              <small className="field-help">Numeros mas bajos salen antes. Si no importa el orden, deja 100.</small>
             </label>
             <label className="checkbox-field">
               <input name="examRelevant" type="checkbox" defaultChecked />
@@ -281,6 +282,7 @@ function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
                 <span className={gradeColorClass(grade)}>{grade}</span>
                 <strong>{rows.length} puntos</strong>
                 <small>{rows.filter((row) => row.exam_relevant).length} para examen</small>
+                <span className="admin-summary-action">Abrir / editar</span>
               </summary>
               <div className="admin-compact-body">
                 {rows.length ? (
@@ -288,7 +290,7 @@ function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
                     {rows.map((item) => <ChildSyllabusItemEditor item={item} key={item.id} />)}
                   </div>
                 ) : (
-                  <p className="muted">Todavia no hay temario definido para este grado.</p>
+                  <p className="muted">Todavia no hay temario definido para este grado. Usa el formulario superior y elige este grado objetivo.</p>
                 )}
               </div>
             </details>
@@ -324,8 +326,9 @@ function ChildSyllabusItemEditor({ item }: { item: ChildSyllabusItem }) {
           </select>
         </label>
         <label>
-          Orden dentro del grado
+          Posicion en el orden del examen/clase
           <input name="sortOrder" type="number" defaultValue={item.sort_order} />
+          <small className="field-help">Numeros mas bajos salen antes. Si no importa el orden, deja 100.</small>
         </label>
         <label className="checkbox-field">
           <input name="examRelevant" type="checkbox" defaultChecked={item.exam_relevant} />
@@ -610,12 +613,64 @@ function formatMaterialGrades(materialGrades: string[], gradeOrder: string[]) {
 }
 
 function groupChildSyllabusItems(items: ChildSyllabusItem[]) {
-  return kidsGrades.map((grade) => [
+  const normalizedItems = items.map((item) => ({
+    ...item,
+    grade: childSyllabusGradeLabel(item.grade)
+  }));
+  const knownGroups = kidsGrades.map((grade) => [
     grade,
-    items
+    normalizedItems
       .filter((item) => normalize(item.grade) === normalize(grade))
       .sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
   ] as const);
+  const extraGrades = [...new Set(normalizedItems.map((item) => item.grade))]
+    .filter((grade) => !kidsGrades.some((knownGrade) => normalize(knownGrade) === normalize(grade)))
+    .sort();
+
+  return [
+    ...knownGroups,
+    ...extraGrades.map((grade) => [
+      grade,
+      normalizedItems
+        .filter((item) => normalize(item.grade) === normalize(grade))
+        .sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
+    ] as const)
+  ];
+}
+
+function childSyllabusGradeLabel(grade: string | null | undefined) {
+  const normalized = normalize(grade);
+  const aliases: Record<string, string> = {
+    "": "BLANCO",
+    MINARAI: "BLANCO",
+    BLANCO: "BLANCO",
+    "BLANCO Y AMARILLO": "BLANCO-AMARILLO",
+    "BLANCO-AMARILLO": "BLANCO-AMARILLO",
+    "5 KYU": "AMARILLO",
+    AMARILLO: "AMARILLO",
+    "AMARILLO Y NARANJA": "AMARILLO-NARANJA",
+    "AMARILLO-NARANJA": "AMARILLO-NARANJA",
+    "4 KYU": "NARANJA",
+    NARANJA: "NARANJA",
+    "NARANJA Y VERDE": "NARANJA-VERDE",
+    "NARANJA-VERDE": "NARANJA-VERDE",
+    "3 KYU": "VERDE",
+    VERDE: "VERDE",
+    "VERDE Y AZUL": "VERDE-AZUL",
+    "VERDE-AZUL": "VERDE-AZUL",
+    "2 KYU": "AZUL",
+    AZUL: "AZUL",
+    "AZUL Y MARRON": "AZUL-MARRON",
+    "AZUL Y MARRÓN": "AZUL-MARRON",
+    "AZUL-MARRON": "AZUL-MARRON",
+    "AZUL-MARRÓN": "AZUL-MARRON",
+    "1 KYU": "MARRON",
+    MARRON: "MARRON",
+    MARRÓN: "MARRON",
+    "1 DAN": "1 DAN"
+  };
+
+  return aliases[normalized] ?? (grade?.trim().toUpperCase() || "BLANCO");
 }
 
 const childSyllabusCategories = [
