@@ -150,7 +150,7 @@ export default async function RankingsPage({
         .returns<any[]>()
       ,
       supabase
-        .from("black_belt_special_members")
+        .from("black_belt_class_eligibility")
         .select("member_id,active")
         .eq("active", true)
         .returns<Array<{ member_id: string; active: boolean }>>()
