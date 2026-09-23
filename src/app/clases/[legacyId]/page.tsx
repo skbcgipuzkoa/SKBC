@@ -17,6 +17,7 @@ import {
   removeManualClassTechniqueAction,
   removeAttendanceAction,
   saveAttendanceTechnicalReviewAction,
+  saveChildAttendanceWorkReviewAction,
   saveChildClassPlanAction,
   updateClassAction,
   updateClassPlanTechniquesAction
@@ -147,6 +148,13 @@ type ChildClassGroupWorkRow = {
   member_ids: string[] | null;
   notes: string | null;
   created_at: string;
+};
+
+type ChildWorkOverrideRow = {
+  attendance_id: string;
+  work_mode: string | null;
+  trained_grade: string | null;
+  notes: string | null;
 };
 
 export default async function ClaseDetailPage({
@@ -331,6 +339,18 @@ export default async function ClaseDetailPage({
         .returns<ChildSyllabusItemRow[]>()
     ])
     : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }, { data: [] as ChildSyllabusItemRow[] }];
+  const childAttendanceRows = childPlanClass?.id
+    ? (dayAttendance ?? []).filter((item) => item.class_id === childPlanClass.id && item.members?.class === "kids")
+    : [];
+  const { data: childWorkOverrides } = childPlanClass?.id && childAttendanceRows.length
+    ? await supabase
+      .from("child_attendance_work_overrides")
+      .select("attendance_id,work_mode,trained_grade,notes")
+      .eq("class_id", childPlanClass.id)
+      .in("attendance_id", childAttendanceRows.map((item) => item.id))
+      .returns<ChildWorkOverrideRow[]>()
+    : { data: [] as ChildWorkOverrideRow[] };
+  const childWorkOverridesByAttendance = new Map((childWorkOverrides ?? []).map((item) => [item.attendance_id, item]));
   const adultDayMembers = (dayMembers ?? []).filter((member) => member.class === "adults");
   const adultAttendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === clase.id && item.members?.class === "adults").map((item) => item.member_id));
   const adultPendingMembers = adultDayMembers.filter((member) => !adultAttendedIds.has(member.id));
@@ -561,6 +581,75 @@ export default async function ClaseDetailPage({
       )}
     </details>
   ) : null;
+  const childWorkReviewPanel = childPlanClass?.id && childAttendanceRows.length ? (
+    <details className="card technical-review-panel child-work-review-panel">
+      <summary>
+        <strong>Ajuste tecnico infantil por alumno</strong>
+        <span>{childAttendanceRows.length} asistentes</span>
+      </summary>
+      {!(childSyllabusItems ?? []).length ? (
+        <p className="muted">Primero define algun punto del programa infantil o selecciona material del plan infantil.</p>
+      ) : (
+        <form action={saveChildAttendanceWorkReviewAction} className="technical-review-form">
+          <input type="hidden" name="classId" value={childPlanClass.id} />
+          <input type="hidden" name="legacyId" value={childPlanClass.legacy_id ?? legacyId} />
+          <input type="hidden" name="returnLegacyId" value={legacyId} />
+          <input type="hidden" name="returnStep" value={isCombinedDay ? "asistencia" : ""} />
+          <p className="muted">
+            Por defecto todos reciben el trabajo comun del dia. Usa esto solo si has separado a algun nino por grado,
+            si ha trabajado otro grupo o si solo ha observado.
+          </p>
+          <div className="technical-review-stack">
+            {childAttendanceRows.map((row) => {
+              const override = childWorkOverridesByAttendance.get(row.id);
+              const mode = override?.work_mode ?? "common";
+              const memberName = `${row.members?.first_name ?? ""} ${row.members?.last_name ?? ""}`.trim();
+              const targetGrade = nextKidGrade(row.official_grade) ?? normalizeKidGrade(row.official_grade) ?? row.official_grade ?? "";
+              const selectedGrade = override?.trained_grade ?? targetGrade;
+              return (
+                <details className="technical-review-member" key={row.id}>
+                  <summary>
+                    <strong>{memberName || "Kenshi"}</strong>
+                    <span>{childWorkModeLabel(mode)}{mode === "other_grade" && selectedGrade ? ` - ${selectedGrade}` : ""}</span>
+                  </summary>
+                  <input type="hidden" name="attendanceIds" value={row.id} />
+                  <div className="child-work-review-grid">
+                    <label>
+                      Trabajo realizado
+                      <select name={`childWorkMode:${row.id}`} defaultValue={mode}>
+                        <option value="common">Trabajo comun del grupo</option>
+                        <option value="own">Su grado objetivo</option>
+                        <option value="other_grade">Entreno otro grado</option>
+                        <option value="observer">Solo observo</option>
+                      </select>
+                    </label>
+                    <label>
+                      Grado entrenado si no fue comun
+                      <select name={`childTrainedGrade:${row.id}`} defaultValue={selectedGrade}>
+                        <option value="">Elegir grado</option>
+                        {kidsGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                      </select>
+                    </label>
+                    <label className="wide">
+                      Nota opcional
+                      <textarea
+                        name={`childWorkNotes:${row.id}`}
+                        defaultValue={override?.notes ?? ""}
+                        placeholder="Ej. trabajo con grupo de verdes, observo por lesion..."
+                      />
+                    </label>
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+          <div className="attendance-day-actions">
+            <button type="submit">Guardar ajustes infantiles</button>
+          </div>
+        </form>
+      )}
+    </details>
+  ) : null;
   const attendanceQuickPanel = (
     <article className="card">
       <h2>Asistencia final</h2>
@@ -697,6 +786,7 @@ export default async function ClaseDetailPage({
         {query.saved === "groups" ? <p className="save-ok">Grupos tecnicos generados.</p> : null}
         {query.saved === "attendance" ? <p className="save-ok">Asistencia anadida.</p> : null}
         {query.saved === "kids-skipped" ? <p className="save-ok">Clase de ninos saltada. Puedes continuar con el plan adulto.</p> : null}
+        {query.saved === "kids-work-review" ? <p className="save-ok">Ajuste tecnico infantil guardado.</p> : null}
         {query.saved === "attendance-removed" ? <p className="save-ok">Asistencia quitada.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
         {query.saved === "manual-technique" ? <p className="save-ok">Tecnica comun anadida al plan de clase.</p> : null}
@@ -722,6 +812,9 @@ export default async function ClaseDetailPage({
         ) : null}
         {query.error === "attendance" ? (
           <p className="form-error">No se ha podido anadir la asistencia.</p>
+        ) : null}
+        {query.error === "kids-work-review" ? (
+          <p className="form-error">No se ha podido guardar el ajuste tecnico infantil.</p>
         ) : null}
         {query.error === "plan-technique" ? (
           <p className="form-error">No se ha podido actualizar la tecnica.</p>
@@ -957,6 +1050,7 @@ export default async function ClaseDetailPage({
         ) : null}
 
         {kidsEarlyAttendancePanel}
+        {childWorkReviewPanel}
 
         {showAdultTechniques ? (
           <>
@@ -1642,6 +1736,20 @@ function groupOverridesByAttendance(rows: TechnicalOverrideRow[]) {
     map.set(row.attendance_id, planIds);
   });
   return map;
+}
+
+function childWorkModeLabel(mode: string | null | undefined) {
+  switch (mode) {
+    case "own":
+      return "Su grado";
+    case "other_grade":
+      return "Otro grado";
+    case "observer":
+      return "Observa";
+    case "common":
+    default:
+      return "Comun";
+  }
 }
 
 function delegateModeFromCreatedBy(value: string | null | undefined) {

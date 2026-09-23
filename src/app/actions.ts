@@ -2423,6 +2423,90 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
   redirect(`/clases/${legacyId}?saved=${closeAfter ? "close" : "technical-review"}${returnStepQuery}`);
 }
 
+export async function saveChildAttendanceWorkReviewAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const returnLegacyId = String(formData.get("returnLegacyId") ?? legacyId);
+  const returnStep = String(formData.get("returnStep") ?? "");
+  const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
+  const attendanceIds = formData.getAll("attendanceIds").map((value) => String(value)).filter(Boolean);
+
+  if (!classId || !legacyId || !attendanceIds.length) {
+    redirect(`/clases/${returnLegacyId || legacyId}?error=kids-work-review${returnStepQuery}`);
+  }
+
+  const supabase = createAdminClient();
+
+  try {
+    const { data: clase, error: classError } = await supabase
+      .from("classes")
+      .select("class_group")
+      .eq("id", classId)
+      .single<{ class_group: "kids" | "adults" }>();
+
+    if (classError || clase?.class_group !== "kids") {
+      throw classError ?? new Error("La clase no es infantil.");
+    }
+
+    const { data: attendanceRows, error: attendanceError } = await supabase
+      .from("attendance_logs")
+      .select("id,member_id")
+      .eq("class_id", classId)
+      .in("id", attendanceIds)
+      .returns<Array<{ id: string; member_id: string }>>();
+
+    if (attendanceError) throw attendanceError;
+
+    const now = new Date().toISOString();
+    const rows = [];
+    for (const attendance of attendanceRows ?? []) {
+      const mode = normalizeChildWorkMode(String(formData.get(`childWorkMode:${attendance.id}`) ?? "common"));
+      const trainedGrade = normalizeChildSyllabusGrade(String(formData.get(`childTrainedGrade:${attendance.id}`) ?? ""));
+      const notes = emptyToNull(String(formData.get(`childWorkNotes:${attendance.id}`) ?? ""));
+
+      if (mode === "common" && !notes) continue;
+
+      rows.push({
+        class_id: classId,
+        attendance_id: attendance.id,
+        member_id: attendance.member_id,
+        work_mode: mode,
+        trained_grade: mode === "own" || mode === "other_grade" ? trainedGrade || null : null,
+        notes,
+        updated_at: now
+      });
+    }
+
+    const { error: deleteError } = await supabase
+      .from("child_attendance_work_overrides")
+      .delete()
+      .eq("class_id", classId)
+      .in("attendance_id", attendanceIds);
+
+    if (deleteError) throw deleteError;
+
+    if (rows.length) {
+      const { error: insertError } = await supabase
+        .from("child_attendance_work_overrides")
+        .insert(rows);
+
+      if (insertError) throw insertError;
+    }
+
+    await syncChildSyllabusHistoryForClass(supabase, classId);
+    await recalculateChildRankings();
+  } catch (error) {
+    console.error("Error saving child attendance work review", error);
+    redirect(`/clases/${returnLegacyId || legacyId}?error=kids-work-review${returnStepQuery}`);
+  }
+
+  redirect(`/clases/${returnLegacyId || legacyId}?saved=kids-work-review${returnStepQuery}`);
+}
+
 export async function closeAdultClassAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");
@@ -4355,6 +4439,17 @@ function normalizeChildSyllabusGrade(value: string) {
   return kidsGrades.find((grade) => grade.toUpperCase() === normalized) ?? "";
 }
 
+function normalizeChildWorkMode(value: string) {
+  return ["common", "own", "other_grade", "observer"].includes(value) ? value : "common";
+}
+
+function nextChildSyllabusGrade(value: string | null | undefined) {
+  const grade = normalizeChildSyllabusGrade(String(value ?? ""));
+  const index = kidsGrades.findIndex((item) => item.toUpperCase() === grade.toUpperCase());
+  if (index === -1) return grade || null;
+  return kidsGrades[Math.min(index + 1, kidsGrades.length - 1)] ?? grade;
+}
+
 function normalizeChildSyllabusCategory(value: string) {
   const normalized = value.trim().toLowerCase();
   const allowed = [
@@ -4744,9 +4839,9 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
       .maybeSingle<{ syllabus_item_ids: string[] | null }>(),
     supabase
       .from("attendance_logs")
-      .select("id,member_id")
+      .select("id,member_id,official_grade,trained_grade")
       .eq("class_id", classId)
-      .returns<Array<{ id: string; member_id: string }>>()
+      .returns<Array<{ id: string; member_id: string; official_grade: string | null; trained_grade: string | null }>>()
   ]);
 
   if (classError) throw classError;
@@ -4763,16 +4858,54 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
   if (deleteError) throw deleteError;
   if (!syllabusItemIds.length || !attendances?.length) return;
 
+  const [{ data: syllabusItems, error: syllabusError }, { data: overrides, error: overrideError }] = await Promise.all([
+    supabase
+      .from("child_syllabus_items")
+      .select("id,grade")
+      .in("id", syllabusItemIds)
+      .returns<Array<{ id: string; grade: string | null }>>(),
+    supabase
+      .from("child_attendance_work_overrides")
+      .select("attendance_id,work_mode,trained_grade")
+      .eq("class_id", classId)
+      .returns<Array<{ attendance_id: string; work_mode: string | null; trained_grade: string | null }>>()
+  ]);
+
+  if (syllabusError) throw syllabusError;
+  if (overrideError) throw overrideError;
+  if (!syllabusItems?.length) return;
+
+  const overridesByAttendance = new Map((overrides ?? []).map((item) => [item.attendance_id, item]));
   const now = new Date().toISOString();
-  const rows = attendances.flatMap((attendance) => syllabusItemIds.map((syllabusItemId) => ({
-    member_id: attendance.member_id,
-    class_id: classId,
-    attendance_id: attendance.id,
-    syllabus_item_id: syllabusItemId,
-    practiced_on: clase.class_date,
-    source: "class_plan",
-    updated_at: now
-  })));
+  const rows = [];
+  for (const attendance of attendances) {
+    const override = overridesByAttendance.get(attendance.id);
+    const mode = normalizeChildWorkMode(String(override?.work_mode ?? "common"));
+    if (mode === "observer") continue;
+
+    const targetGrade = mode === "own"
+      ? nextChildSyllabusGrade(attendance.official_grade ?? attendance.trained_grade)
+      : mode === "other_grade"
+        ? normalizeChildSyllabusGrade(String(override?.trained_grade ?? ""))
+        : "";
+    const itemsForAttendance = targetGrade
+      ? syllabusItems.filter((item) => normalizeChildSyllabusGrade(String(item.grade ?? "")) === targetGrade)
+      : syllabusItems;
+
+    for (const item of itemsForAttendance) {
+      rows.push({
+        member_id: attendance.member_id,
+        class_id: classId,
+        attendance_id: attendance.id,
+        syllabus_item_id: item.id,
+        practiced_on: clase.class_date,
+        source: "class_plan",
+        updated_at: now
+      });
+    }
+  }
+
+  if (!rows.length) return;
 
   const { error } = await supabase
     .from("child_syllabus_history")

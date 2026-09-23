@@ -3584,6 +3584,34 @@ tbody tr:hover {
   padding: 0 6px;
 }
 
+.child-work-review-panel {
+  border-color: rgba(22, 101, 52, 0.22);
+}
+
+.child-work-review-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 12px;
+}
+
+.child-work-review-grid label {
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  font-weight: 900;
+  gap: 6px;
+}
+
+.child-work-review-grid textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.child-work-review-grid .wide {
+  grid-column: 1 / -1;
+}
+
 .mini-check-row {
   align-items: center;
   display: grid;
