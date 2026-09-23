@@ -139,7 +139,14 @@ export async function createIntegratedExamEvent(input: {
   if (studentsError) throw studentsError;
 
   const items = await buildExamItems(event.id, input.programType, students.map((student) => student.target_grade).filter(Boolean) as string[]);
-  if (!items.length) throw new Error("No hay temario disponible para crear este examen.");
+  if (!items.length) {
+    await supabase.from("exam_events").delete().eq("id", event.id);
+    throw new Error(
+      input.programType === "kids" || input.programType === "kids_progressive"
+        ? "No hay temario infantil activo ni un examen infantil anterior que pueda usarse como plantilla."
+        : "No hay temario disponible para crear este examen."
+    );
+  }
 
   const { error: itemsError } = await supabase.from("exam_event_items").insert(items);
   if (itemsError) throw itemsError;
@@ -557,7 +564,67 @@ async function buildKidsItems(eventId: string, targetGrades: string[]) {
       });
     }
   }
-  return rows;
+  if (rows.length) return rows;
+  return buildKidsItemsFromLatestTemplate(eventId, grades);
+}
+
+async function buildKidsItemsFromLatestTemplate(eventId: string, grades: string[]) {
+  const supabase = createAdminClient();
+  const { data: previousEvents, error: eventsError } = await supabase
+    .from("exam_events")
+    .select("id")
+    .in("program_type", ["kids", "kids_progressive"])
+    .neq("id", eventId)
+    .order("exam_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(8)
+    .returns<Array<{ id: string }>>();
+
+  if (eventsError) throw eventsError;
+
+  const allowedGrades = new Set(grades.map(normalizeGrade));
+  for (const previousEvent of previousEvents ?? []) {
+    const { data: templateItems, error: itemsError } = await supabase
+      .from("exam_event_items")
+      .select("source,section,name,summary,grade,category,weight,order_index,cut_grade,active")
+      .eq("exam_event_id", previousEvent.id)
+      .eq("active", true)
+      .order("order_index", { ascending: true })
+      .returns<Array<{
+        source: ExamEventItem["source"];
+        section: string | null;
+        name: string;
+        summary: string | null;
+        grade: string | null;
+        category: string | null;
+        weight: number;
+        order_index: number;
+        cut_grade: string | null;
+        active: boolean;
+      }>>();
+
+    if (itemsError) throw itemsError;
+
+    const copiedItems = (templateItems ?? [])
+      .filter((item) => item.source === "cut" || !item.grade || allowedGrades.has(normalizeGrade(item.grade)))
+      .map((item, index) => ({
+        exam_event_id: eventId,
+        source: item.source === "cut" ? "cut" : "manual",
+        section: item.section,
+        name: item.name,
+        summary: item.summary,
+        grade: item.grade,
+        category: item.category,
+        weight: item.weight,
+        order_index: index + 1,
+        cut_grade: item.cut_grade,
+        active: item.active
+      }));
+
+    if (copiedItems.length) return copiedItems;
+  }
+
+  return [];
 }
 
 function resolveTargetGrade(memberClass: "kids" | "adults", currentGrade: string | null) {
