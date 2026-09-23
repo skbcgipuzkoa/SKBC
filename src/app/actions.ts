@@ -4436,7 +4436,16 @@ function normalizeTechnicalMaterialSection(formData: FormData) {
 
 function normalizeChildSyllabusGrade(value: string) {
   const normalized = value.trim().toUpperCase().replace(/\s+/g, " ");
-  return kidsGrades.find((grade) => grade.toUpperCase() === normalized) ?? "";
+  const aliases: Record<string, string> = {
+    MINARAI: "BLANCO",
+    "BLANCO Y AMARILLO": "BLANCO-AMARILLO",
+    "AMARILLO Y NARANJA": "AMARILLO-NARANJA",
+    "NARANJA Y VERDE": "NARANJA-VERDE",
+    "VERDE Y AZUL": "VERDE-AZUL",
+    "AZUL Y MARRON": "AZUL-MARRON",
+    "AZUL Y MARRÓN": "AZUL-MARRON"
+  };
+  return kidsGrades.find((grade) => grade.toUpperCase() === (aliases[normalized] ?? normalized)) ?? "";
 }
 
 function normalizeChildWorkMode(value: string) {
@@ -4448,6 +4457,12 @@ function nextChildSyllabusGrade(value: string | null | undefined) {
   const index = kidsGrades.findIndex((item) => item.toUpperCase() === grade.toUpperCase());
   if (index === -1) return grade || null;
   return kidsGrades[Math.min(index + 1, kidsGrades.length - 1)] ?? grade;
+}
+
+function childSyllabusGradeCandidates(value: string | null | undefined) {
+  const current = normalizeChildSyllabusGrade(String(value ?? ""));
+  const target = nextChildSyllabusGrade(value) ?? current;
+  return [...new Set([target, current].filter(Boolean))];
 }
 
 function normalizeChildSyllabusCategory(value: string) {
@@ -4883,13 +4898,13 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
     const mode = normalizeChildWorkMode(String(override?.work_mode ?? "common"));
     if (mode === "observer") continue;
 
-    const targetGrade = mode === "own"
-      ? nextChildSyllabusGrade(attendance.official_grade ?? attendance.trained_grade)
+    const targetGrades = mode === "own"
+      ? childSyllabusGradeCandidates(attendance.official_grade ?? attendance.trained_grade)
       : mode === "other_grade"
-        ? normalizeChildSyllabusGrade(String(override?.trained_grade ?? ""))
-        : "";
-    const itemsForAttendance = targetGrade
-      ? syllabusItems.filter((item) => normalizeChildSyllabusGrade(String(item.grade ?? "")) === targetGrade)
+        ? [normalizeChildSyllabusGrade(String(override?.trained_grade ?? ""))].filter(Boolean)
+        : [];
+    const itemsForAttendance = targetGrades.length
+      ? syllabusItems.filter((item) => targetGrades.includes(normalizeChildSyllabusGrade(String(item.grade ?? ""))))
       : syllabusItems;
 
     for (const item of itemsForAttendance) {

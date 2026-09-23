@@ -315,7 +315,7 @@ export default async function ClaseDetailPage({
   const kidsDayMembers = (dayMembers ?? []).filter((member) => member.class === "kids");
   const pendingKidsDayMembers = kidsDayMembers.filter((member) => !kidsAttendedIds.has(member.id));
   const childPlanClass = clase.class_group === "kids" ? { id: clase.id, legacy_id: clase.legacy_id } : kidsDayClass;
-  const childSyllabusGrades = [...new Set(kidsDayMembers.map((member) => nextKidGrade(member.grade) ?? normalizeKidGrade(member.grade)).filter(Boolean))] as string[];
+  const childSyllabusGrades = [...new Set(kidsDayMembers.flatMap((member) => childSyllabusGradeCandidates(member.grade)).filter(Boolean))] as string[];
   const [{ data: childClassPlan }, { data: childClassGroupWork }, { data: childSyllabusItems }] = childPlanClass?.id
     ? await Promise.all([
       supabase
@@ -1522,7 +1522,17 @@ function childSyllabusCategoryLabel(value: string | null | undefined) {
 
 function normalizeKidGrade(grade: string | null | undefined) {
   const normalized = normalizeGradeLabel(grade);
-  return kidsGrades.find((item) => normalizeGradeLabel(item) === normalized) ?? null;
+  const aliases: Record<string, string> = {
+    MINARAI: "BLANCO",
+    "BLANCO Y AMARILLO": "BLANCO-AMARILLO",
+    "AMARILLO Y NARANJA": "AMARILLO-NARANJA",
+    "NARANJA Y VERDE": "NARANJA-VERDE",
+    "VERDE Y AZUL": "VERDE-AZUL",
+    "AZUL Y MARRON": "AZUL-MARRON",
+    "AZUL Y MARRÓN": "AZUL-MARRON"
+  };
+  const canonical = aliases[normalized] ?? normalized;
+  return kidsGrades.find((item) => normalizeGradeLabel(item) === canonical) ?? null;
 }
 
 function nextKidGrade(grade: string | null | undefined) {
@@ -1530,6 +1540,12 @@ function nextKidGrade(grade: string | null | undefined) {
   if (!current) return null;
   const index = kidsGrades.indexOf(current);
   return kidsGrades[Math.min(index + 1, kidsGrades.length - 1)] ?? current;
+}
+
+function childSyllabusGradeCandidates(grade: string | null | undefined) {
+  const current = normalizeKidGrade(grade);
+  const target = nextKidGrade(grade) ?? current;
+  return [...new Set([target, current].filter(Boolean))] as string[];
 }
 
 function kidGradeSortValue(grade: string | null | undefined) {
