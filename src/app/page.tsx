@@ -8,7 +8,6 @@ import {
   Medal,
   NotebookTabs,
   PackageCheck,
-  SquareArrowOutUpRight,
   ShieldCheck,
   Sparkles,
   Bell,
@@ -73,7 +72,6 @@ const moduleGroups: Array<{ title: string; items: ModuleLink[] }> = [
     items: [
       { label: "Proximos examenes", href: "/proximos-examenes", icon: Medal },
       { label: "Examenes", href: "/examenes", icon: GraduationCap },
-      { label: "App examenes", href: "https://akapi80.github.io/EXAMENES/", icon: SquareArrowOutUpRight, external: true },
       { label: "Actas", href: "/actas-clase", icon: FileSearch },
       { label: "Rankings", href: "/rankings", icon: Trophy },
       { label: "Cursos", href: "/cursos", icon: BarChart3 }

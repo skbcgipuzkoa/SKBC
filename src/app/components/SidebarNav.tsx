@@ -4,7 +4,13 @@ type SidebarNavProps = {
   current?: string;
 };
 
-const navItems = [
+type NavItem = {
+  label: string;
+  href: string;
+  external?: boolean;
+};
+
+const navItems: NavItem[] = [
   { label: "Inicio", href: "/skbc-interno" },
   { label: "Dojo", href: "/skbc-interno/dojo" },
   { label: "Control dia", href: "/control-dia" },
@@ -20,7 +26,6 @@ const navItems = [
   { label: "Consulta tecnica", href: "/consulta-tecnica" },
   { label: "Areas tecnicas", href: "/areas-tecnicas" },
   { label: "Examenes", href: "/examenes" },
-  { label: "App examenes", href: "https://akapi80.github.io/EXAMENES/", external: true },
   { label: "Cursos", href: "/cursos" },
   { label: "Calendario", href: "/calendario" },
   { label: "Pedidos", href: "/pedidos-cinturones" },
