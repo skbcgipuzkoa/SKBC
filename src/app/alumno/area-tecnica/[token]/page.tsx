@@ -50,6 +50,16 @@ type Technique = {
   video_title: string | null;
 };
 
+type ChildSyllabusItem = {
+  id: string;
+  grade: string;
+  title: string;
+  category: string;
+  description: string | null;
+  exam_relevant: boolean;
+  sort_order: number;
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function StudentTechnicalAreaPage({
@@ -75,7 +85,7 @@ export default async function StudentTechnicalAreaPage({
   const targetGrade = member.class === "kids" ? nextGrade(kidsGrades, member.grade) : nextGrade(adultGrades, member.grade);
   const allowedGrades = gradesUntil(member.class === "kids" ? kidsGrades : adultGrades, targetGrade);
 
-  const [{ data: materials }, { data: configuredLinks }, { data: techniques }] = await Promise.all([
+  const [{ data: materials }, { data: configuredLinks }, { data: techniques }, { data: childSyllabus }] = await Promise.all([
     supabase
       .from("technical_area_materials")
       .select("id,member_class,grade,title,description,material_type,url,section,sort_order")
@@ -101,6 +111,16 @@ export default async function StudentTechnicalAreaPage({
           .order("grade", { ascending: true })
           .order("name", { ascending: true })
           .returns<Technique[]>()
+      : Promise.resolve({ data: [], error: null }),
+    member.class === "kids"
+      ? supabase
+          .from("child_syllabus_items")
+          .select("id,grade,title,category,description,exam_relevant,sort_order")
+          .in("grade", allowedGrades)
+          .eq("active", true)
+          .order("sort_order", { ascending: true })
+          .order("title", { ascending: true })
+          .returns<ChildSyllabusItem[]>()
       : Promise.resolve({ data: [], error: null })
   ]);
 
@@ -114,11 +134,14 @@ export default async function StudentTechnicalAreaPage({
       : null;
   const materialsBySection = groupBySection(materials ?? []);
   const techniqueRows = techniques ?? [];
+  const childSyllabusRows = childSyllabus ?? [];
   const selectedCategory = normalizeTechniqueCategory(query.category);
   const techniquesByGrade = groupTechniquesByGrade(techniqueRows, allowedGrades);
+  const childSyllabusByGrade = groupChildSyllabusByGrade(childSyllabusRows, allowedGrades);
   const hasGoho = techniqueRows.some((technique) => normalizeGrade(technique.category) === "GOHO");
   const hasJuho = techniqueRows.some((technique) => normalizeGrade(technique.category) === "JUHO");
   const portalSections = [
+    childSyllabusRows.length ? { id: "programa-infantil", label: "Programa infantil", count: childSyllabusRows.length } : null,
     techniqueRows.length ? { id: "tecnicas", label: "Tecnicas", count: techniqueRows.length } : null,
     ...materialsBySection.map(([section, rows]) => ({ id: slug(section), label: section, count: rows.length }))
   ].filter(Boolean) as Array<{ id: string; label: string; count: number }>;
@@ -144,6 +167,42 @@ export default async function StudentTechnicalAreaPage({
             </a>
           ))}
         </nav>
+      ) : null}
+
+      {childSyllabusRows.length ? (
+        <details className="student-area-section student-area-disclosure" id="programa-infantil">
+          <summary>
+            <div>
+              <h2>Programa infantil</h2>
+              <p className="muted">Temario visible por grados hasta tu objetivo. Sirve como guia de aprendizaje y de futuros examenes infantiles.</p>
+            </div>
+            <span>Abrir</span>
+          </summary>
+          <div className="student-area-disclosure-body">
+            <div className="student-technique-grade-list">
+              {childSyllabusByGrade.map(([grade, rows]) => (
+                <details className="student-technique-grade-panel" key={grade}>
+                  <summary>
+                    <span className={gradeColorClass(grade)}>{grade}</span>
+                    <strong>{rows.length} puntos</strong>
+                  </summary>
+                  <div className="student-child-program-list">
+                    {rows.map((item) => (
+                      <article className="student-child-program-item" key={item.id}>
+                        <div>
+                          <span>{childSyllabusCategoryLabel(item.category)}</span>
+                          <h3>{item.title}</h3>
+                          {item.description ? <p>{item.description}</p> : null}
+                        </div>
+                        {item.exam_relevant ? <small>Examen</small> : <small>Practica</small>}
+                      </article>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        </details>
       ) : null}
 
       {materialsBySection.map(([section, rows]) => (
@@ -374,6 +433,21 @@ function groupTechniquesByGrade(techniques: Technique[], gradeOrder: string[]) {
   return [...grouped.entries()].filter(([, rows]) => rows.length);
 }
 
+function groupChildSyllabusByGrade(items: ChildSyllabusItem[], gradeOrder: string[]) {
+  const grouped = new Map<string, ChildSyllabusItem[]>();
+  for (const grade of gradeOrder) grouped.set(grade, []);
+  for (const item of items) {
+    const grade = gradeOrder.find((candidate) => sameGrade(candidate, item.grade)) ?? item.grade;
+    grouped.set(grade, [...(grouped.get(grade) ?? []), item]);
+  }
+  return [...grouped.entries()]
+    .map(([grade, rows]) => [
+      grade,
+      rows.sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
+    ] as const)
+    .filter(([, rows]) => rows.length);
+}
+
 function sameGrade(a: string | null | undefined, b: string | null | undefined) {
   return normalizeGrade(a) === normalizeGrade(b);
 }
@@ -392,6 +466,23 @@ function materialTypeLabel(type: TechnicalAreaMaterial["material_type"]) {
     link: "Enlace"
   };
   return labels[type] ?? "Enlace";
+}
+
+function childSyllabusCategoryLabel(category: string) {
+  const labels: Record<string, string> = {
+    tecnica: "Tecnica",
+    kihon: "Kihon",
+    desplazamiento: "Desplazamiento",
+    ukemi: "Ukemi",
+    kata: "Kata",
+    howa: "Howa",
+    gakka: "Gakka",
+    comportamiento: "Comportamiento",
+    etiqueta: "Etiqueta",
+    juego: "Juego",
+    otro: "Practica general"
+  };
+  return labels[category] ?? "Practica general";
 }
 
 function normalizeTechniqueCategory(value: string | null | undefined) {

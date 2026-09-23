@@ -35,6 +35,7 @@ const BACKUP_TABLES = [
   "distribution_delivery_checks",
   "technical_area_links",
   "technical_area_materials",
+  "child_syllabus_items",
   "internal_notices",
   "telegram_notification_settings",
   "telegram_notification_logs",

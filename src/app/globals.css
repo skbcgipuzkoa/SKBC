@@ -8830,6 +8830,74 @@ tbody tr:hover {
   font-weight: 700;
 }
 
+.child-syllabus-admin-list,
+.child-syllabus-item-list,
+.student-child-program-list {
+  display: grid;
+  gap: 12px;
+}
+
+.child-syllabus-grade-panel > summary {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.child-syllabus-admin-card summary,
+.student-child-program-item {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.child-syllabus-admin-card summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.child-syllabus-admin-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.child-syllabus-admin-card summary span,
+.student-child-program-item div {
+  display: grid;
+  gap: 4px;
+}
+
+.child-syllabus-admin-card summary small,
+.student-child-program-item span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.student-child-program-item {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.student-child-program-item h3 {
+  margin: 0;
+}
+
+.student-child-program-item p {
+  color: #475569;
+  margin: 0;
+}
+
+.student-child-program-item small {
+  background: #eef4fb;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  flex-shrink: 0;
+  font-weight: 900;
+  padding: 8px 10px;
+}
+
 .student-area-page {
   background: #f5f8fc;
   color: var(--ink);

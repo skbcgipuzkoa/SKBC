@@ -2,7 +2,16 @@ import { ArrowLeft, ExternalLink, LogOut, NotebookTabs } from "lucide-react";
 import { GradeMultiSelect } from "@/app/components/GradeMultiSelect";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
-import { createTechnicalAreaMaterialAction, deleteTechnicalAreaMaterialGroupAction, logoutAction, updateTechnicalAreaMaterialGroupAction, upsertTechnicalAreaLinkAction } from "@/app/actions";
+import {
+  createChildSyllabusItemAction,
+  createTechnicalAreaMaterialAction,
+  deleteChildSyllabusItemAction,
+  deleteTechnicalAreaMaterialGroupAction,
+  logoutAction,
+  updateChildSyllabusItemAction,
+  updateTechnicalAreaMaterialGroupAction,
+  upsertTechnicalAreaLinkAction
+} from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -37,6 +46,19 @@ type TechnicalAreaMaterialGroup = TechnicalAreaMaterial & {
   grades: string[];
 };
 
+type ChildSyllabusItem = {
+  id: string;
+  grade: string;
+  title: string;
+  category: string;
+  description: string | null;
+  exam_relevant: boolean;
+  active: boolean;
+  sort_order: number;
+  updated_at: string;
+  updated_by: string | null;
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function TechnicalAreasPage({
@@ -48,7 +70,7 @@ export default async function TechnicalAreasPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data, error }, materialsResult] = await Promise.all([
+  const [{ data, error }, materialsResult, childSyllabusResult] = await Promise.all([
     supabase
       .from("technical_area_links")
       .select("member_class,grade,target_grade,url,label,active,notes")
@@ -61,14 +83,23 @@ export default async function TechnicalAreasPage({
       .order("member_class", { ascending: true })
       .order("grade", { ascending: true })
       .order("sort_order", { ascending: true })
-      .returns<TechnicalAreaMaterial[]>()
+      .returns<TechnicalAreaMaterial[]>(),
+    supabase
+      .from("child_syllabus_items")
+      .select("id,grade,title,category,description,exam_relevant,active,sort_order,updated_at,updated_by")
+      .order("grade", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .order("title", { ascending: true })
+      .returns<ChildSyllabusItem[]>()
   ]);
 
   if (error) throw error;
   if (materialsResult.error) throw materialsResult.error;
+  if (childSyllabusResult.error) throw childSyllabusResult.error;
 
   const links = data ?? [];
   const materials = materialsResult.data ?? [];
+  const childSyllabusItems = childSyllabusResult.data ?? [];
   const adultRows = buildRows("adults", adultGrades.filter((grade) => grade !== "10 DAN"), links);
   const kidRows = buildRows("kids", kidsGrades, links);
   const selectedClass = params.class === "kids" ? "kids" : "adults";
@@ -94,8 +125,11 @@ export default async function TechnicalAreasPage({
         {params.saved === "link" ? <p className="save-ok">Area tecnica guardada. Las fichas ya usan este enlace automaticamente.</p> : null}
         {params.saved === "material" ? <p className="save-ok">Material guardado. El area tecnica interna ya lo puede mostrar.</p> : null}
         {params.saved === "material-deleted" ? <p className="save-ok">Material eliminado.</p> : null}
+        {params.saved === "child-program" ? <p className="save-ok">Programa infantil guardado. Las fichas infantiles ya lo pueden mostrar.</p> : null}
+        {params.saved === "child-program-deleted" ? <p className="save-ok">Punto del programa infantil eliminado.</p> : null}
         {params.error === "link" ? <p className="form-error">No se pudo guardar el enlace. Revisa grado y URL.</p> : null}
         {params.error === "material" ? <p className="form-error">No se pudo guardar el material. Revisa titulo, grado y URL.</p> : null}
+        {params.error === "child-program" ? <p className="form-error">No se pudo guardar el programa infantil. Revisa grado y titulo.</p> : null}
 
         <section className="card">
           <div className="section-heading-row">
@@ -115,9 +149,145 @@ export default async function TechnicalAreasPage({
 
         <TechnicalAreaGrid title="Adultos" rows={adultRows} hidden={selectedClass !== "adults"} />
         <TechnicalAreaGrid title="Ninos" rows={kidRows} hidden={selectedClass !== "kids"} />
+        {selectedClass === "kids" ? <ChildSyllabusAdmin items={childSyllabusItems} /> : null}
         <TechnicalMaterialsAdmin selectedClass={selectedClass} materials={materials} />
       </main>
     </div>
+  );
+}
+
+function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
+  const grouped = groupChildSyllabusItems(items);
+  const activeCount = items.filter((item) => item.active).length;
+
+  return (
+    <details className="card admin-compact-section">
+      <summary>
+        <div>
+          <h2>Programa infantil por grados</h2>
+          <p className="muted">{activeCount} puntos activos. Sirve para fichas infantiles, plan ligero y futuros examenes de ninos.</p>
+        </div>
+        <span>Abrir</span>
+      </summary>
+      <div className="admin-compact-body">
+        <details className="admin-compact-inner">
+          <summary>
+            <strong>Anadir punto del programa</strong>
+            <span>Nuevo</span>
+          </summary>
+          <form className="quick-form technical-material-form" action={createChildSyllabusItemAction}>
+            <label>
+              Grado
+              <select name="grade" defaultValue="BLANCO">
+                {kidsGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              </select>
+            </label>
+            <label>
+              Categoria
+              <select name="category" defaultValue="tecnica">
+                {childSyllabusCategories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
+              </select>
+            </label>
+            <label>
+              Orden
+              <input name="sortOrder" type="number" defaultValue={100} />
+            </label>
+            <label className="checkbox-field">
+              <input name="examRelevant" type="checkbox" defaultChecked />
+              Entra para examen
+            </label>
+            <label className="checkbox-field">
+              <input name="active" type="checkbox" defaultChecked />
+              Activo
+            </label>
+            <label className="wide">
+              Titulo
+              <input name="title" placeholder="Atar el cinturon, kihon de puños, kote nuki..." required />
+            </label>
+            <label className="wide">
+              Descripcion
+              <textarea name="description" rows={3} placeholder="Que debe saber hacer o recordar el alumno..." />
+            </label>
+            <SubmitButton pendingLabel="Guardando...">Anadir al programa infantil</SubmitButton>
+          </form>
+        </details>
+
+        <section className="child-syllabus-admin-list">
+          {grouped.map(([grade, rows]) => (
+            <details className="admin-compact-inner child-syllabus-grade-panel" key={grade}>
+              <summary>
+                <span className={gradeColorClass(grade)}>{grade}</span>
+                <strong>{rows.length} puntos</strong>
+                <small>{rows.filter((row) => row.exam_relevant).length} para examen</small>
+              </summary>
+              <div className="admin-compact-body">
+                {rows.length ? (
+                  <div className="child-syllabus-item-list">
+                    {rows.map((item) => <ChildSyllabusItemEditor item={item} key={item.id} />)}
+                  </div>
+                ) : (
+                  <p className="muted">Todavia no hay temario definido para este grado.</p>
+                )}
+              </div>
+            </details>
+          ))}
+        </section>
+      </div>
+    </details>
+  );
+}
+
+function ChildSyllabusItemEditor({ item }: { item: ChildSyllabusItem }) {
+  return (
+    <details className={item.active ? "card child-syllabus-admin-card" : "card child-syllabus-admin-card muted-card"}>
+      <summary>
+        <span>
+          <strong>{item.title}</strong>
+          <small>{childSyllabusCategoryLabel(item.category)} - {item.exam_relevant ? "entra para examen" : "practica general"}</small>
+        </span>
+        <small>{item.updated_by ? `Editado por ${item.updated_by}` : "Sin editor"} · {formatDateTime(item.updated_at)}</small>
+      </summary>
+      <form className="quick-form technical-material-form" action={updateChildSyllabusItemAction}>
+        <input type="hidden" name="id" value={item.id} />
+        <label>
+          Grado
+          <select name="grade" defaultValue={item.grade}>
+            {kidsGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+          </select>
+        </label>
+        <label>
+          Categoria
+          <select name="category" defaultValue={item.category}>
+            {childSyllabusCategories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
+          </select>
+        </label>
+        <label>
+          Orden
+          <input name="sortOrder" type="number" defaultValue={item.sort_order} />
+        </label>
+        <label className="checkbox-field">
+          <input name="examRelevant" type="checkbox" defaultChecked={item.exam_relevant} />
+          Entra para examen
+        </label>
+        <label className="checkbox-field">
+          <input name="active" type="checkbox" defaultChecked={item.active} />
+          Activo
+        </label>
+        <label className="wide">
+          Titulo
+          <input name="title" defaultValue={item.title} required />
+        </label>
+        <label className="wide">
+          Descripcion
+          <textarea name="description" rows={3} defaultValue={item.description ?? ""} />
+        </label>
+        <SubmitButton pendingLabel="Guardando...">Guardar punto</SubmitButton>
+      </form>
+      <form action={deleteChildSyllabusItemAction} className="form-actions">
+        <input type="hidden" name="id" value={item.id} />
+        <button className="danger-button" type="submit">Eliminar punto</button>
+      </form>
+    </details>
   );
 }
 
@@ -370,6 +540,57 @@ function formatMaterialGrades(materialGrades: string[], gradeOrder: string[]) {
   const orderedGrades = sortMaterialGrades(materialGrades, gradeOrder);
   if (orderedGrades.length === gradeOrder.length) return "Todos los grados";
   return `Disponible para: ${orderedGrades.join(", ")}`;
+}
+
+function groupChildSyllabusItems(items: ChildSyllabusItem[]) {
+  return kidsGrades.map((grade) => [
+    grade,
+    items
+      .filter((item) => normalize(item.grade) === normalize(grade))
+      .sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
+  ] as const);
+}
+
+const childSyllabusCategories = [
+  { value: "tecnica", label: "Tecnica" },
+  { value: "kihon", label: "Kihon" },
+  { value: "desplazamiento", label: "Desplazamiento" },
+  { value: "ukemi", label: "Ukemi" },
+  { value: "kata", label: "Kata" },
+  { value: "howa", label: "Howa" },
+  { value: "gakka", label: "Gakka" },
+  { value: "comportamiento", label: "Comportamiento" },
+  { value: "etiqueta", label: "Etiqueta" },
+  { value: "juego", label: "Juego" },
+  { value: "otro", label: "Otro" }
+];
+
+function childSyllabusCategoryLabel(category: string) {
+  return childSyllabusCategories.find((item) => item.value === category)?.label ?? "Otro";
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
+}
+
+function gradeColorClass(grade: string) {
+  const normalized = normalize(grade);
+  const slugged = normalized.toLowerCase().replace(/\s+/g, "-").replace(/ñ/g, "n");
+  const kidMixed: Record<string, string> = {
+    "BLANCO-AMARILLO": "grade-blanco-amarillo",
+    "AMARILLO-NARANJA": "grade-amarillo-naranja",
+    "NARANJA-VERDE": "grade-naranja-verde",
+    "VERDE-AZUL": "grade-verde-azul",
+    "AZUL-MARRON": "grade-azul-marron",
+    "MARRON": "grade-1-kyu",
+    "BLANCO": "grade-minarai",
+    "AMARILLO": "grade-5-kyu",
+    "NARANJA": "grade-4-kyu",
+    "VERDE": "grade-3-kyu",
+    "AZUL": "grade-2-kyu"
+  };
+  return `grade-chip ${kidMixed[normalized] ?? `grade-${slugged}`}`;
 }
 
 function gradeSortIndex(grade: string, gradeOrder: string[]) {

@@ -18,6 +18,7 @@ import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/telegram-notifications";
 import { createTrashItem, restoreTrashItem } from "@/lib/trash";
+import { kidsGrades } from "@/lib/grades";
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -936,6 +937,103 @@ export async function deleteTechnicalAreaMaterialAction(formData: FormData) {
   revalidatePath("/areas-tecnicas");
   revalidatePath("/alumno/area-tecnica/[token]", "page");
   redirect(`/areas-tecnicas?saved=material-deleted&class=${memberClass === "kids" ? "kids" : "adults"}`);
+}
+
+export async function createChildSyllabusItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+
+  const grade = normalizeChildSyllabusGrade(String(formData.get("grade") ?? ""));
+  const title = String(formData.get("title") ?? "").trim();
+  const category = normalizeChildSyllabusCategory(String(formData.get("category") ?? ""));
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
+
+  if (!grade || !title) {
+    redirect("/areas-tecnicas?error=child-program&class=kids");
+  }
+
+  const { error } = await createAdminClient()
+    .from("child_syllabus_items")
+    .insert({
+      grade,
+      title,
+      category,
+      description,
+      exam_relevant: formData.get("examRelevant") === "on",
+      active: formData.get("active") === "on",
+      sort_order: Number.isFinite(sortOrder) ? sortOrder : 100,
+      created_by: "Alvaro",
+      updated_by: "Alvaro"
+    });
+
+  if (error) {
+    console.error("Error creating child syllabus item", error);
+    redirect("/areas-tecnicas?error=child-program&class=kids");
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/alumno/area-tecnica/[token]", "page");
+  redirect("/areas-tecnicas?saved=child-program&class=kids");
+}
+
+export async function updateChildSyllabusItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const grade = normalizeChildSyllabusGrade(String(formData.get("grade") ?? ""));
+  const title = String(formData.get("title") ?? "").trim();
+  const category = normalizeChildSyllabusCategory(String(formData.get("category") ?? ""));
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "100"), 10);
+
+  if (!id || !grade || !title) {
+    redirect("/areas-tecnicas?error=child-program&class=kids");
+  }
+
+  const { error } = await createAdminClient()
+    .from("child_syllabus_items")
+    .update({
+      grade,
+      title,
+      category,
+      description,
+      exam_relevant: formData.get("examRelevant") === "on",
+      active: formData.get("active") === "on",
+      sort_order: Number.isFinite(sortOrder) ? sortOrder : 100,
+      updated_by: "Alvaro",
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error updating child syllabus item", error);
+    redirect("/areas-tecnicas?error=child-program&class=kids");
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/alumno/area-tecnica/[token]", "page");
+  redirect("/areas-tecnicas?saved=child-program&class=kids");
+}
+
+export async function deleteChildSyllabusItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) redirect("/areas-tecnicas?error=child-program&class=kids");
+
+  const { error } = await createAdminClient()
+    .from("child_syllabus_items")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error deleting child syllabus item", error);
+    redirect("/areas-tecnicas?error=child-program&class=kids");
+  }
+
+  revalidatePath("/areas-tecnicas");
+  revalidatePath("/alumno/area-tecnica/[token]", "page");
+  redirect("/areas-tecnicas?saved=child-program-deleted&class=kids");
 }
 
 export async function createDistributionCampaignAction(formData: FormData) {
@@ -4032,6 +4130,29 @@ function normalizeTechnicalMaterialSection(formData: FormData) {
     String(formData.get("section") ?? "").trim() ||
     "Material"
   );
+}
+
+function normalizeChildSyllabusGrade(value: string) {
+  const normalized = value.trim().toUpperCase().replace(/\s+/g, " ");
+  return kidsGrades.find((grade) => grade.toUpperCase() === normalized) ?? "";
+}
+
+function normalizeChildSyllabusCategory(value: string) {
+  const normalized = value.trim().toLowerCase();
+  const allowed = [
+    "tecnica",
+    "kihon",
+    "desplazamiento",
+    "ukemi",
+    "kata",
+    "howa",
+    "gakka",
+    "comportamiento",
+    "etiqueta",
+    "juego",
+    "otro"
+  ];
+  return allowed.includes(normalized) ? normalized : "otro";
 }
 
 function normalizeCourseKind(value: string) {
