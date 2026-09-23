@@ -10,7 +10,24 @@ export default async function ExaminerTokenPage({
 }) {
   const { token } = await params;
   const query = await searchParams;
-  const payload = await getExaminerExamByToken(token);
+  let payload: Awaited<ReturnType<typeof getExaminerExamByToken>>;
+  try {
+    payload = await getExaminerExamByToken(token);
+  } catch {
+    return (
+      <main className="public-exam-page">
+        <section className="public-exam-hero">
+          <p className="eyebrow">SKBC Gipuzkoa</p>
+          <h1>Enlace no valido</h1>
+          <p>Este enlace de examen no existe, ha caducado o ha sido desactivado.</p>
+        </section>
+        <section className="card">
+          <h2>No se puede abrir este examen</h2>
+          <p className="muted">Si crees que es un error, pide al responsable del examen que te envie un enlace nuevo.</p>
+        </section>
+      </main>
+    );
+  }
   const scoreMap = new Map(payload.existingScores.map((score) => [`${score.event_student_id}:${score.event_item_id}`, score]));
   const submitted = Boolean(payload.examiner.submitted_at || query.saved);
   const scorableItems = payload.items.filter((item) => item.source !== "cut");
