@@ -22,15 +22,45 @@ function addCalendarMonths(value: string, months: number) {
   return new Date(Date.UTC(targetYear, normalizedMonth, day));
 }
 
+function firstFifteenthAfterStart(start: Date) {
+  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 15));
+}
+
+function fifteenthOnOrAfter(date: Date) {
+  const thisMonth = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 15));
+  if (thisMonth >= date) return thisMonth;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 15));
+}
+
+function countTrainingDays(start: Date, endExclusive: Date) {
+  let total = 0;
+  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  while (cursor < endExclusive) {
+    const day = cursor.getUTCDay();
+    if (day === 2 || day === 4) total += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return total;
+}
+
 export function firstBillingDateAfterFreeMonth(startedOn: string | null | undefined) {
   if (!startedOn) return null;
+  const start = parseIsoDate(startedOn);
+  if (!start) return null;
   const minimumFreeEnd = addCalendarMonths(startedOn, 1);
   if (!minimumFreeEnd) return null;
 
-  const billingThisMonth = new Date(Date.UTC(minimumFreeEnd.getUTCFullYear(), minimumFreeEnd.getUTCMonth(), 15));
-  if (billingThisMonth >= minimumFreeEnd) return isoDate(billingThisMonth);
+  const candidateBilling = firstFifteenthAfterStart(start);
+  const strictBilling = fifteenthOnOrAfter(minimumFreeEnd);
+  if (candidateBilling >= minimumFreeEnd) return isoDate(candidateBilling);
 
-  return isoDate(new Date(Date.UTC(minimumFreeEnd.getUTCFullYear(), minimumFreeEnd.getUTCMonth() + 1, 15)));
+  const fullFreeMonthTrainingDays = countTrainingDays(start, minimumFreeEnd);
+  const candidateTrainingDays = countTrainingDays(start, candidateBilling);
+  const minimumFairTrainingDays = Math.max(fullFreeMonthTrainingDays - 1, 0);
+
+  if (candidateTrainingDays >= minimumFairTrainingDays) return isoDate(candidateBilling);
+
+  return isoDate(strictBilling);
 }
 
 export function resolveFreeTrialBillingDate(startedOn: string | null | undefined, storedBillingOn?: string | null) {
