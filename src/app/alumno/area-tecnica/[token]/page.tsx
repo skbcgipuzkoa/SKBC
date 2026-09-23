@@ -82,7 +82,7 @@ export default async function StudentTechnicalAreaPage({
 
   if (error || !member || member.status !== "active") notFound();
 
-  const targetGrade = member.class === "kids" ? nextGrade(kidsGrades, member.grade) : nextGrade(adultGrades, member.grade);
+  const targetGrade = member.class === "kids" ? nextKidGrade(member.grade) : nextGrade(adultGrades, member.grade);
   const allowedGrades = gradesUntil(member.class === "kids" ? kidsGrades : adultGrades, targetGrade);
 
   const [{ data: materials }, { data: configuredLinks }, { data: techniques }, { data: childSyllabus }] = await Promise.all([
@@ -361,6 +361,13 @@ function nextGrade(grades: string[], grade: string | null) {
   return grades[Math.min(index + 1, grades.length - 1)];
 }
 
+function nextKidGrade(grade: string | null) {
+  const normalized = normalizeKidGrade(grade);
+  const index = kidsGrades.findIndex((item) => normalizeGradeKey(item) === normalized);
+  if (index < 0) return kidsGrades[0] ?? "";
+  return kidsGrades[Math.min(index + 1, kidsGrades.length - 1)];
+}
+
 function gradesUntil(grades: string[], targetGrade: string) {
   const targetIndex = grades.findIndex((grade) => sameGrade(grade, targetGrade));
   return grades.slice(0, targetIndex >= 0 ? targetIndex + 1 : 1);
@@ -449,11 +456,36 @@ function groupChildSyllabusByGrade(items: ChildSyllabusItem[], gradeOrder: strin
 }
 
 function sameGrade(a: string | null | undefined, b: string | null | undefined) {
-  return normalizeGrade(a) === normalizeGrade(b);
+  return normalizeGradeKey(a) === normalizeGradeKey(b) || normalizeKidGrade(a) === normalizeKidGrade(b);
 }
 
 function normalizeGrade(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function normalizeGradeKey(value: string | null | undefined) {
+  return normalizeGrade(value)
+    .replace(/\bY\b/g, "")
+    .replace(/\bAND\b/g, "")
+    .replace(/[\s\-_()]/g, "");
+}
+
+function normalizeKidGrade(value: string | null | undefined) {
+  const key = normalizeGradeKey(value);
+  const aliases = new Map([
+    ["MINARAI", "BLANCO"],
+    ["5KYU", "AMARILLO"],
+    ["4KYU", "NARANJA"],
+    ["3KYU", "VERDE"],
+    ["2KYU", "AZUL"],
+    ["1KYU", "MARRON"],
+    ["BLANCOYAMARILLO", "BLANCOAMARILLO"],
+    ["AMARILLOYNARANJA", "AMARILLONARANJA"],
+    ["NARANJAYVERDE", "NARANJAVERDE"],
+    ["VERDEYAZUL", "VERDEAZUL"],
+    ["AZULYMARRON", "AZULMARRON"]
+  ]);
+  return aliases.get(key) ?? key;
 }
 
 function materialTypeLabel(type: TechnicalAreaMaterial["material_type"]) {
@@ -496,21 +528,28 @@ function slug(value: string) {
 
 function gradeColorClass(grade: string) {
   const normalized = normalizeGrade(grade);
+  const kidNormalized = normalizeKidGrade(grade);
   const slugged = normalized.toLowerCase().replace(/\s+/g, "-").replace(/ñ/g, "n");
   const kidMixed: Record<string, string> = {
+    MINARAI: "grade-minarai",
     "BLANCO-AMARILLO": "grade-blanco-amarillo",
+    BLANCOAMARILLO: "grade-blanco-amarillo",
     "AMARILLO-NARANJA": "grade-amarillo-naranja",
+    AMARILLONARANJA: "grade-amarillo-naranja",
     "NARANJA-VERDE": "grade-naranja-verde",
+    NARANJAVERDE: "grade-naranja-verde",
     "VERDE-AZUL": "grade-verde-azul",
+    VERDEAZUL: "grade-verde-azul",
     "AZUL-MARRON": "grade-azul-marron",
-    "MARRON": "grade-1-kyu",
-    "BLANCO": "grade-minarai",
-    "AMARILLO": "grade-5-kyu",
-    "NARANJA": "grade-4-kyu",
-    "VERDE": "grade-3-kyu",
-    "AZUL": "grade-2-kyu"
+    AZULMARRON: "grade-azul-marron",
+    MARRON: "grade-1-kyu",
+    BLANCO: "grade-minarai",
+    AMARILLO: "grade-5-kyu",
+    NARANJA: "grade-4-kyu",
+    VERDE: "grade-3-kyu",
+    AZUL: "grade-2-kyu"
   };
-  return `grade-chip ${kidMixed[normalized] ?? `grade-${slugged}`}`;
+  return `grade-chip ${kidMixed[kidNormalized] ?? kidMixed[normalized] ?? `grade-${slugged}`}`;
 }
 
 function youtubeEmbedUrl(url: string) {

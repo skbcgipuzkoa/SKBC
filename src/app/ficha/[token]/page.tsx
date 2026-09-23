@@ -1602,7 +1602,7 @@ function normalizeKidGrade(grade: string | null | undefined) {
 }
 
 function kidGradeTone(grade: string | null): FichaTone {
-  const value = normalizeGradeKey(grade);
+  const value = normalizeKidGrade(grade);
   if (!value || value === "SIGUIENTEETAPA") return "neutral";
   if (value.includes("DAN")) return "black";
   if (value.includes("AZULMARRON")) return "blue-brown";
