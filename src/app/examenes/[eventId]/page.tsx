@@ -171,7 +171,13 @@ export default async function IntegratedExamPage({
             <h3>Anadir punto manual</h3>
             <div className="form-grid">
               <label>Nombre<input name="name" placeholder="Ej. Atar el cinturon, Embu, Howa..." required /></label>
-              <label>Grado o corte<input name="grade" placeholder={event.program_type === "kids_progressive" || event.program_type === "kids" ? "Ej. 5 KYU" : "Ej. 3 KYU"} /></label>
+              <label>
+                Grado objetivo que evalua este punto
+                <input name="grade" placeholder={event.program_type === "kids_progressive" || event.program_type === "kids" ? "Ej. 5 KYU, 4 KYU..." : "Ej. 3 KYU"} />
+              </label>
+              <p className="form-help">
+                En examenes infantiles progresivos, este grado indica hasta que objetivo continua el alumno. No es el grado actual.
+              </p>
               <label>Seccion<input name="section" placeholder="Gakka, tecnica, kihon..." /></label>
               <label>Peso<input name="weight" inputMode="decimal" defaultValue="1" /></label>
             </div>
@@ -194,7 +200,7 @@ export default async function IntegratedExamPage({
                   </div>
                   <div className="form-grid">
                     <label>Orden<input name="orderIndex" inputMode="numeric" defaultValue={item.order_index} disabled={isCompleted} /></label>
-                    <label>Grado<input name="grade" defaultValue={item.grade ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
+                    <label>{item.source === "cut" ? "Corte para objetivo" : "Grado objetivo"}<input name="grade" defaultValue={item.grade ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
                     <label>Seccion<input name="section" defaultValue={item.section ?? item.category ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
                     <label>Peso<input name="weight" inputMode="decimal" defaultValue={item.weight} disabled={isCompleted || item.source === "cut"} /></label>
                   </div>
