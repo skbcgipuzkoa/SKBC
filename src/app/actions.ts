@@ -11,7 +11,7 @@ import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { sendStudentEmailNotification, type EmailAudience } from "@/lib/email-notifications";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
-import { createIntegratedExamEvent, submitIntegratedExamScores, type IntegratedExamProgram } from "@/lib/integrated-exams";
+import { createIntegratedExamEvent, finalizeIntegratedExamEvent, submitIntegratedExamScores, type IntegratedExamProgram } from "@/lib/integrated-exams";
 import { archiveLegacyRowsToDrive } from "@/lib/legacy-rows-archive";
 import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
@@ -2681,6 +2681,27 @@ export async function submitIntegratedExamScoresAction(formData: FormData) {
   }
 
   redirect(`/examinar/${token}?saved=1`);
+}
+
+export async function finalizeIntegratedExamEventAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const eventId = String(formData.get("eventId") ?? "").trim();
+  if (!eventId) {
+    redirect("/examenes?error=integrated-finalize");
+  }
+
+  try {
+    const result = await finalizeIntegratedExamEvent(eventId, "WEB SKBC");
+    revalidatePath("/examenes");
+    revalidatePath(`/examenes/${eventId}`);
+    redirect(`/examenes/${eventId}?saved=finalized&registered=${result.registeredCount}`);
+  } catch (error) {
+    console.error("Error finalizing integrated exam", error);
+    redirect(`/examenes/${eventId}?error=finalize&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
 }
 
 export async function saveExamReportAction(formData: FormData) {

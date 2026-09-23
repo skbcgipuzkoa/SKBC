@@ -1,5 +1,5 @@
 import { LogOut } from "lucide-react";
-import { logoutAction } from "@/app/actions";
+import { finalizeIntegratedExamEventAction, logoutAction } from "@/app/actions";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { hasInternalAccess } from "@/lib/auth";
 import { getIntegratedExamAdmin } from "@/lib/integrated-exams";
@@ -10,7 +10,7 @@ export default async function IntegratedExamPage({
   searchParams
 }: {
   params: Promise<{ eventId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; detail?: string; registered?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -21,6 +21,9 @@ export default async function IntegratedExamPage({
   const { event, students, items, examiners, scores, summaries } = await getIntegratedExamAdmin(eventId);
   const publicBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://skbc.vercel.app";
   const scorableItems = items.filter((item) => item.source !== "cut");
+  const isCompleted = event.status === "completed" || event.status === "archived";
+  const submittedExaminers = examiners.filter((examiner) => examiner.submitted_at && !examiner.revoked_at).length;
+  const passedSummaries = summaries.filter((summary) => summary.passed).length;
 
   return (
     <div className="shell">
@@ -39,6 +42,7 @@ export default async function IntegratedExamPage({
         </div>
 
         {query.saved === "created" ? <p className="save-ok">Examen integrado creado. Copia los enlaces de examinador si los necesitas.</p> : null}
+        {query.saved === "finalized" ? <p className="save-ok">Examen cerrado. Aprobados registrados en fichas: {query.registered ?? "0"}.</p> : null}
         {query.error ? <p className="form-error">Ha ocurrido un error{query.detail ? `: ${query.detail}` : "."}</p> : null}
 
         <section className="grid stats compact">
@@ -92,7 +96,9 @@ export default async function IntegratedExamPage({
           <div className="section-heading-row">
             <div>
               <h2>Resultados provisionales</h2>
-              <p className="muted">Se recalcula con las puntuaciones enviadas por los examinadores.</p>
+              <p className="muted">
+                Se recalcula con las puntuaciones enviadas por los examinadores. En adultos cada kenshi cuenta solo su grado objetivo; en ninos progresivo cuenta hasta su corte.
+              </p>
             </div>
           </div>
           <div className="table-wrap">
@@ -117,6 +123,38 @@ export default async function IntegratedExamPage({
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Cierre oficial</h2>
+              <p className="muted">
+                Al cerrar, los aprobados se registran como examenes reales del sistema nuevo, se actualiza su grado y se recalculan fichas, rankings y semaforos.
+              </p>
+            </div>
+            <span className={isCompleted ? "state-badge state-completada" : "state-badge state-pendiente"}>
+              {isCompleted ? "Cerrado" : "Pendiente"}
+            </span>
+          </div>
+          <div className="grid stats compact">
+            <article className="metric-panel">
+              <h2>Evaluadores enviados</h2>
+              <div className="metric">{submittedExaminers}/{examiners.length}</div>
+            </article>
+            <article className="metric-panel">
+              <h2>Aprobados provisionales</h2>
+              <div className="metric">{passedSummaries}/{students.length}</div>
+            </article>
+          </div>
+          {isCompleted ? (
+            <p className="muted">Este examen ya esta cerrado. Los diplomas e informes se gestionan desde el historial de examenes.</p>
+          ) : (
+            <form action={finalizeIntegratedExamEventAction} className="form-actions">
+              <input type="hidden" name="eventId" value={event.id} />
+              <button type="submit" disabled={!submittedExaminers}>Cerrar examen y registrar aprobados</button>
+            </form>
+          )}
         </section>
 
         <details className="card foldable-admin-section">
@@ -149,7 +187,7 @@ export default async function IntegratedExamPage({
         <section className="card">
           <h2>Siguiente paso</h2>
           <p className="muted">
-            Esta es la primera capa integrada: creacion, enlaces, evaluacion y calculo provisional. La fase siguiente sera convertir aprobados revisados en examenes reales con informe y diploma.
+            Despues del cierre, cada aprobado aparece en el historial normal de examenes para revisar informe y generar diploma.
           </p>
           <a className="secondary-link" href="/examenes">Volver a examenes</a>
         </section>

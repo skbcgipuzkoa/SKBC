@@ -1,4 +1,5 @@
 import { adultGrades, kidsGrades } from "@/lib/grades";
+import { registerExam } from "@/lib/exams";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type IntegratedExamProgram = "adults" | "kids_progressive" | "kids" | "dan_tribunal";
@@ -65,6 +66,12 @@ type ExamEventScore = {
   examiner_id: string;
   score: number | null;
   skipped: boolean;
+};
+
+type ExamEventReview = {
+  event_student_id: string;
+  final_passed: boolean | null;
+  final_percentage: number | null;
 };
 
 export async function createIntegratedExamEvent(input: {
@@ -189,7 +196,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
     items: items ?? [],
     examiners: examiners ?? [],
     scores: scores ?? [],
-    summaries: summarizeScores(students ?? [], items ?? [], scores ?? [], event.pass_percentage)
+    summaries: summarizeScores(event.program_type, students ?? [], items ?? [], scores ?? [], event.pass_percentage)
   };
 }
 
@@ -291,10 +298,84 @@ export async function submitIntegratedExamScores(input: {
   await refreshIntegratedExamReview(payload.event.id);
 }
 
+export async function finalizeIntegratedExamEvent(eventId: string, finalizedBy = "WEB SKBC") {
+  const supabase = createAdminClient();
+  const { event, students, items, examiners, scores } = await getIntegratedExamAdmin(eventId);
+  if (event.status === "completed" || event.status === "archived") {
+    throw new Error("Este examen ya esta cerrado.");
+  }
+
+  const submittedExaminers = examiners.filter((examiner) => examiner.submitted_at && !examiner.revoked_at);
+  if (!submittedExaminers.length) {
+    throw new Error("Antes de cerrar el examen hace falta al menos una evaluacion enviada.");
+  }
+
+  const summaries = summarizeScores(event.program_type, students, items, scores, event.pass_percentage);
+  const { data: reviews, error: reviewsError } = await supabase
+    .from("exam_event_reviews")
+    .select("event_student_id,final_passed,final_percentage")
+    .eq("exam_event_id", eventId)
+    .returns<ExamEventReview[]>();
+  if (reviewsError) throw reviewsError;
+
+  const reviewByStudent = new Map((reviews ?? []).map((review) => [review.event_student_id, review]));
+  const examinerLabel = submittedExaminers.map((examiner) => examiner.name).join(", ") || "Examen integrado SKBC";
+  const registered: Array<{ studentId: string; examId: string }> = [];
+
+  for (const student of students) {
+    const review = reviewByStudent.get(student.id);
+    const summary = summaries.find((item) => item.studentId === student.id);
+    const finalPassed = review?.final_passed ?? summary?.passed ?? false;
+    const targetGrade = student.target_grade?.trim();
+    if (!finalPassed || !targetGrade) continue;
+
+    const result = await registerExam({
+      memberId: student.member_id,
+      examDate: event.exam_date,
+      grade: targetGrade,
+      examiner: examinerLabel,
+      registeredBy: finalizedBy
+    });
+    registered.push({ studentId: student.id, examId: result.examId });
+  }
+
+  const now = new Date().toISOString();
+  for (const row of registered) {
+    const { error } = await supabase
+      .from("exam_event_reviews")
+      .update({
+        reviewed_by: finalizedBy,
+        reviewed_at: now,
+        updated_at: now
+      })
+      .eq("exam_event_id", eventId)
+      .eq("event_student_id", row.studentId);
+    if (error) throw error;
+  }
+
+  const { error: eventError } = await supabase
+    .from("exam_events")
+    .update({
+      status: "completed",
+      updated_at: now
+    })
+    .eq("id", eventId);
+  if (eventError) throw eventError;
+
+  return {
+    registeredCount: registered.length,
+    passedCount: summaries.filter((summary) => {
+      const review = reviewByStudent.get(summary.studentId);
+      return review?.final_passed ?? summary.passed;
+    }).length,
+    studentCount: students.length
+  };
+}
+
 export async function refreshIntegratedExamReview(eventId: string) {
   const supabase = createAdminClient();
   const { event, students, items, scores } = await getIntegratedExamAdmin(eventId);
-  const summaries = summarizeScores(students, items, scores, event.pass_percentage);
+  const summaries = summarizeScores(event.program_type, students, items, scores, event.pass_percentage);
 
   if (!summaries.length) return;
 
@@ -325,12 +406,13 @@ export async function refreshIntegratedExamReview(eventId: string) {
   }
 }
 
-function summarizeScores(students: ExamEventStudent[], items: ExamEventItem[], scores: ExamEventScore[], passPercentage: number) {
+function summarizeScores(programType: IntegratedExamProgram, students: ExamEventStudent[], items: ExamEventItem[], scores: ExamEventScore[], passPercentage: number) {
   const scorableItems = items.filter((item) => item.active && item.source !== "cut");
   return students.map((student) => {
+    const relevantItems = scorableItems.filter((item) => isItemRelevantForStudent(programType, student, item));
     let total = 0;
     let max = 0;
-    for (const item of scorableItems) {
+    for (const item of relevantItems) {
       const itemScores = scores.filter((score) => score.event_student_id === student.id && score.event_item_id === item.id && !score.skipped && score.score !== null);
       const average = itemScores.length ? itemScores.reduce((sum, score) => sum + Number(score.score ?? 0), 0) / itemScores.length : 0;
       total += average * Number(item.weight || 1);
@@ -342,10 +424,17 @@ function summarizeScores(students: ExamEventStudent[], items: ExamEventItem[], s
       memberId: student.member_id,
       percentage,
       passed: percentage >= passPercentage,
-      scoredItems: scores.filter((score) => score.event_student_id === student.id && !score.skipped && score.score !== null).length,
-      totalItems: scorableItems.length
+      scoredItems: scores.filter((score) => score.event_student_id === student.id && !score.skipped && score.score !== null && relevantItems.some((item) => item.id === score.event_item_id)).length,
+      totalItems: relevantItems.length
     };
   });
+}
+
+function isItemRelevantForStudent(programType: IntegratedExamProgram, student: ExamEventStudent, item: ExamEventItem) {
+  if (programType === "kids" || programType === "kids_progressive") {
+    return gradeIndex(kidsGrades, item.grade) <= gradeIndex(kidsGrades, student.target_grade);
+  }
+  return normalizeGrade(item.grade) === normalizeGrade(student.target_grade);
 }
 
 async function buildExamItems(eventId: string, programType: IntegratedExamProgram, targetGrades: string[]) {
