@@ -224,6 +224,16 @@ export async function getRecentIntegratedExamEvents(limit = 12) {
   }>;
 }
 
+export async function deleteIntegratedExamEvent(eventId: string) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("exam_events")
+    .delete()
+    .eq("id", eventId);
+
+  if (error) throw error;
+}
+
 export async function getExaminerExamByToken(token: string) {
   const supabase = createAdminClient();
   const { data: examiner, error: examinerError } = await supabase

@@ -1,5 +1,5 @@
 import { LogOut } from "lucide-react";
-import { finalizeIntegratedExamEventAction, logoutAction } from "@/app/actions";
+import { deleteIntegratedExamEventAction, finalizeIntegratedExamEventAction, logoutAction } from "@/app/actions";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { hasInternalAccess } from "@/lib/auth";
 import { getIntegratedExamAdmin } from "@/lib/integrated-exams";
@@ -189,7 +189,13 @@ export default async function IntegratedExamPage({
           <p className="muted">
             Despues del cierre, cada aprobado aparece en el historial normal de examenes con informe y diploma enlazados desde Google Drive.
           </p>
-          <a className="secondary-link" href="/examenes">Volver a examenes</a>
+          <div className="form-actions">
+            <a className="secondary-link" href="/examenes">Volver a examenes</a>
+            <form action={deleteIntegratedExamEventAction}>
+              <input type="hidden" name="eventId" value={event.id} />
+              <button className="danger-button" type="submit">Eliminar examen integrado</button>
+            </form>
+          </div>
         </section>
       </main>
     </div>

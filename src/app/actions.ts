@@ -11,7 +11,7 @@ import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { sendStudentEmailNotification, type EmailAudience } from "@/lib/email-notifications";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
-import { createIntegratedExamEvent, finalizeIntegratedExamEvent, submitIntegratedExamScores, type IntegratedExamProgram } from "@/lib/integrated-exams";
+import { createIntegratedExamEvent, deleteIntegratedExamEvent, finalizeIntegratedExamEvent, submitIntegratedExamScores, type IntegratedExamProgram } from "@/lib/integrated-exams";
 import { archiveLegacyRowsToDrive } from "@/lib/legacy-rows-archive";
 import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
@@ -2635,6 +2635,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
     redirect("/examenes?error=integrated");
   }
 
+  let eventId: string;
   try {
     const result = await createIntegratedExamEvent({
       title,
@@ -2645,12 +2646,35 @@ export async function createIntegratedExamEventAction(formData: FormData) {
       examinerNames,
       notes: notes || null
     });
-    revalidatePath("/examenes");
-    redirect(`/examenes/${result.eventId}?saved=created`);
+    eventId = result.eventId;
   } catch (error) {
     console.error("Error creating integrated exam", error);
     redirect(`/examenes?error=integrated&detail=${encodeURIComponent(errorMessage(error))}`);
   }
+
+  revalidatePath("/examenes");
+  redirect(`/examenes/${eventId}?saved=created`);
+}
+
+export async function deleteIntegratedExamEventAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const eventId = String(formData.get("eventId") ?? "").trim();
+  if (!eventId) {
+    redirect("/examenes?error=integrated-delete");
+  }
+
+  try {
+    await deleteIntegratedExamEvent(eventId);
+  } catch (error) {
+    console.error("Error deleting integrated exam", error);
+    redirect(`/examenes?error=integrated-delete&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath("/examenes");
+  redirect("/examenes?saved=integrated-delete");
 }
 
 export async function submitIntegratedExamScoresAction(formData: FormData) {

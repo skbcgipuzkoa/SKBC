@@ -1,7 +1,7 @@
 import { ExternalLink, FileText, GraduationCap, LogOut, ScrollText, Trophy } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { createIntegratedExamEventAction, deleteExamAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
+import { createIntegratedExamEventAction, deleteExamAction, deleteIntegratedExamEventAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { getRecentIntegratedExamEvents } from "@/lib/integrated-exams";
@@ -191,7 +191,15 @@ export default async function ExamenesPage({
                     <td data-label="Examinadores">
                       {(event.exam_event_examiners ?? []).filter((examiner) => examiner.submitted_at).length}/{event.exam_event_examiners?.length ?? 0} enviados
                     </td>
-                    <td data-label="Accion"><a className="text-link" href={`/examenes/${event.id}`}>Abrir</a></td>
+                    <td data-label="Accion">
+                      <div className="inline-actions">
+                        <a className="text-link" href={`/examenes/${event.id}`}>Abrir</a>
+                        <form action={deleteIntegratedExamEventAction}>
+                          <input type="hidden" name="eventId" value={event.id} />
+                          <button className="mini-action danger" type="submit">Eliminar</button>
+                        </form>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {!integratedEvents.length ? (
