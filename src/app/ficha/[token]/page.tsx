@@ -185,6 +185,16 @@ type ChildBehavior = {
   observation: string | null;
 };
 
+type ChildSyllabusHistoryRow = {
+  practiced_on: string;
+  child_syllabus_items: {
+    title: string;
+    grade: string | null;
+    category: string | null;
+    description: string | null;
+  } | null;
+};
+
 type ChildAdultTransition = {
   transitioned_on: string;
   child_grade: string | null;
@@ -290,7 +300,7 @@ export default async function PublicFichaPage({
   const fichaExams = mergeExams(exams ?? [], legacyExams);
 
   if (member.class === "kids") {
-    const [{ data: childRanking }, { data: childNotices }, { data: childNote }, { data: behavior }] = await Promise.all([
+    const [{ data: childRanking }, { data: childNotices }, { data: childNote }, { data: behavior }, { data: childSyllabusHistory }] = await Promise.all([
       supabase
         .from("child_rankings")
         .select("attendance_30d,attendance_90d,last_attendance_on,days_without_attendance,score,position,level,constancy_status,motivational_message")
@@ -317,7 +327,13 @@ export default async function PublicFichaPage({
         .eq("member_id", member.id)
         .order("report_date", { ascending: false, nullsFirst: false })
         .limit(1)
-        .maybeSingle<ChildBehavior>()
+        .maybeSingle<ChildBehavior>(),
+      supabase
+        .from("child_syllabus_history")
+        .select("practiced_on,child_syllabus_items(title,grade,category,description)")
+        .eq("member_id", member.id)
+        .order("practiced_on", { ascending: false })
+        .returns<ChildSyllabusHistoryRow[]>()
     ]);
 
     const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures);
@@ -326,7 +342,7 @@ export default async function PublicFichaPage({
     return (
       <>
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
+        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childSyllabusHistory ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
     );
   }
@@ -689,6 +705,7 @@ function KidsFicha({
   notices,
   note,
   behavior,
+  childSyllabusHistory,
   technicalArea,
   adminBackUrl,
   fichaToken
@@ -701,6 +718,7 @@ function KidsFicha({
   notices: ChildNotice[];
   note: ChildNote | null;
   behavior: ChildBehavior | null;
+  childSyllabusHistory: ChildSyllabusHistoryRow[];
   technicalArea: { url: string; label: string };
   adminBackUrl: string | null;
   fichaToken: string;
@@ -709,6 +727,7 @@ function KidsFicha({
   const objective = nextKidGrade(member.grade);
   const childCourses = courses.filter((course) => course.kind !== "taikai");
   const taikai = courses.filter((course) => course.kind === "taikai");
+  const childProgramHistory = buildChildProgramHistory(childSyllabusHistory);
   return (
     <main className="legacy-ficha kids-ficha">
       <AdminBackLink href={adminBackUrl} />
@@ -735,6 +754,41 @@ function KidsFicha({
           <StatusBlock title="Días sin venir" value={ranking?.days_without_attendance === null || ranking?.days_without_attendance === undefined ? "-" : String(ranking.days_without_attendance)} tone={daysWithoutTone(ranking?.days_without_attendance)} />
         </div>
       </section>
+
+      <FoldableSection title="Programa infantil trabajado" meta={`${childProgramHistory.totalRepetitions} practicas · ${childProgramHistory.items.length} contenidos`}>
+        <div className="global-technical-summary">
+          <div>
+            <strong>{childProgramHistory.items.length}</strong>
+            <p>contenidos diferentes</p>
+          </div>
+          <Field label="Veces trabajadas" value={childProgramHistory.totalRepetitions} />
+          <Field label="Ultima practica" value={childProgramHistory.lastDate ? formatDate(childProgramHistory.lastDate) : null} />
+        </div>
+        {childProgramHistory.groups.length ? (
+          <div className="global-technical-grades">
+            {childProgramHistory.groups.map((group) => (
+              <details className="global-technical-grade" key={group.grade}>
+                <summary>
+                  <span className={`global-grade-chip kid-badge-${kidGradeTone(group.grade)}`}>{group.grade}</span>
+                  <small>{group.repetitions} practicas · {group.items.length} contenidos</small>
+                </summary>
+                <ResponsiveTable
+                  columns={["Contenido", "Categoria", "Veces", "Ultima vez"]}
+                  rows={group.items.map((item) => [
+                    item.title,
+                    childSyllabusCategoryLabel(item.category),
+                    String(item.repetitions),
+                    formatDate(item.lastDate)
+                  ])}
+                  empty="Sin contenidos trabajados en este grado."
+                />
+              </details>
+            ))}
+          </div>
+        ) : (
+          <div className="ficha-card">Todavia no hay contenidos infantiles registrados en clase.</div>
+        )}
+      </FoldableSection>
 
       <section className="ficha-section">
         <h2>Ranking</h2>
@@ -863,6 +917,78 @@ function normalizeGradeAlias(value: string | null | undefined) {
     .replace(/\s+Y\s+/g, "-")
     .replace(/\s*-\s*/g, "-")
     .replace("MARRON", "MARRON");
+}
+
+function buildChildProgramHistory(history: ChildSyllabusHistoryRow[]) {
+  const byItem = new Map<string, {
+    title: string;
+    grade: string;
+    category: string | null;
+    repetitions: number;
+    lastDate: string;
+  }>();
+
+  for (const row of history) {
+    const item = row.child_syllabus_items;
+    if (!item?.title) continue;
+
+    const grade = normalizeGradeAlias(item.grade) || "SIN GRADO";
+    const key = `${grade}::${normalize(item.category)}::${normalize(item.title)}`;
+    const existing = byItem.get(key);
+    if (existing) {
+      existing.repetitions += 1;
+      if (row.practiced_on > existing.lastDate) existing.lastDate = row.practiced_on;
+    } else {
+      byItem.set(key, {
+        title: item.title,
+        grade,
+        category: item.category,
+        repetitions: 1,
+        lastDate: row.practiced_on
+      });
+    }
+  }
+
+  const items = [...byItem.values()].sort((a, b) => {
+    const gradeDiff = childGradeIndex(a.grade) - childGradeIndex(b.grade);
+    if (gradeDiff !== 0) return gradeDiff;
+    return `${a.category ?? ""}${a.title}`.localeCompare(`${b.category ?? ""}${b.title}`);
+  });
+  const groups = [...new Map(items.map((item) => [item.grade, items.filter((candidate) => candidate.grade === item.grade)]))].map(([grade, groupItems]) => ({
+    grade,
+    items: groupItems,
+    repetitions: groupItems.reduce((sum, item) => sum + item.repetitions, 0)
+  }));
+
+  return {
+    items,
+    groups,
+    totalRepetitions: items.reduce((sum, item) => sum + item.repetitions, 0),
+    lastDate: items.reduce<string | null>((latest, item) => !latest || item.lastDate > latest ? item.lastDate : latest, null)
+  };
+}
+
+function childGradeIndex(grade: string | null | undefined) {
+  const normalized = normalizeGradeAlias(grade);
+  const index = KID_GRADES.findIndex((candidate) => normalizeGradeAlias(candidate) === normalized);
+  return index === -1 ? 999 : index;
+}
+
+function childSyllabusCategoryLabel(category: string | null | undefined) {
+  const value = normalize(category);
+  const labels: Record<string, string> = {
+    TECNICA: "Tecnica",
+    GOHO: "Goho",
+    JUHO: "Juho",
+    KIHON: "Kihon",
+    KATA: "Kata",
+    GAKKA: "Gakka",
+    HOWA: "Howa",
+    COMPORTAMIENTO: "Comportamiento",
+    JUEGO: "Juego",
+    OTRO: "Otro"
+  };
+  return labels[value] ?? (category || "Otro");
 }
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {

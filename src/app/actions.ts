@@ -2034,6 +2034,10 @@ export async function addAttendanceAction(formData: FormData) {
     console.error("Error syncing attendance to legacy sheet", syncError);
   }
 
+  if (clase.class_group === "kids") {
+    await syncChildSyllabusHistoryForClass(supabase, classId);
+  }
+
   if (clase.class_group === "adults" && clase.closed) {
     await closeAdultClass(classId);
   }
@@ -2166,6 +2170,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
   }
 
   if (clase.class_group === "kids") {
+    await syncChildSyllabusHistoryForClass(supabase, classId);
     await recalculateChildRankings();
   }
 
@@ -2193,6 +2198,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
       }
       await recalculateClassExamStatus(classId);
       if (clase.class_group === "kids") {
+        await syncChildSyllabusHistoryForClass(supabase, classId);
         await recalculateChildRankings();
       }
     } catch (closeError) {
@@ -2254,6 +2260,9 @@ export async function removeAttendanceAction(formData: FormData) {
   try {
     if (attendance.classes?.class_group === "adults" && attendance.classes.closed) {
       await closeAdultClass(attendance.class_id);
+    }
+    if (attendance.classes?.class_group === "kids") {
+      await syncChildSyllabusHistoryForClass(supabase, attendance.class_id);
     }
     await recalculateClassExamStatus(attendance.class_id);
     if (attendance.classes?.class_group === "kids") {
@@ -2466,6 +2475,7 @@ export async function closeKidsClassAction(formData: FormData) {
   }
 
   try {
+    await syncChildSyllabusHistoryForClass(supabase, classId);
     await recalculateClassExamStatus(classId);
     await recalculateChildRankings();
   } catch (error) {
@@ -2543,6 +2553,7 @@ export async function saveChildClassPlanAction(formData: FormData) {
 
       if (groupError) throw groupError;
     }
+    await syncChildSyllabusHistoryForClass(supabase, classId);
   } catch (error) {
     console.error("Error saving child class plan", error);
     redirect(returnTo || `/clases/${legacyId}?error=kids-plan&detail=${encodeURIComponent(errorMessage(error))}`);
@@ -4714,7 +4725,60 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
 
   if (clase.class_group === "adults") {
     await addTeachingBonuses(supabase, classId, clase.class_date, rows.filter((row) => row.technical_role === "teaching").map((row) => row.member_id));
+  } else {
+    await syncChildSyllabusHistoryForClass(supabase, classId);
   }
+}
+
+async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof createAdminClient>, classId: string) {
+  const [{ data: clase, error: classError }, { data: plan, error: planError }, { data: attendances, error: attendanceError }] = await Promise.all([
+    supabase
+      .from("classes")
+      .select("id,class_date,class_group")
+      .eq("id", classId)
+      .maybeSingle<{ id: string; class_date: string; class_group: "kids" | "adults" }>(),
+    supabase
+      .from("child_class_plans")
+      .select("syllabus_item_ids")
+      .eq("class_id", classId)
+      .maybeSingle<{ syllabus_item_ids: string[] | null }>(),
+    supabase
+      .from("attendance_logs")
+      .select("id,member_id")
+      .eq("class_id", classId)
+      .returns<Array<{ id: string; member_id: string }>>()
+  ]);
+
+  if (classError) throw classError;
+  if (planError) throw planError;
+  if (attendanceError) throw attendanceError;
+  if (!clase || clase.class_group !== "kids") return;
+
+  const syllabusItemIds = Array.from(new Set((plan?.syllabus_item_ids ?? []).filter(Boolean)));
+  const { error: deleteError } = await supabase
+    .from("child_syllabus_history")
+    .delete()
+    .eq("class_id", classId);
+
+  if (deleteError) throw deleteError;
+  if (!syllabusItemIds.length || !attendances?.length) return;
+
+  const now = new Date().toISOString();
+  const rows = attendances.flatMap((attendance) => syllabusItemIds.map((syllabusItemId) => ({
+    member_id: attendance.member_id,
+    class_id: classId,
+    attendance_id: attendance.id,
+    syllabus_item_id: syllabusItemId,
+    practiced_on: clase.class_date,
+    source: "class_plan",
+    updated_at: now
+  })));
+
+  const { error } = await supabase
+    .from("child_syllabus_history")
+    .insert(rows);
+
+  if (error) throw error;
 }
 
 async function addTeachingBonuses(
