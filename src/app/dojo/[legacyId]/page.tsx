@@ -13,7 +13,7 @@ import {
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { hasInternalAccess } from "@/lib/auth";
-import { adultGrades } from "@/lib/grades";
+import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound, redirect } from "next/navigation";
 
@@ -65,6 +65,7 @@ type TechniqueOption = {
 type ChildClassPlanRow = {
   objective: string | null;
   activities: string[] | null;
+  syllabus_item_ids?: string[] | null;
   notes: string | null;
 };
 
@@ -75,6 +76,16 @@ type ChildClassGroupWorkRow = {
   member_ids: string[] | null;
   notes: string | null;
   created_at: string;
+};
+
+type ChildSyllabusItemRow = {
+  id: string;
+  grade: string | null;
+  title: string;
+  category: string | null;
+  description: string | null;
+  exam_relevant: boolean | null;
+  sort_order: number | null;
 };
 
 export default async function DojoClassPage({
@@ -172,11 +183,15 @@ export default async function DojoClassPage({
   const trainingGrades = buildAdultTrainingGradeOptions(groupedPlan.map(([grade]) => grade));
   const manualCommonPlan = planRows.filter((item) => normalizeGrade(item.proposal_type) === "COMUN MANUAL");
   const manualCommonSummary = summarizeManualCommonPlan(manualCommonPlan);
-  const [{ data: childClassPlan }, { data: childClassGroupWork }] = kidsClass?.id
+  const childSyllabusGrades = [...new Set(kids.flatMap((member) => childSyllabusGradeCandidates(member.grade)).filter(Boolean))] as string[];
+  const fallbackChildSyllabusGrades = childSyllabusGradeCandidates(...kidsGrades);
+  const childSyllabusGradeFilter = childSyllabusGrades.length ? childSyllabusGrades : fallbackChildSyllabusGrades;
+  const childSyllabusGradeKeys = new Set(childSyllabusGradeFilter.map(normalizeChildGradeKey));
+  const [{ data: childClassPlan }, { data: childClassGroupWork }, { data: rawChildSyllabusItems }] = kidsClass?.id
     ? await Promise.all([
       supabase
         .from("child_class_plans")
-        .select("objective,activities,notes")
+        .select("objective,activities,syllabus_item_ids,notes")
         .eq("class_id", kidsClass.id)
         .maybeSingle<ChildClassPlanRow>(),
       supabase
@@ -184,9 +199,17 @@ export default async function DojoClassPage({
         .select("id,group_label,content,member_ids,notes,created_at")
         .eq("class_id", kidsClass.id)
         .order("created_at", { ascending: true })
-        .returns<ChildClassGroupWorkRow[]>()
+        .returns<ChildClassGroupWorkRow[]>(),
+      supabase
+        .from("child_syllabus_items")
+        .select("id,grade,title,category,description,exam_relevant,sort_order")
+        .eq("active", true)
+        .eq("exam_relevant", true)
+        .order("sort_order", { ascending: true })
+        .returns<ChildSyllabusItemRow[]>()
     ])
-    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }];
+    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }, { data: [] as ChildSyllabusItemRow[] }];
+  const childSyllabusItems = filterChildSyllabusItemsByGrade(rawChildSyllabusItems ?? [], childSyllabusGradeKeys);
 
   return (
     <main className="dojo-page dojo-work-page">
@@ -229,6 +252,7 @@ export default async function DojoClassPage({
                 plan={childClassPlan}
                 groupWork={childClassGroupWork ?? []}
                 members={kids}
+                syllabusItems={childSyllabusItems}
               />
               <form action={addBulkAttendanceAction} className="dojo-check-list">
                 <input type="hidden" name="classId" value={kidsClass.id} />
@@ -434,7 +458,8 @@ function DojoChildPlanPanel({
   returnTo,
   plan,
   groupWork,
-  members
+  members,
+  syllabusItems
 }: {
   classId: string;
   legacyId: string;
@@ -442,9 +467,12 @@ function DojoChildPlanPanel({
   plan: ChildClassPlanRow | null;
   groupWork: ChildClassGroupWorkRow[];
   members: MemberRow[];
+  syllabusItems: ChildSyllabusItemRow[];
 }) {
   const activities = new Set(plan?.activities ?? []);
+  const selectedSyllabusItems = new Set(plan?.syllabus_item_ids ?? []);
   const memberNames = new Map(members.map((member) => [member.id, member.display_name]));
+  const groupedSyllabusItems = groupChildSyllabusItems(syllabusItems);
 
   return (
     <details className="dojo-child-plan">
@@ -506,6 +534,38 @@ function DojoChildPlanPanel({
             ))}
           </div>
         </fieldset>
+        {groupedSyllabusItems.length ? (
+          <fieldset>
+            <legend>Temario de examen sugerido</legend>
+            <p className="muted">Puntos reales del programa infantil para los grados objetivo presentes en la clase. Marca solo lo trabajado hoy.</p>
+            <div className="dojo-child-syllabus-list">
+              {groupedSyllabusItems.map(([grade, items]) => (
+                <details key={grade}>
+                  <summary>
+                    <strong>{grade}</strong>
+                    <span>{items.length} puntos</span>
+                  </summary>
+                  <div className="dojo-child-syllabus-grid">
+                    {items.map((item) => (
+                      <label key={item.id}>
+                        <input name="syllabusItemIds" type="checkbox" value={item.id} defaultChecked={selectedSyllabusItems.has(item.id)} />
+                        <span>
+                          <strong>{item.title}</strong>
+                          <small>{childSyllabusCategoryLabel(item.category)}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </fieldset>
+        ) : (
+          <fieldset>
+            <legend>Temario de examen sugerido</legend>
+            <p className="muted">No hay temario infantil activo para los grados objetivo de esta clase.</p>
+          </fieldset>
+        )}
         <label>
           Nota rapida
           <textarea name="notes" rows={2} defaultValue={plan?.notes ?? ""} placeholder="Opcional: como fue la clase, actitud general, algo a recordar..." />
@@ -632,6 +692,117 @@ function normalizeGrade(grade: string | null | undefined) {
 
 function slugGrade(grade: string | null | undefined) {
   return normalizeGrade(grade || "sin-grado").toLowerCase().replace(/\s+/g, "-");
+}
+
+function normalizeKidGrade(grade: string | null | undefined) {
+  const normalized = normalizeChildGradeKey(grade);
+  const aliases: Record<string, string> = {
+    MINARAI: "BLANCO",
+    BLANCO: "BLANCO",
+    "BLANCO-AMARILLO": "BLANCO-AMARILLO",
+    AMARILLO: "AMARILLO",
+    "AMARILLO-NARANJA": "AMARILLO-NARANJA",
+    NARANJA: "NARANJA",
+    "NARANJA-VERDE": "NARANJA-VERDE",
+    VERDE: "VERDE",
+    "VERDE-AZUL": "VERDE-AZUL",
+    AZUL: "AZUL",
+    "AZUL-MARRON": "AZUL-MARRON",
+    MARRON: "MARRON"
+  };
+  const canonical = aliases[normalized] ?? normalized;
+  return kidsGrades.find((item) => normalizeChildGradeKey(item) === normalizeChildGradeKey(canonical)) ?? null;
+}
+
+function nextKidGrade(grade: string | null | undefined) {
+  const current = normalizeKidGrade(grade);
+  if (!current) return null;
+  const index = kidsGrades.indexOf(current);
+  return kidsGrades[Math.min(index + 1, kidsGrades.length - 1)] ?? current;
+}
+
+function childSyllabusGradeCandidates(...grades: Array<string | null | undefined>) {
+  const equivalents: Record<string, string[]> = {
+    BLANCO: ["MINARAI"],
+    "BLANCO-AMARILLO": ["5 KYU"],
+    AMARILLO: ["BLANCO-AMARILLO", "5 KYU"],
+    "AMARILLO-NARANJA": ["4 KYU"],
+    NARANJA: ["AMARILLO-NARANJA", "4 KYU"],
+    "NARANJA-VERDE": ["3 KYU"],
+    VERDE: ["NARANJA-VERDE", "3 KYU"],
+    "VERDE-AZUL": ["2 KYU"],
+    AZUL: ["VERDE-AZUL", "2 KYU"],
+    "AZUL-MARRON": ["1 KYU"],
+    MARRON: ["1 KYU"]
+  };
+  const labels = new Set<string>();
+  for (const grade of grades) {
+    const current = normalizeKidGrade(grade);
+    const target = nextKidGrade(grade) ?? current;
+    for (const label of [target, current, normalizeGrade(grade)].filter(Boolean)) {
+      labels.add(label as string);
+      for (const equivalent of equivalents[label as string] ?? []) labels.add(equivalent);
+    }
+  }
+  return [...labels];
+}
+
+function normalizeChildGradeKey(grade: string | null | undefined) {
+  return normalizeGrade(grade)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+Y\s+/g, "-")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, "-");
+}
+
+function filterChildSyllabusItemsByGrade(items: ChildSyllabusItemRow[], gradeKeys: Set<string>) {
+  if (!gradeKeys.size) return items;
+  return items.filter((item) => gradeKeys.has(normalizeChildGradeKey(item.grade)));
+}
+
+function groupChildSyllabusItems(items: ChildSyllabusItemRow[]) {
+  const byGrade = new Map<string, ChildSyllabusItemRow[]>();
+  items
+    .slice()
+    .sort((a, b) => childGradeSortValue(a.grade) - childGradeSortValue(b.grade) || (a.sort_order ?? 999) - (b.sort_order ?? 999) || a.title.localeCompare(b.title))
+    .forEach((item) => {
+      const grade = normalizeKidGrade(item.grade) ?? normalizeGrade(item.grade || "Sin grado");
+      const rows = byGrade.get(grade) ?? [];
+      rows.push(item);
+      byGrade.set(grade, rows);
+    });
+  return [...byGrade.entries()];
+}
+
+function childGradeSortValue(grade: string | null | undefined) {
+  const normalized = normalizeKidGrade(grade);
+  const index = normalized ? kidsGrades.indexOf(normalized) : -1;
+  return index === -1 ? 999 : index;
+}
+
+function childSyllabusCategoryLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  const labels: Record<string, string> = {
+    kihon: "Kihon",
+    goho: "Goho",
+    juho: "Juho",
+    gakka: "Gakka",
+    howa: "Howa",
+    taiso: "Taiso",
+    ukemi: "Ukemi",
+    tai_gamae: "Tai gamae",
+    tai_sabaki: "Tai sabaki",
+    embu: "Embu",
+    dojo: "Dojo",
+    cinturon: "Cinturon",
+    vocabulario: "Vocabulario",
+    desplazamiento: "Desplazamiento",
+    etiqueta: "Etiqueta",
+    juego: "Juego",
+    otro: "Otro"
+  };
+  return labels[normalized] ?? (value || "Otro");
 }
 
 const childObjectives = [

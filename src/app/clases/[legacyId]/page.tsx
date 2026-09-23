@@ -318,6 +318,7 @@ export default async function ClaseDetailPage({
   const childSyllabusGrades = [...new Set(kidsDayMembers.flatMap((member) => childSyllabusGradeCandidates(member.grade)).filter(Boolean))] as string[];
   const fallbackChildSyllabusGrades = childSyllabusGradeCandidates(...kidsGrades);
   const childSyllabusGradeFilter = childSyllabusGrades.length ? childSyllabusGrades : fallbackChildSyllabusGrades;
+  const childSyllabusGradeKeys = new Set(childSyllabusGradeFilter.map(normalizeChildGradeKey));
   const [{ data: childClassPlan }, { data: childClassGroupWork }] = childPlanClass?.id
     ? await Promise.all([
       supabase
@@ -339,20 +340,20 @@ export default async function ClaseDetailPage({
       .select("id,grade,title,category,description,exam_relevant,sort_order")
       .eq("active", true)
       .eq("exam_relevant", true)
-      .in("grade", childSyllabusGradeFilter)
       .order("sort_order", { ascending: true })
       .returns<ChildSyllabusItemRow[]>()
     : { data: [] as ChildSyllabusItemRow[] };
-  const { data: fallbackChildSyllabusItems } = childPlanClass?.id && !(childExamSyllabusItems ?? []).length
+  const childExamSyllabusItemsForClass = filterChildSyllabusItemsByGrade(childExamSyllabusItems ?? [], childSyllabusGradeKeys);
+  const { data: fallbackChildSyllabusItems } = childPlanClass?.id && !childExamSyllabusItemsForClass.length
     ? await supabase
       .from("child_syllabus_items")
       .select("id,grade,title,category,description,exam_relevant,sort_order")
       .eq("active", true)
-      .in("grade", childSyllabusGradeFilter)
       .order("sort_order", { ascending: true })
       .returns<ChildSyllabusItemRow[]>()
     : { data: [] as ChildSyllabusItemRow[] };
-  const childSyllabusItems = (childExamSyllabusItems ?? []).length ? childExamSyllabusItems : fallbackChildSyllabusItems;
+  const fallbackChildSyllabusItemsForClass = filterChildSyllabusItemsByGrade(fallbackChildSyllabusItems ?? [], childSyllabusGradeKeys);
+  const childSyllabusItems = childExamSyllabusItemsForClass.length ? childExamSyllabusItemsForClass : fallbackChildSyllabusItemsForClass;
   const childAttendanceRows = childPlanClass?.id
     ? (dayAttendance ?? []).filter((item) => item.class_id === childPlanClass.id && item.members?.class === "kids")
     : [];
@@ -1560,13 +1561,13 @@ function childSyllabusGradeCandidates(...grades: Array<string | null | undefined
   const equivalents: Record<string, string[]> = {
     BLANCO: ["MINARAI"],
     "BLANCO-AMARILLO": ["5 KYU"],
-    AMARILLO: ["5 KYU"],
+    AMARILLO: ["BLANCO-AMARILLO", "5 KYU"],
     "AMARILLO-NARANJA": ["4 KYU"],
-    NARANJA: ["4 KYU"],
+    NARANJA: ["AMARILLO-NARANJA", "4 KYU"],
     "NARANJA-VERDE": ["3 KYU"],
-    VERDE: ["3 KYU"],
+    VERDE: ["NARANJA-VERDE", "3 KYU"],
     "VERDE-AZUL": ["2 KYU"],
-    AZUL: ["2 KYU"],
+    AZUL: ["VERDE-AZUL", "2 KYU"],
     "AZUL-MARRON": ["1 KYU"],
     MARRON: ["1 KYU"]
   };
@@ -1580,6 +1581,20 @@ function childSyllabusGradeCandidates(...grades: Array<string | null | undefined
     }
   }
   return [...labels];
+}
+
+function normalizeChildGradeKey(grade: string | null | undefined) {
+  return normalizeGradeLabel(grade)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+Y\s+/g, "-")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, "-");
+}
+
+function filterChildSyllabusItemsByGrade(items: ChildSyllabusItemRow[], gradeKeys: Set<string>) {
+  if (!gradeKeys.size) return items;
+  return items.filter((item) => gradeKeys.has(normalizeChildGradeKey(item.grade)));
 }
 
 function kidGradeSortValue(grade: string | null | undefined) {
