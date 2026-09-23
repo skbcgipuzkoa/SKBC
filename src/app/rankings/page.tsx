@@ -87,6 +87,7 @@ type AdultRankingRow = Member & {
   taikaiCoursePoints: number;
   manualBonus: number;
   blackBeltPoints: number;
+  isBlackBeltEligible: boolean;
   shakujoPoints: number;
   score: number;
 };
@@ -114,7 +115,7 @@ export default async function RankingsPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, shakujoResult, closuresResult] =
+  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, blackBeltEligibilityResult, shakujoResult, closuresResult] =
     await Promise.all([
       supabase
         .from("members")
@@ -149,6 +150,12 @@ export default async function RankingsPage({
         .returns<any[]>()
       ,
       supabase
+        .from("black_belt_special_members")
+        .select("member_id,active")
+        .eq("active", true)
+        .returns<Array<{ member_id: string; active: boolean }>>()
+      ,
+      supabase
         .from("shakujo_attendance")
         .select("member_id,shakujo_classes(class_date)")
         .returns<any[]>()
@@ -159,7 +166,6 @@ export default async function RankingsPage({
         .eq("active", true)
         .lte("starts_on", new Date().toISOString().slice(0, 10))
         .gte("ends_on", "2000-01-01")
-        .in("applies_to", ["all", "adults"])
         .returns<CalendarClosure[]>()
     ]);
 
@@ -190,12 +196,19 @@ export default async function RankingsPage({
   const oneTimeBonuses = recentBonuses.filter((bonus) => !bonus.permanent);
 
   const blackBeltRows = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
+  const blackBeltEligibleIds = new Set((blackBeltEligibilityResult.error ? [] : blackBeltEligibilityResult.data ?? []).map((row) => row.member_id));
   const shakujoRows = shakujoResult.error ? [] : shakujoResult.data ?? [];
   const closures = closuresResult.error ? [] : closuresResult.data ?? [];
-  const allAdults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, shakujoRows, closures);
+  const allAdults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, blackBeltEligibleIds, shakujoRows, closures);
   const adults = allAdults.slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
-  const allKids = (childRankings ?? []).filter((row) => row.members?.status === "active");
+  const childDaysWithoutAttendance = latestAttendanceByMember(attendance ?? []);
+  const allKids = (childRankings ?? [])
+    .filter((row) => row.members?.status === "active")
+    .map((row) => ({
+      ...row,
+      days_without_attendance: displayDaysWithout(row.member_id, row.days_without_attendance, childDaysWithoutAttendance, closures, "kids")
+    }));
   const kids = allKids.slice(0, 10);
   const selectedView = params.view === "kids" ? "kids" : "adults";
   const compareA = params.compareA ?? "";
@@ -307,7 +320,7 @@ export default async function RankingsPage({
                         <span className="ranking-chip">Const. 90: {row.constancy90}%</span>
                         <span className="ranking-chip">{formatDaysWithout(row.daysWithoutAttendance)}</span>
                         <span className="ranking-chip">Cursos {row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}</span>
-                        <span className="ranking-chip">Busen {row.blackBeltPoints}</span>
+                        {row.isBlackBeltEligible ? <span className="ranking-chip">Busen {row.blackBeltPoints}</span> : null}
                         <span className="ranking-chip">Shakujo {row.shakujoPoints}</span>
                         {row.fixedBonus ? <span className="ranking-chip">Fijo {row.fixedBonus}</span> : null}
                         {row.oneTimeBonus ? <span className="ranking-chip">Puntual {row.oneTimeBonus}</span> : null}
@@ -323,7 +336,7 @@ export default async function RankingsPage({
                     <AuditMetric label="Cursos 60 dias" value={`+${row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}`} detail={`N ${row.nationalCoursePoints} Ã‚· I ${row.internationalCoursePoints} Ã‚· T ${row.taikaiCoursePoints}`} />
                     <AuditMetric label="Bonus fijo" value={`+${row.fixedBonusScore}`} detail={`${row.fixedBonus} x 8`} />
                     <AuditMetric label="Bonus puntual" value={`+${row.oneTimeBonusScore}`} detail={`${row.oneTimeBonus} x 4 ultimos 180 dias`} />
-                    <AuditMetric label="Busen / Shakujo" value={`${signed(row.blackBeltPoints)} / ${signed(row.shakujoPoints)}`} detail="ultimos 180 dias" />
+                    <AuditMetric label="Busen / Shakujo" value={`${row.isBlackBeltEligible ? signed(row.blackBeltPoints) : "-"} / ${signed(row.shakujoPoints)}`} detail="ultimos 180 dias" />
                     <AuditMetric label="Inactividad" value={`-${row.inactivityPenalty}`} detail={formatDaysWithout(row.daysWithoutAttendance)} />
                     <AuditMetric label="Tecnicas" value={`${row.technical90}`} detail="solo informativo" />
                   </div>
@@ -344,7 +357,7 @@ export default async function RankingsPage({
                       <span className="ranking-chip-grid">
                         <span className="ranking-chip">30/90: {row.attendance_30d}/{row.attendance_90d}</span>
                         <span className="ranking-chip">Ultima {row.last_attendance_on ?? "-"}</span>
-                        <span className="ranking-chip">{formatDaysWithout(row.days_without_attendance)}</span>
+                        <span className="ranking-chip">{formatDaysWithout(displayDaysWithout(row.member_id, row.days_without_attendance, childDaysWithoutAttendance, closures, "kids"))}</span>
                         <span className="ranking-chip">Nivel {row.level ?? "-"}</span>
                       </span>
                     </span>
@@ -353,7 +366,7 @@ export default async function RankingsPage({
                     <AuditMetric label="Asistencias 30 dias" value={`${row.attendance_30d}`} detail={`${row.attendance_30d} x 3 puntos`} />
                     <AuditMetric label="Asistencias 90 dias" value={`${row.attendance_90d}`} detail={`${row.attendance_90d} x 1 punto`} />
                     <AuditMetric label="Score infantil" value={`${row.score}`} detail={`${row.attendance_30d * 3} + ${row.attendance_90d}`} />
-                    <AuditMetric label="Ultima asistencia" value={row.last_attendance_on ?? "-"} detail={formatDaysWithout(row.days_without_attendance)} />
+                    <AuditMetric label="Ultima asistencia" value={row.last_attendance_on ?? "-"} detail={formatDaysWithout(displayDaysWithout(row.member_id, row.days_without_attendance, childDaysWithoutAttendance, closures, "kids"))} />
                   </div>
                   {row.members?.legacy_id ? <a className="mini-action" href={`/kenshis/${row.members.legacy_id}`}>Abrir kenshi</a> : null}
                 </details>
@@ -449,7 +462,7 @@ export default async function RankingsPage({
                       <td data-label="Asist. 30/90">{row.attendance30}/{row.attendance90} ({row.constancy90}%)</td>
                       <td data-label="Dias sin venir">{row.daysWithoutAttendance}</td>
                       <td data-label="Cursos">{row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}</td>
-                      <td data-label="Busen">{row.blackBeltPoints}</td>
+                      <td data-label="Busen">{row.isBlackBeltEligible ? row.blackBeltPoints : "-"}</td>
                       <td data-label="Shakujo">{row.shakujoPoints}</td>
                       <td data-label="Bonus">{row.manualBonus}</td>
                       <td data-label="Score"><strong>{row.score}</strong></td>
@@ -482,7 +495,7 @@ export default async function RankingsPage({
                       </td>
                       <td data-label="Grado">{row.members?.grade ?? "-"}</td>
                       <td data-label="Asist. 30/90">{row.attendance_30d}/{row.attendance_90d}</td>
-                      <td data-label="Ultima">{row.last_attendance_on ?? "-"}{row.days_without_attendance !== null ? ` Ã‚· ${row.days_without_attendance} dias` : ""}</td>
+                      <td data-label="Ultima">{row.last_attendance_on ?? "-"}{formatInlineDaysWithout(displayDaysWithout(row.member_id, row.days_without_attendance, childDaysWithoutAttendance, closures, "kids"))}</td>
                       <td data-label="Nivel">{row.level ?? "-"}</td>
                       <td data-label="Score"><strong>{row.score}</strong></td>
                     </tr>
@@ -499,7 +512,7 @@ export default async function RankingsPage({
   );
 }
 
-function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], shakujoRows: any[], closures: CalendarClosure[]): AdultRankingRow[] {
+function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], blackBeltEligibleIds: Set<string>, shakujoRows: any[], closures: CalendarClosure[]): AdultRankingRow[] {
   const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
@@ -538,7 +551,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const a180 = attendance180.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
       const last = lastAttendance.get(member.id);
-      const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10), closures) : 999;
+      const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10), closures, "adults") : 999;
       const possible30 = possibleClubDays(clubTrainingDates, date30, member.joined_on);
       const possible90 = possibleClubDays(clubTrainingDates, date90, member.joined_on);
       const possible180 = possibleClubDays(clubTrainingDates, date180, member.joined_on);
@@ -554,6 +567,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const oneTimeBonusScore = oneTime * 4;
       const bonusScore = fixedBonusScore + oneTimeBonusScore;
       const black = blackBeltPoints.get(member.id) ?? 0;
+      const isBlackBeltEligible = blackBeltEligibleIds.has(member.id);
       const shakujo = shakujoPoints.get(member.id) ?? 0;
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
       const attendanceVolume = Math.min(a90, 12);
@@ -585,6 +599,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         taikaiCoursePoints: taikai,
         manualBonus: fixed + oneTime,
         blackBeltPoints: black,
+        isBlackBeltEligible,
         shakujoPoints: shakujo,
         score: Math.max(0, activityScore - inactivityPenalty)
       };
@@ -620,7 +635,7 @@ function AdultComparison({ left, right, leftPosition, rightPosition }: { left: A
         <CompareMetric label="Dias sin entrenar" left={left.daysWithoutAttendance} right={right.daysWithoutAttendance} lowerIsBetter />
         <CompareMetric label="Cursos 60 dias" left={left.nationalCoursePoints + left.internationalCoursePoints + left.taikaiCoursePoints} right={right.nationalCoursePoints + right.internationalCoursePoints + right.taikaiCoursePoints} higherIsBetter />
         <CompareMetric label="Bonus manual" left={left.manualBonus} right={right.manualBonus} higherIsBetter />
-        <CompareMetric label="Busen" left={left.blackBeltPoints} right={right.blackBeltPoints} higherIsBetter />
+        <CompareMetric label="Busen" left={left.isBlackBeltEligible ? left.blackBeltPoints : "-"} right={right.isBlackBeltEligible ? right.blackBeltPoints : "-"} higherIsBetter />
         <CompareMetric label="Shakujo" left={left.shakujoPoints} right={right.shakujoPoints} higherIsBetter />
         <CompareMetric label="Tecnicas 90 dias" left={left.technical90} right={right.technical90} higherIsBetter note="informativo" />
       </div>
@@ -792,7 +807,7 @@ function daysBetween(from: string, to: string) {
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.floor((end - start) / 86400000)) : 0;
 }
 
-function trainingDaysBetween(from: string, to: string, closures: CalendarClosure[]) {
+function trainingDaysBetween(from: string, to: string, closures: CalendarClosure[], audience: "kids" | "adults") {
   const totalDays = daysBetween(from, to);
   if (totalDays <= 0) return 0;
   let count = 0;
@@ -800,14 +815,20 @@ function trainingDaysBetween(from: string, to: string, closures: CalendarClosure
   const end = new Date(`${to}T00:00:00`);
   cursor.setDate(cursor.getDate() + 1);
   while (cursor <= end) {
-    if (!isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures)) count += 1;
+    if (isClubTrainingDay(cursor) && !isSummerBreak(cursor) && !isExplicitlyClosed(cursor, closures, audience)) count += 1;
     cursor.setDate(cursor.getDate() + 1);
   }
   return count;
 }
 
-function isExplicitlyClosed(date: Date, closures: CalendarClosure[]) {
+function isClubTrainingDay(date: Date) {
+  const day = date.getDay();
+  return day === 2 || day === 4;
+}
+
+function isExplicitlyClosed(date: Date, closures: CalendarClosure[], audience: "kids" | "adults") {
   return closures.some((closure) => {
+    if (closure.applies_to !== "all" && closure.applies_to !== audience) return false;
     const starts = new Date(`${closure.starts_on}T00:00:00`);
     const ends = new Date(`${closure.ends_on}T00:00:00`);
     return starts <= date && date <= ends;
@@ -822,6 +843,23 @@ function isSummerBreak(date: Date) {
 function formatDaysWithout(days: number | null | undefined) {
   if (days === null || days === undefined || days >= 999) return "Sin asistencia";
   return days === 1 ? "1 dia sin venir" : `${days} dias sin venir`;
+}
+
+function formatInlineDaysWithout(days: number | null | undefined) {
+  if (days === null || days === undefined || days >= 999) return "";
+  return ` - ${days === 1 ? "1 dia" : `${days} dias`}`;
+}
+
+function displayDaysWithout(
+  memberId: string,
+  storedDays: number | null | undefined,
+  latestAttendance: Map<string, string>,
+  closures: CalendarClosure[],
+  audience: "kids" | "adults"
+) {
+  const last = latestAttendance.get(memberId);
+  if (last) return trainingDaysBetween(last, new Date().toISOString().slice(0, 10), closures, audience);
+  return storedDays ?? null;
 }
 
 function adultInactivityPenalty(daysWithoutAttendance: number) {
