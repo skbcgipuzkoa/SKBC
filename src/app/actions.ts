@@ -4257,13 +4257,21 @@ function normalizeChildSyllabusGrade(value: string) {
 function normalizeChildSyllabusCategory(value: string) {
   const normalized = value.trim().toLowerCase();
   const allowed = [
+    "gakka",
+    "dojo",
+    "cinturon",
+    "vocabulario",
     "tecnica",
     "kihon",
+    "goho",
+    "juho",
     "desplazamiento",
     "ukemi",
     "kata",
+    "kata_tanen",
+    "kata_sotai",
     "howa",
-    "gakka",
+    "shakujo",
     "comportamiento",
     "etiqueta",
     "juego",

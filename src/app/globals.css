@@ -8807,6 +8807,33 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.admin-helper-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 12px 0;
+}
+
+.admin-helper-grid article {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.admin-helper-grid strong {
+  color: var(--ink);
+  display: block;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 760px) {
+  .admin-helper-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .technical-material-card summary {
   align-items: center;
   cursor: pointer;

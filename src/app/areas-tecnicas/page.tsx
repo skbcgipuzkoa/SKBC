@@ -165,50 +165,62 @@ function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
       <summary>
         <div>
           <h2>Programa infantil por grados</h2>
-          <p className="muted">{activeCount} puntos activos. Sirve para fichas infantiles, plan ligero y futuros examenes de ninos.</p>
+          <p className="muted">
+            {activeCount} puntos activos. Esto es el temario evaluable de ninos: lo usa el plan ligero, las fichas infantiles y los examenes.
+          </p>
         </div>
         <span>Abrir</span>
       </summary>
       <div className="admin-compact-body">
         <details className="admin-compact-inner">
           <summary>
-            <strong>Anadir punto del programa</strong>
-            <span>Nuevo</span>
+            <strong>Anadir punto al temario infantil</strong>
+            <span>No es un enlace</span>
           </summary>
+          <div className="admin-helper-grid">
+            <article>
+              <strong>Usa este bloque para evaluar o registrar progreso</strong>
+              <p className="muted">Ejemplos: atar el cinturon, saludo, comportamiento en dojo, seiku/seigan, vocabulario, kihon, ukemi, randori suave o gakka.</p>
+            </article>
+            <article>
+              <strong>Los enlaces van abajo en Material interno</strong>
+              <p className="muted">Videos, documentos, Drive, YouTube o Sites son material visible para el alumno, no temario evaluable.</p>
+            </article>
+          </div>
           <form className="quick-form technical-material-form" action={createChildSyllabusItemAction}>
             <label>
-              Grado
+              Grado infantil objetivo
               <select name="grade" defaultValue="BLANCO">
                 {kidsGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
               </select>
             </label>
             <label>
-              Categoria
-              <select name="category" defaultValue="tecnica">
+              Tipo de punto
+              <select name="category" defaultValue="gakka">
                 {childSyllabusCategories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
               </select>
             </label>
             <label>
-              Orden
+              Orden dentro del grado
               <input name="sortOrder" type="number" defaultValue={100} />
             </label>
             <label className="checkbox-field">
               <input name="examRelevant" type="checkbox" defaultChecked />
-              Entra para examen
+              Entra en examen infantil
             </label>
             <label className="checkbox-field">
               <input name="active" type="checkbox" defaultChecked />
-              Activo
+              Visible y activo
             </label>
             <label className="wide">
-              Titulo
-              <input name="title" placeholder="Atar el cinturon, kihon de puños, kote nuki..." required />
+              Punto del programa
+              <input name="title" placeholder="Atar el cinturon, Seiku-Seigan, Kihon: jun zuki, Saludo y etiqueta..." required />
             </label>
             <label className="wide">
-              Descripcion
-              <textarea name="description" rows={3} placeholder="Que debe saber hacer o recordar el alumno..." />
+              Descripcion para clase/examen
+              <textarea name="description" rows={3} placeholder="Que debe saber hacer el alumno, como se evalua y que quieres recordar al profesor..." />
             </label>
-            <SubmitButton pendingLabel="Guardando...">Anadir al programa infantil</SubmitButton>
+            <SubmitButton pendingLabel="Guardando...">Anadir punto evaluable</SubmitButton>
           </form>
         </details>
 
@@ -256,22 +268,22 @@ function ChildSyllabusItemEditor({ item }: { item: ChildSyllabusItem }) {
           </select>
         </label>
         <label>
-          Categoria
+          Tipo de punto
           <select name="category" defaultValue={item.category}>
             {childSyllabusCategories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
           </select>
         </label>
         <label>
-          Orden
+          Orden dentro del grado
           <input name="sortOrder" type="number" defaultValue={item.sort_order} />
         </label>
         <label className="checkbox-field">
           <input name="examRelevant" type="checkbox" defaultChecked={item.exam_relevant} />
-          Entra para examen
+          Entra en examen infantil
         </label>
         <label className="checkbox-field">
           <input name="active" type="checkbox" defaultChecked={item.active} />
-          Activo
+          Visible y activo
         </label>
         <label className="wide">
           Titulo
@@ -308,16 +320,21 @@ function TechnicalMaterialsAdmin({
         <summary>
           <div>
             <h2>Material interno {selectedClass === "kids" ? "ninos" : "adultos"}</h2>
-            <p className="muted">{visibleMaterials.length} materiales visibles. Despliega solo la seccion y el grado que quieras revisar.</p>
+            <p className="muted">
+              {visibleMaterials.length} materiales visibles. Aqui van enlaces, videos y documentos para el area tecnica personal; no uses esto para puntos de examen infantil.
+            </p>
           </div>
           <span>Abrir</span>
         </summary>
         <div className="admin-compact-body">
           <details className="admin-compact-inner">
             <summary>
-              <strong>Anadir material tecnico</strong>
-              <span>Nuevo</span>
+              <strong>Anadir enlace o material visible</strong>
+              <span>Video, Drive, documento...</span>
             </summary>
+            <p className="muted">
+              Si quieres anadir algo evaluable para ninos, como atar el cinturon o una pregunta de gakka, usa el bloque "Programa infantil por grados".
+            </p>
             <form className="quick-form technical-material-form" action={createTechnicalAreaMaterialAction}>
               <label>
                 Para
@@ -350,7 +367,7 @@ function TechnicalMaterialsAdmin({
               </label>
               <label className="wide">
                 Titulo
-                <input name="title" placeholder="Kote nuki - explicacion SKBC" required />
+                <input name="title" placeholder="Video de Kote nuki, Documento de Gakka, Playlist 5 KYU..." required />
               </label>
               <label className="wide">
                 URL
@@ -552,17 +569,23 @@ function groupChildSyllabusItems(items: ChildSyllabusItem[]) {
 }
 
 const childSyllabusCategories = [
-  { value: "tecnica", label: "Tecnica" },
-  { value: "kihon", label: "Kihon" },
-  { value: "desplazamiento", label: "Desplazamiento" },
-  { value: "ukemi", label: "Ukemi" },
-  { value: "kata", label: "Kata" },
+  { value: "gakka", label: "Gakka / filosofia" },
+  { value: "dojo", label: "Dojo / etiqueta" },
+  { value: "cinturon", label: "Cinturon y uniforme" },
+  { value: "vocabulario", label: "Vocabulario japones" },
+  { value: "kihon", label: "Kihon / fundamentos" },
+  { value: "goho", label: "Goho infantil" },
+  { value: "juho", label: "Juho infantil" },
+  { value: "tecnica", label: "Tecnica general" },
+  { value: "desplazamiento", label: "Desplazamiento / umpo ho" },
+  { value: "ukemi", label: "Ukemi / caidas" },
+  { value: "kata_tanen", label: "Kata tanen" },
+  { value: "kata_sotai", label: "Kata sotai" },
   { value: "howa", label: "Howa" },
-  { value: "gakka", label: "Gakka" },
+  { value: "shakujo", label: "Shakujo" },
   { value: "comportamiento", label: "Comportamiento" },
-  { value: "etiqueta", label: "Etiqueta" },
-  { value: "juego", label: "Juego" },
-  { value: "otro", label: "Otro" }
+  { value: "juego", label: "Juego / dinamica" },
+  { value: "otro", label: "Otro punto evaluable" }
 ];
 
 function childSyllabusCategoryLabel(category: string) {
