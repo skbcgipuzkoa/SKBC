@@ -61,6 +61,19 @@ type ChildSyllabusItem = {
 
 export const dynamic = "force-dynamic";
 
+const childSyllabusGrades = [
+  "BLANCO-AMARILLO",
+  "5 KYU",
+  "AMARILLO-NARANJA",
+  "4 KYU",
+  "NARANJA-VERDE",
+  "3 KYU",
+  "VERDE-AZUL",
+  "2 KYU",
+  "AZUL-MARRON",
+  "1 KYU"
+];
+
 export default async function TechnicalAreasPage({
   searchParams
 }: {
@@ -240,8 +253,8 @@ function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
           <form className="quick-form technical-material-form" action={createChildSyllabusItemAction}>
             <label>
               Grado infantil objetivo
-              <select name="grade" defaultValue="BLANCO">
-                {kidsGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              <select name="grade" defaultValue="BLANCO-AMARILLO">
+                {childSyllabusGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
               </select>
             </label>
             <label>
@@ -316,7 +329,7 @@ function ChildSyllabusItemEditor({ item }: { item: ChildSyllabusItem }) {
         <label>
           Grado
           <select name="grade" defaultValue={item.grade}>
-            {kidsGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+            {childSyllabusGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
           </select>
         </label>
         <label>
@@ -617,14 +630,14 @@ function groupChildSyllabusItems(items: ChildSyllabusItem[]) {
     ...item,
     grade: childSyllabusGradeLabel(item.grade)
   }));
-  const knownGroups = kidsGrades.map((grade) => [
+  const knownGroups = childSyllabusGrades.map((grade) => [
     grade,
     normalizedItems
       .filter((item) => normalize(item.grade) === normalize(grade))
       .sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
   ] as const);
   const extraGrades = [...new Set(normalizedItems.map((item) => item.grade))]
-    .filter((grade) => !kidsGrades.some((knownGrade) => normalize(knownGrade) === normalize(grade)))
+    .filter((grade) => !childSyllabusGrades.some((knownGrade) => normalize(knownGrade) === normalize(grade)))
     .sort();
 
   return [
@@ -641,36 +654,36 @@ function groupChildSyllabusItems(items: ChildSyllabusItem[]) {
 function childSyllabusGradeLabel(grade: string | null | undefined) {
   const normalized = normalize(grade);
   const aliases: Record<string, string> = {
-    "": "BLANCO",
-    MINARAI: "BLANCO",
-    BLANCO: "BLANCO",
+    "": "BLANCO-AMARILLO",
+    MINARAI: "BLANCO-AMARILLO",
+    BLANCO: "BLANCO-AMARILLO",
     "BLANCO Y AMARILLO": "BLANCO-AMARILLO",
     "BLANCO-AMARILLO": "BLANCO-AMARILLO",
-    "5 KYU": "AMARILLO",
-    AMARILLO: "AMARILLO",
+    "5 KYU": "5 KYU",
+    AMARILLO: "5 KYU",
     "AMARILLO Y NARANJA": "AMARILLO-NARANJA",
     "AMARILLO-NARANJA": "AMARILLO-NARANJA",
-    "4 KYU": "NARANJA",
-    NARANJA: "NARANJA",
+    "4 KYU": "4 KYU",
+    NARANJA: "4 KYU",
     "NARANJA Y VERDE": "NARANJA-VERDE",
     "NARANJA-VERDE": "NARANJA-VERDE",
-    "3 KYU": "VERDE",
-    VERDE: "VERDE",
+    "3 KYU": "3 KYU",
+    VERDE: "3 KYU",
     "VERDE Y AZUL": "VERDE-AZUL",
     "VERDE-AZUL": "VERDE-AZUL",
-    "2 KYU": "AZUL",
-    AZUL: "AZUL",
+    "2 KYU": "2 KYU",
+    AZUL: "2 KYU",
     "AZUL Y MARRON": "AZUL-MARRON",
     "AZUL Y MARRÓN": "AZUL-MARRON",
     "AZUL-MARRON": "AZUL-MARRON",
     "AZUL-MARRÓN": "AZUL-MARRON",
-    "1 KYU": "MARRON",
-    MARRON: "MARRON",
-    MARRÓN: "MARRON",
-    "1 DAN": "1 DAN"
+    "1 KYU": "1 KYU",
+    MARRON: "1 KYU",
+    MARRÓN: "1 KYU",
+    "1 DAN": "1 KYU"
   };
 
-  return aliases[normalized] ?? (grade?.trim().toUpperCase() || "BLANCO");
+  return aliases[normalized] ?? (grade?.trim().toUpperCase() || "BLANCO-AMARILLO");
 }
 
 const childSyllabusCategories = [
