@@ -147,6 +147,46 @@ export default async function TechnicalAreasPage({
           </div>
         </section>
 
+        <details className="card admin-compact-section">
+          <summary>
+            <div>
+              <h2>Como funciona esta pantalla</h2>
+              <p className="muted">Guia rapida para saber que debes tocar segun lo que quieras conseguir.</p>
+            </div>
+            <span>Abrir</span>
+          </summary>
+          <div className="admin-helper-grid">
+            <article>
+              <strong>Configuracion por grado</strong>
+              <p className="muted">
+                Es el enlace general de respaldo para el boton Area tecnica personal de la ficha. Si un kenshi no tiene enlace individual,
+                usara el enlace activo de su grado. Sirve para no dejar a los alumnos nuevos sin acceso.
+              </p>
+            </article>
+            <article>
+              <strong>Programa infantil por grados</strong>
+              <p className="muted">
+                Es el temario evaluable real de ninos. Aqui van puntos como atar el cinturon, kihon, gakka, desplazamientos o tecnicas.
+                Cada punto se asigna al grado objetivo que prepara el alumno. Lo usa el plan ligero infantil, las fichas infantiles y los examenes progresivos.
+              </p>
+            </article>
+            <article>
+              <strong>Material interno</strong>
+              <p className="muted">
+                Es la biblioteca que ve el alumno: videos, documentos, enlaces, YouTube, Drive o Sites. No cuenta como punto de examen
+                por si solo; es material de consulta para acompanar el aprendizaje.
+              </p>
+            </article>
+            <article>
+              <strong>Tecnicas oficiales de adulto</strong>
+              <p className="muted">
+                El programa adulto oficial vive en Tecnicas. Si quieres pedir una tecnica oficial a ninos, anadela aqui como punto infantil
+                del grado objetivo correspondiente, junto con la descripcion que quieres evaluar.
+              </p>
+            </article>
+          </div>
+        </details>
+
         <TechnicalAreaGrid title="Adultos" rows={adultRows} hidden={selectedClass !== "adults"} />
         <TechnicalAreaGrid title="Ninos" rows={kidRows} hidden={selectedClass !== "kids"} />
         {selectedClass === "kids" ? <ChildSyllabusAdmin items={childSyllabusItems} /> : null}
@@ -166,7 +206,7 @@ function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
         <div>
           <h2>Programa infantil por grados</h2>
           <p className="muted">
-            {activeCount} puntos activos. Esto es el temario evaluable de ninos: lo usa el plan ligero, las fichas infantiles y los examenes.
+            {activeCount} puntos activos. Esto es el syllabus infantil por grado objetivo: lo usa el plan ligero, las fichas infantiles y los examenes.
           </p>
         </div>
         <span>Abrir</span>
@@ -180,11 +220,21 @@ function ChildSyllabusAdmin({ items }: { items: ChildSyllabusItem[] }) {
           <div className="admin-helper-grid">
             <article>
               <strong>Usa este bloque para evaluar o registrar progreso</strong>
-              <p className="muted">Ejemplos: atar el cinturon, saludo, comportamiento en dojo, seiku/seigan, vocabulario, kihon, ukemi, randori suave o gakka.</p>
+              <p className="muted">
+                Ejemplos: atar el cinturon, saludo, comportamiento en dojo, seiku/seigan, vocabulario, kihon, ukemi, randori suave,
+                gakka o una tecnica oficial adaptada al grado infantil.
+              </p>
             </article>
             <article>
               <strong>Los enlaces van abajo en Material interno</strong>
               <p className="muted">Videos, documentos, Drive, YouTube o Sites son material visible para el alumno, no temario evaluable.</p>
+            </article>
+            <article>
+              <strong>El grado siempre es objetivo</strong>
+              <p className="muted">
+                Si un nino es blanco y prepara blanco-amarillo, crea el punto en blanco-amarillo. Asi el examen progresivo sabe donde sentarlo
+                y la ficha muestra lo que corresponde a su siguiente etapa.
+              </p>
             </article>
           </div>
           <form className="quick-form technical-material-form" action={createChildSyllabusItemAction}>
