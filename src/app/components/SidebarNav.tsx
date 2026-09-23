@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
 
 type SidebarNavProps = {
   current?: string;
@@ -109,15 +110,17 @@ async function getUnreadTrialNoticeCount() {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const to = addDays(today, 7);
-    const { count, error } = await createAdminClient()
+    const { data, error } = await createAdminClient()
       .from("members")
-      .select("id", { count: "exact", head: true })
+      .select("joined_on,free_trial_started_on,free_trial_ends_on")
       .eq("status", "active")
       .eq("free_trial_enabled", true)
-      .is("free_trial_notice_read_at", null)
-      .lte("free_trial_ends_on", to);
+      .is("free_trial_notice_read_at", null);
     if (error) return 0;
-    return count ?? 0;
+    return (data ?? []).filter((member) => {
+      const billingOn = resolveFreeTrialBillingDate(member.free_trial_started_on ?? member.joined_on, member.free_trial_ends_on);
+      return Boolean(billingOn) && billingOn! <= to;
+    }).length;
   } catch {
     return 0;
   }

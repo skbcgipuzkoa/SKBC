@@ -77,7 +77,7 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
           Aplicar aviso de mes gratis
         </label>
         <label>Inicio mes gratis<input name="freeTrialStartedOn" type="date" defaultValue={initial?.freeTrialStartedOn ?? initial?.joinedOn ?? ""} /></label>
-        <label>Fin mes gratis<input name="freeTrialEndsOn" type="date" defaultValue={initial?.freeTrialEndsOn ?? ""} /></label>
+        <label>Primer cobro posible<input name="freeTrialEndsOn" type="date" defaultValue={initial?.freeTrialEndsOn ?? ""} /></label>
         <label className="wide">Direccion<input name="address" defaultValue={initial?.address ?? ""} /></label>
         <label className="wide">URL material grado<input name="siteUrl" defaultValue={initial?.siteUrl ?? ""} /></label>
         <label className="wide">Historial examenes<textarea name="examHistory" rows={4} defaultValue={initial?.examHistory ?? ""} /></label>

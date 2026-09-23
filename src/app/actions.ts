@@ -20,6 +20,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/telegram-notifications";
 import { createTrashItem, restoreTrashItem } from "@/lib/trash";
 import { kidsGrades } from "@/lib/grades";
+import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -4416,19 +4417,14 @@ function parseDateInput(value: string) {
 function resolveFreeTrialFields(formData: FormData, joinedOn: string | null) {
   const enabled = formData.get("freeTrialEnabled") === "on";
   const startedOn = parseDateInput(String(formData.get("freeTrialStartedOn") ?? "")) ?? joinedOn;
-  const endsOn = parseDateInput(String(formData.get("freeTrialEndsOn") ?? "")) ?? (startedOn ? addMonthsToIsoDate(startedOn, 1) : null);
+  const manualBillingOn = parseDateInput(String(formData.get("freeTrialEndsOn") ?? ""));
+  const endsOn = resolveFreeTrialBillingDate(startedOn, manualBillingOn);
 
   return {
     enabled,
     startedOn: enabled ? startedOn : null,
     endsOn: enabled ? endsOn : null
   };
-}
-
-function addMonthsToIsoDate(value: string, months: number) {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1 + months, day));
-  return date.toISOString().slice(0, 10);
 }
 
 function addYearsToIsoDate(value: string, years: number) {

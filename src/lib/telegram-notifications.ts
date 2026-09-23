@@ -1,3 +1,4 @@
+import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type NotificationType = "daily_ranking" | "monthly_stats" | "semester_stats" | "yearly_stats" | "test";
@@ -680,20 +681,29 @@ function upcomingForExam(members: Member[]) {
 function freeTrialAlerts(members: Member[]) {
   const limit = isoDate(addDays(new Date(), 7));
   return members
-    .filter((member) =>
+    .map((member) => {
+      const joinedOn = member.free_trial_started_on ?? member.joined_on ?? null;
+      return {
+        member,
+        joinedOn,
+        billingOn: resolveFreeTrialBillingDate(joinedOn, member.free_trial_ends_on)
+      };
+    })
+    .filter(({ member, billingOn }) =>
       member.status === "active" &&
       member.free_trial_enabled &&
       !member.free_trial_notice_read_at &&
-      Boolean(member.free_trial_ends_on) &&
-      member.free_trial_ends_on! <= limit
+      Boolean(billingOn) &&
+      billingOn! <= limit
     )
-    .sort((a, b) => (a.free_trial_ends_on ?? "9999-12-31").localeCompare(b.free_trial_ends_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name))
-    .map((member) => ({
+    .sort((a, b) => (a.billingOn ?? "9999-12-31").localeCompare(b.billingOn ?? "9999-12-31") || a.member.display_name.localeCompare(b.member.display_name))
+    .map(({ member, joinedOn, billingOn }) => ({
       name: member.display_name,
       grade: member.grade ?? "-",
       className: member.class === "kids" ? "ninos" : "adultos",
-      joinedOn: member.free_trial_started_on ?? member.joined_on,
-      endsOn: member.free_trial_ends_on ?? null
+      joinedOn,
+      billingOn,
+      endsOn: billingOn
     }));
 }
 
@@ -727,10 +737,10 @@ function formatFreeTrialAlerts(rows: ReturnType<typeof freeTrialAlerts>) {
   if (!rows.length) return "<b>Mes gratis</b>\nSin vencimientos pendientes.";
   const today = todayIso();
   return [
-    "<b>Mes gratis pendiente</b>",
+    "<b>Mes gratis pendiente de cobro</b>",
     ...rows.slice(0, 12).map((row) => {
-      const state = row.endsOn && row.endsOn < today ? "vencido" : row.endsOn === today ? "vence hoy" : "proximo";
-      return `• <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${state}${row.endsOn ? ` ${formatHumanDate(row.endsOn)}` : ""}${row.joinedOn ? ` - ingreso ${formatHumanDate(row.joinedOn)}` : ""}`;
+      const state = row.billingOn && row.billingOn < today ? "cobro pendiente desde" : row.billingOn === today ? "empieza a pagar hoy" : "primer cobro";
+      return `- <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${state}${row.billingOn ? ` ${formatHumanDate(row.billingOn)}` : ""}${row.joinedOn ? ` - ingreso ${formatHumanDate(row.joinedOn)}` : ""}`;
     }),
     rows.length > 12 ? `Y ${rows.length - 12} mas.` : ""
   ].filter(Boolean).join("\n");
