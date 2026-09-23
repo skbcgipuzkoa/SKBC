@@ -297,14 +297,6 @@ export default async function StudentTechnicalAreaPage({
         </details>
       ) : null}
 
-      {!materialsBySection.length && !techniqueRows.length && !oldSiteLink?.url ? (
-        <section className="student-area-section">
-          <div className="student-empty-material">
-            <h2>Material en preparacion</h2>
-            <p>El club esta preparando el contenido tecnico de este grado.</p>
-          </div>
-        </section>
-      ) : null}
     </main>
   );
 }
