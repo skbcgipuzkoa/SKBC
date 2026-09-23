@@ -3022,6 +3022,8 @@ export async function addAdultRankingBonusAction(formData: FormData) {
   const bonusDate = parseDateInput(String(formData.get("bonusDate") ?? "")) ?? new Date().toISOString().slice(0, 10);
   const points = Number.parseInt(String(formData.get("points") ?? ""), 10);
   const reason = String(formData.get("reason") ?? "").trim();
+  const bonusType = String(formData.get("bonusType") ?? "one_time");
+  const permanent = bonusType === "fixed";
 
   if (!memberId || !Number.isFinite(points) || points === 0 || !reason) {
     redirect("/rankings?error=bonus");
@@ -3034,7 +3036,7 @@ export async function addAdultRankingBonusAction(formData: FormData) {
     points,
     reason,
     active: true,
-    permanent: true,
+    permanent,
     created_by: "WEB SKBC"
   });
 
@@ -4533,6 +4535,8 @@ async function addTeachingBonuses(
       bonus_date: classDate,
       points: 1,
       reason,
+      active: true,
+      permanent: false,
       created_by: `WEB SKBC:${classId}`
     }));
 

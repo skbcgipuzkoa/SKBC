@@ -1,4 +1,4 @@
-import { Award, LogOut, Medal } from "lucide-react";
+﻿import { Award, LogOut, Medal } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
 import { addAdultRankingBonusAction, deactivateAdultRankingBonusAction, logoutAction } from "@/app/actions";
@@ -75,6 +75,10 @@ type AdultRankingRow = Member & {
   constancyScore: number;
   attendanceVolume: number;
   bonusScore: number;
+  fixedBonus: number;
+  oneTimeBonus: number;
+  fixedBonusScore: number;
+  oneTimeBonusScore: number;
   inactivityPenalty: number;
   technical90: number;
   daysWithoutAttendance: number;
@@ -182,6 +186,8 @@ export default async function RankingsPage({
   const bonusTableReady = !bonusResult.error && !recentBonusResult.error;
   const bonuses = bonusTableReady ? bonusResult.data ?? [] : [];
   const recentBonuses = bonusTableReady ? recentBonusResult.data ?? [] : [];
+  const fixedBonuses = recentBonuses.filter((bonus) => bonus.permanent);
+  const oneTimeBonuses = recentBonuses.filter((bonus) => !bonus.permanent);
 
   const blackBeltRows = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
   const shakujoRows = shakujoResult.error ? [] : shakujoResult.data ?? [];
@@ -303,7 +309,8 @@ export default async function RankingsPage({
                         <span className="ranking-chip">Cursos {row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}</span>
                         <span className="ranking-chip">Busen {row.blackBeltPoints}</span>
                         <span className="ranking-chip">Shakujo {row.shakujoPoints}</span>
-                        {row.manualBonus ? <span className="ranking-chip">Bonus {row.manualBonus}</span> : null}
+                        {row.fixedBonus ? <span className="ranking-chip">Fijo {row.fixedBonus}</span> : null}
+                        {row.oneTimeBonus ? <span className="ranking-chip">Puntual {row.oneTimeBonus}</span> : null}
                       </span>
                     </span>
                   </summary>
@@ -313,8 +320,9 @@ export default async function RankingsPage({
                     <AuditMetric label="Historico 180 dias" value={`${row.attendance180}/${row.possible180}`} detail={`${row.constancy180}%`} />
                     <AuditMetric label="Base constancia" value={`+${row.constancyScore}`} detail="30/90/180 ponderado" />
                     <AuditMetric label="Volumen asistencia" value={`+${row.attendanceVolume}`} detail="maximo 12" />
-                    <AuditMetric label="Cursos 60 dias" value={`+${row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}`} detail={`N ${row.nationalCoursePoints} · I ${row.internationalCoursePoints} · T ${row.taikaiCoursePoints}`} />
-                    <AuditMetric label="Bonus manual" value={`+${row.bonusScore}`} detail={`${row.manualBonus} x 8`} />
+                    <AuditMetric label="Cursos 60 dias" value={`+${row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}`} detail={`N ${row.nationalCoursePoints} Ã‚· I ${row.internationalCoursePoints} Ã‚· T ${row.taikaiCoursePoints}`} />
+                    <AuditMetric label="Bonus fijo" value={`+${row.fixedBonusScore}`} detail={`${row.fixedBonus} x 8`} />
+                    <AuditMetric label="Bonus puntual" value={`+${row.oneTimeBonusScore}`} detail={`${row.oneTimeBonus} x 4 ultimos 180 dias`} />
                     <AuditMetric label="Busen / Shakujo" value={`${signed(row.blackBeltPoints)} / ${signed(row.shakujoPoints)}`} detail="ultimos 180 dias" />
                     <AuditMetric label="Inactividad" value={`-${row.inactivityPenalty}`} detail={formatDaysWithout(row.daysWithoutAttendance)} />
                     <AuditMetric label="Tecnicas" value={`${row.technical90}`} detail="solo informativo" />
@@ -360,7 +368,7 @@ export default async function RankingsPage({
 
         {selectedView === "adults" && bonusTableReady ? <section className="split-section">
           <article className="card">
-            <h2>Bonus adulto permanente</h2>
+            <h2>Bonus adulto</h2>
             <form action={addAdultRankingBonusAction} className="quick-form">
               <label>
                 Kenshi
@@ -368,31 +376,52 @@ export default async function RankingsPage({
                   <option value="">Seleccionar adulto</option>
                   {adultMembers.map((member) => (
                     <option value={member.id} key={member.id}>
-                      {member.display_name} · ID {member.legacy_id}
+                      {member.display_name} Ã‚· ID {member.legacy_id}
                     </option>
                   ))}
                 </select>
               </label>
+              <label>
+                Tipo
+                <select name="bonusType" defaultValue="one_time" required>
+                  <option value="one_time">Puntual de una clase</option>
+                  <option value="fixed">Fijo hasta quitarlo</option>
+                </select>
+              </label>
               <label>Desde<input name="bonusDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label>
               <label>Puntos<input name="points" type="number" defaultValue="1" step="1" required /></label>
-              <label className="wide">Motivo<input name="reason" placeholder="Ayuda en clase, tatami, apoyo a ninos..." required /></label>
-              <button type="submit">Activar bonus</button>
+              <label className="wide">Motivo<input name="reason" placeholder="Fijo: responsabilidad habitual. Puntual: tatami, ayuda ninos, clase concreta..." required /></label>
+              <button type="submit">Guardar bonus</button>
             </form>
           </article>
           <article className="card">
-            <h2>Bonus activos</h2>
+            <h2>Bonus fijos activos</h2>
             <div className="stack-list compact-stack">
-              {(recentBonuses ?? []).length ? (recentBonuses ?? []).map((bonus) => (
+              {fixedBonuses.length ? fixedBonuses.map((bonus) => (
                 <div className="bonus-row" key={bonus.id}>
                   <strong>{bonus.points > 0 ? `+${bonus.points}` : bonus.points}</strong>
-                  <span>{bonus.members?.display_name ?? "-"} · {bonus.bonus_date}</span>
+                  <span>{bonus.members?.display_name ?? "-"} Ã‚· {bonus.bonus_date}</span>
                   <p>{bonus.reason}</p>
                   <form action={deactivateAdultRankingBonusAction}>
                     <input type="hidden" name="bonusId" value={bonus.id} />
                     <button className="mini-action danger" type="submit">Quitar</button>
                   </form>
                 </div>
-              )) : <p className="muted">Sin bonus activos todavia.</p>}
+              )) : <p className="muted">Sin bonus fijos activos.</p>}
+            </div>
+            <h2 className="section-title small-title">Puntuales recientes</h2>
+            <div className="stack-list compact-stack">
+              {oneTimeBonuses.length ? oneTimeBonuses.map((bonus) => (
+                <div className="bonus-row" key={bonus.id}>
+                  <strong>{bonus.points > 0 ? `+${bonus.points}` : bonus.points}</strong>
+                  <span>{bonus.members?.display_name ?? "-"} Ã‚· {bonus.bonus_date}</span>
+                  <p>{bonus.reason}</p>
+                  <form action={deactivateAdultRankingBonusAction}>
+                    <input type="hidden" name="bonusId" value={bonus.id} />
+                    <button className="mini-action danger" type="submit">Quitar</button>
+                  </form>
+                </div>
+              )) : <p className="muted">Sin bonus puntuales recientes.</p>}
             </div>
           </article>
         </section> : null}
@@ -414,7 +443,7 @@ export default async function RankingsPage({
                       <td data-label="#">{index + 1}</td>
                       <td data-label="Kenshi">
                         {row.legacy_id ? <a className="text-link" href={`/kenshis/${row.legacy_id}`}>{row.display_name}</a> : <strong>{row.display_name}</strong>}
-                        <span className="ranking-id">ID {row.legacy_id ?? "-"} · IKA {row.ika_id ?? "pendiente"}</span>
+                        <span className="ranking-id">ID {row.legacy_id ?? "-"} Ã‚· IKA {row.ika_id ?? "pendiente"}</span>
                       </td>
                       <td data-label="Grado">{row.grade ?? "-"}</td>
                       <td data-label="Asist. 30/90">{row.attendance30}/{row.attendance90} ({row.constancy90}%)</td>
@@ -449,11 +478,11 @@ export default async function RankingsPage({
                       <td data-label="#">{row.position ?? index + 1}</td>
                       <td data-label="Kenshi">
                         {row.members?.legacy_id ? <a className="text-link" href={`/kenshis/${row.members.legacy_id}`}>{row.members.display_name}</a> : <strong>{row.members?.display_name ?? "-"}</strong>}
-                        <span className="ranking-id">ID {row.members?.legacy_id ?? "-"} · IKA {row.members?.ika_id ?? "pendiente"}</span>
+                        <span className="ranking-id">ID {row.members?.legacy_id ?? "-"} Ã‚· IKA {row.members?.ika_id ?? "pendiente"}</span>
                       </td>
                       <td data-label="Grado">{row.members?.grade ?? "-"}</td>
                       <td data-label="Asist. 30/90">{row.attendance_30d}/{row.attendance_90d}</td>
-                      <td data-label="Ultima">{row.last_attendance_on ?? "-"}{row.days_without_attendance !== null ? ` · ${row.days_without_attendance} dias` : ""}</td>
+                      <td data-label="Ultima">{row.last_attendance_on ?? "-"}{row.days_without_attendance !== null ? ` Ã‚· ${row.days_without_attendance} dias` : ""}</td>
                       <td data-label="Nivel">{row.level ?? "-"}</td>
                       <td data-label="Score"><strong>{row.score}</strong></td>
                     </tr>
@@ -480,9 +509,14 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national").map((row) => ({ member_id: row.member_id, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international").map((row) => ({ member_id: row.member_id, points: 3 })));
   const taikaiCoursePoints = sumByMember(courses.filter((row) => row.kind === "taikai").map((row) => ({ member_id: row.member_id, points: 2 })));
-  const manualBonus = sumByMember(
+  const fixedBonus = sumByMember(
     bonuses
-      .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
+      .filter((row) => row.active && row.permanent)
+      .map((row) => ({ member_id: row.member_id, points: row.points }))
+  );
+  const oneTimeBonus = sumByMember(
+    bonuses
+      .filter((row) => row.active && !row.permanent && row.bonus_date >= date180)
       .map((row) => ({ member_id: row.member_id, points: row.points }))
   );
   const blackBeltPoints = sumByMember(
@@ -514,8 +548,11 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const nac = nationalCoursePoints.get(member.id) ?? 0;
       const intl = internationalCoursePoints.get(member.id) ?? 0;
       const taikai = taikaiCoursePoints.get(member.id) ?? 0;
-      const bonus = manualBonus.get(member.id) ?? 0;
-      const bonusScore = bonus * 8;
+      const fixed = fixedBonus.get(member.id) ?? 0;
+      const oneTime = oneTimeBonus.get(member.id) ?? 0;
+      const fixedBonusScore = fixed * 8;
+      const oneTimeBonusScore = oneTime * 4;
+      const bonusScore = fixedBonusScore + oneTimeBonusScore;
       const black = blackBeltPoints.get(member.id) ?? 0;
       const shakujo = shakujoPoints.get(member.id) ?? 0;
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
@@ -536,13 +573,17 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
         constancyScore,
         attendanceVolume,
         bonusScore,
+        fixedBonus: fixed,
+        oneTimeBonus: oneTime,
+        fixedBonusScore,
+        oneTimeBonusScore,
         inactivityPenalty,
         technical90: t90,
         daysWithoutAttendance,
         nationalCoursePoints: nac,
         internationalCoursePoints: intl,
         taikaiCoursePoints: taikai,
-        manualBonus: bonus,
+        manualBonus: fixed + oneTime,
         blackBeltPoints: black,
         shakujoPoints: shakujo,
         score: Math.max(0, activityScore - inactivityPenalty)
@@ -566,8 +607,8 @@ function AdultComparison({ left, right, leftPosition, rightPosition }: { left: A
   return (
     <div className="ranking-compare-panel">
       <div className="compare-columns">
-        <ComparePerson name={left.display_name} position={leftPosition} score={left.score} detail={`${left.grade ?? "-"} · ID ${left.legacy_id ?? "-"}`} />
-        <ComparePerson name={right.display_name} position={rightPosition} score={right.score} detail={`${right.grade ?? "-"} · ID ${right.legacy_id ?? "-"}`} />
+        <ComparePerson name={left.display_name} position={leftPosition} score={left.score} detail={`${left.grade ?? "-"} Ã‚· ID ${left.legacy_id ?? "-"}`} />
+        <ComparePerson name={right.display_name} position={rightPosition} score={right.score} detail={`${right.grade ?? "-"} Ã‚· ID ${right.legacy_id ?? "-"}`} />
       </div>
       <div className="compare-metric-table">
         <CompareMetric label="Score total" left={left.score} right={right.score} higherIsBetter />
@@ -595,8 +636,8 @@ function KidComparison({ left, right, leftPosition, rightPosition }: { left: Chi
   return (
     <div className="ranking-compare-panel">
       <div className="compare-columns">
-        <ComparePerson name={leftName} position={leftPosition} score={left.score} detail={`${left.members?.grade ?? "-"} · ID ${left.members?.legacy_id ?? "-"}`} />
-        <ComparePerson name={rightName} position={rightPosition} score={right.score} detail={`${right.members?.grade ?? "-"} · ID ${right.members?.legacy_id ?? "-"}`} />
+        <ComparePerson name={leftName} position={leftPosition} score={left.score} detail={`${left.members?.grade ?? "-"} Ã‚· ID ${left.members?.legacy_id ?? "-"}`} />
+        <ComparePerson name={rightName} position={rightPosition} score={right.score} detail={`${right.members?.grade ?? "-"} Ã‚· ID ${right.members?.legacy_id ?? "-"}`} />
       </div>
       <div className="compare-metric-table">
         <CompareMetric label="Score total" left={left.score} right={right.score} higherIsBetter />

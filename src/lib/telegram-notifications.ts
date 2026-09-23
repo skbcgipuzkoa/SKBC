@@ -578,9 +578,14 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 3 })));
   const taikaiCoursePoints = sumByMember(courses.filter((row) => row.kind === "taikai" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 2 })));
-  const manualBonus = sumByMember(
+  const fixedBonus = sumByMember(
     bonuses
-      .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
+      .filter((row) => row.active && row.permanent)
+      .map((row) => ({ member_id: row.member_id, points: row.points }))
+  );
+  const oneTimeBonus = sumByMember(
+    bonuses
+      .filter((row) => row.active && !row.permanent && row.bonus_date >= date180)
       .map((row) => ({ member_id: row.member_id, points: row.points }))
   );
   const blackBeltPoints = sumByMember(
@@ -608,7 +613,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
       const attendanceVolume = Math.min(a90, 12);
-      const bonusScore = (manualBonus.get(member.id) ?? 0) * 8;
+      const bonusScore = ((fixedBonus.get(member.id) ?? 0) * 8) + ((oneTimeBonus.get(member.id) ?? 0) * 4);
       const score = Math.max(
         0,
         constancyScore +

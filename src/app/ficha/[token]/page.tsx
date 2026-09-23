@@ -1396,7 +1396,8 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
   const clubTrainingDates = uniqueSorted(attendance.map((row) => row.attended_on));
   const lastAttendance = latestByMember(attendance);
   const coursePoints = countCoursePoints(courses);
-  const bonusPoints = sumByMember(bonuses.filter((row) => row.active && (row.permanent || row.bonus_date >= date180)));
+  const fixedBonusPoints = sumByMember(bonuses.filter((row) => row.active && row.permanent));
+  const oneTimeBonusPoints = sumByMember(bonuses.filter((row) => row.active && !row.permanent && row.bonus_date >= date180));
   const ranked = members
     .filter((member) => member.legacy_id !== "13")
     .map((member) => {
@@ -1409,7 +1410,7 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
       const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
       const attendanceVolume = Math.min(a90, 12);
-      const bonusScore = (bonusPoints.get(member.id) ?? 0) * 8;
+      const bonusScore = ((fixedBonusPoints.get(member.id) ?? 0) * 8) + ((oneTimeBonusPoints.get(member.id) ?? 0) * 4);
       const activityScore = constancyScore + attendanceVolume + (coursePoints.get(member.id) ?? 0) + bonusScore;
       const score = Math.max(0, activityScore - adultInactivityPenalty(daysWithoutAttendance));
       return { ...member, score, constancy90: c90, attendance30: a30 };
