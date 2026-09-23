@@ -10069,6 +10069,76 @@ tbody tr:hover {
   background: #fffaf0;
 }
 
+.exam-seated-list {
+  background: #fff4d6;
+  border: 1px solid #f1d28a;
+  border-radius: 12px;
+  color: #7a5200;
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.exam-seated-list p {
+  margin: 0;
+}
+
+.exam-item-add-form,
+.exam-item-editor-list,
+.exam-item-editor form {
+  display: grid;
+  gap: 12px;
+}
+
+.exam-item-add-form {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.exam-item-add-form h3 {
+  margin: 0;
+}
+
+.exam-item-editor-list {
+  margin-top: 16px;
+}
+
+.exam-item-editor {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.exam-item-editor.inactive {
+  background: #f8fafc;
+  opacity: 0.78;
+}
+
+.exam-item-editor-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.exam-item-editor label {
+  display: grid;
+  gap: 6px;
+}
+
+.exam-item-editor .check-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
 .sticky-submit-card {
   bottom: 12px;
   display: flex;

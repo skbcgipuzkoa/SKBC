@@ -11,7 +11,7 @@ import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { sendStudentEmailNotification, type EmailAudience } from "@/lib/email-notifications";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
-import { createIntegratedExamEvent, deleteIntegratedExamEvent, finalizeIntegratedExamEvent, submitIntegratedExamScores, type IntegratedExamProgram } from "@/lib/integrated-exams";
+import { createIntegratedExamEvent, createIntegratedExamItem, deleteIntegratedExamEvent, deleteIntegratedExamItem, finalizeIntegratedExamEvent, submitIntegratedExamScores, updateIntegratedExamItem, type IntegratedExamProgram } from "@/lib/integrated-exams";
 import { archiveLegacyRowsToDrive } from "@/lib/legacy-rows-archive";
 import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
@@ -2675,6 +2675,91 @@ export async function deleteIntegratedExamEventAction(formData: FormData) {
 
   revalidatePath("/examenes");
   redirect("/examenes?saved=integrated-delete");
+}
+
+export async function updateIntegratedExamItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const eventId = String(formData.get("eventId") ?? "").trim();
+  const itemId = String(formData.get("itemId") ?? "").trim();
+  if (!eventId || !itemId) {
+    redirect("/examenes?error=integrated-item");
+  }
+
+  const weight = Number(String(formData.get("weight") ?? "1").replace(",", "."));
+  const orderIndex = Number(String(formData.get("orderIndex") ?? "0").replace(",", "."));
+  try {
+    await updateIntegratedExamItem({
+      itemId,
+      active: formData.get("active") === "on",
+      grade: String(formData.get("grade") ?? "").trim(),
+      section: String(formData.get("section") ?? "").trim(),
+      name: String(formData.get("name") ?? "").trim(),
+      summary: String(formData.get("summary") ?? "").trim(),
+      weight,
+      orderIndex
+    });
+  } catch (error) {
+    console.error("Error updating integrated exam item", error);
+    redirect(`/examenes/${eventId}?error=item&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath(`/examenes/${eventId}`);
+  redirect(`/examenes/${eventId}?saved=item`);
+}
+
+export async function createIntegratedExamItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const eventId = String(formData.get("eventId") ?? "").trim();
+  if (!eventId) {
+    redirect("/examenes?error=integrated-item");
+  }
+
+  const weight = Number(String(formData.get("weight") ?? "1").replace(",", "."));
+  try {
+    await createIntegratedExamItem({
+      eventId,
+      grade: String(formData.get("grade") ?? "").trim(),
+      section: String(formData.get("section") ?? "").trim(),
+      category: String(formData.get("category") ?? "").trim(),
+      name: String(formData.get("name") ?? "").trim(),
+      summary: String(formData.get("summary") ?? "").trim(),
+      weight
+    });
+  } catch (error) {
+    console.error("Error creating integrated exam item", error);
+    redirect(`/examenes/${eventId}?error=item&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath(`/examenes/${eventId}`);
+  redirect(`/examenes/${eventId}?saved=item`);
+}
+
+export async function deleteIntegratedExamItemAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const eventId = String(formData.get("eventId") ?? "").trim();
+  const itemId = String(formData.get("itemId") ?? "").trim();
+  if (!eventId || !itemId) {
+    redirect("/examenes?error=integrated-item");
+  }
+
+  try {
+    await deleteIntegratedExamItem(itemId);
+  } catch (error) {
+    console.error("Error deleting integrated exam item", error);
+    redirect(`/examenes/${eventId}?error=item&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath(`/examenes/${eventId}`);
+  redirect(`/examenes/${eventId}?saved=item`);
 }
 
 export async function submitIntegratedExamScoresAction(formData: FormData) {

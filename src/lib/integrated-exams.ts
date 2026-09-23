@@ -287,6 +287,103 @@ export async function deleteIntegratedExamEvent(eventId: string) {
   if (error) throw error;
 }
 
+export async function updateIntegratedExamItem(input: {
+  itemId: string;
+  active: boolean;
+  grade?: string | null;
+  section?: string | null;
+  name?: string | null;
+  summary?: string | null;
+  weight?: number | null;
+  orderIndex?: number | null;
+}) {
+  const supabase = createAdminClient();
+  const { data: item, error: itemError } = await supabase
+    .from("exam_event_items")
+    .select("exam_event_id")
+    .eq("id", input.itemId)
+    .single<{ exam_event_id: string }>();
+  if (itemError || !item) throw itemError ?? new Error("Item de examen no encontrado.");
+
+  const update: Record<string, unknown> = {
+    active: input.active
+  };
+  if (input.grade !== undefined) update.grade = input.grade || null;
+  if (input.section !== undefined) update.section = input.section || null;
+  const name = input.name?.trim();
+  if (input.name !== undefined && name) update.name = name;
+  if (input.summary !== undefined) update.summary = input.summary || null;
+  if (input.weight !== undefined && input.weight !== null) update.weight = Number.isFinite(input.weight) ? input.weight : 1;
+  if (input.orderIndex !== undefined && input.orderIndex !== null) update.order_index = Number.isFinite(input.orderIndex) ? input.orderIndex : 0;
+
+  const { error } = await supabase
+    .from("exam_event_items")
+    .update(update)
+    .eq("id", input.itemId);
+  if (error) throw error;
+
+  await refreshIntegratedExamReview(item.exam_event_id);
+  return item.exam_event_id;
+}
+
+export async function createIntegratedExamItem(input: {
+  eventId: string;
+  grade?: string | null;
+  section?: string | null;
+  name: string;
+  summary?: string | null;
+  category?: string | null;
+  weight?: number | null;
+}) {
+  const supabase = createAdminClient();
+  const name = input.name.trim();
+  if (!name) throw new Error("Indica el nombre del punto de examen.");
+
+  const { data: lastItem, error: lastError } = await supabase
+    .from("exam_event_items")
+    .select("order_index")
+    .eq("exam_event_id", input.eventId)
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ order_index: number | null }>();
+  if (lastError) throw lastError;
+
+  const { error } = await supabase.from("exam_event_items").insert({
+    exam_event_id: input.eventId,
+    source: "manual",
+    section: input.section || input.category || "MANUAL",
+    name,
+    summary: input.summary || null,
+    grade: input.grade || null,
+    category: input.category || input.section || "manual",
+    weight: Number.isFinite(input.weight ?? 1) ? input.weight ?? 1 : 1,
+    order_index: Number(lastItem?.order_index ?? 0) + 1,
+    active: true
+  });
+  if (error) throw error;
+
+  await refreshIntegratedExamReview(input.eventId);
+}
+
+export async function deleteIntegratedExamItem(itemId: string) {
+  const supabase = createAdminClient();
+  const { data: item, error: itemError } = await supabase
+    .from("exam_event_items")
+    .select("exam_event_id")
+    .eq("id", itemId)
+    .single<{ exam_event_id: string }>();
+  if (itemError || !item) throw itemError ?? new Error("Item de examen no encontrado.");
+
+  const { error } = await supabase
+    .from("exam_event_items")
+    .delete()
+    .eq("id", itemId);
+  if (error) throw error;
+
+  await refreshIntegratedExamReview(item.exam_event_id);
+  return item.exam_event_id;
+}
+
 export async function getExaminerExamByToken(token: string) {
   const supabase = createAdminClient();
   const { data: examiner, error: examinerError } = await supabase
@@ -529,11 +626,15 @@ function summarizeScores(programType: IntegratedExamProgram, students: ExamEvent
   });
 }
 
-function isItemRelevantForStudent(programType: IntegratedExamProgram, student: ExamEventStudent, item: ExamEventItem) {
+export function isExamItemRelevantForStudent(programType: IntegratedExamProgram, student: Pick<ExamEventStudent, "target_grade">, item: Pick<ExamEventItem, "grade">) {
   if (programType === "kids" || programType === "kids_progressive") {
     return kidsGradeIndex(item.grade) <= kidsGradeIndex(student.target_grade);
   }
   return normalizeGrade(item.grade) === normalizeGrade(student.target_grade);
+}
+
+function isItemRelevantForStudent(programType: IntegratedExamProgram, student: ExamEventStudent, item: ExamEventItem) {
+  return isExamItemRelevantForStudent(programType, student, item);
 }
 
 async function buildExamItems(eventId: string, programType: IntegratedExamProgram, targetGrades: string[]) {

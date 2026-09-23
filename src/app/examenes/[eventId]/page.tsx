@@ -1,5 +1,5 @@
 import { LogOut } from "lucide-react";
-import { deleteIntegratedExamEventAction, finalizeIntegratedExamEventAction, logoutAction } from "@/app/actions";
+import { createIntegratedExamItemAction, deleteIntegratedExamEventAction, deleteIntegratedExamItemAction, finalizeIntegratedExamEventAction, logoutAction, updateIntegratedExamItemAction } from "@/app/actions";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { hasInternalAccess } from "@/lib/auth";
 import { getIntegratedExamAdmin } from "@/lib/integrated-exams";
@@ -42,6 +42,7 @@ export default async function IntegratedExamPage({
         </div>
 
         {query.saved === "created" ? <p className="save-ok">Examen integrado creado. Copia los enlaces de examinador si los necesitas.</p> : null}
+        {query.saved === "item" ? <p className="save-ok">Temario del examen actualizado.</p> : null}
         {query.saved === "finalized" ? <p className="save-ok">Examen cerrado. Aprobados registrados en fichas y documentos enviados a Drive: {query.registered ?? "0"}.</p> : null}
         {query.error ? <p className="form-error">Ha ocurrido un error{query.detail ? `: ${query.detail}` : "."}</p> : null}
 
@@ -160,27 +161,58 @@ export default async function IntegratedExamPage({
         <details className="card foldable-admin-section">
           <summary>
             <span>
-              <strong>Temario del examen</strong>
-              <small>{items.length} lineas, incluidos cortes progresivos si existen</small>
+              <strong>Configurar temario del examen</strong>
+              <small>{scorableItems.filter((item) => item.active).length} activos de {scorableItems.length} puntos evaluables. Puedes quitar, editar o anadir puntos antes de evaluar.</small>
             </span>
           </summary>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>#</th><th>Grado</th><th>Seccion</th><th>Item</th><th>Resumen</th></tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td data-label="#">{item.order_index}</td>
-                    <td data-label="Grado">{item.grade ?? "-"}</td>
-                    <td data-label="Seccion">{item.section ?? item.category ?? "-"}</td>
-                    <td data-label="Item"><strong>{item.name}</strong>{item.source === "cut" ? <span className="state-badge">Corte</span> : null}</td>
-                    <td data-label="Resumen">{item.summary ?? "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <form action={createIntegratedExamItemAction} className="exam-item-add-form">
+            <input type="hidden" name="eventId" value={event.id} />
+            <h3>Anadir punto manual</h3>
+            <div className="form-grid">
+              <label>Nombre<input name="name" placeholder="Ej. Atar el cinturon, Embu, Howa..." required /></label>
+              <label>Grado o corte<input name="grade" placeholder={event.program_type === "kids_progressive" || event.program_type === "kids" ? "Ej. 5 KYU" : "Ej. 3 KYU"} /></label>
+              <label>Seccion<input name="section" placeholder="Gakka, tecnica, kihon..." /></label>
+              <label>Peso<input name="weight" inputMode="decimal" defaultValue="1" /></label>
+            </div>
+            <label>Resumen<textarea name="summary" rows={3} placeholder="Indicaciones para el examinador" /></label>
+            <button type="submit">Anadir al examen</button>
+          </form>
+
+          <div className="exam-item-editor-list">
+            {items.map((item) => (
+              <article className={item.active ? "exam-item-editor" : "exam-item-editor inactive"} key={item.id}>
+                <form action={updateIntegratedExamItemAction}>
+                  <input type="hidden" name="eventId" value={event.id} />
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <div className="exam-item-editor-head">
+                    <label className="check-row">
+                      <input name="active" type="checkbox" defaultChecked={item.active} disabled={isCompleted || item.source === "cut"} />
+                      <span>{item.source === "cut" ? "Corte progresivo" : item.active ? "Entra en examen" : "Fuera del examen"}</span>
+                    </label>
+                    <span className="state-badge">{item.source === "cut" ? "Corte" : item.source}</span>
+                  </div>
+                  <div className="form-grid">
+                    <label>Orden<input name="orderIndex" inputMode="numeric" defaultValue={item.order_index} disabled={isCompleted} /></label>
+                    <label>Grado<input name="grade" defaultValue={item.grade ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
+                    <label>Seccion<input name="section" defaultValue={item.section ?? item.category ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
+                    <label>Peso<input name="weight" inputMode="decimal" defaultValue={item.weight} disabled={isCompleted || item.source === "cut"} /></label>
+                  </div>
+                  <label>Item<input name="name" defaultValue={item.name} disabled={isCompleted || item.source === "cut"} /></label>
+                  <label>Resumen<textarea name="summary" rows={3} defaultValue={item.summary ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
+                  <div className="form-actions">
+                    <button type="submit" disabled={isCompleted || item.source === "cut"}>Guardar punto</button>
+                  </div>
+                </form>
+                {item.source !== "cut" && !isCompleted ? (
+                  <form action={deleteIntegratedExamItemAction}>
+                    <input type="hidden" name="eventId" value={event.id} />
+                    <input type="hidden" name="itemId" value={item.id} />
+                    <button className="danger-button" type="submit">Eliminar punto</button>
+                  </form>
+                ) : null}
+              </article>
+            ))}
           </div>
         </details>
 

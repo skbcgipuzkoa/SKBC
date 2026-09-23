@@ -1,5 +1,5 @@
 import { submitIntegratedExamScoresAction } from "@/app/actions";
-import { getExaminerExamByToken } from "@/lib/integrated-exams";
+import { getExaminerExamByToken, isExamItemRelevantForStudent } from "@/lib/integrated-exams";
 
 export default async function ExaminerTokenPage({
   params,
@@ -28,16 +28,18 @@ export default async function ExaminerTokenPage({
       </main>
     );
   }
+
   const scoreMap = new Map(payload.existingScores.map((score) => [`${score.event_student_id}:${score.event_item_id}`, score]));
   const submitted = Boolean(payload.examiner.submitted_at || query.saved);
   const scorableItems = payload.items.filter((item) => item.source !== "cut");
+  const isKidsProgressive = payload.event.program_type === "kids" || payload.event.program_type === "kids_progressive";
 
   return (
     <main className="public-exam-page">
       <section className="public-exam-hero">
         <p className="eyebrow">SKBC Gipuzkoa</p>
         <h1>{payload.event.title}</h1>
-        <p>{payload.event.exam_date} · Examinador: <strong>{payload.examiner.name}</strong></p>
+        <p>{payload.event.exam_date} - Examinador: <strong>{payload.examiner.name}</strong></p>
       </section>
 
       {query.saved ? <p className="save-ok">Evaluacion enviada correctamente. Gracias.</p> : null}
@@ -57,26 +59,38 @@ export default async function ExaminerTokenPage({
 
           {payload.items.map((item) => {
             if (item.source === "cut") {
+              const seatedStudents = isKidsProgressive
+                ? payload.students.filter((student) => normalizeExamGrade(student.target_grade) === normalizeExamGrade(item.cut_grade ?? item.grade))
+                : [];
               return (
                 <section className="card exam-cut-marker" key={item.id}>
                   <p className="eyebrow">Corte progresivo</p>
                   <h2>{item.name}</h2>
                   <p className="muted">{item.summary}</p>
+                  {seatedStudents.length ? (
+                    <div className="exam-seated-list">
+                      <strong>Se sientan aqui</strong>
+                      <p>{seatedStudents.map((student) => student.members?.display_name ?? "Kenshi").join(", ")}</p>
+                    </div>
+                  ) : null}
                 </section>
               );
             }
+
+            const relevantStudents = payload.students.filter((student) => isExamItemRelevantForStudent(payload.event.program_type, student, item));
 
             return (
               <section className="card exam-score-card" key={item.id}>
                 <div className="section-heading-row">
                   <div>
-                    <p className="eyebrow">{item.grade ?? "-"} · {item.section ?? item.category ?? "Item"}</p>
+                    <p className="eyebrow">{item.grade ?? "-"} - {item.section ?? item.category ?? "Item"}</p>
                     <h2>{item.name}</h2>
                     {item.summary ? <p className="muted">{item.summary}</p> : null}
                   </div>
+                  {isKidsProgressive ? <span className="state-badge">{relevantStudents.length} continuan</span> : null}
                 </div>
                 <div className="exam-score-grid">
-                  {payload.students.map((student) => {
+                  {relevantStudents.map((student) => {
                     const current = scoreMap.get(`${student.id}:${item.id}`);
                     const defaultValue = current?.skipped ? "skip" : String(current?.score ?? "");
                     return (
@@ -98,11 +112,15 @@ export default async function ExaminerTokenPage({
           })}
 
           <section className="card sticky-submit-card">
-            <p className="muted">{payload.students.length} kenshis · {scorableItems.length} puntos evaluables</p>
+            <p className="muted">{payload.students.length} kenshis - {scorableItems.length} puntos evaluables</p>
             <button type="submit">Enviar evaluacion</button>
           </section>
         </form>
       )}
     </main>
   );
+}
+
+function normalizeExamGrade(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase();
 }
