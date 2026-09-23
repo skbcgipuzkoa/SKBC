@@ -23,7 +23,7 @@ import {
 } from "@/app/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { hasInternalAccess } from "@/lib/auth";
-import { adultGrades } from "@/lib/grades";
+import { adultGrades, kidsGrades } from "@/lib/grades";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
@@ -125,8 +125,19 @@ type TechniqueOption = {
 type ChildClassPlanRow = {
   objective: string | null;
   activities: string[] | null;
+  syllabus_item_ids: string[] | null;
   notes: string | null;
   updated_at: string | null;
+};
+
+type ChildSyllabusItemRow = {
+  id: string;
+  grade: string;
+  title: string;
+  category: string;
+  description: string | null;
+  exam_relevant: boolean;
+  sort_order: number;
 };
 
 type ChildClassGroupWorkRow = {
@@ -296,11 +307,12 @@ export default async function ClaseDetailPage({
   const kidsDayMembers = (dayMembers ?? []).filter((member) => member.class === "kids");
   const pendingKidsDayMembers = kidsDayMembers.filter((member) => !kidsAttendedIds.has(member.id));
   const childPlanClass = clase.class_group === "kids" ? { id: clase.id, legacy_id: clase.legacy_id } : kidsDayClass;
-  const [{ data: childClassPlan }, { data: childClassGroupWork }] = childPlanClass?.id
+  const childSyllabusGrades = [...new Set(kidsDayMembers.map((member) => nextKidGrade(member.grade) ?? normalizeKidGrade(member.grade)).filter(Boolean))] as string[];
+  const [{ data: childClassPlan }, { data: childClassGroupWork }, { data: childSyllabusItems }] = childPlanClass?.id
     ? await Promise.all([
       supabase
         .from("child_class_plans")
-        .select("objective,activities,notes,updated_at")
+        .select("objective,activities,syllabus_item_ids,notes,updated_at")
         .eq("class_id", childPlanClass.id)
         .maybeSingle<ChildClassPlanRow>(),
       supabase
@@ -308,9 +320,17 @@ export default async function ClaseDetailPage({
         .select("id,group_label,content,member_ids,notes,created_at")
         .eq("class_id", childPlanClass.id)
         .order("created_at", { ascending: true })
-        .returns<ChildClassGroupWorkRow[]>()
+        .returns<ChildClassGroupWorkRow[]>(),
+      supabase
+        .from("child_syllabus_items")
+        .select("id,grade,title,category,description,exam_relevant,sort_order")
+        .eq("active", true)
+        .eq("exam_relevant", true)
+        .in("grade", childSyllabusGrades.length ? childSyllabusGrades : kidsGrades)
+        .order("sort_order", { ascending: true })
+        .returns<ChildSyllabusItemRow[]>()
     ])
-    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }];
+    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }, { data: [] as ChildSyllabusItemRow[] }];
   const adultDayMembers = (dayMembers ?? []).filter((member) => member.class === "adults");
   const adultAttendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === clase.id && item.members?.class === "adults").map((item) => item.member_id));
   const adultPendingMembers = adultDayMembers.filter((member) => !adultAttendedIds.has(member.id));
@@ -364,6 +384,7 @@ export default async function ClaseDetailPage({
         returnTo={`/clases/${legacyId}?saved=kids-plan`}
         plan={childClassPlan}
         groupWork={childClassGroupWork ?? []}
+        syllabusItems={childSyllabusItems ?? []}
         members={kidsDayMembers}
         compact
       />
@@ -929,6 +950,7 @@ export default async function ClaseDetailPage({
               returnTo={`/clases/${legacyId}?saved=kids-plan`}
               plan={childClassPlan}
               groupWork={childClassGroupWork ?? []}
+              syllabusItems={childSyllabusItems ?? []}
               members={classMembers ?? []}
             />
           </>
@@ -1199,6 +1221,7 @@ function ChildLightPlanPanel({
   returnTo,
   plan,
   groupWork,
+  syllabusItems,
   members,
   compact = false
 }: {
@@ -1207,23 +1230,28 @@ function ChildLightPlanPanel({
   returnTo: string;
   plan: ChildClassPlanRow | null;
   groupWork: ChildClassGroupWorkRow[];
+  syllabusItems: ChildSyllabusItemRow[];
   members: MemberOption[];
   compact?: boolean;
 }) {
   const activities = new Set(plan?.activities ?? []);
+  const selectedSyllabusItems = new Set(plan?.syllabus_item_ids ?? []);
   const memberNames = new Map(members.map((member) => [member.id, member.display_name]));
+  const syllabusByGrade = groupChildSyllabusByGrade(syllabusItems);
+  const selectedSyllabusCount = syllabusItems.filter((item) => selectedSyllabusItems.has(item.id)).length;
 
   return (
     <details className={compact ? "child-light-plan-panel compact" : "card child-light-plan-panel"}>
       <summary>
         <strong>Plan infantil opcional</strong>
-        <span>{plan?.objective || groupWork.length ? "Guardado" : "Ligero"}</span>
+        <span>{plan?.objective || groupWork.length || selectedSyllabusCount ? "Guardado" : "Ligero"}</span>
       </summary>
       <p className="muted">Solo sirve como memoria interna del dia. No bloquea asistencia ni cambia el progreso tecnico como en adultos.</p>
-      {plan?.objective || activities.size || plan?.notes ? (
+      {plan?.objective || activities.size || selectedSyllabusCount || plan?.notes ? (
         <div className="child-plan-summary">
           {plan?.objective ? <span className="tag">Objetivo: {plan.objective}</span> : null}
           {[...activities].map((activity) => <span className="tag" key={activity}>{childActivityLabel(activity)}</span>)}
+          {selectedSyllabusCount ? <span className="tag">Temario examen: {selectedSyllabusCount} puntos</span> : null}
           {plan?.notes ? <p>{plan.notes}</p> : null}
         </div>
       ) : null}
@@ -1271,6 +1299,36 @@ function ChildLightPlanPanel({
               </label>
             ))}
           </div>
+        </fieldset>
+        <fieldset className="child-syllabus-plan-fieldset">
+          <legend>Temario de examen sugerido</legend>
+          <p className="muted">Puntos reales del programa infantil para los grados objetivo presentes en la clase. Marca solo lo trabajado hoy.</p>
+          {syllabusByGrade.length ? (
+            <div className="child-syllabus-plan-list">
+              {syllabusByGrade.map(([grade, items], index) => (
+                <details key={grade} className="child-syllabus-plan-grade" open={index === 0 || items.some((item) => selectedSyllabusItems.has(item.id))}>
+                  <summary>
+                    <span className={gradeChipClass(grade)}>{grade}</span>
+                    <strong>{items.length} puntos</strong>
+                  </summary>
+                  <div className="child-syllabus-plan-items">
+                    {items.map((item) => (
+                      <label key={item.id}>
+                        <input name="syllabusItemIds" type="checkbox" value={item.id} defaultChecked={selectedSyllabusItems.has(item.id)} />
+                        <span>
+                          <strong>{item.title}</strong>
+                          <small>{childSyllabusCategoryLabel(item.category)}</small>
+                          {item.description ? <small>{item.description}</small> : null}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No hay temario infantil activo para los grados objetivo de esta clase.</p>
+          )}
         </fieldset>
         <label>
           Nota rapida
@@ -1335,6 +1393,60 @@ const childActivities = [
   { value: "howa", label: "Howa" },
   { value: "examen", label: "Preparacion grado" }
 ];
+
+function groupChildSyllabusByGrade(items: ChildSyllabusItemRow[]) {
+  const byGrade = new Map<string, ChildSyllabusItemRow[]>();
+  items
+    .slice()
+    .sort((a, b) => kidGradeSortValue(a.grade) - kidGradeSortValue(b.grade) || a.sort_order - b.sort_order || a.title.localeCompare(b.title))
+    .forEach((item) => {
+      const grade = normalizeKidGrade(item.grade) ?? item.grade;
+      const rows = byGrade.get(grade) ?? [];
+      rows.push(item);
+      byGrade.set(grade, rows);
+    });
+  return [...byGrade.entries()];
+}
+
+function childSyllabusCategoryLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  const labels: Record<string, string> = {
+    kihon: "Kihon",
+    goho: "Goho",
+    juho: "Juho",
+    gakka: "Gakka",
+    howa: "Howa",
+    taiso: "Taiso",
+    ukemi: "Ukemi",
+    tai_gamae: "Tai gamae",
+    tai_sabaki: "Tai sabaki",
+    embu: "Embu",
+    otro: "Otro"
+  };
+  return labels[normalized] ?? (value || "Otro");
+}
+
+function normalizeKidGrade(grade: string | null | undefined) {
+  const normalized = normalizeGradeLabel(grade);
+  return kidsGrades.find((item) => normalizeGradeLabel(item) === normalized) ?? null;
+}
+
+function nextKidGrade(grade: string | null | undefined) {
+  const current = normalizeKidGrade(grade);
+  if (!current) return null;
+  const index = kidsGrades.indexOf(current);
+  return kidsGrades[Math.min(index + 1, kidsGrades.length - 1)] ?? current;
+}
+
+function kidGradeSortValue(grade: string | null | undefined) {
+  const normalized = normalizeKidGrade(grade);
+  const index = normalized ? kidsGrades.indexOf(normalized) : -1;
+  return index === -1 ? 999 : index;
+}
+
+function gradeChipClass(grade: string | null | undefined) {
+  return `grade-chip grade-${slugGrade(grade)}`;
+}
 
 function childActivityLabel(value: string) {
   return childActivities.find((activity) => activity.value === value)?.label ?? value;

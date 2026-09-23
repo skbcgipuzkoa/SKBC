@@ -2488,6 +2488,9 @@ export async function saveChildClassPlanAction(formData: FormData) {
   const activities = Array.from(new Set(
     formData.getAll("activities").map((value) => String(value).trim()).filter(Boolean)
   ));
+  const syllabusItemIds = Array.from(new Set(
+    formData.getAll("syllabusItemIds").map((value) => String(value).trim()).filter(Boolean)
+  ));
   const groupLabel = emptyToNull(String(formData.get("groupLabel") ?? ""));
   const groupContent = emptyToNull(String(formData.get("groupContent") ?? ""));
   const groupNotes = emptyToNull(String(formData.get("groupNotes") ?? ""));
@@ -2519,6 +2522,7 @@ export async function saveChildClassPlanAction(formData: FormData) {
           class_id: classId,
           objective,
           activities,
+          syllabus_item_ids: syllabusItemIds,
           notes,
           updated_at: now
         },

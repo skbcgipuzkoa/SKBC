@@ -3711,6 +3711,63 @@ tbody tr:hover {
   padding: 12px;
 }
 
+.child-syllabus-plan-fieldset {
+  display: grid;
+  gap: 12px;
+}
+
+.child-syllabus-plan-list {
+  display: grid;
+  gap: 10px;
+}
+
+.child-syllabus-plan-grade {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.child-syllabus-plan-grade > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.child-syllabus-plan-grade > summary strong {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.child-syllabus-plan-items {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.child-syllabus-plan-items label {
+  align-items: flex-start;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+}
+
+.child-syllabus-plan-items span {
+  display: grid;
+  gap: 3px;
+}
+
+.child-syllabus-plan-items small {
+  color: var(--muted);
+}
+
 .child-activity-grid,
 .child-member-mini-list {
   display: grid;
