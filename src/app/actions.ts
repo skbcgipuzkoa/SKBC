@@ -11,6 +11,7 @@ import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { sendStudentEmailNotification, type EmailAudience } from "@/lib/email-notifications";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
+import { createIntegratedExamEvent, submitIntegratedExamScores, type IntegratedExamProgram } from "@/lib/integrated-exams";
 import { archiveLegacyRowsToDrive } from "@/lib/legacy-rows-archive";
 import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior, syncLegacyChildNote, syncLegacyCourse } from "@/lib/legacy-sheet-sync";
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
@@ -2611,6 +2612,75 @@ export async function registerExamAction(formData: FormData) {
   }
 
   redirect(selectedMemberIds.length === 1 && registeredLegacyIds[0] ? `/kenshis/${registeredLegacyIds[0]}?saved=exam` : "/examenes?saved=exam");
+}
+
+export async function createIntegratedExamEventAction(formData: FormData) {
+  if (!(await hasInternalAccess())) {
+    redirect("/");
+  }
+
+  const memberIds = Array.from(new Set(formData.getAll("memberIds").map((value) => String(value).trim()).filter(Boolean)));
+  const examDate = parseDateInput(String(formData.get("examDate") ?? ""));
+  const title = String(formData.get("title") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+  const rawProgramType = String(formData.get("programType") ?? "").trim();
+  const programType: IntegratedExamProgram = rawProgramType === "kids_progressive" || rawProgramType === "kids" || rawProgramType === "dan_tribunal" ? rawProgramType : "adults";
+  const passPercentage = Number(String(formData.get("passPercentage") ?? "70").replace(",", "."));
+  const examinerNames = String(formData.get("examinerNames") ?? "")
+    .split(/\r?\n|,/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!memberIds.length || !examDate) {
+    redirect("/examenes?error=integrated");
+  }
+
+  try {
+    const result = await createIntegratedExamEvent({
+      title,
+      examDate,
+      programType,
+      passPercentage: Number.isFinite(passPercentage) ? passPercentage : 70,
+      memberIds,
+      examinerNames,
+      notes: notes || null
+    });
+    revalidatePath("/examenes");
+    redirect(`/examenes/${result.eventId}?saved=created`);
+  } catch (error) {
+    console.error("Error creating integrated exam", error);
+    redirect(`/examenes?error=integrated&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+}
+
+export async function submitIntegratedExamScoresAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  if (!token) {
+    redirect("/examinar/error");
+  }
+
+  const scores: Array<{ eventStudentId: string; eventItemId: string; score: number | null; skipped: boolean }> = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("score:")) continue;
+    const [, eventStudentId, eventItemId] = key.split(":");
+    const rawValue = String(value ?? "").trim();
+    if (!eventStudentId || !eventItemId || !rawValue) continue;
+    scores.push({
+      eventStudentId,
+      eventItemId,
+      score: rawValue === "skip" ? null : Number(rawValue),
+      skipped: rawValue === "skip"
+    });
+  }
+
+  try {
+    await submitIntegratedExamScores({ token, scores });
+  } catch (error) {
+    console.error("Error submitting integrated exam scores", error);
+    redirect(`/examinar/${token}?error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  redirect(`/examinar/${token}?saved=1`);
 }
 
 export async function saveExamReportAction(formData: FormData) {

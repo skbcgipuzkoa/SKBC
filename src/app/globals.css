@@ -9967,6 +9967,89 @@ tbody tr:hover {
   text-align: right;
 }
 
+.public-exam-page {
+  background: #f3f7fb;
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.public-exam-hero {
+  background: linear-gradient(135deg, #0f1b2e, #174f87);
+  border-radius: 16px;
+  color: #ffffff;
+  margin: 0 auto 14px;
+  max-width: 1120px;
+  padding: 20px;
+}
+
+.public-exam-hero .eyebrow,
+.public-exam-hero p {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.public-exam-form {
+  display: grid;
+  gap: 14px;
+  margin: 0 auto;
+  max-width: 1120px;
+}
+
+.exam-score-card {
+  display: grid;
+  gap: 16px;
+}
+
+.exam-score-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.exam-score-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(72px, auto));
+  margin: 0;
+  padding: 12px;
+}
+
+.exam-score-row legend {
+  display: grid;
+  gap: 2px;
+}
+
+.exam-score-row legend small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.exam-score-row label {
+  align-items: center;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 6px;
+  justify-content: center;
+  padding: 9px 10px;
+}
+
+.exam-cut-marker {
+  border-color: #f3d58c;
+  background: #fffaf0;
+}
+
+.sticky-submit-card {
+  bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  position: sticky;
+  z-index: 3;
+}
+
 @media (max-width: 900px) {
   .class-audit-calendar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -10060,5 +10143,28 @@ tbody tr:hover {
 
   .table-health-size {
     text-align: left;
+  }
+
+  .public-exam-page {
+    padding: 10px;
+  }
+
+  .public-exam-hero {
+    border-radius: 14px;
+    padding: 16px;
+  }
+
+  .exam-score-row {
+    align-items: stretch;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+  }
+
+  .exam-score-row legend {
+    grid-column: 1 / -1;
+  }
+
+  .sticky-submit-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

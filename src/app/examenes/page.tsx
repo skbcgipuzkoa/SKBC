@@ -1,9 +1,10 @@
 import { ExternalLink, FileText, GraduationCap, LogOut, ScrollText, Trophy } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { deleteExamAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
+import { createIntegratedExamEventAction, deleteExamAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
+import { getRecentIntegratedExamEvents } from "@/lib/integrated-exams";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type MemberOption = {
@@ -45,7 +46,7 @@ export default async function ExamenesPage({
     .order("exam_date", { ascending: false })
     .limit(200);
 
-  const [{ data: members }, { data: rawExams }] = await Promise.all([
+  const [{ data: members }, { data: rawExams }, integratedEvents] = await Promise.all([
     supabase
       .from("members")
       .select("id,display_name,class,grade")
@@ -53,7 +54,8 @@ export default async function ExamenesPage({
       .order("class")
       .order("display_name")
       .returns<MemberOption[]>(),
-    examsQuery.returns<ExamRow[]>()
+    examsQuery.returns<ExamRow[]>(),
+    getRecentIntegratedExamEvents()
   ]);
 
   const exams = filterExams(rawExams ?? [], params);
@@ -85,7 +87,9 @@ export default async function ExamenesPage({
         {params.saved === "report" ? <p className="save-ok">Informe guardado en la linea de examen.</p> : null}
         {params.saved === "diploma" ? <p className="save-ok">Diploma generado y guardado.</p> : null}
         {params.saved === "delete" ? <p className="save-ok">Examen eliminado y ficha recalculada.</p> : null}
+        {params.saved === "integrated" ? <p className="save-ok">Examen integrado creado.</p> : null}
         {params.error === "exam" ? <p className="form-error">No se pudo registrar el examen.</p> : null}
+        {params.error === "integrated" ? <p className="form-error">No se pudo crear el examen integrado{params.detail ? `: ${params.detail}` : "."}</p> : null}
         {params.error === "report" ? <p className="form-error">No se pudo guardar el informe.</p> : null}
         {params.error === "diploma" ? <p className="form-error">No se pudo generar el diploma{params.detail ? `: ${params.detail}` : "."}</p> : null}
         {params.error === "delete" ? <p className="form-error">No se pudo eliminar el examen{params.detail ? `: ${params.detail}` : "."}</p> : null}
@@ -106,6 +110,96 @@ export default async function ExamenesPage({
           >
             Abrir app examenes <ExternalLink aria-hidden="true" size={17} />
           </a>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <p className="eyebrow">Nuevo sistema</p>
+              <h2>Crear examen integrado</h2>
+              <p className="muted">
+                Crea el examen dentro de SKBC, genera enlaces para examinadores y calcula resultados con los datos del sistema nuevo.
+              </p>
+            </div>
+          </div>
+          <form action={createIntegratedExamEventAction} className="edit-form">
+            <div className="form-grid">
+              <label>
+                Tipo de examen
+                <select name="programType" required>
+                  <option value="adults">Adultos - programa tecnico</option>
+                  <option value="kids_progressive">Ninos - progresivo</option>
+                </select>
+              </label>
+              <label>Fecha<input name="examDate" type="date" required /></label>
+              <label>Aprobado desde %<input name="passPercentage" type="number" min="0" max="100" step="1" defaultValue="70" /></label>
+              <label className="wide">Titulo<input name="title" placeholder="Examen junio, examen infantil..." /></label>
+              <label className="wide">
+                Examinadores
+                <textarea name="examinerNames" rows={3} placeholder="Un examinador por linea. Si lo dejas vacio se crea con Alvaro Calvo." />
+              </label>
+              <details className="exam-member-picker">
+                <summary>Adultos <span>{adultMembers.length}</span></summary>
+                <div className="attendance-checklist compact-picker">
+                  {adultMembers.map((member) => (
+                    <label className="check-row" key={`integrated-adult-${member.id}`}>
+                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
+                    </label>
+                  ))}
+                </div>
+              </details>
+              <details className="exam-member-picker">
+                <summary>Ninos <span>{kidMembers.length}</span></summary>
+                <div className="attendance-checklist compact-picker">
+                  {kidMembers.map((member) => (
+                    <label className="check-row" key={`integrated-kid-${member.id}`}>
+                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
+                    </label>
+                  ))}
+                </div>
+              </details>
+              <label className="wide">Notas internas<textarea name="notes" rows={2} placeholder="Opcional" /></label>
+            </div>
+            <div className="form-actions">
+              <button type="submit">Crear examen integrado</button>
+            </div>
+          </form>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Examenes integrados recientes</h2>
+              <p className="muted">Entra en un examen para copiar enlaces de examinadores y revisar resultados.</p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Fecha</th><th>Examen</th><th>Tipo</th><th>Estado</th><th>Kenshis</th><th>Examinadores</th><th>Accion</th></tr>
+              </thead>
+              <tbody>
+                {integratedEvents.map((event) => (
+                  <tr key={event.id}>
+                    <td data-label="Fecha">{event.exam_date}</td>
+                    <td data-label="Examen"><strong>{event.title}</strong></td>
+                    <td data-label="Tipo">{event.program_type === "kids_progressive" ? "Ninos progresivo" : "Adultos"}</td>
+                    <td data-label="Estado"><span className="state-badge">{event.status}</span></td>
+                    <td data-label="Kenshis">{event.exam_event_students?.length ?? 0}</td>
+                    <td data-label="Examinadores">
+                      {(event.exam_event_examiners ?? []).filter((examiner) => examiner.submitted_at).length}/{event.exam_event_examiners?.length ?? 0} enviados
+                    </td>
+                    <td data-label="Accion"><a className="text-link" href={`/examenes/${event.id}`}>Abrir</a></td>
+                  </tr>
+                ))}
+                {!integratedEvents.length ? (
+                  <tr><td colSpan={7} className="muted">Aun no hay examenes integrados.</td></tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="card">
