@@ -61,18 +61,7 @@ type ChildSyllabusItem = {
 
 export const dynamic = "force-dynamic";
 
-const childSyllabusGrades = [
-  "BLANCO-AMARILLO",
-  "5 KYU",
-  "AMARILLO-NARANJA",
-  "4 KYU",
-  "NARANJA-VERDE",
-  "3 KYU",
-  "VERDE-AZUL",
-  "2 KYU",
-  "AZUL-MARRON",
-  "1 KYU"
-];
+const childSyllabusGrades = kidsGrades.filter((grade) => grade !== "1 DAN");
 
 export default async function TechnicalAreasPage({
   searchParams
