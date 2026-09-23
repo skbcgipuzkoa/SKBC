@@ -1,5 +1,5 @@
 import { submitIntegratedExamScoresAction } from "@/app/actions";
-import { getExaminerExamByToken, isExamItemRelevantForStudent } from "@/lib/integrated-exams";
+import { getExaminerExamByToken, isExamItemRelevantForStudent, isKidsProgressiveCutForStudent } from "@/lib/integrated-exams";
 
 export default async function ExaminerTokenPage({
   params,
@@ -60,7 +60,7 @@ export default async function ExaminerTokenPage({
           {payload.items.map((item) => {
             if (item.source === "cut") {
               const seatedStudents = isKidsProgressive
-                ? payload.students.filter((student) => normalizeExamGrade(student.target_grade) === normalizeExamGrade(item.cut_grade ?? item.grade))
+                ? payload.students.filter((student) => isKidsProgressiveCutForStudent(student, item))
                 : [];
               return (
                 <section className="card exam-cut-marker" key={item.id}>
@@ -119,8 +119,4 @@ export default async function ExaminerTokenPage({
       )}
     </main>
   );
-}
-
-function normalizeExamGrade(value: string | null | undefined) {
-  return String(value ?? "").trim().toUpperCase();
 }

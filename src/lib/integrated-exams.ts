@@ -633,6 +633,10 @@ export function isExamItemRelevantForStudent(programType: IntegratedExamProgram,
   return normalizeGrade(item.grade) === normalizeGrade(student.target_grade);
 }
 
+export function isKidsProgressiveCutForStudent(student: Pick<ExamEventStudent, "target_grade">, item: Pick<ExamEventItem, "grade" | "cut_grade">) {
+  return kidsGradeIndex(student.target_grade) === kidsGradeIndex(item.cut_grade ?? item.grade);
+}
+
 function isItemRelevantForStudent(programType: IntegratedExamProgram, student: ExamEventStudent, item: ExamEventItem) {
   return isExamItemRelevantForStudent(programType, student, item);
 }
