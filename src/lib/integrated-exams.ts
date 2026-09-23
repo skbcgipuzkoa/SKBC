@@ -1,4 +1,4 @@
-import { adultGrades, kidsGrades } from "@/lib/grades";
+import { adultGrades } from "@/lib/grades";
 import { registerExam } from "@/lib/exams";
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { generateIntegratedExamDocumentsForStudent } from "@/lib/integrated-exam-documents";
@@ -74,6 +74,56 @@ type ExamEventReview = {
   event_student_id: string;
   final_passed: boolean | null;
   final_percentage: number | null;
+};
+
+const kidsExamStages = [
+  "5 KYU",
+  "4 KYU",
+  "3 KYU",
+  "2 KYU",
+  "1 KYU"
+];
+
+const kidsTargetByCurrentGrade: Record<string, string> = {
+  MINARAI: "BLANCO-AMARILLO",
+  BLANCO: "BLANCO-AMARILLO",
+  "BLANCO-AMARILLO": "5 KYU",
+  "5 KYU": "AMARILLO-NARANJA",
+  AMARILLO: "AMARILLO-NARANJA",
+  "AMARILLO-NARANJA": "4 KYU",
+  "4 KYU": "NARANJA-VERDE",
+  NARANJA: "NARANJA-VERDE",
+  "NARANJA-VERDE": "3 KYU",
+  "3 KYU": "VERDE-AZUL",
+  VERDE: "VERDE-AZUL",
+  "VERDE-AZUL": "2 KYU",
+  "2 KYU": "AZUL-MARRON",
+  AZUL: "AZUL-MARRON",
+  "AZUL-MARRON": "1 KYU",
+  "1 KYU": "1 DAN",
+  MARRON: "1 DAN",
+  "1 DAN": "1 DAN"
+};
+
+const kidsExamStageByGrade: Record<string, string> = {
+  MINARAI: "5 KYU",
+  BLANCO: "5 KYU",
+  "BLANCO-AMARILLO": "5 KYU",
+  "5 KYU": "5 KYU",
+  AMARILLO: "5 KYU",
+  "AMARILLO-NARANJA": "4 KYU",
+  "4 KYU": "4 KYU",
+  NARANJA: "4 KYU",
+  "NARANJA-VERDE": "3 KYU",
+  "3 KYU": "3 KYU",
+  VERDE: "3 KYU",
+  "VERDE-AZUL": "2 KYU",
+  "2 KYU": "2 KYU",
+  AZUL: "2 KYU",
+  "AZUL-MARRON": "1 KYU",
+  "1 KYU": "1 KYU",
+  MARRON: "1 KYU",
+  "1 DAN": "1 KYU"
 };
 
 export async function createIntegratedExamEvent(input: {
@@ -478,7 +528,7 @@ function summarizeScores(programType: IntegratedExamProgram, students: ExamEvent
 
 function isItemRelevantForStudent(programType: IntegratedExamProgram, student: ExamEventStudent, item: ExamEventItem) {
   if (programType === "kids" || programType === "kids_progressive") {
-    return gradeIndex(kidsGrades, item.grade) <= gradeIndex(kidsGrades, student.target_grade);
+    return kidsGradeIndex(item.grade) <= kidsGradeIndex(student.target_grade);
   }
   return normalizeGrade(item.grade) === normalizeGrade(student.target_grade);
 }
@@ -528,8 +578,8 @@ async function buildAdultItems(eventId: string, targetGrades: string[]) {
 
 async function buildKidsItems(eventId: string, targetGrades: string[]) {
   const supabase = createAdminClient();
-  const maxIndex = Math.max(0, ...targetGrades.map((grade) => gradeIndex(kidsGrades, grade)));
-  const grades = kidsGrades.slice(0, maxIndex + 1);
+  const maxIndex = Math.max(0, ...targetGrades.map(kidsGradeIndex));
+  const grades = kidsExamStages.slice(0, maxIndex + 1);
   const { data, error } = await supabase
     .from("child_syllabus_items")
     .select("id,grade,title,category,description,sort_order")
@@ -638,13 +688,18 @@ async function buildKidsItemsFromLatestTemplate(eventId: string, grades: string[
 }
 
 function resolveTargetGrade(memberClass: "kids" | "adults", currentGrade: string | null) {
-  const grades = memberClass === "kids" ? kidsGrades : adultGrades;
   const current = normalizeGrade(currentGrade);
-  if (memberClass === "kids" && current === "BLANCO") return "BLANCO-AMARILLO";
+  if (memberClass === "kids") return kidsTargetByCurrentGrade[current] ?? "BLANCO-AMARILLO";
   if (memberClass === "adults" && current === "5 DAN") return "5 DAN";
+  const grades = adultGrades;
   const index = grades.findIndex((grade) => normalizeGrade(grade) === current);
   if (index < 0) return grades[0];
   return grades[Math.min(index + 1, grades.length - 1)];
+}
+
+function kidsGradeIndex(grade: string | null) {
+  const stage = kidsExamStageByGrade[normalizeGrade(grade)] ?? normalizeGrade(grade);
+  return gradeIndex(kidsExamStages, stage);
 }
 
 function gradeIndex(grades: string[], grade: string | null) {
