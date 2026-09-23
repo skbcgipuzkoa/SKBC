@@ -199,7 +199,10 @@ export async function createIntegratedExamEvent(input: {
   }
 
   const { error: itemsError } = await supabase.from("exam_event_items").insert(items);
-  if (itemsError) throw itemsError;
+  if (itemsError) {
+    await supabase.from("exam_events").delete().eq("id", event.id);
+    throw itemsError;
+  }
 
   const examinerNames = input.examinerNames.length ? input.examinerNames : ["Alvaro Calvo"];
   const { error: examinersError } = await supabase.from("exam_event_examiners").insert(
@@ -572,6 +575,7 @@ async function buildAdultItems(eventId: string, targetGrades: string[]) {
     summary: item.summary_es,
     grade: item.grade,
     category: item.category,
+    weight: 1,
     order_index: index + 1
   }));
 }
@@ -606,6 +610,7 @@ async function buildKidsItems(eventId: string, targetGrades: string[]) {
         summary: item.description,
         grade: item.grade,
         category: item.category,
+        weight: 1,
         order_index: order++
       });
     }
