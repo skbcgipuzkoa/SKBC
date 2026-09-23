@@ -317,7 +317,8 @@ export default async function ClaseDetailPage({
   const childPlanClass = clase.class_group === "kids" ? { id: clase.id, legacy_id: clase.legacy_id } : kidsDayClass;
   const childSyllabusGrades = [...new Set(kidsDayMembers.flatMap((member) => childSyllabusGradeCandidates(member.grade)).filter(Boolean))] as string[];
   const fallbackChildSyllabusGrades = childSyllabusGradeCandidates(...kidsGrades);
-  const [{ data: childClassPlan }, { data: childClassGroupWork }, { data: childSyllabusItems }] = childPlanClass?.id
+  const childSyllabusGradeFilter = childSyllabusGrades.length ? childSyllabusGrades : fallbackChildSyllabusGrades;
+  const [{ data: childClassPlan }, { data: childClassGroupWork }] = childPlanClass?.id
     ? await Promise.all([
       supabase
         .from("child_class_plans")
@@ -329,17 +330,29 @@ export default async function ClaseDetailPage({
         .select("id,group_label,content,member_ids,notes,created_at")
         .eq("class_id", childPlanClass.id)
         .order("created_at", { ascending: true })
-        .returns<ChildClassGroupWorkRow[]>(),
-      supabase
-        .from("child_syllabus_items")
-        .select("id,grade,title,category,description,exam_relevant,sort_order")
-        .eq("active", true)
-        .eq("exam_relevant", true)
-        .in("grade", childSyllabusGrades.length ? childSyllabusGrades : fallbackChildSyllabusGrades)
-        .order("sort_order", { ascending: true })
-        .returns<ChildSyllabusItemRow[]>()
+        .returns<ChildClassGroupWorkRow[]>()
     ])
-    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }, { data: [] as ChildSyllabusItemRow[] }];
+    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }];
+  const { data: childExamSyllabusItems } = childPlanClass?.id
+    ? await supabase
+      .from("child_syllabus_items")
+      .select("id,grade,title,category,description,exam_relevant,sort_order")
+      .eq("active", true)
+      .eq("exam_relevant", true)
+      .in("grade", childSyllabusGradeFilter)
+      .order("sort_order", { ascending: true })
+      .returns<ChildSyllabusItemRow[]>()
+    : { data: [] as ChildSyllabusItemRow[] };
+  const { data: fallbackChildSyllabusItems } = childPlanClass?.id && !(childExamSyllabusItems ?? []).length
+    ? await supabase
+      .from("child_syllabus_items")
+      .select("id,grade,title,category,description,exam_relevant,sort_order")
+      .eq("active", true)
+      .in("grade", childSyllabusGradeFilter)
+      .order("sort_order", { ascending: true })
+      .returns<ChildSyllabusItemRow[]>()
+    : { data: [] as ChildSyllabusItemRow[] };
+  const childSyllabusItems = (childExamSyllabusItems ?? []).length ? childExamSyllabusItems : fallbackChildSyllabusItems;
   const childAttendanceRows = childPlanClass?.id
     ? (dayAttendance ?? []).filter((item) => item.class_id === childPlanClass.id && item.members?.class === "kids")
     : [];
