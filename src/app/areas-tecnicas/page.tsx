@@ -643,36 +643,35 @@ function groupChildSyllabusItems(items: ChildSyllabusItem[]) {
 function childSyllabusGradeLabel(grade: string | null | undefined) {
   const normalized = normalize(grade);
   const aliases: Record<string, string> = {
-    "": "BLANCO-AMARILLO",
-    MINARAI: "BLANCO-AMARILLO",
-    BLANCO: "BLANCO-AMARILLO",
+    "": "BLANCO",
+    MINARAI: "BLANCO",
+    BLANCO: "BLANCO",
     "BLANCO Y AMARILLO": "BLANCO-AMARILLO",
     "BLANCO-AMARILLO": "BLANCO-AMARILLO",
-    "5 KYU": "5 KYU",
-    AMARILLO: "5 KYU",
+    AMARILLO: "AMARILLO",
     "AMARILLO Y NARANJA": "AMARILLO-NARANJA",
     "AMARILLO-NARANJA": "AMARILLO-NARANJA",
-    "4 KYU": "4 KYU",
-    NARANJA: "4 KYU",
+    NARANJA: "NARANJA",
     "NARANJA Y VERDE": "NARANJA-VERDE",
     "NARANJA-VERDE": "NARANJA-VERDE",
-    "3 KYU": "3 KYU",
-    VERDE: "3 KYU",
+    VERDE: "VERDE",
     "VERDE Y AZUL": "VERDE-AZUL",
     "VERDE-AZUL": "VERDE-AZUL",
-    "2 KYU": "2 KYU",
-    AZUL: "2 KYU",
+    AZUL: "AZUL",
     "AZUL Y MARRON": "AZUL-MARRON",
     "AZUL Y MARRÓN": "AZUL-MARRON",
     "AZUL-MARRON": "AZUL-MARRON",
     "AZUL-MARRÓN": "AZUL-MARRON",
-    "1 KYU": "1 KYU",
-    MARRON: "1 KYU",
-    MARRÓN: "1 KYU",
-    "1 DAN": "1 KYU"
+    MARRON: "MARRON",
+    MARRÓN: "MARRON",
+    "1 DAN": "1 DAN"
   };
 
-  return aliases[normalized] ?? (grade?.trim().toUpperCase() || "BLANCO-AMARILLO");
+  aliases["MARRON"] = "MARRON";
+  aliases["MARRÓN"] = "MARRON";
+  aliases["1 DAN"] = "1 DAN";
+
+  return aliases[normalized] ?? (grade?.trim().toUpperCase() || "BLANCO");
 }
 
 const childSyllabusCategories = [

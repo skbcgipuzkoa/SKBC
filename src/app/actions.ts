@@ -4466,26 +4466,12 @@ function childSyllabusGradeCandidates(value: string | null | undefined) {
 }
 
 function childSyllabusGradeSearchLabels(...values: Array<string | null | undefined>) {
-  const equivalents: Record<string, string[]> = {
-    BLANCO: ["MINARAI"],
-    "BLANCO-AMARILLO": ["5 KYU"],
-    AMARILLO: ["5 KYU"],
-    "AMARILLO-NARANJA": ["4 KYU"],
-    NARANJA: ["4 KYU"],
-    "NARANJA-VERDE": ["3 KYU"],
-    VERDE: ["3 KYU"],
-    "VERDE-AZUL": ["2 KYU"],
-    AZUL: ["2 KYU"],
-    "AZUL-MARRON": ["1 KYU"],
-    MARRON: ["1 KYU"]
-  };
   const labels = new Set<string>();
   for (const value of values) {
     const raw = String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
     const normalized = normalizeChildSyllabusGrade(String(value ?? ""));
     for (const label of [normalized, raw].filter(Boolean)) {
       labels.add(label);
-      for (const equivalent of equivalents[label] ?? []) labels.add(equivalent);
     }
   }
   return [...labels];

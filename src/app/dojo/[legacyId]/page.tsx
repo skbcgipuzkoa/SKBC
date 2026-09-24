@@ -722,26 +722,12 @@ function nextKidGrade(grade: string | null | undefined) {
 }
 
 function childSyllabusGradeCandidates(...grades: Array<string | null | undefined>) {
-  const equivalents: Record<string, string[]> = {
-    BLANCO: ["MINARAI"],
-    "BLANCO-AMARILLO": ["5 KYU"],
-    AMARILLO: ["BLANCO-AMARILLO", "5 KYU"],
-    "AMARILLO-NARANJA": ["4 KYU"],
-    NARANJA: ["AMARILLO-NARANJA", "4 KYU"],
-    "NARANJA-VERDE": ["3 KYU"],
-    VERDE: ["NARANJA-VERDE", "3 KYU"],
-    "VERDE-AZUL": ["2 KYU"],
-    AZUL: ["VERDE-AZUL", "2 KYU"],
-    "AZUL-MARRON": ["1 KYU"],
-    MARRON: ["1 KYU"]
-  };
   const labels = new Set<string>();
   for (const grade of grades) {
     const current = normalizeKidGrade(grade);
     const target = nextKidGrade(grade) ?? current;
     for (const label of [target, current, normalizeGrade(grade)].filter(Boolean)) {
       labels.add(label as string);
-      for (const equivalent of equivalents[label as string] ?? []) labels.add(equivalent);
     }
   }
   return [...labels];

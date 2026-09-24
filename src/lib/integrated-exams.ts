@@ -77,71 +77,67 @@ type ExamEventReview = {
 };
 
 const kidsExamStages = [
+  "BLANCO",
   "BLANCO-AMARILLO",
-  "5 KYU",
+  "AMARILLO",
   "AMARILLO-NARANJA",
-  "4 KYU",
+  "NARANJA",
   "NARANJA-VERDE",
-  "3 KYU",
+  "VERDE",
   "VERDE-AZUL",
-  "2 KYU",
+  "AZUL",
   "AZUL-MARRON",
-  "1 KYU"
+  "MARRON",
+  "1 DAN"
 ];
 
 const kidsTargetByCurrentGrade: Record<string, string> = {
-  MINARAI: "BLANCO-AMARILLO",
+  MINARAI: "BLANCO",
   BLANCO: "BLANCO-AMARILLO",
-  "BLANCO-AMARILLO": "5 KYU",
-  "5 KYU": "AMARILLO-NARANJA",
+  "BLANCO-AMARILLO": "AMARILLO",
   AMARILLO: "AMARILLO-NARANJA",
-  "AMARILLO-NARANJA": "4 KYU",
-  "4 KYU": "NARANJA-VERDE",
+  "AMARILLO-NARANJA": "NARANJA",
   NARANJA: "NARANJA-VERDE",
-  "NARANJA-VERDE": "3 KYU",
-  "3 KYU": "VERDE-AZUL",
+  "NARANJA-VERDE": "VERDE",
   VERDE: "VERDE-AZUL",
-  "VERDE-AZUL": "2 KYU",
-  "2 KYU": "AZUL-MARRON",
+  "VERDE-AZUL": "AZUL",
   AZUL: "AZUL-MARRON",
-  "AZUL-MARRON": "1 KYU",
-  "1 KYU": "1 DAN",
+  "AZUL-MARRON": "MARRON",
   MARRON: "1 DAN",
   "1 DAN": "1 DAN"
 };
 
 const kidsExamStageByGrade: Record<string, string> = {
-  MINARAI: "BLANCO-AMARILLO",
-  BLANCO: "BLANCO-AMARILLO",
+  MINARAI: "BLANCO",
+  BLANCO: "BLANCO",
   "BLANCO Y AMARILLO": "BLANCO-AMARILLO",
   "BLANCO-AMARILLO": "BLANCO-AMARILLO",
-  "5 KYU": "5 KYU",
-  AMARILLO: "5 KYU",
+  AMARILLO: "AMARILLO",
   "AMARILLO Y NARANJA": "AMARILLO-NARANJA",
   "AMARILLO-NARANJA": "AMARILLO-NARANJA",
   "AMARILLO NARANJA": "AMARILLO-NARANJA",
-  "4 KYU": "4 KYU",
-  NARANJA: "4 KYU",
+  NARANJA: "NARANJA",
   "NARANJA Y VERDE": "NARANJA-VERDE",
   "NARANJA-VERDE": "NARANJA-VERDE",
   "NARANJA VERDE": "NARANJA-VERDE",
-  "3 KYU": "3 KYU",
-  VERDE: "3 KYU",
+  VERDE: "VERDE",
   "VERDE Y AZUL": "VERDE-AZUL",
   "VERDE-AZUL": "VERDE-AZUL",
   "VERDE AZUL": "VERDE-AZUL",
-  "2 KYU": "2 KYU",
-  AZUL: "2 KYU",
+  AZUL: "AZUL",
   "AZUL Y MARRON": "AZUL-MARRON",
   "AZUL Y MARRÓN": "AZUL-MARRON",
   "AZUL-MARRON": "AZUL-MARRON",
   "AZUL-MARRÓN": "AZUL-MARRON",
   "AZUL MARRON": "AZUL-MARRON",
-  "1 KYU": "1 KYU",
-  MARRON: "1 KYU",
-  MARRÓN: "1 KYU",
-  "1 DAN": "1 KYU"
+  MARRON: "MARRON",
+  MARRÓN: "MARRON",
+  "1 DAN": "1 DAN"
 };
+
+kidsExamStageByGrade["MARRON"] = "MARRON";
+kidsExamStageByGrade["MARRÓN"] = "MARRON";
+kidsExamStageByGrade["1 DAN"] = "1 DAN";
 
 export async function createIntegratedExamEvent(input: {
   title: string;
