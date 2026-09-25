@@ -12,6 +12,7 @@ import {
 } from "@/app/actions";
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
+import { ClassSectionNav, type ClassSectionLink } from "@/components/class-section-nav";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -93,7 +94,7 @@ export default async function DojoClassPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ step?: string; saved?: string; error?: string; detail?: string }>;
+  searchParams: Promise<{ step?: string; section?: string; saved?: string; error?: string; detail?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -228,12 +229,22 @@ export default async function DojoClassPage({
         </form>
       </header>
 
-      <section className="dojo-stepper" aria-label="Flujo de clase">
-        <StepPill active={step === "kids"} done={Boolean(kidsClass?.closed || kidsAttendance.length)} label="1 Niños" />
-        <StepPill active={step === "techniques"} done={completedPlan > 0} label="2 Técnicas" />
-        <StepPill active={step === "adults"} done={adultAttendance.length > 0} label="3 Adultos" />
-        <StepPill active={step === "close" || step === "done"} done={Boolean(adultClass?.closed && (!kidsClass || kidsClass.closed))} label="4 Cerrar" />
-      </section>
+      {step !== "done" ? (
+        <ClassSectionNav
+          current={step === "kids" ? query.section === "kids-technical" ? "kids-technical" : "kids-attendance" : step === "techniques" ? "adult-technical" : step === "adults" ? "adult-attendance" : "close"}
+          links={[
+            ...(kidsClass ? [
+              { id: "kids-attendance", label: "Asistencia ninos", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`, done: kidsAttendance.length > 0 },
+              { id: "kids-technical", label: "Tecnica ninos", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=kids&section=kids-technical#tecnica-ninos`, done: Boolean(childClassPlan?.objective || childClassPlan?.syllabus_item_ids?.length || childClassGroupWork?.length) }
+            ] : []),
+            ...(adultClass ? [
+              { id: "adult-technical", label: "Tecnica adultos", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=techniques`, done: completedPlan > 0 },
+              { id: "adult-attendance", label: "Asistencia adultos", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=adults`, done: adultAttendance.length > 0 }
+            ] : []),
+            { id: "close", label: "Revisar y cerrar", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=close`, done: Boolean(adultClass?.closed && (!kidsClass || kidsClass.closed)) }
+          ] satisfies ClassSectionLink[]}
+        />
+      ) : null}
 
       {query.error ? <p className="dojo-error">No se ha podido guardar. Revisa la clase completa si necesitas corregir algo.</p> : null}
       {query.saved ? <p className="dojo-ok">{savedMessage(query.saved)}</p> : null}
@@ -253,6 +264,7 @@ export default async function DojoClassPage({
                 groupWork={childClassGroupWork ?? []}
                 members={kids}
                 syllabusItems={childSyllabusItems}
+                open={query.section === "kids-technical"}
               />
               <form action={addBulkAttendanceAction} className="dojo-check-list">
                 <input type="hidden" name="classId" value={kidsClass.id} />
@@ -435,10 +447,6 @@ export default async function DojoClassPage({
   );
 }
 
-function StepPill({ label, active, done }: { label: string; active: boolean; done: boolean }) {
-  return <span className={active ? "active" : done ? "done" : ""}>{done ? <Check aria-hidden="true" size={16} /> : null}{label}</span>;
-}
-
 function DojoCheck({ name, member, children }: { name: string; member: MemberRow; children?: ReactNode }) {
   return (
     <label className="dojo-member-row">
@@ -459,7 +467,8 @@ function DojoChildPlanPanel({
   plan,
   groupWork,
   members,
-  syllabusItems
+  syllabusItems,
+  open
 }: {
   classId: string;
   legacyId: string;
@@ -468,6 +477,7 @@ function DojoChildPlanPanel({
   groupWork: ChildClassGroupWorkRow[];
   members: MemberRow[];
   syllabusItems: ChildSyllabusItemRow[];
+  open?: boolean;
 }) {
   const activities = new Set(plan?.activities ?? []);
   const selectedSyllabusItems = new Set(plan?.syllabus_item_ids ?? []);
@@ -475,7 +485,7 @@ function DojoChildPlanPanel({
   const groupedSyllabusItems = groupChildSyllabusItems(syllabusItems);
 
   return (
-    <details className="dojo-child-plan">
+    <details className="dojo-child-plan" id="tecnica-ninos" open={open || undefined}>
       <summary>
         <span>
           <strong>Plan infantil opcional</strong>

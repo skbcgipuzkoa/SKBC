@@ -25,6 +25,7 @@ import {
   updateClassPlanTechniquesAction
 } from "@/app/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { ClassSectionNav, type ClassSectionLink } from "@/components/class-section-nav";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
@@ -165,7 +166,7 @@ export default async function ClaseDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -404,7 +405,7 @@ export default async function ClaseDetailPage({
           : "techniques"
     : null;
   const showKidsPrelude = clase.class_group === "adults" && activeStep === "techniques" && Boolean(kidsDayClass) && !kidsDayClass?.closed && (!isCombinedDay || combinedStep === "kids");
-  const showAdultTechniques = clase.class_group === "adults" && activeStep === "techniques" && (!isCorrectionMode || correctionSection === "adult-technical") && !mustRegisterKidsFirst && (!isCombinedDay || combinedStep === "techniques" || isCorrectionMode);
+  const showAdultTechniques = clase.class_group === "adults" && activeStep === "techniques" && (!isCorrectionMode || correctionSection === "adult-technical") && (!mustRegisterKidsFirst || query.section === "adult-technical") && (!isCombinedDay || combinedStep === "techniques" || isCorrectionMode || query.section === "adult-technical");
   const showAttendanceStep = isCorrectionMode
     ? correctionSection === "kids-attendance" || correctionSection === "adult-attendance"
     : clase.class_group !== "adults" || activeStep === "attendance" || clase.closed;
@@ -440,6 +441,7 @@ export default async function ClaseDetailPage({
         syllabusItems={childSyllabusItems ?? []}
         members={kidsDayMembers}
         compact
+        open={query.section === "kids-technical"}
       />
       <form action={addBulkAttendanceAction} className="attendance-day-form">
         <input type="hidden" name="classId" value={kidsDayClass.id} />
@@ -478,7 +480,7 @@ export default async function ClaseDetailPage({
       <input type="hidden" name="legacyId" value={legacyId} />
       <input type="hidden" name="returnLegacyId" value={legacyId} />
       <input type="hidden" name="returnStep" value={isCombinedDay ? "cierre" : "asistencia"} />
-      {isCorrectionMode ? <input type="hidden" name="returnTo" value={`/clases/${legacyId}?edit=${correctionSection}#asistencia`} /> : null}
+      <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=${isCombinedDay ? "cierre" : "asistencia"}#asistencia`} />
       <div className="attendance-group-stack">
         {attendancePanelClasses.map((dayClass) => {
           const attendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === dayClass.id).map((item) => item.member_id));
@@ -560,6 +562,7 @@ export default async function ClaseDetailPage({
       <form action={saveAttendanceTechnicalReviewAction} className="technical-review-form">
         <input type="hidden" name="classId" value={clase.id} />
         <input type="hidden" name="legacyId" value={legacyId} />
+        <input type="hidden" name="returnTo" value={`/clases/${legacyId}?step=${showCombinedCloseStep ? "cierre" : "asistencia"}#asistencia`} />
         <input type="hidden" name="returnStep" value={showCombinedCloseStep ? "cierre" : "asistencia"} />
         <p className="muted">Abre esto solo si alguien cambio de grupo, enseno parte de la clase, observo o salio antes. Por defecto aparecen marcadas las tecnicas de su grupo; desmarca las que no hizo para que no se adjunten por error.</p>
         <div className="technical-review-stack">
@@ -692,7 +695,7 @@ export default async function ClaseDetailPage({
           <form action={addBulkAttendanceAction} className="quick-form">
             <input type="hidden" name="classId" value={clase.id} />
             <input type="hidden" name="legacyId" value={legacyId} />
-            {isCorrectionMode ? <input type="hidden" name="returnTo" value={`/clases/${legacyId}?edit=${correctionSection}#asistencia`} /> : null}
+            <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=asistencia#asistencia`} />
             <div className="attendance-checklist">
               {pendingClassMembers.length ? pendingClassMembers.map((member) => (
                 <label className="check-row" key={member.id}>
@@ -751,6 +754,29 @@ export default async function ClaseDetailPage({
         </>
     </article>
   );
+  const requestedSection = String(query.section ?? "");
+  const currentClassSection = requestedSection === "kids-technical" || requestedSection === "adult-technical"
+    ? requestedSection
+    : clase.class_group === "kids"
+      ? "kids-attendance"
+      : combinedStep === "kids"
+        ? "kids-attendance"
+        : combinedStep === "adult-attendance" || activeStep === "attendance"
+          ? "adult-attendance"
+          : combinedStep === "close"
+            ? "close"
+            : "adult-technical";
+  const classSectionLinks: ClassSectionLink[] = [
+    ...(kidsDayClass || clase.class_group === "kids" ? [
+      { id: "kids-attendance", label: "Asistencia ninos", href: `/clases/${legacyId}#asistencia-ninos-rapida`, done: kidsRegisteredCount > 0 || Boolean(clase.class_group === "kids" && attendance?.length) },
+      { id: "kids-technical", label: "Tecnica ninos", href: `/clases/${legacyId}?section=kids-technical#tecnica-ninos`, done: Boolean(childClassPlan?.objective || childClassPlan?.syllabus_item_ids?.length || childClassGroupWork?.length) }
+    ] : []),
+    ...(clase.class_group === "adults" ? [
+      { id: "adult-technical", label: "Tecnica adultos", href: `/clases/${legacyId}?section=adult-technical#plan-tecnico`, done: completedPlan > 0 },
+      { id: "adult-attendance", label: "Asistencia adultos", href: `/clases/${legacyId}?step=asistencia#asistencia`, done: adultRegisteredCount > 0 }
+    ] : []),
+    { id: "close", label: "Revisar y cerrar", href: clase.class_group === "adults" ? `/clases/${legacyId}?step=cierre#revision-final` : `/clases/${legacyId}#cierre-clase`, done: clase.closed }
+  ];
 
   return (
     <div className="shell">
@@ -1023,28 +1049,7 @@ export default async function ClaseDetailPage({
           </div>
         </details>
 
-        {clase.class_group === "adults" && isCombinedDay ? (
-          <section className="class-stepper combined-class-stepper" aria-label="Flujo de clase combinada">
-            <span className={combinedStep === "kids" ? "step current" : kidsRegisteredCount > 0 || kidsDayClass?.closed ? "step done" : "step"}>1 Ninos</span>
-            <a className={combinedStep === "techniques" ? "step current" : completedPlan ? "step done" : "step"} href={mustRegisterKidsFirst ? "#asistencia-ninos-rapida" : techniqueStepHref}>2 Tecnicas</a>
-            <a className={combinedStep === "adult-attendance" ? "step current" : adultRegisteredCount ? "step done" : "step"} href={mustRegisterKidsFirst ? "#asistencia-ninos-rapida" : attendanceStepHref}>3 Adultos</a>
-            <a className={combinedStep === "close" ? "step current" : clase.closed ? "step done" : "step"} href={adultRegisteredCount ? `/clases/${legacyId}?step=cierre` : attendanceStepHref}>4 Cerrar todo</a>
-          </section>
-        ) : clase.class_group === "adults" ? (
-          <section className="class-stepper" aria-label="Flujo de clase">
-            <span className={(groups ?? []).length ? "step done" : "step"}>1 Grupos</span>
-            <span className={hasPlan ? "step done" : "step"}>2 Plan</span>
-            <a className={activeStep === "techniques" ? "step current" : completedPlan ? "step done" : "step"} href={techniqueStepHref}>3 Tecnicas</a>
-            <a className={activeStep === "attendance" ? "step current" : (attendance ?? []).length ? "step done" : "step"} href={attendanceStepHref}>4 Asistencia</a>
-            <span className={clase.closed ? "step done" : "step"}>5 Cierre</span>
-          </section>
-        ) : (
-          <section className="class-stepper" aria-label="Flujo de clase infantil">
-            <span className={(attendance ?? []).length ? "step done" : "step"}>1 Asistencia</span>
-            <span className="step done">2 Fichas</span>
-            <span className={clase.closed ? "step done" : "step"}>3 Cierre</span>
-          </section>
-        )}
+        {!isCorrectionMode ? <ClassSectionNav links={classSectionLinks} current={currentClassSection} /> : null}
 
         <section className="card class-mission-card">
           <div>
@@ -1127,6 +1132,7 @@ export default async function ClaseDetailPage({
               groupWork={childClassGroupWork ?? []}
               syllabusItems={childSyllabusItems ?? []}
               members={classMembers ?? []}
+              open={requestedSection === "kids-technical"}
             />
           </>
         ) : null}
@@ -1157,7 +1163,7 @@ export default async function ClaseDetailPage({
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
               <input type="hidden" name="nextStep" value="attendance" />
-              {isCorrectionMode ? <input type="hidden" name="returnTo" value={`/clases/${legacyId}?edit=adult-technical#plan-tecnico`} /> : null}
+              <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=adult-technical#plan-tecnico` : `/clases/${legacyId}?step=asistencia#asistencia`} />
               {canEditClosedClass && groupedPlan.length ? (
                 <div className="plan-save-row">
                   <p className="muted">Marca todas las tecnicas realizadas y guarda una sola vez antes de pasar asistencia.</p>
@@ -1248,6 +1254,7 @@ export default async function ClaseDetailPage({
                               <input type="hidden" name="classId" value={clase.id} />
                               <input type="hidden" name="legacyId" value={legacyId} />
                               <input type="hidden" name="planIds" value={item.ids.join(",")} />
+                              <input type="hidden" name="returnTo" value={`/clases/${legacyId}#plan-tecnico`} />
                               <button type="submit">Quitar</button>
                             </form>
                           </div>
@@ -1258,6 +1265,7 @@ export default async function ClaseDetailPage({
                       action={addManualClassTechniqueAction}
                       classId={clase.id}
                       legacyId={legacyId}
+                      returnTo={`/clases/${legacyId}#plan-tecnico`}
                       techniques={techniqueOptions ?? []}
                       groups={groups ?? []}
                     />
@@ -1353,7 +1361,7 @@ export default async function ClaseDetailPage({
         ) : null}
 
         {readyToCloseKids ? (
-          <section className="mobile-close-bar" aria-label="Cerrar clase infantil">
+          <section className="mobile-close-bar" id="cierre-clase" aria-label="Cerrar clase infantil">
             <div>
               <strong>{attendance?.length ?? 0}</strong>
               <span>asistentes</span>
@@ -1413,7 +1421,8 @@ function ChildLightPlanPanel({
   groupWork,
   syllabusItems,
   members,
-  compact = false
+  compact = false,
+  open = false
 }: {
   classId: string;
   legacyId: string;
@@ -1423,6 +1432,7 @@ function ChildLightPlanPanel({
   syllabusItems: ChildSyllabusItemRow[];
   members: MemberOption[];
   compact?: boolean;
+  open?: boolean;
 }) {
   const activities = new Set(plan?.activities ?? []);
   const selectedSyllabusItems = new Set(plan?.syllabus_item_ids ?? []);
@@ -1431,7 +1441,7 @@ function ChildLightPlanPanel({
   const selectedSyllabusCount = syllabusItems.filter((item) => selectedSyllabusItems.has(item.id)).length;
 
   return (
-    <details className={compact ? "child-light-plan-panel compact" : "card child-light-plan-panel"}>
+    <details className={compact ? "child-light-plan-panel compact" : "card child-light-plan-panel"} id="tecnica-ninos" open={open || undefined}>
       <summary>
         <strong>Plan infantil opcional</strong>
         <span>{plan?.objective || groupWork.length || selectedSyllabusCount ? "Guardado" : "Ligero"}</span>
