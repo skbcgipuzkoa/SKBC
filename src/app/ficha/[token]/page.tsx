@@ -210,6 +210,11 @@ type ChildClassGroupWorkHistoryRow = {
   member_ids: string[] | null;
 };
 
+type ChildClassDateLookup = {
+  id: string;
+  class_date: string;
+};
+
 type ChildSyllabusItemLookup = {
   id: string;
   title: string;
@@ -947,7 +952,7 @@ async function loadChildProgramHistoryRows(
   if (!classDates.size) return history;
 
   const classIds = [...classDates.keys()];
-  const [{ data: plans, error: planError }, { data: groupWork, error: groupWorkError }] = await Promise.all([
+  const [{ data: directPlans, error: planError }, { data: directGroupWork, error: groupWorkError }] = await Promise.all([
     supabase
       .from("child_class_plans")
       .select("class_id,objective,activities,syllabus_item_ids")
@@ -966,19 +971,54 @@ async function loadChildProgramHistoryRows(
     return history;
   }
 
-  console.info("[ficha-child-work]", JSON.stringify({
-    attendanceRows: attendance.length,
-    linkedClasses: classDates.size,
-    attendanceDates: [...new Set(classDates.values())],
-    plans: plans?.length ?? 0,
-    plansWithSyllabus: (plans ?? []).filter((plan) => plan.syllabus_item_ids?.length).length,
-    plansWithActivities: (plans ?? []).filter((plan) => plan.activities?.length).length,
-    plansWithObjective: (plans ?? []).filter((plan) => plan.objective).length,
-    groupWork: groupWork?.length ?? 0,
-    existingHistory: history.length
-  }));
+  const plans = [...(directPlans ?? [])];
+  const groupWork = [...(directGroupWork ?? [])];
+  const classesWithWork = new Set([
+    ...plans.map((plan) => plan.class_id),
+    ...groupWork.map((work) => work.class_id)
+  ]);
+  const missingDates = [...new Set(
+    [...classDates.entries()]
+      .filter(([classId]) => !classesWithWork.has(classId))
+      .map(([, classDate]) => classDate)
+  )];
 
-  const itemIds = Array.from(new Set((plans ?? []).flatMap((plan) => plan.syllabus_item_ids ?? []).filter(Boolean)));
+  if (missingDates.length) {
+    const { data: siblingClasses, error: siblingClassError } = await supabase
+      .from("classes")
+      .select("id,class_date")
+      .eq("class_group", "kids")
+      .in("class_date", missingDates)
+      .returns<ChildClassDateLookup[]>();
+
+    if (siblingClassError) {
+      console.error("Error loading sibling child classes for ficha", siblingClassError);
+    } else {
+      const siblingIds = (siblingClasses ?? []).map((clase) => clase.id).filter((id) => !classDates.has(id));
+      for (const clase of siblingClasses ?? []) classDates.set(clase.id, clase.class_date);
+      if (siblingIds.length) {
+        const [{ data: siblingPlans, error: siblingPlanError }, { data: siblingGroupWork, error: siblingGroupError }] = await Promise.all([
+          supabase
+            .from("child_class_plans")
+            .select("class_id,objective,activities,syllabus_item_ids")
+            .in("class_id", siblingIds)
+            .returns<ChildClassPlanHistoryRow[]>(),
+          supabase
+            .from("child_class_group_work")
+            .select("class_id,group_label,content,member_ids")
+            .in("class_id", siblingIds)
+            .returns<ChildClassGroupWorkHistoryRow[]>()
+        ]);
+
+        if (siblingPlanError) console.error("Error loading sibling child plans for ficha", siblingPlanError);
+        else plans.push(...(siblingPlans ?? []));
+        if (siblingGroupError) console.error("Error loading sibling child group work for ficha", siblingGroupError);
+        else groupWork.push(...(siblingGroupWork ?? []));
+      }
+    }
+  }
+
+  const itemIds = Array.from(new Set(plans.flatMap((plan) => plan.syllabus_item_ids ?? []).filter(Boolean)));
   let items: ChildSyllabusItemLookup[] = [];
   if (itemIds.length) {
     const { data, error: itemError } = await supabase
@@ -1017,7 +1057,7 @@ async function loadChildProgramHistoryRows(
     });
   };
 
-  for (const plan of plans ?? []) {
+  for (const plan of plans) {
     const practicedOn = classDates.get(plan.class_id);
     if (!practicedOn) continue;
 
@@ -1034,7 +1074,7 @@ async function loadChildProgramHistoryRows(
     }
   }
 
-  for (const work of groupWork ?? []) {
+  for (const work of groupWork) {
     const practicedOn = classDates.get(work.class_id);
     const assignedMembers = work.member_ids ?? [];
     if (!practicedOn || (assignedMembers.length && !assignedMembers.includes(memberId))) continue;
