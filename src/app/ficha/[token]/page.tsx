@@ -77,6 +77,7 @@ type Member = {
 };
 
 type Attendance = {
+  class_id: string | null;
   attended_on: string;
   official_grade: string | null;
   trained_grade: string | null;
@@ -195,6 +196,20 @@ type ChildSyllabusHistoryRow = {
   } | null;
 };
 
+type ChildClassPlanHistoryRow = {
+  class_id: string;
+  syllabus_item_ids: string[] | null;
+};
+
+type ChildSyllabusItemLookup = {
+  id: string;
+  title: string;
+  grade: string | null;
+  category: string | null;
+  description: string | null;
+  active: boolean;
+};
+
 type ChildAdultTransition = {
   transitioned_on: string;
   child_grade: string | null;
@@ -268,7 +283,7 @@ export default async function PublicFichaPage({
   const [{ data: attendance }, { data: exams }, { data: courses }, { data: fichaClosures }] = await Promise.all([
     supabase
       .from("attendance_logs")
-      .select("attended_on,official_grade,trained_grade,classes(name)")
+      .select("class_id,attended_on,official_grade,trained_grade,classes(name)")
       .eq("member_id", member.id)
       .order("attended_on", { ascending: false })
       .returns<Attendance[]>(),
@@ -336,13 +351,14 @@ export default async function PublicFichaPage({
         .returns<ChildSyllabusHistoryRow[]>()
     ]);
 
+    const childProgramHistoryRows = await loadChildProgramHistoryRows(supabase, attendance ?? [], childSyllabusHistory ?? []);
     const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures);
     const automaticNotices = buildAutomaticChildNotices(visibleChildRanking);
     const familyNotices = filterChildFamilyNotices(childNotices ?? []);
     return (
       <>
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childSyllabusHistory ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
+        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
     );
   }
@@ -906,6 +922,77 @@ function resolveTechnicalArea(member: Member, configured: TechnicalAreaLink | nu
     url,
     label: configured?.label?.trim() || "AREA TECNICA PERSONAL"
   };
+}
+
+async function loadChildProgramHistoryRows(
+  supabase: ReturnType<typeof createAdminClient>,
+  attendance: Attendance[],
+  history: ChildSyllabusHistoryRow[]
+) {
+  const classDates = new Map(
+    attendance
+      .filter((row) => row.class_id && row.attended_on)
+      .map((row) => [row.class_id as string, row.attended_on])
+  );
+  if (!classDates.size) return history;
+
+  const { data: plans, error: planError } = await supabase
+    .from("child_class_plans")
+    .select("class_id,syllabus_item_ids")
+    .in("class_id", [...classDates.keys()])
+    .returns<ChildClassPlanHistoryRow[]>();
+
+  if (planError || !plans?.length) {
+    if (planError) console.error("Error loading child class plan fallback for ficha", planError);
+    return history;
+  }
+
+  const itemIds = Array.from(new Set(plans.flatMap((plan) => plan.syllabus_item_ids ?? []).filter(Boolean)));
+  if (!itemIds.length) return history;
+
+  const { data: items, error: itemError } = await supabase
+    .from("child_syllabus_items")
+    .select("id,title,grade,category,description,active")
+    .in("id", itemIds)
+    .returns<ChildSyllabusItemLookup[]>();
+
+  if (itemError || !items?.length) {
+    if (itemError) console.error("Error loading child syllabus fallback items for ficha", itemError);
+    return history;
+  }
+
+  const itemsById = new Map(items.filter((item) => item.active).map((item) => [item.id, item]));
+  const existing = new Set(
+    history
+      .filter((row) => row.child_syllabus_items?.title)
+      .map((row) => `${row.practiced_on}::${normalizeGradeAlias(row.child_syllabus_items?.grade)}::${normalize(row.child_syllabus_items?.category)}::${normalize(row.child_syllabus_items?.title)}`)
+  );
+  const fallbackRows: ChildSyllabusHistoryRow[] = [];
+
+  for (const plan of plans) {
+    const practicedOn = classDates.get(plan.class_id);
+    if (!practicedOn) continue;
+
+    for (const itemId of plan.syllabus_item_ids ?? []) {
+      const item = itemsById.get(itemId);
+      if (!item) continue;
+
+      const key = `${practicedOn}::${normalizeGradeAlias(item.grade)}::${normalize(item.category)}::${normalize(item.title)}`;
+      if (existing.has(key)) continue;
+      existing.add(key);
+      fallbackRows.push({
+        practiced_on: practicedOn,
+        child_syllabus_items: {
+          title: item.title,
+          grade: item.grade,
+          category: item.category,
+          description: item.description
+        }
+      });
+    }
+  }
+
+  return [...history, ...fallbackRows].sort((a, b) => b.practiced_on.localeCompare(a.practiced_on));
 }
 
 function sameGrade(a: string | null | undefined, b: string | null | undefined) {
