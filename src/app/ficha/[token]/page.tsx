@@ -966,6 +966,18 @@ async function loadChildProgramHistoryRows(
     return history;
   }
 
+  console.info("[ficha-child-work]", JSON.stringify({
+    attendanceRows: attendance.length,
+    linkedClasses: classDates.size,
+    attendanceDates: [...new Set(classDates.values())],
+    plans: plans?.length ?? 0,
+    plansWithSyllabus: (plans ?? []).filter((plan) => plan.syllabus_item_ids?.length).length,
+    plansWithActivities: (plans ?? []).filter((plan) => plan.activities?.length).length,
+    plansWithObjective: (plans ?? []).filter((plan) => plan.objective).length,
+    groupWork: groupWork?.length ?? 0,
+    existingHistory: history.length
+  }));
+
   const itemIds = Array.from(new Set((plans ?? []).flatMap((plan) => plan.syllabus_item_ids ?? []).filter(Boolean)));
   let items: ChildSyllabusItemLookup[] = [];
   if (itemIds.length) {
