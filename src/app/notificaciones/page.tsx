@@ -58,10 +58,13 @@ export default async function NotificacionesPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
+  const emailCutoff = daysAgoIso(90);
+  const telegramCutoff = daysAgoIso(30);
   const [logsResult, settingsResult, emailLogsResult, emailMembersResult] = await Promise.all([
     supabase
       .from("telegram_notification_logs")
       .select("id,notification_type,period_start,period_end,status,error_message,sent_at,created_at")
+      .or(`created_at.gte.${telegramCutoff},status.eq.failed`)
       .order("created_at", { ascending: false })
       .limit(30)
       .returns<NotificationLog[]>(),
@@ -73,6 +76,7 @@ export default async function NotificacionesPage({
     supabase
       .from("email_notification_logs")
       .select("id,audience,subject,recipient_count,sent_count,failed_count,status,error_message,sent_at,created_at")
+      .or(`created_at.gte.${emailCutoff},status.in.(failed,partial)`)
       .order("created_at", { ascending: false })
       .limit(20)
       .returns<EmailNotificationLog[]>()
@@ -242,7 +246,7 @@ export default async function NotificacionesPage({
           <div className="section-heading-row">
             <div>
               <h2>Ultimos emails</h2>
-              <p className="muted">Historial de comunicados enviados a alumnos y familias.</p>
+              <p className="muted">Comunicados de los ultimos 90 dias. Los fallidos o parciales se conservan.</p>
             </div>
           </div>
           <div className="table-wrap">
@@ -281,7 +285,7 @@ export default async function NotificacionesPage({
           <div className="section-heading-row">
             <div>
               <h2>Ultimos envios</h2>
-              <p className="muted">Registro leido desde Supabase.</p>
+              <p className="muted">Envios automaticos de los ultimos 30 dias. Los fallidos se conservan.</p>
             </div>
           </div>
           <div className="table-wrap">
@@ -366,4 +370,8 @@ function formatDate(value: string) {
 
 function formatDateTime(value: string) {
   return value.slice(0, 16).replace("T", " ");
+}
+
+function daysAgoIso(days: number) {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
 }
