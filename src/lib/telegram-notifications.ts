@@ -509,7 +509,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
   };
 }
 
-async function sendTelegramMessage(text: string) {
+export async function sendTelegramMessage(text: string) {
   const token = cleanEnv(process.env.TELEGRAM_BOT_TOKEN);
   const chatId = cleanEnv(process.env.TELEGRAM_CHAT_ID);
   if (!token || !chatId) {

@@ -2,7 +2,7 @@ import { ArrowLeft, LogOut } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { CopyFichaLinkButton } from "@/app/kenshis/[legacyId]/CopyFichaLinkButton";
 import { notFound, redirect } from "next/navigation";
-import { ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, transitionChildToAdultAction, undoChildToAdultTransitionAction, updateKenshiAction } from "@/app/actions";
+import { addMemberNoteAction, ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, transitionChildToAdultAction, undoChildToAdultTransitionAction, updateKenshiAction, updateMemberNoteAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
 import { hasInternalAccess } from "@/lib/auth";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
@@ -166,6 +166,8 @@ type TechnicalAreaLink = {
   active: boolean | null;
 };
 
+type InternalNote = { id: string; note: string; important: boolean; resolved_at: string | null; created_by: string; created_at: string };
+
 export default async function KenshiDetailPage({
   params,
   searchParams
@@ -193,7 +195,7 @@ export default async function KenshiDetailPage({
   if (error || !member) notFound();
   const photoSrc = driveImageUrl(member.photo_url);
 
-  const [{ data: attendance }, { data: exams }, { data: courses }, technicalHistoryResult, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult, technicalAreaResult] = await Promise.all([
+  const [{ data: attendance }, { data: exams }, { data: courses }, technicalHistoryResult, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult, technicalAreaResult, internalNotesResult] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("attended_on,official_grade,trained_grade,technical_role,classes(name)")
@@ -284,7 +286,8 @@ export default async function KenshiDetailPage({
       .select("grade,member_class,url,active")
       .eq("member_class", member.class)
       .eq("active", true)
-      .returns<TechnicalAreaLink[]>()
+      .returns<TechnicalAreaLink[]>(),
+    supabase.from("member_notes").select("id,note,important,resolved_at,created_by,created_at").eq("member_id", member.id).order("created_at", { ascending: false }).returns<InternalNote[]>()
   ]);
   const childRanking = childRankingResult.data;
   const childNotes = childNotesResult.data ?? [];
@@ -377,6 +380,20 @@ export default async function KenshiDetailPage({
               {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank" rel="noopener noreferrer external">Abrir ficha antigua</a> : null}
             </div>
           </article>
+        </section>
+
+        <section className="card" id="notas-internas">
+          <div className="section-heading-row"><div><h2>Notas internas</h2><p className="muted">Solo visibles para administracion.</p></div></div>
+          <form action={addMemberNoteAction} className="form-grid">
+            <input type="hidden" name="memberId" value={member.id} /><input type="hidden" name="legacyId" value={member.legacy_id ?? ""} />
+            <label className="wide">Nueva nota<textarea name="note" rows={3} required placeholder="Seguimiento, llamada, observacion..." /></label>
+            <label className="checkbox-line"><input type="checkbox" name="important" /> Marcar como importante</label>
+            <button className="primary-link" type="submit">Guardar nota</button>
+          </form>
+          <div className="stack-list">{(internalNotesResult.data ?? []).map((note) => <article className={`list-card ${note.important && !note.resolved_at ? "attention-card" : ""}`} key={note.id}>
+            <div><span className="tag">{note.resolved_at ? "Resuelta" : note.important ? "Importante" : "Nota"}</span><p>{note.note}</p><small className="muted">{note.created_at.slice(0, 10)} · {note.created_by}</small></div>
+            {!note.resolved_at ? <div className="row-actions"><form action={updateMemberNoteAction}><input type="hidden" name="noteId" value={note.id} /><input type="hidden" name="legacyId" value={member.legacy_id ?? ""} /><input type="hidden" name="mode" value="important" /><input type="hidden" name="value" value={String(!note.important)} /><button className="secondary-link" type="submit">{note.important ? "Quitar importancia" : "Importante"}</button></form><form action={updateMemberNoteAction}><input type="hidden" name="noteId" value={note.id} /><input type="hidden" name="legacyId" value={member.legacy_id ?? ""} /><button className="secondary-link" type="submit">Resolver</button></form></div> : null}
+          </article>)}{!(internalNotesResult.data ?? []).length ? <p className="muted">Sin notas internas.</p> : null}</div>
         </section>
 
         <KenshiOnboardingChecklist member={member} hasConfiguredTechnicalArea={hasConfiguredTechnicalArea} returnTo={returnTo} />

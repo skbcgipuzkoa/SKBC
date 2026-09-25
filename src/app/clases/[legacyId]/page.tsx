@@ -26,6 +26,7 @@ import {
 } from "@/app/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { ClassSectionNav, type ClassSectionLink } from "@/components/class-section-nav";
+import { ProvisionalAttendanceForm } from "@/components/provisional-attendance-form";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
@@ -475,7 +476,7 @@ export default async function ClaseDetailPage({
     </details>
   ) : null;
   const attendancePanel = (
-    <AttendanceDayForm action={addBulkAttendanceAction}>
+    <><AttendanceDayForm action={addBulkAttendanceAction}>
       <input type="hidden" name="classId" value={clase.id} />
       <input type="hidden" name="legacyId" value={legacyId} />
       <input type="hidden" name="returnLegacyId" value={legacyId} />
@@ -547,6 +548,9 @@ export default async function ClaseDetailPage({
         ) : null}
       </div>
     </AttendanceDayForm>
+    <div className="provisional-group-grid">
+      {attendancePanelClasses.map((dayClass) => <ProvisionalAttendanceForm key={dayClass.id} classId={dayClass.id} group={dayClass.class_group} returnTo={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=${isCombinedDay ? "cierre" : "asistencia"}#asistencia`} />)}
+    </div></>
   );
   const technicalReviewPanel = clase.class_group === "adults" && (activeStep === "attendance" || showCombinedCloseStep || (isCorrectionMode && correctionSection === "adult-technical")) && canEditClosedClass && hasPlan ? (
     <details className="card technical-review-panel">

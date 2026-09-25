@@ -13,6 +13,7 @@ import {
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { ClassSectionNav, type ClassSectionLink } from "@/components/class-section-nav";
+import { ProvisionalAttendanceForm } from "@/components/provisional-attendance-form";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -266,6 +267,7 @@ export default async function DojoClassPage({
                 syllabusItems={childSyllabusItems}
                 open={query.section === "kids-technical"}
               />
+              <ProvisionalAttendanceForm classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} />
               <form action={addBulkAttendanceAction} className="dojo-check-list">
                 <input type="hidden" name="classId" value={kidsClass.id} />
                 <input type="hidden" name="legacyId" value={kidsClass.legacy_id ?? legacyId} />
@@ -372,7 +374,7 @@ export default async function DojoClassPage({
           <h1>Asistencia adultos</h1>
           <p>Marca asistencia y ajusta grupo/rol solo cuando haga falta.</p>
           {adultClass ? (
-            <form action={addBulkAttendanceAction} className="dojo-check-list">
+            <><ProvisionalAttendanceForm classId={adultClass.id} group="adults" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=adults`} /><form action={addBulkAttendanceAction} className="dojo-check-list">
               <input type="hidden" name="classId" value={adultClass.id} />
               <input type="hidden" name="legacyId" value={adultClass.legacy_id ?? legacyId} />
               <input type="hidden" name="returnTo" value={`/dojo/${adultClass.legacy_id ?? legacyId}?step=close&saved=adults`} />
@@ -391,7 +393,7 @@ export default async function DojoClassPage({
                 </DojoCheck>
               ))}
               {pendingAdults.length ? <DojoSubmitButton pendingLabel="Guardando adultos...">Guardar adultos y revisar cierre</DojoSubmitButton> : <a className="dojo-primary-button" href={`/dojo/${adultClass.legacy_id ?? legacyId}?step=close`}>Revisar cierre</a>}
-            </form>
+            </form></>
           ) : <p className="muted">No hay clase adulta en este día.</p>}
         </section>
       ) : null}

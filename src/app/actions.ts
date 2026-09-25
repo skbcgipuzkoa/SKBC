@@ -21,6 +21,7 @@ import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/tel
 import { createTrashItem, restoreTrashItem } from "@/lib/trash";
 import { kidsGrades } from "@/lib/grades";
 import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
+import { convertProvisionalMember } from "@/lib/provisional-members";
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -146,6 +147,77 @@ export async function dismissSelectedAdminAlertsAction(formData: FormData) {
   revalidatePath("/alertas");
   revalidatePath("/sistema");
   redirect("/alertas?saved=dismiss-selected");
+}
+
+export async function addProvisionalAttendanceAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const displayName = String(formData.get("displayName") ?? "").trim().replace(/\s+/g, " ");
+  const classId = String(formData.get("classId") ?? "").trim();
+  const group = String(formData.get("group") ?? "");
+  const returnTo = safeInternalReturn(String(formData.get("returnTo") ?? "/clases"));
+  if (displayName.length < 2 || !classId || !["kids", "adults"].includes(group)) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=provisional`);
+
+  const supabase = createAdminClient();
+  const { data: clase, error: classError } = await supabase.from("classes").select("id,class_date,class_group").eq("id", classId).single();
+  if (classError || !clase || clase.class_group !== group) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=provisional`);
+  const { data: provisional, error } = await supabase.from("provisional_members").insert({ display_name: displayName, class: group, created_by: "Alvaro" }).select("id").single();
+  if (error || !provisional) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=provisional`);
+  const { error: attendanceError } = await supabase.from("provisional_attendance").insert({ provisional_member_id: provisional.id, class_id: classId, attended_on: clase.class_date });
+  if (attendanceError) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=provisional`);
+  revalidatePath(returnTo.split("?")[0]);
+  revalidatePath("/provisionales");
+  revalidatePath("/alertas");
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=provisional`);
+}
+
+export async function convertProvisionalMemberAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const provisionalId = String(formData.get("provisionalId") ?? "");
+  const memberId = String(formData.get("memberId") ?? "");
+  if (!provisionalId || !memberId) redirect("/provisionales?error=convert");
+  try {
+    await convertProvisionalMember(provisionalId, memberId);
+  } catch (error) {
+    console.error("Error converting provisional member", error);
+    redirect(`/provisionales?error=convert&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+  revalidatePath("/provisionales");
+  revalidatePath("/alertas");
+  revalidatePath("/kenshis");
+  redirect("/provisionales?saved=converted");
+}
+
+export async function addMemberNoteAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const memberId = String(formData.get("memberId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const note = String(formData.get("note") ?? "").trim();
+  const important = formData.get("important") === "on";
+  if (!memberId || !legacyId || note.length < 2) redirect(`/kenshis/${legacyId}?error=note#notas-internas`);
+  const { error } = await createAdminClient().from("member_notes").insert({ member_id: memberId, note, important, created_by: "Alvaro" });
+  if (error) redirect(`/kenshis/${legacyId}?error=note#notas-internas`);
+  revalidatePath(`/kenshis/${legacyId}`);
+  revalidatePath("/alertas");
+  redirect(`/kenshis/${legacyId}?saved=note#notas-internas`);
+}
+
+export async function updateMemberNoteAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const noteId = String(formData.get("noteId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  const mode = String(formData.get("mode") ?? "resolve");
+  const update = mode === "important"
+    ? { important: formData.get("value") === "true", updated_at: new Date().toISOString() }
+    : { resolved_at: new Date().toISOString(), resolved_by: "Alvaro", updated_at: new Date().toISOString() };
+  const { error } = await createAdminClient().from("member_notes").update(update).eq("id", noteId);
+  if (error) redirect(`/kenshis/${legacyId}?error=note#notas-internas`);
+  revalidatePath(`/kenshis/${legacyId}`);
+  revalidatePath("/alertas");
+  redirect(`/kenshis/${legacyId}?saved=note#notas-internas`);
+}
+
+function safeInternalReturn(value: string) {
+  return value.startsWith("/") && !value.startsWith("//") ? value : "/clases";
 }
 
 export async function restoreTrashItemAction(formData: FormData) {

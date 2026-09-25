@@ -4,6 +4,7 @@ import { dismissAdminAlertAction, dismissSelectedAdminAlertsAction, logoutAction
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import { isRelevantAbsence, operationalAlertKey } from "@/lib/operational-follow-up";
 
 type AlertLevel = "danger" | "warn" | "info";
 
@@ -23,6 +24,7 @@ type ClassRow = {
   class_group: "kids" | "adults";
   closed: boolean;
   plan_generated: boolean;
+  status?: string;
 };
 
 type MemberRow = {
@@ -33,6 +35,7 @@ type MemberRow = {
   grade: string | null;
   ficha_token: string | null;
   photo_url: string | null;
+  joined_on: string | null;
 };
 
 type ExamRow = {
@@ -56,19 +59,22 @@ export default async function AlertasPage() {
     { data: failedSync },
     { data: latestBackup },
     { count: restorableTrash },
-    { data: dismissedAlerts }
+    { data: dismissedAlerts },
+    { data: provisionalMembers },
+    { data: importantNotes },
+    { data: recentAttendance }
   ] = await Promise.all([
     supabase
       .from("classes")
-      .select("id,legacy_id,name,class_date,class_group,closed,plan_generated")
-      .eq("closed", false)
+      .select("id,legacy_id,name,class_date,class_group,closed,plan_generated,status")
+      .or("closed.eq.false,status.eq.correction")
       .lt("class_date", today)
       .order("class_date", { ascending: false })
       .limit(30)
       .returns<ClassRow[]>(),
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,ficha_token,photo_url")
+      .select("id,legacy_id,display_name,class,grade,ficha_token,photo_url,joined_on")
       .eq("status", "active")
       .order("class")
       .order("display_name")
@@ -97,17 +103,37 @@ export default async function AlertasPage() {
       .eq("restore_status", "restorable"),
     supabase
       .from("admin_alert_dismissals")
-      .select("alert_key")
+      .select("alert_key"),
+    supabase.from("provisional_members").select("id,display_name,class,created_at").eq("status", "pending"),
+    supabase.from("member_notes").select("id,note,created_at,members(display_name,legacy_id)").eq("important", true).is("resolved_at", null),
+    supabase.from("attendance_logs").select("member_id,attended_on").order("attended_on", { ascending: false })
   ]);
 
   const alerts: SystemAlert[] = [];
+
+  for (const provisional of provisionalMembers ?? []) alerts.push({
+    id: operationalAlertKey("provisional", provisional.id), level: "warn", title: `Invitado pendiente: ${provisional.display_name}`,
+    detail: `${provisional.class === "kids" ? "Ninos" : "Adultos"} · creado ${String(provisional.created_at).slice(0, 10)}. Completa su ficha para consolidar sus asistencias.`, href: "/provisionales"
+  });
+
+  for (const note of importantNotes ?? []) {
+    const member = Array.isArray(note.members) ? note.members[0] : note.members;
+    alerts.push({ id: operationalAlertKey("member-note", note.id), level: "warn", title: `Nota importante: ${member?.display_name ?? "Kenshi"}`, detail: String(note.note).slice(0, 180), href: member?.legacy_id ? `/kenshis/${member.legacy_id}#notas-internas` : "/kenshis" });
+  }
+
+  const lastAttendance = new Map<string, string>();
+  for (const item of recentAttendance ?? []) if (!lastAttendance.has(item.member_id)) lastAttendance.set(item.member_id, item.attended_on);
+  for (const member of activeMembers ?? []) if (isRelevantAbsence({ group: member.class, joinedOn: member.joined_on, lastAttendanceOn: lastAttendance.get(member.id), today })) alerts.push({
+    id: operationalAlertKey("absence", member.id, lastAttendance.get(member.id) ?? member.joined_on), level: "info", title: `Sin asistencia reciente: ${member.display_name}`,
+    detail: `Ultima asistencia: ${lastAttendance.get(member.id) ?? "sin asistencia registrada"}.`, href: member.legacy_id ? `/kenshis/${member.legacy_id}` : "/kenshis"
+  });
 
   for (const clase of openOldClasses ?? []) {
     alerts.push({
       id: `class-${clase.id}`,
       level: "danger",
-      title: `Clase antigua abierta: ${clase.name}`,
-      detail: `${clase.class_date} - ${clase.class_group === "kids" ? "ninos" : "adultos"}. Conviene cerrarla o eliminarla si fue una prueba.`,
+      title: clase.status === "correction" ? `Clase en correccion: ${clase.name}` : `Clase antigua abierta: ${clase.name}`,
+      detail: `${clase.class_date} - ${clase.class_group === "kids" ? "ninos" : "adultos"}. ${clase.status === "correction" ? "Termina y cierra la correccion pendiente." : "Conviene cerrarla o eliminarla si fue una prueba."}`,
       href: clase.legacy_id ? `/clases/${clase.legacy_id}` : "/clases"
     });
   }

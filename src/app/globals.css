@@ -10690,3 +10690,30 @@ tbody tr:hover {
     flex-direction: column;
   }
 }
+.provisional-attendance {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #cbd8e6;
+  border-radius: 8px;
+  background: #f7fafc;
+}
+
+.provisional-attendance summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #075e54;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.provisional-attendance .inline-form,
+.provisional-group-grid {
+  margin-top: 12px;
+}
+
+.provisional-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
