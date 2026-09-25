@@ -44,7 +44,7 @@ Cada lunes a las 08:00, zona `Europe/Madrid`, se generara un resumen de la seman
 - notas importantes abiertas;
 - otras tareas operativas pendientes.
 
-El panel calculara y mostrara unicamente la ultima semana finalizada, sin almacenar historial. El mismo contenido se enviara por Telegram. Una clave tecnica semanal para Telegram garantizara idempotencia: reintentar el proceso no creara dos mensajes. Si Telegram falla, el panel seguira pudiendo calcular el resumen y el envio podra reintentarse.
+El panel calculara y mostrara inicialmente la ultima semana finalizada, sin almacenar historial. Tambien permitira indicar un intervalo `Desde` y `Hasta` para calcular en el momento un resumen historico de hasta dos anos. Las consultas manuales no se enviaran por Telegram. El resumen automatico semanal si se enviara por Telegram y una clave tecnica garantizara idempotencia: reintentar el proceso no creara dos mensajes.
 
 ## Arquitectura y datos
 

@@ -8,9 +8,9 @@ export type WeeklySummaryPayload = {
   newMembers: number; newProvisionals: number; pendingProvisionals: number; importantNotes: number;
 };
 
-export async function generateWeeklySummary(options: { sendTelegram?: boolean; force?: boolean } = {}) {
+export async function generateWeeklySummary(options: { sendTelegram?: boolean; force?: boolean; period?: { start: string; end: string } } = {}) {
   const supabase = createAdminClient();
-  const period = previousWeekPeriod();
+  const period = options.period ?? previousWeekPeriod();
   const [classesResult, attendanceResult, membersResult, provisionalResult, pendingResult, notesResult] = await Promise.all([
     supabase.from("classes").select("id,class_group,closed,status").gte("class_date", period.start).lte("class_date", period.end),
     supabase.from("attendance_logs").select("member_id,attended_on,members(class)").gte("attended_on", period.start).lte("attended_on", period.end),
