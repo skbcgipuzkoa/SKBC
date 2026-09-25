@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const madrid = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", weekday: "short", hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
   const weekday = madrid.find((part) => part.type === "weekday")?.value;
   const hour = Number(madrid.find((part) => part.type === "hour")?.value);
-  if (!force && (weekday !== "Mon" || hour !== 8)) return NextResponse.json({ status: "skipped", reason: "outside-local-window" });
+  if (!force && (weekday !== "Mon" || ![7, 8].includes(hour))) return NextResponse.json({ status: "skipped", reason: "outside-local-window" });
   try {
     return NextResponse.json({ status: "sent", ...(await generateWeeklySummary({ sendTelegram: true, force })) });
   } catch (error) {
