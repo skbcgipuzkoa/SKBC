@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Convertir las cuatro tarjetas del resumen de Kenshis en filtros navegables y eliminar los controles duplicados de clase y estado.
+**Goal:** Usar tres tarjetas principales como filtros y ofrecer Inactivos como un acceso compacto sin contador.
 
 **Architecture:** La pagina de servidor derivara un filtro unico (`active`, `kids`, `adults`, `inactive`) desde los parametros existentes `class` y `status`. Las tarjetas seran enlaces con parametros de URL, preservaran `q`, y las rutas de detalle conservaran la URL completa para restaurar el estado al volver.
 
@@ -40,11 +40,11 @@ Expected: proceso terminado con codigo 0.
 
 - [ ] **Step 1: Crear enlaces de filtro**
 
-Generar las URLs de las cuatro tarjetas con `URLSearchParams`. Cada URL preservara `q`, fijara el estado necesario y solo incluira `class` para `kids` o `adults`.
+Generar las URLs de los tres filtros principales y del acceso compacto de inactivos con `URLSearchParams`. Cada URL preservara `q`, fijara el estado necesario y solo incluira `class` para `kids` o `adults`.
 
 - [ ] **Step 2: Sustituir articulos por enlaces accesibles**
 
-Renderizar `Activos`, `Ninos`, `Adultos` e `Inactivos` como enlaces de tarjeta. Aplicar clase `selected` y `aria-current="page"` al filtro activo.
+Renderizar `Activos`, `Ninos` y `Adultos` como enlaces de tarjeta. Renderizar `Inactivos` como un enlace compacto separado, sin metrica. Aplicar clase `selected` y `aria-current="page"` al filtro activo.
 
 - [ ] **Step 3: Simplificar el buscador**
 
@@ -61,11 +61,11 @@ Mostrar el numero de resultados junto al campo de busqueda con texto singular/pl
 
 - [ ] **Step 1: Estilizar tarjetas interactivas**
 
-Anadir estilos limitados a `.kenshi-filter-card` para conservar la apariencia actual, eliminar subrayado, mostrar cursor, hover y foco visible.
+Mantener `.kenshi-filter-card` para las tres tarjetas principales y anadir `.kenshi-inactive-filter` como acceso compacto alineado a la derecha, sin metrica, con hover y foco visible.
 
 - [ ] **Step 2: Estilizar seleccion**
 
-Anadir `.kenshi-filter-card.selected` con borde azul, fondo sutil y realce suficiente sin cambiar las dimensiones del grid.
+Cambiar el grid principal a tres columnas y anadir un estado seleccionado equivalente para `.kenshi-inactive-filter`, sin cambiar la altura del resumen.
 
 - [ ] **Step 3: Adaptar el buscador**
 

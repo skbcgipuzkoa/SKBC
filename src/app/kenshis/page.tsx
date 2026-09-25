@@ -50,13 +50,11 @@ export default async function KenshisPage({
   const [
     { count: activeCount },
     { count: activeKidsCount },
-    { count: activeAdultsCount },
-    { count: inactiveCount }
+    { count: activeAdultsCount }
   ] = await Promise.all([
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "kids"),
-    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults"),
-    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "inactive")
+    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults")
   ]);
 
   let query = supabase
@@ -116,28 +114,31 @@ export default async function KenshisPage({
           </div>
         </div>
 
-        <section className="grid stats compact" aria-label="Resumen">
-          <a className={`card kenshi-filter-card${selectedFilter === "active" ? " selected" : ""}`} href={kenshiFilterHref("active", searchValue)} aria-current={selectedFilter === "active" ? "page" : undefined}>
-            <ShieldCheck aria-hidden="true" size={19} />
-            <h2>Activos</h2>
-            <div className="metric">{activeCount ?? 0}</div>
-          </a>
-          <a className={`card kenshi-filter-card${selectedFilter === "kids" ? " selected" : ""}`} href={kenshiFilterHref("kids", searchValue)} aria-current={selectedFilter === "kids" ? "page" : undefined}>
-            <UserRound aria-hidden="true" size={19} />
-            <h2>Ninos</h2>
-            <div className="metric">{activeKidsCount ?? 0}</div>
-          </a>
-          <a className={`card kenshi-filter-card${selectedFilter === "adults" ? " selected" : ""}`} href={kenshiFilterHref("adults", searchValue)} aria-current={selectedFilter === "adults" ? "page" : undefined}>
-            <UserRound aria-hidden="true" size={19} />
-            <h2>Adultos</h2>
-            <div className="metric">{activeAdultsCount ?? 0}</div>
-          </a>
-          <a className={`card kenshi-filter-card${selectedFilter === "inactive" ? " selected" : ""}`} href={kenshiFilterHref("inactive", searchValue)} aria-current={selectedFilter === "inactive" ? "page" : undefined}>
-            <Search aria-hidden="true" size={19} />
-            <h2>Inactivos</h2>
-            <div className="metric">{inactiveCount ?? 0}</div>
-          </a>
-        </section>
+        <div className="kenshi-filter-panel">
+          <section className="grid stats compact kenshi-primary-filters" aria-label="Resumen">
+            <a className={`card kenshi-filter-card${selectedFilter === "active" ? " selected" : ""}`} href={kenshiFilterHref("active", searchValue)} aria-current={selectedFilter === "active" ? "page" : undefined}>
+              <ShieldCheck aria-hidden="true" size={19} />
+              <h2>Activos</h2>
+              <div className="metric">{activeCount ?? 0}</div>
+            </a>
+            <a className={`card kenshi-filter-card${selectedFilter === "kids" ? " selected" : ""}`} href={kenshiFilterHref("kids", searchValue)} aria-current={selectedFilter === "kids" ? "page" : undefined}>
+              <UserRound aria-hidden="true" size={19} />
+              <h2>Ninos</h2>
+              <div className="metric">{activeKidsCount ?? 0}</div>
+            </a>
+            <a className={`card kenshi-filter-card${selectedFilter === "adults" ? " selected" : ""}`} href={kenshiFilterHref("adults", searchValue)} aria-current={selectedFilter === "adults" ? "page" : undefined}>
+              <UserRound aria-hidden="true" size={19} />
+              <h2>Adultos</h2>
+              <div className="metric">{activeAdultsCount ?? 0}</div>
+            </a>
+          </section>
+          <div className="kenshi-secondary-filter-row">
+            <a className={`kenshi-inactive-filter${selectedFilter === "inactive" ? " selected" : ""}`} href={kenshiFilterHref("inactive", searchValue)} aria-current={selectedFilter === "inactive" ? "page" : undefined}>
+              <Search aria-hidden="true" size={16} />
+              Inactivos
+            </a>
+          </div>
+        </div>
 
         <form className="filters kenshi-search-form">
           <label>
