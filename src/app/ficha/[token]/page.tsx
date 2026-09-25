@@ -1034,7 +1034,7 @@ async function loadChildProgramHistoryRows(
     items = data ?? [];
   }
 
-  const itemsById = new Map(items.filter((item) => item.active).map((item) => [item.id, item]));
+  const itemsById = new Map(items.map((item) => [item.id, item]));
   const existing = new Set(
     history
       .filter((row) => row.child_syllabus_items?.title)
