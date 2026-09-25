@@ -6,14 +6,15 @@ Convertir las tarjetas de resumen de la pagina de Kenshis en el control principa
 
 ## Interaccion
 
-El resumen tendra cuatro tarjetas pulsables:
+El resumen tendra tres tarjetas principales pulsables:
 
 - **Activos**: muestra todos los kenshis activos, sin filtrar por clase.
 - **Ninos**: muestra solamente los kenshis activos de clase infantil.
 - **Adultos**: muestra solamente los kenshis activos de clase adulta.
-- **Inactivos**: muestra todos los kenshis inactivos, sin filtrar por clase.
 
 La tarjeta seleccionada se distinguira mediante fondo, borde y estado accesible. Toda la tarjeta sera pulsable y funcionara como enlace, por lo que la navegacion sera compatible con el historial y el boton Atrás del navegador.
+
+**Inactivos** sera un acceso compacto independiente, situado debajo del resumen y alineado a la derecha. No mostrara ninguna cantidad. Cuando este seleccionado conservara el mismo lenguaje visual de seleccion, adaptado a su tamano de boton.
 
 ## Busqueda y navegacion
 
@@ -25,25 +26,25 @@ No se guardara el filtro en cookies ni almacenamiento local. Si el usuario sale 
 
 ## Contadores
 
-Las tarjetas mostraran cantidades globales independientes de la busqueda:
+Las tres tarjetas principales mostraran cantidades globales independientes de la busqueda:
 
 - total de activos;
 - total de ninos activos;
 - total de adultos activos;
-- total de inactivos.
 
-La tarjeta `Mostrando` desaparecera. El numero de filas resultantes se indicara junto al buscador o en la zona inmediata de resultados, sin crear una quinta tarjeta.
+La tarjeta `Mostrando` desaparecera. El numero de inactivos no se mostrara en el acceso compacto ni en otro lugar del resumen. El numero de filas resultantes se indicara junto al buscador.
 
 ## Implementacion
 
 La pagina seguira siendo un componente de servidor. Se derivara un unico filtro seleccionado a partir de `class` y `status`, con `active` como valor inicial. Las tarjetas generaran enlaces con `URLSearchParams`, preservando `q` y sustituyendo exclusivamente los parametros de clase y estado.
 
-Se reutilizaran los estilos existentes de las tarjetas y se anadiran estados de interaccion, foco y seleccion. Los desplegables `Clase`, `Estado` y el boton `Filtrar` se eliminaran.
+Se reutilizaran los estilos existentes de las tarjetas y se anadiran estados de interaccion, foco y seleccion. El grid principal pasara a tres columnas en escritorio y mantendra su adaptacion responsive. El acceso compacto de inactivos tendra su propio estilo sin metricas. Los desplegables `Clase`, `Estado` y el boton `Filtrar` se eliminaran.
 
 ## Casos de comprobacion
 
 - La entrada desde el menu muestra todos los activos.
-- Cada tarjeta devuelve el grupo y el contador esperados.
+- Cada tarjeta principal devuelve el grupo y el contador esperados.
+- El acceso compacto de inactivos no muestra cantidad y filtra correctamente.
 - La busqueda funciona dentro de cada filtro.
 - Cambiar de tarjeta conserva la busqueda.
 - Abrir un alumno y volver conserva filtro y busqueda.
