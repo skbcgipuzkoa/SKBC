@@ -198,7 +198,16 @@ type ChildSyllabusHistoryRow = {
 
 type ChildClassPlanHistoryRow = {
   class_id: string;
+  objective: string | null;
+  activities: string[] | null;
   syllabus_item_ids: string[] | null;
+};
+
+type ChildClassGroupWorkHistoryRow = {
+  class_id: string;
+  group_label: string;
+  content: string;
+  member_ids: string[] | null;
 };
 
 type ChildSyllabusItemLookup = {
@@ -351,7 +360,7 @@ export default async function PublicFichaPage({
         .returns<ChildSyllabusHistoryRow[]>()
     ]);
 
-    const childProgramHistoryRows = await loadChildProgramHistoryRows(supabase, attendance ?? [], childSyllabusHistory ?? []);
+    const childProgramHistoryRows = await loadChildProgramHistoryRows(supabase, member.id, attendance ?? [], childSyllabusHistory ?? []);
     const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures);
     const automaticNotices = buildAutomaticChildNotices(visibleChildRanking);
     const familyNotices = filterChildFamilyNotices(childNotices ?? []);
@@ -926,6 +935,7 @@ function resolveTechnicalArea(member: Member, configured: TechnicalAreaLink | nu
 
 async function loadChildProgramHistoryRows(
   supabase: ReturnType<typeof createAdminClient>,
+  memberId: string,
   attendance: Attendance[],
   history: ChildSyllabusHistoryRow[]
 ) {
@@ -936,29 +946,40 @@ async function loadChildProgramHistoryRows(
   );
   if (!classDates.size) return history;
 
-  const { data: plans, error: planError } = await supabase
-    .from("child_class_plans")
-    .select("class_id,syllabus_item_ids")
-    .in("class_id", [...classDates.keys()])
-    .returns<ChildClassPlanHistoryRow[]>();
+  const classIds = [...classDates.keys()];
+  const [{ data: plans, error: planError }, { data: groupWork, error: groupWorkError }] = await Promise.all([
+    supabase
+      .from("child_class_plans")
+      .select("class_id,objective,activities,syllabus_item_ids")
+      .in("class_id", classIds)
+      .returns<ChildClassPlanHistoryRow[]>(),
+    supabase
+      .from("child_class_group_work")
+      .select("class_id,group_label,content,member_ids")
+      .in("class_id", classIds)
+      .returns<ChildClassGroupWorkHistoryRow[]>()
+  ]);
 
-  if (planError || !plans?.length) {
+  if (planError || groupWorkError) {
     if (planError) console.error("Error loading child class plan fallback for ficha", planError);
+    if (groupWorkError) console.error("Error loading child group work fallback for ficha", groupWorkError);
     return history;
   }
 
-  const itemIds = Array.from(new Set(plans.flatMap((plan) => plan.syllabus_item_ids ?? []).filter(Boolean)));
-  if (!itemIds.length) return history;
+  const itemIds = Array.from(new Set((plans ?? []).flatMap((plan) => plan.syllabus_item_ids ?? []).filter(Boolean)));
+  let items: ChildSyllabusItemLookup[] = [];
+  if (itemIds.length) {
+    const { data, error: itemError } = await supabase
+      .from("child_syllabus_items")
+      .select("id,title,grade,category,description,active")
+      .in("id", itemIds)
+      .returns<ChildSyllabusItemLookup[]>();
 
-  const { data: items, error: itemError } = await supabase
-    .from("child_syllabus_items")
-    .select("id,title,grade,category,description,active")
-    .in("id", itemIds)
-    .returns<ChildSyllabusItemLookup[]>();
-
-  if (itemError || !items?.length) {
-    if (itemError) console.error("Error loading child syllabus fallback items for ficha", itemError);
-    return history;
+    if (itemError) {
+      console.error("Error loading child syllabus fallback items for ficha", itemError);
+      return history;
+    }
+    items = data ?? [];
   }
 
   const itemsById = new Map(items.filter((item) => item.active).map((item) => [item.id, item]));
@@ -968,31 +989,63 @@ async function loadChildProgramHistoryRows(
       .map((row) => `${row.practiced_on}::${normalizeGradeAlias(row.child_syllabus_items?.grade)}::${normalize(row.child_syllabus_items?.category)}::${normalize(row.child_syllabus_items?.title)}`)
   );
   const fallbackRows: ChildSyllabusHistoryRow[] = [];
+  const addFallbackRow = (
+    practicedOn: string,
+    title: string,
+    grade: string | null,
+    category: string | null,
+    description: string | null = null
+  ) => {
+    const key = `${practicedOn}::${normalizeGradeAlias(grade)}::${normalize(category)}::${normalize(title)}`;
+    if (existing.has(key)) return;
+    existing.add(key);
+    fallbackRows.push({
+      practiced_on: practicedOn,
+      child_syllabus_items: { title, grade, category, description }
+    });
+  };
 
-  for (const plan of plans) {
+  for (const plan of plans ?? []) {
     const practicedOn = classDates.get(plan.class_id);
     if (!practicedOn) continue;
 
+    if (plan.objective) {
+      addFallbackRow(practicedOn, plan.objective, "CLASE GENERAL", "OBJETIVO");
+    }
+    for (const activity of plan.activities ?? []) {
+      addFallbackRow(practicedOn, childClassActivityLabel(activity), "CLASE GENERAL", "ACTIVIDAD");
+    }
     for (const itemId of plan.syllabus_item_ids ?? []) {
       const item = itemsById.get(itemId);
       if (!item) continue;
-
-      const key = `${practicedOn}::${normalizeGradeAlias(item.grade)}::${normalize(item.category)}::${normalize(item.title)}`;
-      if (existing.has(key)) continue;
-      existing.add(key);
-      fallbackRows.push({
-        practiced_on: practicedOn,
-        child_syllabus_items: {
-          title: item.title,
-          grade: item.grade,
-          category: item.category,
-          description: item.description
-        }
-      });
+      addFallbackRow(practicedOn, item.title, item.grade, item.category, item.description);
     }
   }
 
+  for (const work of groupWork ?? []) {
+    const practicedOn = classDates.get(work.class_id);
+    const assignedMembers = work.member_ids ?? [];
+    if (!practicedOn || (assignedMembers.length && !assignedMembers.includes(memberId))) continue;
+    addFallbackRow(practicedOn, work.content, "CLASE GENERAL", "GRUPO", work.group_label);
+  }
+
   return [...history, ...fallbackRows].sort((a, b) => b.practiced_on.localeCompare(a.practiced_on));
+}
+
+function childClassActivityLabel(value: string) {
+  const labels: Record<string, string> = {
+    calentamiento: "Calentamiento",
+    coordinacion: "Coordinacion",
+    caidas: "Caidas",
+    kihon: "Kihon",
+    goho: "Goho",
+    juho: "Juho",
+    pareja: "Pareja",
+    "juego-tecnico": "Juego tecnico",
+    howa: "Howa",
+    examen: "Preparacion grado"
+  };
+  return labels[value] ?? value;
 }
 
 function sameGrade(a: string | null | undefined, b: string | null | undefined) {
@@ -1073,6 +1126,9 @@ function childSyllabusCategoryLabel(category: string | null | undefined) {
     HOWA: "Howa",
     COMPORTAMIENTO: "Comportamiento",
     JUEGO: "Juego",
+    OBJETIVO: "Objetivo de clase",
+    ACTIVIDAD: "Actividad general",
+    GRUPO: "Trabajo por grupo",
     OTRO: "Otro"
   };
   return labels[value] ?? (category || "Otro");
