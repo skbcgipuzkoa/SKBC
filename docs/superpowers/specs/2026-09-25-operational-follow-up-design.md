@@ -44,11 +44,11 @@ Cada lunes a las 08:00, zona `Europe/Madrid`, se generara un resumen de la seman
 - notas importantes abiertas;
 - otras tareas operativas pendientes.
 
-El mismo contenido se guardara para consulta en el panel y se enviara por Telegram. Una clave por semana y canal garantizara idempotencia: reintentar el proceso no creara dos resumenes ni dos mensajes. Si Telegram falla, el resumen del panel seguira disponible y el envio podra reintentarse.
+El panel calculara y mostrara unicamente la ultima semana finalizada, sin almacenar historial. El mismo contenido se enviara por Telegram. Una clave tecnica semanal para Telegram garantizara idempotencia: reintentar el proceso no creara dos mensajes. Si Telegram falla, el panel seguira pudiendo calcular el resumen y el envio podra reintentarse.
 
 ## Arquitectura y datos
 
-Se anadiran tablas para `provisional_members`, `provisional_attendance`, `member_notes`, `weekly_summaries` y `notification_deliveries`. Las migraciones incluiran indices y restricciones de unicidad para asistencia y envios. Las politicas de acceso seguiran el patron administrativo existente.
+Se anadiran tablas para `provisional_members`, `provisional_attendance`, `member_notes` y `notification_deliveries`. Las migraciones incluiran indices y restricciones de unicidad para asistencia y envios. Las politicas de acceso seguiran el patron administrativo existente.
 
 La logica de dominio se dividira en servicios independientes:
 
@@ -57,13 +57,13 @@ La logica de dominio se dividira en servicios independientes:
 - notas de miembro;
 - agregacion y entrega semanal.
 
-Las paginas y acciones reutilizaran esos servicios. El generador de Telegram existente recibira las nuevas secciones sin crear un segundo sistema de mensajeria. El proceso semanal se expondra mediante una ruta protegida compatible con el programador de Vercel y tambien podra ejecutarse manualmente para recuperacion.
+Las paginas y acciones reutilizaran esos servicios. El generador de Telegram existente recibira las nuevas secciones sin crear un segundo sistema de mensajeria. El proceso semanal se expondra mediante una ruta protegida compatible con el programador de Vercel. Solo se conservara el registro tecnico del envio a Telegram.
 
 ## Interfaz
 
 Los formularios de asistencia de dojo y clase completa tendran una accion compacta `Anadir invitado`. La fila provisional se distinguira claramente y permitira registrar o quitar su asistencia igual que el resto, respetando los avisos de cambios sin guardar.
 
-La lista de Kenshis ofrecera una entrada visible para provisionales pendientes y su conversion. La ficha del alumno incluira el bloque de notas internas. La pagina de alertas conservara sus controles actuales y anadira filtros por tipo y prioridad. El panel incluira el ultimo resumen semanal y acceso al historial.
+La lista de Kenshis ofrecera una entrada visible para provisionales pendientes y su conversion. La ficha del alumno incluira el bloque de notas internas. La pagina de alertas conservara sus controles actuales y anadira filtros por tipo y prioridad. El panel incluira solo el ultimo resumen semanal calculado desde los datos actuales.
 
 ## Errores y consistencia
 

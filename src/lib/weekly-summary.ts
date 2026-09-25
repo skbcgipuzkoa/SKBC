@@ -36,10 +36,6 @@ export async function generateWeeklySummary(options: { sendTelegram?: boolean; f
     pendingProvisionals: pendingResult.count ?? 0,
     importantNotes: notesResult.count ?? 0
   };
-  const { data: summary, error } = await supabase.from("weekly_summaries").upsert({ period_start: period.start, period_end: period.end, payload, updated_at: new Date().toISOString() }, { onConflict: "period_start,period_end" }).select("id").single();
-  if (error) throw error;
-  await supabase.from("notification_deliveries").upsert({ delivery_key: `weekly:${period.start}`, channel: "panel", status: "sent", delivered_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "delivery_key,channel" });
-
   if (options.sendTelegram) {
     const key = `weekly:${period.start}`;
     const { data: prior } = await supabase.from("notification_deliveries").select("status").eq("delivery_key", key).eq("channel", "telegram").maybeSingle();
@@ -54,7 +50,7 @@ export async function generateWeeklySummary(options: { sendTelegram?: boolean; f
       }
     }
   }
-  return { id: summary.id, period, payload };
+  return { period, payload };
 }
 
 function formatWeeklyTelegram(period: { start: string; end: string }, value: WeeklySummaryPayload) {
