@@ -311,9 +311,10 @@ export async function sendStudentEmailNotificationAction(formData: FormData) {
   const audience = String(formData.get("audience") ?? "");
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  const allowed = ["all_active", "adults", "kids", "exam_ready", "exam_upcoming", "inactive"] as const;
+  const memberIds = [...new Set(formData.getAll("memberIds").map((value) => String(value)).filter(Boolean))];
+  const allowed = ["all_active", "adults", "kids", "exam_ready", "exam_upcoming", "inactive", "selected"] as const;
 
-  if (!allowed.includes(audience as EmailAudience) || !subject || !body) {
+  if (!allowed.includes(audience as EmailAudience) || !subject || !body || (audience === "selected" && !memberIds.length)) {
     redirect("/notificaciones?error=email&detail=Faltan%20datos%20del%20email");
   }
 
@@ -322,7 +323,8 @@ export async function sendStudentEmailNotificationAction(formData: FormData) {
     result = await sendStudentEmailNotification({
       audience: audience as EmailAudience,
       subject,
-      body
+      body,
+      memberIds
     });
   } catch (error) {
     console.error("Error sending student email notification", error);

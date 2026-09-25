@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { logoutAction, sendStudentEmailNotificationAction, sendTelegramNotificationAction, updateTelegramNotificationSettingAction, updateTelegramScheduledPauseAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { EmailRecipientPicker, type EmailRecipientOption } from "@/components/email-recipient-picker";
 
 type NotificationLog = {
   id: string;
@@ -57,7 +58,7 @@ export default async function NotificacionesPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [logsResult, settingsResult, emailLogsResult] = await Promise.all([
+  const [logsResult, settingsResult, emailLogsResult, emailMembersResult] = await Promise.all([
     supabase
       .from("telegram_notification_logs")
       .select("id,notification_type,period_start,period_end,status,error_message,sent_at,created_at")
@@ -75,6 +76,8 @@ export default async function NotificacionesPage({
       .order("created_at", { ascending: false })
       .limit(20)
       .returns<EmailNotificationLog[]>()
+    ,
+    supabase.from("members").select("id,display_name,class,family_email").eq("status", "active").not("family_email", "is", null).order("class").order("display_name").returns<Array<{ id: string; display_name: string; class: "kids" | "adults"; family_email: string }>>()
   ]);
   const data = logsResult.data;
   const error = logsResult.error;
@@ -216,17 +219,7 @@ export default async function NotificacionesPage({
             <Mail aria-hidden="true" size={22} />
           </div>
           <form className="email-notification-form" action={sendStudentEmailNotificationAction}>
-            <label>
-              Destinatarios
-              <select name="audience" defaultValue="all_active">
-                <option value="all_active">Todos los kenshis activos</option>
-                <option value="adults">Solo adultos activos</option>
-                <option value="kids">Solo ninos activos</option>
-                <option value="exam_ready">Aptos para examen</option>
-                <option value="exam_upcoming">Proximos a examen</option>
-                <option value="inactive">Inactivos</option>
-              </select>
-            </label>
+            <EmailRecipientPicker members={(emailMembersResult.data ?? []).map((member) => ({ id: member.id, name: member.display_name, group: member.class, email: member.family_email })) satisfies EmailRecipientOption[]} />
             <label>
               Asunto
               <input name="subject" required placeholder="Asunto del email" />
@@ -355,6 +348,7 @@ function emailAudienceLabel(value: string) {
     exam_ready: "Aptos examen",
     exam_upcoming: "Proximos examen",
     inactive: "Inactivos"
+    ,selected: "Seleccion individual"
   };
   return labels[value] ?? value;
 }

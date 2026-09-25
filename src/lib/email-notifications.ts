@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type EmailAudience = "all_active" | "adults" | "kids" | "exam_ready" | "exam_upcoming" | "inactive";
+export type EmailAudience = "all_active" | "adults" | "kids" | "exam_ready" | "exam_upcoming" | "inactive" | "selected";
 
 type MemberEmailRow = {
   id: string;
@@ -26,6 +26,7 @@ export async function sendStudentEmailNotification(input: {
   audience: EmailAudience;
   subject: string;
   body: string;
+  memberIds?: string[];
 }) {
   const subject = input.subject.trim();
   const body = input.body.trim();
@@ -41,7 +42,7 @@ export async function sendStudentEmailNotification(input: {
 
   if (error) throw error;
 
-  const recipients = uniqueRecipients(filterMembers(data ?? [], input.audience));
+  const recipients = uniqueRecipients(filterMembers(data ?? [], input.audience, input.memberIds));
   if (!recipients.length) {
     throw new Error("No hay destinatarios con email familiar para ese filtro.");
   }
@@ -120,8 +121,10 @@ function createTransporter() {
   });
 }
 
-function filterMembers(members: MemberEmailRow[], audience: EmailAudience) {
+function filterMembers(members: MemberEmailRow[], audience: EmailAudience, memberIds: string[] = []) {
+  const selectedIds = new Set(memberIds);
   return members.filter((member) => {
+    if (audience === "selected") return member.status === "active" && selectedIds.has(member.id);
     if (audience === "inactive") return member.status === "inactive";
     if (member.status !== "active") return false;
     if (audience === "adults") return member.class === "adults";

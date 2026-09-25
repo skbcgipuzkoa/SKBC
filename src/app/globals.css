@@ -2318,6 +2318,102 @@ tbody tr:hover {
   padding: 9px 14px;
 }
 
+.email-recipient-field {
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+
+.email-recipient-picker {
+  background: #f7fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.email-recipient-picker-head,
+.email-recipient-picker-head span,
+.email-recipient-search {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.email-recipient-picker-head {
+  justify-content: space-between;
+}
+
+.email-recipient-picker-head span {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.email-recipient-picker-head button {
+  background: transparent;
+  border: 0;
+  color: var(--brand-strong);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.email-recipient-search {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.email-recipient-search input {
+  border: 0;
+  min-width: 0;
+  outline: 0;
+}
+
+.email-recipient-options {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.email-notification-form .email-recipient-option {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  padding: 10px;
+}
+
+.email-notification-form .email-recipient-option:last-child {
+  border-bottom: 0;
+}
+
+.email-notification-form .email-recipient-option input {
+  min-height: 18px;
+  width: 18px;
+}
+
+.email-recipient-option span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.email-recipient-option strong,
+.email-recipient-option small {
+  overflow-wrap: anywhere;
+}
+
+.email-recipient-option strong {
+  color: var(--ink);
+}
+
 .segmented-tabs {
   background: var(--panel);
   border: 1px solid var(--line);
