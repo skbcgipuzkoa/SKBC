@@ -1342,9 +1342,9 @@ export async function addManualClassTechniqueAction(formData: FormData) {
       await Promise.all([
         supabase
           .from("classes")
-          .select("id,class_date,class_group,class_type,closed")
+          .select("id,class_date,class_group,class_type,closed,status")
           .eq("id", classId)
-          .single<{ id: string; class_date: string; class_group: "kids" | "adults"; class_type: string | null; closed: boolean }>(),
+          .single<{ id: string; class_date: string; class_group: "kids" | "adults"; class_type: string | null; closed: boolean; status: string }>(),
         supabase
           .from("techniques")
           .select("id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,score")
@@ -1379,7 +1379,7 @@ export async function addManualClassTechniqueAction(formData: FormData) {
     if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
     if (techniqueError || !technique) throw techniqueError ?? new Error("Tecnica no encontrada.");
     if (groupsError) throw groupsError;
-    if (clase.closed || clase.class_group !== "adults") throw new Error("Solo se pueden anadir tecnicas manuales a clases adultas abiertas.");
+    if ((clase.closed && clase.status !== "correction") || clase.class_group !== "adults") throw new Error("Solo se pueden anadir tecnicas manuales a clases adultas abiertas o en correccion.");
 
     const normalizedSelected = new Set(selectedGrades.map(normalizeActionGrade));
     const targetGroups = (groups ?? []).filter((group) => !normalizedSelected.size || normalizedSelected.has(normalizeActionGrade(group.grade)));
@@ -1449,11 +1449,11 @@ export async function removeManualClassTechniqueAction(formData: FormData) {
   try {
     const { data: clase, error: classError } = await supabase
       .from("classes")
-      .select("id,closed")
+      .select("id,closed,status")
       .eq("id", classId)
-      .single<{ id: string; closed: boolean }>();
+      .single<{ id: string; closed: boolean; status: string }>();
     if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
-    if (clase.closed) throw new Error("No se pueden quitar tecnicas manuales de una clase cerrada.");
+    if (clase.closed && clase.status !== "correction") throw new Error("No se pueden quitar tecnicas manuales de una clase cerrada.");
 
     const { error } = await supabase
       .from("technical_plans")
@@ -2529,6 +2529,105 @@ export async function closeAdultClassAction(formData: FormData) {
   }
 
   redirect(returnTo || `/clases/${legacyId}?saved=close`);
+}
+
+export async function reopenClassForCorrectionAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  if (!classId || !legacyId) redirect("/clases");
+
+  const supabase = createAdminClient();
+  const { data: clase, error: classError } = await supabase
+    .from("classes")
+    .select("class_date")
+    .eq("id", classId)
+    .single<{ class_date: string }>();
+
+  if (classError || !clase) redirect(`/clases/${legacyId}?error=correction`);
+
+  const { data: reopenedClasses, error } = await supabase
+    .from("classes")
+    .update({ status: "correction", updated_at: new Date().toISOString() })
+    .eq("class_date", clase.class_date)
+    .eq("closed", true)
+    .in("class_group", ["kids", "adults"])
+    .select("legacy_id,class_group")
+    .returns<Array<{ legacy_id: string | null; class_group: "kids" | "adults" }>>();
+
+  if (error) {
+    console.error("Error reopening class for correction", error);
+    redirect(`/clases/${legacyId}?error=correction`);
+  }
+
+  const targetLegacyId = reopenedClasses?.find((item) => item.class_group === "adults")?.legacy_id ?? legacyId;
+  revalidatePath(`/clases/${targetLegacyId}`);
+  redirect(`/clases/${targetLegacyId}?saved=correction-opened`);
+}
+
+export async function finishClassCorrectionAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const classId = String(formData.get("classId") ?? "");
+  const legacyId = String(formData.get("legacyId") ?? "");
+  if (!classId || !legacyId) redirect("/clases");
+
+  const supabase = createAdminClient();
+  const { data: clase, error: classError } = await supabase
+    .from("classes")
+    .select("class_date")
+    .eq("id", classId)
+    .single<{ class_date: string }>();
+
+  if (classError || !clase) redirect(`/clases/${legacyId}?error=correction-close`);
+
+  const { data: correctionClasses, error: correctionError } = await supabase
+    .from("classes")
+    .select("id,class_group")
+    .eq("class_date", clase.class_date)
+    .eq("status", "correction")
+    .eq("closed", true)
+    .in("class_group", ["kids", "adults"])
+    .returns<Array<{ id: string; class_group: "kids" | "adults" }>>();
+
+  if (correctionError || !correctionClasses?.length) {
+    redirect(`/clases/${legacyId}?error=correction-close`);
+  }
+  const correctionClassIds = correctionClasses.map((dayClass) => dayClass.id);
+
+  try {
+    for (const dayClass of correctionClasses) {
+      if (dayClass.class_group === "adults") {
+        // Keeping closed=true makes this a replacement rebuild and avoids
+        // incrementing global technique counters a second time.
+        await closeAdultClass(dayClass.id);
+      } else {
+        await syncChildSyllabusHistoryForClass(supabase, dayClass.id);
+      }
+      await recalculateClassExamStatus(dayClass.id);
+    }
+
+    if (correctionClasses.some((dayClass) => dayClass.class_group === "kids")) {
+      await recalculateChildRankings();
+    }
+
+    const { error: finishError } = await supabase
+      .from("classes")
+      .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+      .in("id", correctionClassIds);
+    if (finishError) throw finishError;
+  } catch (error) {
+    console.error("Error finishing class correction", error);
+    await supabase
+      .from("classes")
+      .update({ closed: true, status: "correction", updated_at: new Date().toISOString() })
+      .in("id", correctionClassIds);
+    redirect(`/clases/${legacyId}?error=correction-close`);
+  }
+
+  revalidatePath(`/clases/${legacyId}`);
+  redirect(`/clases/${legacyId}?saved=correction-closed`);
 }
 
 export async function closeKidsClassAction(formData: FormData) {

@@ -12,7 +12,7 @@ type Clase = {
   class_group: "kids" | "adults";
   class_type: string | null;
   responsible: string | null;
-  status: "pending" | "completed" | "cancelled";
+  status: "pending" | "completed" | "cancelled" | "correction";
   plan_generated: boolean;
   closed: boolean;
 };
@@ -20,7 +20,7 @@ type Clase = {
 type ClaseDisplay = Clase & {
   display_group: "kids" | "adults" | "combined";
   display_name: string;
-  display_status: "pending" | "completed" | "cancelled";
+  display_status: "pending" | "completed" | "cancelled" | "correction";
   display_closed: boolean;
   companion?: Clase;
 };
@@ -102,7 +102,7 @@ export default async function ClasesPage({
                 <strong>{clase.display_name}</strong>
                 <small>{clase.class_date} · {displayGroupLabel(clase.display_group)} · {clase.class_type ?? "-"}</small>
               </span>
-              <b className={clase.display_closed ? "mobile-state done" : "mobile-state"}>{clase.display_closed ? "Cerrada" : "Abierta"}</b>
+              <b className={clase.display_closed ? "mobile-state done" : "mobile-state"}>{clase.display_status === "correction" ? "En correccion" : clase.display_closed ? "Cerrada" : "Abierta"}</b>
             </a>
           )) : <p className="muted">Pendiente de normalizar desde legacy_rows.</p>}
         </section>
@@ -132,7 +132,7 @@ export default async function ClasesPage({
                   </td>
                   <td data-label="Grupo">{displayGroupLabel(clase.display_group)}</td>
                   <td data-label="Tipo">{clase.class_type ?? "-"}</td>
-                  <td data-label="Estado">{clase.display_status}</td>
+                  <td data-label="Estado">{classStatusLabel(clase.display_status)}</td>
                   <td data-label="Plan">{clase.plan_generated ? "Generado" : "Pendiente"}</td>
                 </tr>
               )) : (
@@ -190,8 +190,8 @@ function mergeCombinedClasses(classes: Clase[]) {
         ...adults,
         display_group: "combined",
         display_name: combinedClassName(adults, kids),
-        display_status: adults.status === "cancelled" || kids.status === "cancelled" ? "cancelled" : adults.closed && kids.closed ? "completed" : "pending",
-        display_closed: adults.closed && kids.closed,
+        display_status: adults.status === "correction" || kids.status === "correction" ? "correction" : adults.status === "cancelled" || kids.status === "cancelled" ? "cancelled" : adults.closed && kids.closed ? "completed" : "pending",
+        display_closed: adults.status !== "correction" && kids.status !== "correction" && adults.closed && kids.closed,
         companion: kids
       });
       continue;
@@ -203,7 +203,7 @@ function mergeCombinedClasses(classes: Clase[]) {
         display_group: clase.class_group,
         display_name: clase.name,
         display_status: clase.status,
-        display_closed: clase.closed
+        display_closed: clase.status !== "correction" && clase.closed
       });
     });
   }
@@ -222,6 +222,13 @@ function combinedClassName(adults: Clase, kids: Clase) {
 function displayGroupLabel(group: ClaseDisplay["display_group"]) {
   if (group === "combined") return "Adultos + ninos";
   return group === "kids" ? "Ninos" : "Adultos";
+}
+
+function classStatusLabel(status: ClaseDisplay["display_status"]) {
+  if (status === "correction") return "En correccion";
+  if (status === "completed") return "Completada";
+  if (status === "cancelled") return "Cancelada";
+  return "Pendiente";
 }
 
 function normalizeMonth(value: string | undefined) {
