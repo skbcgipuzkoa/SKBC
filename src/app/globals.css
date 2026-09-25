@@ -2414,6 +2414,59 @@ tbody tr:hover {
   color: var(--ink);
 }
 
+.email-log-detail {
+  min-width: 110px;
+}
+
+.email-log-detail summary {
+  color: var(--brand-strong);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.email-log-detail > div {
+  background: #f7fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  min-width: min(520px, 75vw);
+  padding: 12px;
+}
+
+.email-log-detail h3,
+.email-log-detail h4,
+.email-log-detail p,
+.email-log-detail ul {
+  margin: 0;
+}
+
+.email-log-message {
+  white-space: pre-wrap;
+}
+
+.email-log-detail ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+}
+
+.email-log-detail li {
+  display: grid;
+  gap: 2px;
+}
+
+.email-log-detail li span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.email-log-failures li {
+  color: #9f1c1c;
+}
+
 .segmented-tabs {
   background: var(--panel);
   border: 1px solid var(--line);

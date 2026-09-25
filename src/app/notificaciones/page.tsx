@@ -35,6 +35,9 @@ type EmailNotificationLog = {
   failed_count: number;
   status: "pending" | "sent" | "partial" | "failed";
   error_message: string | null;
+  body: string;
+  recipients: Array<{ name?: string; email?: string; legacy_id?: string | null }> | null;
+  failures: Array<{ name?: string; email?: string; error?: string }> | null;
   sent_at: string | null;
   created_at: string;
 };
@@ -75,7 +78,7 @@ export default async function NotificacionesPage({
     ,
     supabase
       .from("email_notification_logs")
-      .select("id,audience,subject,recipient_count,sent_count,failed_count,status,error_message,sent_at,created_at")
+      .select("id,audience,subject,body,recipients,failures,recipient_count,sent_count,failed_count,status,error_message,sent_at,created_at")
       .or(`created_at.gte.${emailCutoff},status.in.(failed,partial)`)
       .order("created_at", { ascending: false })
       .limit(20)
@@ -266,12 +269,23 @@ export default async function NotificacionesPage({
                   <tr><td colSpan={6} className="muted">Falta aplicar la migracion de emails.</td></tr>
                 ) : emailLogsResult.data?.length ? emailLogsResult.data.map((log) => (
                   <tr key={log.id}>
-                    <td data-label="Destinatarios">{emailAudienceLabel(log.audience)}</td>
+                    <td data-label="Destinatarios"><strong>{recipientNames(log)}</strong></td>
                     <td data-label="Asunto">{log.subject}</td>
                     <td data-label="Estado"><span className={`pill status-${log.status}`}>{statusLabel(log.status)}</span></td>
                     <td data-label="Enviados">{log.sent_count}/{log.recipient_count}{log.failed_count ? ` (${log.failed_count} fallidos)` : ""}</td>
                     <td data-label="Fecha">{formatDateTime(log.sent_at ?? log.created_at)}</td>
-                    <td data-label="Detalle">{log.error_message ?? "-"}</td>
+                    <td data-label="Detalle">
+                      <details className="email-log-detail">
+                        <summary>Ver email</summary>
+                        <div>
+                          <h3>{log.subject}</h3>
+                          <p className="email-log-message">{log.body}</p>
+                          <h4>Destinatarios reales</h4>
+                          <ul>{(log.recipients ?? []).map((recipient, index) => <li key={`${recipient.email ?? recipient.name}-${index}`}><strong>{recipient.name ?? "Sin nombre"}</strong>{recipient.email ? <span>{recipient.email}</span> : null}</li>)}</ul>
+                          {log.failures?.length ? <><h4>Errores</h4><ul className="email-log-failures">{log.failures.map((failure, index) => <li key={`${failure.email ?? failure.name}-${index}`}><strong>{failure.name ?? failure.email ?? "Destinatario"}</strong><span>{failure.error ?? "Error desconocido"}</span></li>)}</ul></> : <p className="save-ok">Todos los destinatarios indicados se procesaron correctamente.</p>}
+                        </div>
+                      </details>
+                    </td>
                   </tr>
                 )) : (
                   <tr><td colSpan={6} className="muted">Aun no hay emails registrados.</td></tr>
@@ -355,6 +369,13 @@ function emailAudienceLabel(value: string) {
     ,selected: "Seleccion individual"
   };
   return labels[value] ?? value;
+}
+
+function recipientNames(log: EmailNotificationLog) {
+  const names = [...new Set((log.recipients ?? []).map((recipient) => recipient.name?.trim()).filter(Boolean))] as string[];
+  if (!names.length) return emailAudienceLabel(log.audience);
+  if (names.length <= 3) return names.join(", ");
+  return `${names.slice(0, 3).join(", ")} + ${names.length - 3} mas`;
 }
 
 function formatPeriod(start: string | null, end: string | null) {
