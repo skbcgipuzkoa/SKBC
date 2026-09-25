@@ -22,6 +22,8 @@ type Kenshi = {
   legacy_ficha_url: string | null;
 };
 
+type KenshiFilter = "active" | "kids" | "adults" | "inactive";
+
 export default async function KenshisPage({
   searchParams
 }: {
@@ -32,21 +34,29 @@ export default async function KenshisPage({
   }
 
   const params = await searchParams;
-  const selectedStatus = params.status === "inactive" ? "inactive" : "active";
+  const selectedFilter: KenshiFilter = params.status === "inactive"
+    ? "inactive"
+    : params.class === "kids" || params.class === "adults"
+      ? params.class
+      : "active";
+  const selectedStatus = selectedFilter === "inactive" ? "inactive" : "active";
+  const searchValue = (params.q ?? "").trim();
   const listParams = new URLSearchParams();
-  if ((params.q ?? "").trim()) listParams.set("q", (params.q ?? "").trim());
-  if (params.class === "kids" || params.class === "adults") listParams.set("class", params.class);
+  if (searchValue) listParams.set("q", searchValue);
+  if (selectedFilter === "kids" || selectedFilter === "adults") listParams.set("class", selectedFilter);
   listParams.set("status", selectedStatus);
   const currentListPath = `/kenshis?${listParams.toString()}`;
   const supabase = createAdminClient();
   const [
     { count: activeCount },
     { count: activeKidsCount },
-    { count: activeAdultsCount }
+    { count: activeAdultsCount },
+    { count: inactiveCount }
   ] = await Promise.all([
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "kids"),
-    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults")
+    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults"),
+    supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "inactive")
   ]);
 
   let query = supabase
@@ -58,8 +68,8 @@ export default async function KenshisPage({
     .order("class", { ascending: true })
     .order("first_name", { ascending: true });
 
-  if (params.class === "kids" || params.class === "adults") {
-    query = query.eq("class", params.class);
+  if (selectedFilter === "kids" || selectedFilter === "adults") {
+    query = query.eq("class", selectedFilter);
   }
 
   query = query.eq("status", selectedStatus);
@@ -67,7 +77,7 @@ export default async function KenshisPage({
   const { data, error } = await query.returns<Kenshi[]>();
   if (error) throw error;
 
-  const search = (params.q ?? "").trim().toLowerCase();
+  const search = searchValue.toLowerCase();
   const kenshis = search
     ? data.filter((kenshi) =>
         [
@@ -107,49 +117,36 @@ export default async function KenshisPage({
         </div>
 
         <section className="grid stats compact" aria-label="Resumen">
-          <article className="card">
+          <a className={`card kenshi-filter-card${selectedFilter === "active" ? " selected" : ""}`} href={kenshiFilterHref("active", searchValue)} aria-current={selectedFilter === "active" ? "page" : undefined}>
             <ShieldCheck aria-hidden="true" size={19} />
             <h2>Activos</h2>
             <div className="metric">{activeCount ?? 0}</div>
-          </article>
-          <article className="card">
+          </a>
+          <a className={`card kenshi-filter-card${selectedFilter === "kids" ? " selected" : ""}`} href={kenshiFilterHref("kids", searchValue)} aria-current={selectedFilter === "kids" ? "page" : undefined}>
             <UserRound aria-hidden="true" size={19} />
             <h2>Ninos</h2>
             <div className="metric">{activeKidsCount ?? 0}</div>
-          </article>
-          <article className="card">
+          </a>
+          <a className={`card kenshi-filter-card${selectedFilter === "adults" ? " selected" : ""}`} href={kenshiFilterHref("adults", searchValue)} aria-current={selectedFilter === "adults" ? "page" : undefined}>
             <UserRound aria-hidden="true" size={19} />
             <h2>Adultos</h2>
             <div className="metric">{activeAdultsCount ?? 0}</div>
-          </article>
-          <article className="card">
+          </a>
+          <a className={`card kenshi-filter-card${selectedFilter === "inactive" ? " selected" : ""}`} href={kenshiFilterHref("inactive", searchValue)} aria-current={selectedFilter === "inactive" ? "page" : undefined}>
             <Search aria-hidden="true" size={19} />
-            <h2>Mostrando</h2>
-            <div className="metric">{kenshis.length}</div>
-          </article>
+            <h2>Inactivos</h2>
+            <div className="metric">{inactiveCount ?? 0}</div>
+          </a>
         </section>
 
-        <form className="filters">
+        <form className="filters kenshi-search-form">
           <label>
             Buscar
             <input name="q" defaultValue={params.q ?? ""} placeholder="Nombre, ID, email..." />
           </label>
-          <label>
-            Clase
-            <select name="class" defaultValue={params.class ?? ""}>
-              <option value="">Todas</option>
-              <option value="kids">Ninos</option>
-              <option value="adults">Adultos</option>
-            </select>
-          </label>
-          <label>
-            Estado
-            <select name="status" defaultValue={selectedStatus}>
-              <option value="active">Activo</option>
-              <option value="inactive">Inactivo</option>
-            </select>
-          </label>
-          <button type="submit">Filtrar</button>
+          {selectedFilter === "kids" || selectedFilter === "adults" ? <input name="class" type="hidden" value={selectedFilter} /> : null}
+          <input name="status" type="hidden" value={selectedStatus} />
+          <span className="kenshi-result-count" aria-live="polite">{kenshis.length} {kenshis.length === 1 ? "resultado" : "resultados"}</span>
         </form>
 
         <section className="table-wrap">
@@ -202,6 +199,14 @@ export default async function KenshisPage({
       </main>
     </div>
   );
+}
+
+function kenshiFilterHref(filter: KenshiFilter, search: string) {
+  const params = new URLSearchParams();
+  if (search) params.set("q", search);
+  params.set("status", filter === "inactive" ? "inactive" : "active");
+  if (filter === "kids" || filter === "adults") params.set("class", filter);
+  return `/kenshis?${params.toString()}`;
 }
 
 function ContactPills({ email, phone }: { email: string | null; phone: string | null }) {
