@@ -2003,7 +2003,7 @@ function levelTone(level: string | null | undefined): FichaTone {
 
 function constancyTone(status: string | null | undefined): FichaTone {
   const value = normalize(status);
-  if (value.includes("TOP") || value.includes("CONSTANTE") || value.includes("MUY")) return "green";
+  if (value.includes("EXCELENTE") || value.includes("SOBRESALIENTE") || value.includes("TOP") || value.includes("CONSTANTE") || value.includes("MUY")) return "green";
   if (value.includes("BIEN") || value.includes("BUEN")) return "blue";
   if (value.includes("REGULAR") || value.includes("PROGRESO") || value.includes("MEJOR")) return "yellow";
   if (!value || value === "-") return "neutral";
