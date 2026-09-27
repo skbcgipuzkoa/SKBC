@@ -607,10 +607,17 @@ export async function updateKenshiAction(formData: FormData) {
   const joinedOn = parseDateInput(String(formData.get("joinedOn") ?? ""));
   const birthDate = parseDateInput(String(formData.get("birthDate") ?? ""));
   const freeTrial = resolveFreeTrialFields(formData, joinedOn);
+  const ikaInput = String(formData.get("ikaId") ?? "").trim();
+  const ikaId = normalizeIkaId(ikaInput);
+
+  if (ikaInput && !ikaId) {
+    redirect(`/kenshis/${legacyId}?error=ika-format&ika=${encodeURIComponent(ikaInput)}`);
+  }
+
   const payload = {
     first_name: String(formData.get("firstName") ?? "").trim(),
     last_name: String(formData.get("lastName") ?? "").trim() || null,
-    ika_id: String(formData.get("ikaId") ?? "").trim() || null,
+    ika_id: ikaId,
     class: normalizeClass(String(formData.get("class") ?? "")),
     status: normalizeStatus(String(formData.get("status") ?? "")),
     grade: String(formData.get("grade") ?? "").trim() || null,
@@ -635,6 +642,24 @@ export async function updateKenshiAction(formData: FormData) {
   }
 
   const supabase = createAdminClient();
+  if (ikaId) {
+    const { data: duplicate, error: duplicateError } = await supabase
+      .from("members")
+      .select("legacy_id")
+      .eq("ika_id", ikaId)
+      .neq("id", memberId)
+      .maybeSingle<{ legacy_id: string | null }>();
+
+    if (duplicateError) {
+      console.error("Error checking duplicate IKA ID", duplicateError);
+      redirect(`/kenshis/${legacyId}?error=kenshi`);
+    }
+    if (duplicate) {
+      const conflict = duplicate.legacy_id ? `&conflict=${encodeURIComponent(duplicate.legacy_id)}` : "";
+      redirect(`/kenshis/${legacyId}?error=ika-duplicate&ika=${encodeURIComponent(ikaId)}${conflict}`);
+    }
+  }
+
   let photoUrl: string | null = null;
   try {
     photoUrl = await uploadMemberPhoto(getPhotoFile(formData), legacyId);
@@ -646,6 +671,10 @@ export async function updateKenshiAction(formData: FormData) {
   const { error } = await supabase.from("members").update(updatePayload).eq("id", memberId);
 
   if (error) {
+    console.error("Error updating kenshi", error);
+    if (ikaId && error.code === "23505") {
+      redirect(`/kenshis/${legacyId}?error=ika-duplicate&ika=${encodeURIComponent(ikaId)}`);
+    }
     redirect(`/kenshis/${legacyId}?error=kenshi`);
   }
 
@@ -4688,6 +4717,13 @@ function normalizeCompetitionMedal(value: string) {
 
 function normalizeStatus(value: string) {
   return value === "active" || value === "inactive" ? value : null;
+}
+
+function normalizeIkaId(value: string) {
+  const compact = value.trim().toUpperCase().replace(/\s+/g, "");
+  if (!compact) return null;
+  const match = compact.match(/^(?:IKA-?)?(\d{1,6})$/);
+  return match ? `IKA-${match[1].padStart(6, "0")}` : null;
 }
 
 function normalizeBeltStatus(value: string) {

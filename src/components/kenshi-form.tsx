@@ -7,7 +7,7 @@ type Props = {
   action: (formData: FormData) => void | Promise<void>;
   submitLabel: string;
   hiddenFields?: Record<string, string>;
-  error?: boolean;
+  error?: boolean | string;
   saved?: boolean;
   initial?: {
     firstName?: string;
@@ -43,7 +43,7 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
       <div className="form-grid">
         <label>Nombre<input name="firstName" defaultValue={initial?.firstName ?? ""} required /></label>
         <label>Apellidos<input name="lastName" defaultValue={initial?.lastName ?? ""} /></label>
-        <label>ID IKA<input name="ikaId" defaultValue={initial?.ikaId ?? ""} placeholder="Opcional" /></label>
+        <label>ID IKA<input name="ikaId" defaultValue={initial?.ikaId ?? ""} placeholder="Ej. IKA-000193 o 193" /></label>
         <label>
           Grado
           <select name="grade" defaultValue={gradeOptions.includes(initial?.grade ?? "") ? initial?.grade ?? "" : ""}>
@@ -85,7 +85,7 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
       <div className="form-actions">
         <button type="submit">{submitLabel}</button>
         {saved ? <span className="save-ok">Guardado</span> : null}
-        {error ? <span className="form-error">No se pudo guardar</span> : null}
+        {error ? <span className="form-error">{typeof error === "string" ? error : "No se pudo guardar"}</span> : null}
       </div>
     </form>
   );

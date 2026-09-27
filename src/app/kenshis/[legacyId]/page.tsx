@@ -173,7 +173,7 @@ export default async function KenshiDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; returnTo?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; returnTo?: string; ika?: string; conflict?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -339,11 +339,11 @@ export default async function KenshiDetailPage({
               submitLabel="Guardar cambios"
               hiddenFields={{ memberId: member.id, legacyId: member.legacy_id ?? "" }}
               saved={notices.saved === "kenshi"}
-              error={notices.error === "kenshi"}
+              error={kenshiFormError(notices)}
               initial={{
                 firstName: member.first_name,
                 lastName: member.last_name,
-                ikaId: member.ika_id,
+                ikaId: notices.error?.startsWith("ika-") ? notices.ika ?? member.ika_id : member.ika_id,
                 grade: member.grade,
                 joinedOn: member.joined_on,
                 birthDate: member.birth_date,
@@ -819,6 +819,16 @@ function hasTechnicalAreaForGrade(links: TechnicalAreaLink[], grade: string | nu
 
 function normalizeText(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function kenshiFormError(notices: { error?: string; conflict?: string }) {
+  if (notices.error === "ika-format") return "El ID IKA debe tener el formato IKA-000000 o escribirse solo con numeros.";
+  if (notices.error === "ika-duplicate") {
+    return notices.conflict
+      ? `Ese ID IKA ya esta asignado al kenshi con ID SKBC ${notices.conflict}.`
+      : "Ese ID IKA ya esta asignado a otro kenshi.";
+  }
+  return notices.error === "kenshi" ? true : false;
 }
 
 function sanitizeKenshiReturnTo(value: string | null | undefined) {
