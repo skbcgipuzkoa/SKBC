@@ -366,8 +366,8 @@ export default async function PublicFichaPage({
     ]);
 
     const childProgramHistoryRows = await loadChildProgramHistoryRows(supabase, member.id, attendance ?? [], childSyllabusHistory ?? []);
-    const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures);
-    const automaticNotices = buildAutomaticChildNotices(visibleChildRanking);
+    const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures, member.joined_on);
+    const automaticNotices = buildAutomaticChildNotices(visibleChildRanking, member.joined_on);
     const familyNotices = filterChildFamilyNotices(childNotices ?? []);
     return (
       <>
@@ -455,7 +455,7 @@ export default async function PublicFichaPage({
 
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
   const fullTechnicalHistory = buildFullTechnicalHistory(technicalHistory ?? []);
-  const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures);
+  const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures, member.joined_on);
   const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
   return (
@@ -571,13 +571,24 @@ function AdultFicha({
           <StatusBlock title="Estado" value={activity.visualStatus} tone={activityTone(activity.visualStatus)} />
           <StatusBlock
             title="Esta semana"
-            value={activity.currentWeekOpen ? (activity.activeThisWeek ? "SI" : "NO") : activity.weekClosedLabel}
-            tone={activity.currentWeekOpen ? (activity.activeThisWeek ? "green" : "red") : "neutral"}
+            value={activity.onboardingNotice ? "EN ADAPTACION" : activity.currentWeekOpen ? (activity.activeThisWeek ? "SI" : "NO") : activity.weekClosedLabel}
+            tone={activity.onboardingNotice ? "blue" : activity.currentWeekOpen ? (activity.activeThisWeek ? "green" : "red") : "neutral"}
           />
           <StatusBlock title="Implicación" value={activity.involvement} tone={involvementTone(activity.involvement)} />
         </div>
         {ranking ? <p className="ficha-ranking">{ranking.message} · Score {ranking.score}</p> : null}
       </section>
+
+      {activity.onboardingNotice ? (
+        <section className="ficha-section">
+          <h2>Avisos importantes</h2>
+          <article className="ficha-notice" style={{ borderLeftColor: "#93c5fd" }}>
+            <strong>{activity.onboardingNotice.title}</strong>
+            <p>{activity.onboardingNotice.body}</p>
+            <span>{formatDate(member.joined_on)}</span>
+          </article>
+        </section>
+      ) : null}
 
       {showBusen ? (
         <section className="ficha-section">
@@ -1522,7 +1533,7 @@ function Footer() {
   return <footer className="ficha-footer">Datos del sistema nuevo SKBC. Ficha privada de consulta personal actualizada automaticamente en tiempo real.</footer>;
 }
 
-function buildVisibleChildRanking(ranking: ChildRanking | null, attendance: Attendance[], closures: CalendarClosure[]): ChildRanking | null {
+function buildVisibleChildRanking(ranking: ChildRanking | null, attendance: Attendance[], closures: CalendarClosure[], joinedOn: string | null): ChildRanking | null {
   const today = startOfDay(new Date());
   const dates = attendance
     .map((row) => parseDate(row.attended_on))
@@ -1532,6 +1543,7 @@ function buildVisibleChildRanking(ranking: ChildRanking | null, attendance: Atte
   const attendance30 = countSinceEffective(dates, 30, today, closures);
   const attendance90 = countSinceEffective(dates, 90, today, closures);
   const daysWithoutAttendance = last ? trainingDaysBetween(formatDateObject(last), formatDateObject(today), closures) : null;
+  const onboarding = onboardingMessage(joinedOn, today);
   return {
     attendance_30d: attendance30,
     attendance_90d: attendance90,
@@ -1540,8 +1552,8 @@ function buildVisibleChildRanking(ranking: ChildRanking | null, attendance: Atte
     score: ranking?.score ?? attendance30 + attendance90,
     position: ranking?.position ?? null,
     level: ranking?.level ?? null,
-    constancy_status: ranking?.constancy_status ?? null,
-    motivational_message: ranking?.motivational_message ?? null
+    constancy_status: onboarding?.shortLabel ?? ranking?.constancy_status ?? null,
+    motivational_message: onboarding?.childMessage ?? ranking?.motivational_message ?? null
   };
 }
 
@@ -1555,7 +1567,7 @@ function filterChildFamilyNotices(notices: ChildNotice[]) {
   });
 }
 
-function buildAdultActivity(attendance: Attendance[], courses: Course[], closures: CalendarClosure[]) {
+function buildAdultActivity(attendance: Attendance[], courses: Course[], closures: CalendarClosure[], joinedOn: string | null) {
   const today = startOfDay(new Date());
   const dates = attendance
     .map((row) => parseDate(row.attended_on))
@@ -1573,9 +1585,29 @@ function buildAdultActivity(attendance: Attendance[], courses: Course[], closure
     const date = parseDate(course.course_date);
     return date && date >= effectiveDaysAgo(365, today, closures);
   }).length;
-  const visualStatus = calculateVisualStatus(weeksSinceLast, attendance1m, activeThisWeek);
-  const involvement = calculateInvolvement(attendance1m, attendance6m, courses12m, activeThisWeek);
-  return { lastAttendance: last ? formatDateObject(last) : null, weeksSinceLast, attendance12m, attendance6m, attendance1m, activeThisWeek, currentWeekOpen, weekClosedLabel, courses12m, visualStatus, involvement };
+  const onboarding = onboardingMessage(joinedOn, today);
+  const visualStatus = onboarding ? "RECIEN INCORPORADO" : calculateVisualStatus(weeksSinceLast, attendance1m, activeThisWeek);
+  const involvement = onboarding ? "EN ADAPTACION" : calculateInvolvement(attendance1m, attendance6m, courses12m, activeThisWeek);
+  const onboardingNotice = onboarding ? { title: onboarding.noticeTitle, body: onboarding.adultMessage } : null;
+  return { lastAttendance: last ? formatDateObject(last) : null, weeksSinceLast, attendance12m, attendance6m, attendance1m, activeThisWeek, currentWeekOpen, weekClosedLabel, courses12m, visualStatus, involvement, onboardingNotice };
+}
+
+function onboardingMessage(joinedOn: string | null | undefined, today = new Date()) {
+  const joined = parseDate(joinedOn ?? null);
+  if (!joined) return null;
+  const membershipDays = Math.max(0, Math.floor((startOfDay(today).getTime() - startOfDay(joined).getTime()) / 86400000));
+  if (membershipDays >= 30) return null;
+  const firstDays = membershipDays < 14;
+  return {
+    shortLabel: firstDays ? "Primeros pasos" : "En adaptacion",
+    noticeTitle: firstDays ? "Primeros dias en el club" : "Periodo de adaptacion",
+    childMessage: firstDays
+      ? "Acaba de incorporarse. Todavia es pronto para valorar su constancia; esta dando sus primeros pasos."
+      : "Lleva poco tiempo en el club. Su constancia se valorara cuando haya acumulado mas semanas de entrenamiento.",
+    adultMessage: firstDays
+      ? "Acaba de incorporarse. Todavia es pronto para valorar su actividad e implicacion; ahora esta conociendo la dinamica de las clases."
+      : "Lleva poco tiempo en el club. Su actividad e implicacion se valoraran cuando haya acumulado mas semanas de entrenamiento."
+  };
 }
 
 function buildTechnicalProgress(targetGrade: string, techniques: Technique[], history: TechnicalHistory[]) {
@@ -1733,14 +1765,21 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
       const attendanceVolume = Math.min(a90, 12);
       const bonusScore = ((fixedBonusPoints.get(member.id) ?? 0) * 8) + ((oneTimeBonusPoints.get(member.id) ?? 0) * 4);
       const activityScore = constancyScore + attendanceVolume + (coursePoints.get(member.id) ?? 0) + bonusScore;
-      const score = Math.max(0, activityScore - adultInactivityPenalty(daysWithoutAttendance));
+      const score = Math.max(0, activityScore - (onboardingMessage(member.joined_on) ? 0 : adultInactivityPenalty(daysWithoutAttendance)));
       return { ...member, score, constancy90: c90, attendance30: a30 };
     })
     .sort((a, b) => b.score - a.score || b.constancy90 - a.constancy90 || b.attendance30 - a.attendance30 || a.display_name.localeCompare(b.display_name));
   const index = ranked.findIndex((row) => row.id === memberId);
   if (index === -1) return null;
   const row = ranked[index];
-  return { position: index + 1, score: row.score, message: rankingMessage(row.display_name, index + 1) };
+  const onboarding = onboardingMessage(row.joined_on);
+  return {
+    position: index + 1,
+    score: row.score,
+    message: onboarding
+      ? `Ranking en formacion: ${row.display_name.split(" ")[0] || row.display_name} acaba de incorporarse y todavia es pronto para valorar su posicion.`
+      : rankingMessage(row.display_name, index + 1)
+  };
 }
 
 function calculateVisualStatus(weeksSinceLast: number | null, attendance1m: number, activeThisWeek: boolean) {
@@ -1761,6 +1800,7 @@ function calculateInvolvement(attendance1m: number, attendance6m: number, course
 }
 
 function activityTone(status: string) {
+  if (status === "RECIEN INCORPORADO") return "blue";
   if (status === "A TOPE" || status === "MUY ACTIVO") return "green";
   if (status === "ACTIVO") return "blue";
   if (status === "POCO ACTIVO") return "yellow";
@@ -1768,6 +1808,7 @@ function activityTone(status: string) {
 }
 
 function involvementTone(status: string) {
+  if (status === "EN ADAPTACION") return "blue";
   if (status === "MUY IMPLICADO" || status === "IMPLICADO") return "green";
   if (status === "IMPLICACION MEDIA") return "yellow";
   if (status === "POCA IMPLICACION") return "yellow";
@@ -2003,6 +2044,7 @@ function levelTone(level: string | null | undefined): FichaTone {
 
 function constancyTone(status: string | null | undefined): FichaTone {
   const value = normalize(status);
+  if (value.includes("PRIMEROS") || value.includes("ADAPTACION") || value.includes("RECIEN")) return "blue";
   if (value.includes("EXCELENTE") || value.includes("SOBRESALIENTE") || value.includes("TOP") || value.includes("CONSTANTE") || value.includes("MUY")) return "green";
   if (value.includes("BIEN") || value.includes("BUEN")) return "blue";
   if (value.includes("REGULAR") || value.includes("PROGRESO") || value.includes("MEJOR")) return "yellow";

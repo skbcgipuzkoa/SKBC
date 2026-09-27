@@ -291,7 +291,7 @@ export default async function KenshiDetailPage({
   ]);
   const childRanking = childRankingResult.data;
   const childNotes = childNotesResult.data ?? [];
-  const childNotices = [...buildAutomaticChildNotices(childRanking), ...(childNoticesResult.data ?? [])];
+  const childNotices = [...buildAutomaticChildNotices(childRanking, member.joined_on), ...(childNoticesResult.data ?? [])];
   const childBehavior = childBehaviorResult.data?.[0] ?? null;
   const childTransition = childTransitionResult.data ?? null;
   const today = new Date().toISOString().slice(0, 10);

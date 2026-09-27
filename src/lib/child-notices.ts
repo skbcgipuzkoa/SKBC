@@ -12,10 +12,23 @@ export type ChildNoticeForDisplay = {
   source?: string | null;
 };
 
-export function buildAutomaticChildNotices(ranking: ChildRankingForNotices | null | undefined, today = new Date()): ChildNoticeForDisplay[] {
+export function buildAutomaticChildNotices(ranking: ChildRankingForNotices | null | undefined, joinedOn?: string | null, today = new Date()): ChildNoticeForDisplay[] {
   if (!ranking) return [];
 
   const noticeDate = today.toISOString().slice(0, 10);
+  const membershipDays = daysSince(joinedOn, today);
+  if (membershipDays !== null && membershipDays < 30) {
+    const firstDays = membershipDays < 14;
+    return [systemNotice(
+      noticeDate,
+      firstDays ? "Primeros dias en el club" : "Periodo de adaptacion",
+      firstDays
+        ? "Acaba de incorporarse. Todavia es pronto para valorar su constancia; ahora lo importante es conocer la clase y disfrutar aprendiendo."
+        : "Lleva poco tiempo en el club. Su constancia se valorara cuando haya acumulado mas semanas de entrenamiento.",
+      "#dbeafe"
+    )];
+  }
+
   const attendance30 = Number(ranking.attendance_30d ?? 0);
   const daysWithoutAttendance = Number(ranking.days_without_attendance ?? 0);
   const position = Number(ranking.position ?? 0);
@@ -46,6 +59,14 @@ export function buildAutomaticChildNotices(ranking: ChildRankingForNotices | nul
   }
 
   return notices;
+}
+
+function daysSince(value: string | null | undefined, today: Date) {
+  if (!value) return null;
+  const joined = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(joined.getTime())) return null;
+  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.max(0, Math.floor((current.getTime() - joined.getTime()) / 86400000));
 }
 
 function systemNotice(noticeDate: string, title: string, body: string, color: string): ChildNoticeForDisplay {
