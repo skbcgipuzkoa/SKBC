@@ -101,7 +101,7 @@ assert.deepEqual(WEB_ORDER_RPC_CONTRACTS.assignPaymentMethod, {
 });
 assert.deepEqual(WEB_ORDER_RPC_CONTRACTS.closeCampaign, {
   name: "close_skbc_order_campaign",
-  args: ["p_campaign_id"],
+  args: ["p_campaign_id", "p_expected_order_count", "p_expected_communication_count"],
   locksCampaign: true,
   preparesCommunications: true
 });
@@ -154,5 +154,63 @@ const assignPaymentFunction = repositoryFile.statements.find(
 );
 assert.ok(assignPaymentFunction, "assignPaymentMethod must exist");
 assert.doesNotMatch(assignPaymentFunction.getText(repositoryFile), /\.from\(|\.update\(/);
+
+const closeCampaignFunction = repositoryFile.statements.find(
+  (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "closeCampaign"
+);
+assert.ok(closeCampaignFunction, "closeCampaign must exist");
+const closeCampaignText = closeCampaignFunction.getText(repositoryFile);
+assert.match(closeCampaignText, /expectedOrderCount:\s*number/);
+assert.match(closeCampaignText, /expectedCommunicationCount:\s*number/);
+assert.match(closeCampaignText, /p_expected_order_count:\s*expectedOrderCount/);
+assert.match(closeCampaignText, /p_expected_communication_count:\s*expectedCommunicationCount/);
+
+const actionsSource = await readFile(
+  new URL("../src/app/material-order-actions.ts", import.meta.url),
+  "utf8"
+);
+assert.match(actionsSource, /getCampaignById\(input\.campaignId\)/);
+assert.match(actionsSource, /advanceCampaignStatus\(campaign/);
+assert.match(actionsSource, /status\s*!==\s*"pending_close"/);
+assert.match(
+  actionsSource,
+  /closeCampaign\(\s*input\.campaignId,\s*input\.expectedOrderCount,\s*input\.expectedCommunicationCount\s*\)/s
+);
+
+const dashboardSource = await readFile(
+  new URL("../src/components/material-orders-dashboard.tsx", import.meta.url),
+  "utf8"
+);
+const dashboardFile = ts.createSourceFile(
+  "material-orders-dashboard.tsx",
+  dashboardSource,
+  ts.ScriptTarget.ES2022,
+  true,
+  ts.ScriptKind.TSX
+);
+const csvCellFunction = dashboardFile.statements.find(
+  (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "csvCell"
+);
+assert.ok(csvCellFunction, "csvCell must exist for executable CSV safety checks");
+const csvCellJavaScript = ts.transpileModule(csvCellFunction.getText(dashboardFile), {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
+}).outputText;
+const { csvCell } = await import(
+  `data:text/javascript,${encodeURIComponent(csvCellJavaScript)}`
+);
+for (const prefix of ["=", "+", "-", "@"]) {
+  assert.equal(csvCell(`${prefix}SUM(A1:A2)`), `'${prefix}SUM(A1:A2)`);
+}
+assert.equal(csvCell('safe, "quoted"'), '"safe, ""quoted"""');
+
+assert.match(dashboardSource, /role="tablist"/);
+assert.match(dashboardSource, /aria-controls=/);
+assert.match(dashboardSource, /aria-labelledby=/);
+assert.match(dashboardSource, /role="tabpanel"/);
+assert.match(dashboardSource, /tabIndex=\{activeTab === id \? 0 : -1\}/);
+for (const key of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
+  assert.match(dashboardSource, new RegExp(`case ["']${key}["']`));
+}
+assert.match(dashboardSource, /campaign\.status !== "pending_close"/);
 
 console.log("Order campaign checks passed.");

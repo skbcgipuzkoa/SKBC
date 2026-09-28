@@ -22,7 +22,7 @@ export const WEB_ORDER_RPC_CONTRACTS = {
   },
   closeCampaign: {
     name: "close_skbc_order_campaign",
-    args: ["p_campaign_id"],
+    args: ["p_campaign_id", "p_expected_order_count", "p_expected_communication_count"],
     locksCampaign: true,
     preparesCommunications: true
   }
@@ -70,6 +70,17 @@ export async function getCurrentCampaign(at: Date = new Date()) {
     .select("*")
     .eq("period_start", period.startsOn)
     .eq("period_end", period.endsOn)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as WebOrderCampaign | null;
+}
+
+export async function getCampaignById(campaignId: string) {
+  const { data, error } = await createWebOrdersClient()
+    .from("skbc_order_campaigns")
+    .select("*")
+    .eq("id", campaignId)
     .maybeSingle();
 
   if (error) throw error;
@@ -168,12 +179,20 @@ export async function assignPaymentMethod(orderId: string, paymentMethod: WebOrd
   return requireRpcResult<WebOrder>(data, WEB_ORDER_RPC_CONTRACTS.assignPaymentMethod.name);
 }
 
-export async function closeCampaign(campaignId: string) {
+export async function closeCampaign(
+  campaignId: string,
+  expectedOrderCount: number,
+  expectedCommunicationCount: number
+) {
   // SQL contract: lock and close the campaign, freeze its orders, prepare one
   // communication per payer, then return the campaign and prepared row count.
   const { data, error } = await createWebOrdersClient().rpc(
     WEB_ORDER_RPC_CONTRACTS.closeCampaign.name,
-    { p_campaign_id: campaignId }
+    {
+      p_campaign_id: campaignId,
+      p_expected_order_count: expectedOrderCount,
+      p_expected_communication_count: expectedCommunicationCount
+    }
   );
 
   if (error) throw error;

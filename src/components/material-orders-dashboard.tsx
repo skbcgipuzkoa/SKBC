@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { AlertTriangle, CalendarClock, CheckCircle2, Download, PackageCheck, ReceiptText, UsersRound } from "lucide-react";
 import { SubmitButton } from "@/app/components/SubmitButton";
@@ -42,22 +42,55 @@ type TabId = (typeof tabs)[number][0];
 
 export function MaterialOrdersDashboard(props: MaterialOrdersDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabId>(props.loadError ? "belts" : "monthly");
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
+    monthly: null,
+    supplier: null,
+    payments: null,
+    catalog: null,
+    history: null,
+    belts: null
+  });
   const totals = useMemo(() => summarize(props.orders), [props.orders]);
   const unresolved = unresolvedOrderCount(props.orders);
 
+  function selectAdjacentTab(event: KeyboardEvent<HTMLButtonElement>, currentId: TabId) {
+    const currentIndex = tabs.findIndex(([id]) => id === currentId);
+    let nextIndex: number;
+    switch (event.key) {
+      case "ArrowLeft":
+        nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        break;
+      case "ArrowRight":
+        nextIndex = (currentIndex + 1) % tabs.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = tabs.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    const nextId = tabs[nextIndex][0];
+    setActiveTab(nextId);
+    tabRefs.current[nextId]?.focus();
+  }
+
   return <div className="material-orders">
-    <nav className="material-tabs" aria-label="Vistas de pedidos">
-      {tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={activeTab === id} onClick={() => setActiveTab(id)}>{label}</button>)}
+    <nav className="material-tabs" aria-label="Vistas de pedidos" role="tablist">
+      {tabs.map(([id, label]) => <button key={id} ref={(element) => { tabRefs.current[id] = element; }} id={`material-tab-${id}`} type="button" role="tab" aria-selected={activeTab === id} aria-controls={`material-panel-${id}`} tabIndex={activeTab === id ? 0 : -1} onClick={() => setActiveTab(id)} onKeyDown={(event) => selectAdjacentTab(event, id)}>{label}</button>)}
     </nav>
 
     {props.loadError ? <div className="material-alert material-alert-danger" role="alert"><AlertTriangle size={18} aria-hidden="true" /><span><strong>Pedidos mensuales no disponibles.</strong> {props.loadError}</span></div> : null}
 
-    <div hidden={activeTab !== "monthly"}>{activeTab === "monthly" ? <MonthlyView {...props} totals={totals} unresolved={unresolved} /> : null}</div>
-    <div hidden={activeTab !== "supplier"}>{activeTab === "supplier" ? <SupplierView rows={props.supplierSummary} campaign={props.campaign} /> : null}</div>
-    <div hidden={activeTab !== "payments"}>{activeTab === "payments" ? <PaymentsView orders={props.orders} communications={props.communications} campaign={props.campaign} /> : null}</div>
-    <div hidden={activeTab !== "catalog"}>{activeTab === "catalog" ? <CatalogView products={props.catalog} /> : null}</div>
-    <div hidden={activeTab !== "history"}>{activeTab === "history" ? <HistoryView campaigns={props.campaigns} orders={props.historyOrders} /> : null}</div>
-    <div hidden={activeTab !== "belts"} className="material-belt-workflow">{activeTab === "belts" ? props.children : null}</div>
+    <div id="material-panel-monthly" role="tabpanel" aria-labelledby="material-tab-monthly" hidden={activeTab !== "monthly"}>{activeTab === "monthly" ? <MonthlyView {...props} totals={totals} unresolved={unresolved} /> : null}</div>
+    <div id="material-panel-supplier" role="tabpanel" aria-labelledby="material-tab-supplier" hidden={activeTab !== "supplier"}>{activeTab === "supplier" ? <SupplierView rows={props.supplierSummary} campaign={props.campaign} /> : null}</div>
+    <div id="material-panel-payments" role="tabpanel" aria-labelledby="material-tab-payments" hidden={activeTab !== "payments"}>{activeTab === "payments" ? <PaymentsView orders={props.orders} communications={props.communications} campaign={props.campaign} /> : null}</div>
+    <div id="material-panel-catalog" role="tabpanel" aria-labelledby="material-tab-catalog" hidden={activeTab !== "catalog"}>{activeTab === "catalog" ? <CatalogView products={props.catalog} /> : null}</div>
+    <div id="material-panel-history" role="tabpanel" aria-labelledby="material-tab-history" hidden={activeTab !== "history"}>{activeTab === "history" ? <HistoryView campaigns={props.campaigns} orders={props.historyOrders} /> : null}</div>
+    <div id="material-panel-belts" role="tabpanel" aria-labelledby="material-tab-belts" hidden={activeTab !== "belts"} className="material-belt-workflow">{activeTab === "belts" ? props.children : null}</div>
   </div>;
 }
 
@@ -68,7 +101,7 @@ function MonthlyView({ campaign, orders, communications, totals, unresolved }: M
   const [orderStatus, setOrderStatus] = useState("");
   if (!campaign) return <EmptyState title="No hay campaña activa" detail="La campaña mensual todavía no existe en la base de datos de la web." />;
   const expectedCommunications = new Set(orders.map((order) => order.customer_email?.trim().toLowerCase()).filter(Boolean)).size;
-  const closeDisabled = campaign.status === "closed" || unresolved > 0 || orders.length === 0;
+  const closeDisabled = campaign.status !== "pending_close" || unresolved > 0 || orders.length === 0;
   const products = [...new Set(orders.flatMap((order) => order.items.map((item) => item.product_name)))].sort();
   const sizes = [...new Set(orders.flatMap((order) => order.items.map((item) => item.variant_name)))].sort();
 
@@ -194,5 +227,5 @@ function numericAttr(attrs: Record<string, WebOrderJson | undefined>, key: strin
 function numericAttr(attrs: Record<string, WebOrderJson | undefined>, key: string, fallback: number | "") { const value = attrs[key]; return typeof value === "number" && Number.isFinite(value) ? value : fallback; }
 function stringAttr(attrs: Record<string, WebOrderJson | undefined>, key: string) { return typeof attrs[key] === "string" ? attrs[key] as string : ""; }
 function confirmClose(event: FormEvent<HTMLFormElement>, orders: number, communications: number) { if (!window.confirm(`Vas a cerrar ${orders} pedidos y preparar ${communications} comunicaciones. No se enviará ningún email. ¿Continuar?`)) event.preventDefault(); }
-function csvCell(value: string | number) { const text = String(value); return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text; }
+export function csvCell(value: string | number) { const text = String(value); const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text; return /[",\r\n]/.test(safeText) ? `"${safeText.replaceAll('"', '""')}"` : safeText; }
 function exportSupplierCsv(rows: SupplierSummaryRow[]) { const headers = ["Referencia", "Producto", "Talla", "Cantidad", "Coste unitario", "Coste total"]; const lines = rows.map((row) => [row.supplierReference, row.productName, row.size, row.quantity, (row.unitCostCents / 100).toFixed(2), (row.totalCostCents / 100).toFixed(2)]); const blob = new Blob(["\uFEFF" + [headers, ...lines].map((line) => line.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "pedido-proveedor.csv"; link.click(); URL.revokeObjectURL(url); }

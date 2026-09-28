@@ -7,10 +7,12 @@ import { hasInternalAccess } from "@/lib/auth";
 import {
   assignPaymentMethod,
   closeCampaign,
+  getCampaignById,
   listCampaignOrders,
   updateVariantPricing,
   upsertCatalogProduct
 } from "@/lib/web-orders/repository";
+import { advanceCampaignStatus } from "@/lib/web-orders/campaigns";
 import type { WebOrderJson } from "@/lib/web-orders/types";
 
 const uuid = z.string().uuid();
@@ -130,6 +132,11 @@ export async function closeMaterialCampaignAction(formData: FormData) {
     expectedCommunicationCount: formData.get("expectedCommunicationCount"),
     unresolvedCount: formData.get("unresolvedCount")
   });
+  const campaign = await getCampaignById(input.campaignId);
+  if (!campaign) throw new Error("La campaña ya no existe.");
+  if (advanceCampaignStatus(campaign).status !== "pending_close") {
+    throw new Error("La campaña solo se puede cerrar cuando el periodo ha terminado.");
+  }
   const currentOrders = await listCampaignOrders(input.campaignId);
   const unresolvedCount = currentOrders.filter((order) =>
     !order.customer_email?.trim() || !order.customer_phone?.trim() || !order.payment_method
@@ -137,14 +144,11 @@ export async function closeMaterialCampaignAction(formData: FormData) {
   if (unresolvedCount > 0 || input.unresolvedCount > 0) throw new Error("La campaña contiene datos sin resolver.");
   if (currentOrders.length !== input.expectedOrderCount) throw new Error("El número de pedidos cambió. Recarga la página antes de cerrar.");
 
-  const result = await closeCampaign(input.campaignId);
-  if (result.prepared_communication_count !== input.expectedCommunicationCount) {
-    console.info("Prepared communication count changed during campaign close.", {
-      expected: input.expectedCommunicationCount,
-      actual: result.prepared_communication_count,
-      orders: input.expectedOrderCount
-    });
-  }
+  await closeCampaign(
+    input.campaignId,
+    input.expectedOrderCount,
+    input.expectedCommunicationCount
+  );
   refresh("campaign-closed");
 }
 
