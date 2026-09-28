@@ -60,6 +60,13 @@ export type PreparedMaterialOrderMail = {
   html: string;
 };
 
+type MaterialOrderDeliveryCounts = {
+  previewOnly: boolean;
+  sentCount: number;
+  failedCount: number;
+  ambiguousCount: number;
+};
+
 export function buildPreparedMaterialOrderEmail(communication: PreparedMaterialOrderCommunication): PreparedMaterialOrderMail {
   const total = materialCommunicationTotal(communication);
   const subject = `Pedido de material SKBC ${communication.orderNumber}`;
@@ -107,6 +114,31 @@ export function buildPreparedMaterialOrderPreview(communications: PreparedMateri
   };
 }
 
+export async function dispatchPreparedMaterialOrderCommunications(
+  communications: PreparedMaterialOrderCommunication[],
+  mode: "test" | "send" | "force-resend",
+  options: {
+    sendPreview: (communications: PreparedMaterialOrderCommunication[]) => Promise<unknown>;
+    claim: (communication: PreparedMaterialOrderCommunication, forceResend: boolean) => Promise<PreparedMaterialOrderCommunication>;
+    sendCustomer: (communication: PreparedMaterialOrderCommunication) => Promise<MaterialOrderDeliveryCounts>;
+  }
+) {
+  if (mode === "test") {
+    await options.sendPreview(communications);
+    return { previewOnly: true, sentCount: 0, failedCount: 0, ambiguousCount: 0 };
+  }
+
+  const totals = { previewOnly: false, sentCount: 0, failedCount: 0, ambiguousCount: 0 };
+  for (const communication of communications) {
+    const claimed = await options.claim(communication, mode === "force-resend");
+    const result = await options.sendCustomer(claimed);
+    totals.sentCount += result.sentCount;
+    totals.failedCount += result.failedCount;
+    totals.ambiguousCount += result.ambiguousCount;
+  }
+  return totals;
+}
+
 export async function processPreparedMaterialOrderCommunications(
   communications: PreparedMaterialOrderCommunication[],
   options: {
@@ -134,7 +166,7 @@ export async function processPreparedMaterialOrderCommunications(
       await options.send(buildPreparedMaterialOrderEmail(communication));
     } catch (smtpError) {
       const message = conciseEmailError(smtpError);
-      if (isDefinitiveSmtpRejection(smtpError)) {
+      if (isDefinitiveSmtpRejection(smtpError, communication.recipientEmail)) {
         await options.complete(communication, {
           outcome: "smtp_failed",
           completedAt: options.now?.() ?? new Date().toISOString(),
@@ -391,12 +423,28 @@ function conciseEmailError(error: unknown) {
   return errorMessage(error).replace(/\s+/g, " ").trim().slice(0, 240) || "Error desconocido.";
 }
 
-function isDefinitiveSmtpRejection(error: unknown) {
+function recipientMatches(value: unknown, intendedRecipient: string) {
+  return typeof value === "string" && value.trim().toLowerCase() === intendedRecipient.trim().toLowerCase();
+}
+
+function isDefinitiveSmtpRejection(error: unknown, intendedRecipient: string) {
   if (!error || typeof error !== "object") return false;
-  const smtpError = error as { responseCode?: unknown; accepted?: unknown };
+  const smtpError = error as {
+    responseCode?: unknown;
+    command?: unknown;
+    rejected?: unknown;
+    rejectedErrors?: unknown;
+  };
+  const rejected = Array.isArray(smtpError.rejected)
+    && smtpError.rejected.some((recipient) => recipientMatches(recipient, intendedRecipient));
+  const rejectedErrors = Array.isArray(smtpError.rejectedErrors)
+    && smtpError.rejectedErrors.some((rejectedError) => {
+      if (!rejectedError || typeof rejectedError !== "object") return false;
+      return recipientMatches((rejectedError as { recipient?: unknown }).recipient, intendedRecipient);
+    });
   return typeof smtpError.responseCode === "number"
     && smtpError.responseCode >= 500
     && smtpError.responseCode < 600
-    && Array.isArray(smtpError.accepted)
-    && smtpError.accepted.length === 0;
+    && smtpError.command === "RCPT TO"
+    && (rejected || rejectedErrors);
 }

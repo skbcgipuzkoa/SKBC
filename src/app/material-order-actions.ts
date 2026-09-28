@@ -21,6 +21,7 @@ import {
 import { advanceCampaignStatus } from "@/lib/web-orders/campaigns";
 import { createWebOrdersClient } from "@/lib/web-orders/client";
 import {
+  dispatchPreparedMaterialOrderCommunications,
   sendPreparedMaterialOrderCommunications,
   type MaterialOrderPaymentMethod,
   type PreparedMaterialOrderCommunication
@@ -309,48 +310,44 @@ export async function sendMaterialCampaignCommunicationsAction(formData: FormDat
     if (preview.campaignId !== input.campaignId) throw new Error("Todas las comunicaciones deben pertenecer exactamente a la campaña seleccionada.");
     previews.push(preview);
   }
-  if (input.mode === "test") {
-    await sendPreparedMaterialOrderCommunications({
-      communications: previews,
+  const totals = await dispatchPreparedMaterialOrderCommunications(previews, input.mode, {
+    sendPreview: async (communications) => sendPreparedMaterialOrderCommunications({
+      communications,
       testOnly: true,
       complete: async () => undefined,
       markDeliveredUnconfirmed: async () => undefined
-    });
-    refresh("communication-preview-sent");
-  }
-
-  const totals = { sentCount: 0, failedCount: 0, ambiguousCount: 0 };
-  for (const preview of previews) {
-    const claimed = await claimCommunication({
+    }),
+    claim: async (communication, forceResend) => parsePreparedCommunication(await claimCommunication({
       campaignId: input.campaignId,
-      communicationId: preview.id,
+      communicationId: communication.id,
       attemptToken: randomUUID(),
-      forceResend: input.mode === "force-resend"
-    });
-    const result = await sendPreparedMaterialOrderCommunications({
-      communications: [parsePreparedCommunication(claimed)],
-      complete: async (communication, outcome) => {
+      forceResend
+    })),
+    sendCustomer: async (communication) => sendPreparedMaterialOrderCommunications({
+      communications: [communication],
+      complete: async (completedCommunication, outcome) => {
         await completeCommunicationAttempt({
-          campaignId: communication.campaignId,
-          communicationId: communication.id,
-          attemptToken: communication.attemptToken!,
+          campaignId: completedCommunication.campaignId,
+          communicationId: completedCommunication.id,
+          attemptToken: completedCommunication.attemptToken!,
           outcome: outcome.outcome,
           errorMessage: outcome.error
         });
       },
-      markDeliveredUnconfirmed: async (communication, errorMessage) => {
+      markDeliveredUnconfirmed: async (completedCommunication, errorMessage) => {
         await completeCommunicationAttempt({
-          campaignId: communication.campaignId,
-          communicationId: communication.id,
-          attemptToken: communication.attemptToken!,
+          campaignId: completedCommunication.campaignId,
+          communicationId: completedCommunication.id,
+          attemptToken: completedCommunication.attemptToken!,
           outcome: "delivered_unconfirmed",
           errorMessage
         });
       }
-    });
-    totals.sentCount += result.sentCount;
-    totals.failedCount += result.failedCount;
-    totals.ambiguousCount += result.ambiguousCount;
+    })
+  });
+  if (totals.previewOnly) {
+    refresh("communication-preview-sent");
+    return;
   }
   refresh(`communications-sent-${totals.sentCount}-failed-${totals.failedCount}-ambiguous-${totals.ambiguousCount}`, input.campaignId);
 }

@@ -10,7 +10,8 @@ const sourceFile = ts.createSourceFile("email-notifications.ts", source, ts.Scri
 const required = [
   "buildPreparedMaterialOrderEmail",
   "buildPreparedMaterialOrderPreview",
-  "processPreparedMaterialOrderCommunications"
+  "processPreparedMaterialOrderCommunications",
+  "dispatchPreparedMaterialOrderCommunications"
 ];
 
 for (const name of required) {
@@ -25,7 +26,8 @@ const dependencyNames = new Set([
   "preparedPaymentMessage",
   "conciseEmailError",
   "errorMessage",
-  "isDefinitiveSmtpRejection"
+  "isDefinitiveSmtpRejection",
+  "recipientMatches"
 ]);
 const declarations = sourceFile.statements
   .filter((statement) => ts.isFunctionDeclaration(statement) && statement.name && dependencyNames.has(statement.name.text))
@@ -79,6 +81,20 @@ assert.match(preview.html, /Aixa Lasa/);
 assert.equal("cc" in preview, false);
 assert.equal("bcc" in preview, false);
 
+const previewCalls = [];
+const previewDispatchResult = await api.dispatchPreparedMaterialOrderCommunications(
+  [robert, aixa],
+  "test",
+  {
+    sendPreview: async (communications) => previewCalls.push(communications),
+    claim: async () => assert.fail("test mode must not claim customer communications"),
+    sendCustomer: async () => assert.fail("test mode must not send customer communications")
+  }
+);
+assert.deepEqual(previewDispatchResult, { previewOnly: true, sentCount: 0, failedCount: 0, ambiguousCount: 0 });
+assert.equal(previewCalls.length, 1);
+assert.deepEqual(previewCalls[0], [robert, aixa]);
+
 const sends = [];
 const completions = [];
 const ambiguous = [];
@@ -87,7 +103,10 @@ const result = await api.processPreparedMaterialOrderCommunications(
     aixa,
     prepared({ ...robert, id: "comm-persist", recipientEmail: "persist@example.com" }),
     prepared({ ...robert, id: "comm-timeout", recipientEmail: "timeout@example.com" }),
-    prepared({ ...robert, id: "comm-smtp", recipientEmail: "smtp-fail@example.com" })
+    prepared({ ...robert, id: "comm-smtp", recipientEmail: "smtp-fail@example.com" }),
+    prepared({ ...robert, id: "comm-network", recipientEmail: "network@example.com" }),
+    prepared({ ...robert, id: "comm-data", recipientEmail: "data@example.com" }),
+    prepared({ ...robert, id: "comm-unknown", recipientEmail: "unknown@example.com" })
   ],
   {
     send: async (mail) => {
@@ -96,7 +115,28 @@ const result = await api.processPreparedMaterialOrderCommunications(
         throw Object.assign(new Error("Connection timed out after DATA"), { code: "ETIMEDOUT" });
       }
       if (mail.to === "smtp-fail@example.com") {
-        throw Object.assign(new Error("550 recipient rejected ".repeat(20)), { responseCode: 550, accepted: [] });
+        throw Object.assign(new Error("Can't send mail - all recipients were rejected: 550 5.1.1 User unknown"), {
+          code: "EENVELOPE",
+          command: "RCPT TO",
+          responseCode: 550,
+          response: "550 5.1.1 User unknown",
+          rejected: ["smtp-fail@example.com"],
+          rejectedErrors: [Object.assign(new Error("Recipient command failed"), {
+            command: "RCPT TO",
+            responseCode: 550,
+            recipient: "smtp-fail@example.com",
+            response: "550 5.1.1 User unknown"
+          })]
+        });
+      }
+      if (mail.to === "network@example.com") {
+        throw Object.assign(new Error("socket hang up"), { code: "ECONNECTION", command: "CONN" });
+      }
+      if (mail.to === "data@example.com") {
+        throw Object.assign(new Error("552 message size exceeds fixed limit"), { responseCode: 552, command: "DATA" });
+      }
+      if (mail.to === "unknown@example.com") {
+        throw new Error("unexpected transport failure");
       }
     },
     complete: async (communication, outcome) => {
@@ -111,15 +151,52 @@ const result = await api.processPreparedMaterialOrderCommunications(
 );
 assert.equal(result.sentCount, 1);
 assert.equal(result.failedCount, 1);
-assert.equal(result.ambiguousCount, 2);
-assert.deepEqual(sends.map((mail) => mail.to), ["aixa@example.com", "persist@example.com", "timeout@example.com", "smtp-fail@example.com"]);
+assert.equal(result.ambiguousCount, 5);
+assert.deepEqual(sends.map((mail) => mail.to), ["aixa@example.com", "persist@example.com", "timeout@example.com", "smtp-fail@example.com", "network@example.com", "data@example.com", "unknown@example.com"]);
 assert.deepEqual(completions.map(({ id, outcome }) => ({ id, outcome })), [
   { id: "comm-aixa", outcome: "delivered" },
   { id: "comm-persist", outcome: "delivered" },
   { id: "comm-smtp", outcome: "smtp_failed" }
 ]);
-assert.deepEqual(ambiguous.map(({ id }) => id), ["comm-persist", "comm-timeout"], "timeouts and SMTP-success persistence failures require manual reconciliation");
+assert.deepEqual(ambiguous.map(({ id }) => id), ["comm-persist", "comm-timeout", "comm-network", "comm-data", "comm-unknown"], "timeouts, network, post-DATA, unknown, and SMTP-success persistence failures require manual reconciliation");
 assert.ok(completions[2].error.length <= 240, "stored SMTP errors are concise");
+
+const rejectedErrorsOnly = prepared({ ...robert, id: "comm-rejected-errors", recipientEmail: "errors-only@example.com" });
+const rejectedErrorsOnlyCompletions = [];
+const rejectedErrorsOnlyResult = await api.processPreparedMaterialOrderCommunications([rejectedErrorsOnly], {
+  send: async () => {
+    throw Object.assign(new Error("550 mailbox unavailable"), {
+      code: "EENVELOPE",
+      command: "RCPT TO",
+      responseCode: 550,
+      rejectedErrors: [Object.assign(new Error("550 mailbox unavailable"), {
+        command: "RCPT TO",
+        responseCode: 550,
+        recipient: "errors-only@example.com"
+      })]
+    });
+  },
+  complete: async (communication, outcome) => rejectedErrorsOnlyCompletions.push({ id: communication.id, ...outcome }),
+  markDeliveredUnconfirmed: async () => assert.fail("definitive RCPT rejection must not be marked ambiguous")
+});
+assert.equal(rejectedErrorsOnlyResult.failedCount, 1, "rejectedErrors identifies a definitive rejection without accepted");
+assert.equal(rejectedErrorsOnlyCompletions[0].outcome, "smtp_failed");
+
+const wrongRecipientAmbiguous = [];
+await api.processPreparedMaterialOrderCommunications([
+  prepared({ ...robert, id: "comm-other-recipient", recipientEmail: "intended@example.com" })
+], {
+  send: async () => {
+    throw Object.assign(new Error("550 another recipient rejected"), {
+      command: "RCPT TO",
+      responseCode: 550,
+      rejected: ["someone-else@example.com"]
+    });
+  },
+  complete: async () => assert.fail("a rejection for another recipient is not definitive for the intended recipient"),
+  markDeliveredUnconfirmed: async (communication) => wrongRecipientAmbiguous.push(communication.id)
+});
+assert.deepEqual(wrongRecipientAmbiguous, ["comm-other-recipient"]);
 
 const testSends = [];
 const testUpdates = [];
