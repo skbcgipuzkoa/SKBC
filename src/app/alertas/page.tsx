@@ -5,6 +5,7 @@ import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { isRelevantAbsence, operationalAlertKey } from "@/lib/operational-follow-up";
+import { getWebsiteAdminAlertCounts, WEBSITE_ADMIN_URL } from "@/lib/website-admin-alerts";
 
 type AlertLevel = "danger" | "warn" | "info";
 
@@ -14,6 +15,7 @@ type SystemAlert = {
   title: string;
   detail: string;
   href?: string;
+  external?: boolean;
 };
 
 type ClassRow = {
@@ -62,7 +64,8 @@ export default async function AlertasPage() {
     { data: dismissedAlerts },
     { data: provisionalMembers },
     { data: importantNotes },
-    { data: recentAttendance }
+    { data: recentAttendance },
+    websiteAlerts
   ] = await Promise.all([
     supabase
       .from("classes")
@@ -106,10 +109,29 @@ export default async function AlertasPage() {
       .select("alert_key"),
     supabase.from("provisional_members").select("id,display_name,class,created_at").eq("status", "pending"),
     supabase.from("member_notes").select("id,note,created_at,members(display_name,legacy_id)").eq("important", true).is("resolved_at", null),
-    supabase.from("attendance_logs").select("member_id,attended_on").order("attended_on", { ascending: false })
+    supabase.from("attendance_logs").select("member_id,attended_on").order("attended_on", { ascending: false }),
+    getWebsiteAdminAlertCounts()
   ]);
 
   const alerts: SystemAlert[] = [];
+
+  if (websiteAlerts.pendingTestimonials > 0) alerts.push({
+    id: `website-testimonials-${websiteAlerts.pendingTestimonials}`,
+    level: "warn",
+    title: `${websiteAlerts.pendingTestimonials} ${websiteAlerts.pendingTestimonials === 1 ? "testimonio pendiente" : "testimonios pendientes"} en la web`,
+    detail: "Hay nuevos testimonios esperando revision en el administrador de la pagina web.",
+    href: WEBSITE_ADMIN_URL,
+    external: true
+  });
+
+  if (websiteAlerts.pendingKenshiRegistrations > 0) alerts.push({
+    id: `website-kenshi-${websiteAlerts.pendingKenshiRegistrations}`,
+    level: "warn",
+    title: `${websiteAlerts.pendingKenshiRegistrations} ${websiteAlerts.pendingKenshiRegistrations === 1 ? "solicitud nueva" : "solicitudes nuevas"} de Area Kenshi`,
+    detail: "Hay solicitudes de alumnos o familias esperando revision en el administrador de la pagina web.",
+    href: WEBSITE_ADMIN_URL,
+    external: true
+  });
 
   for (const provisional of provisionalMembers ?? []) alerts.push({
     id: operationalAlertKey("provisional", provisional.id), level: "warn", title: `Invitado pendiente: ${provisional.display_name}`,
@@ -288,7 +310,7 @@ export default async function AlertasPage() {
                   <p className="muted">{alert.detail}</p>
                 </div>
                 <div className="row-actions">
-                  {alert.href ? <a className="icon-button" href={alert.href} aria-label="Abrir alerta"><ExternalLink size={16} /></a> : null}
+                  {alert.href ? <a className="icon-button" href={alert.href} aria-label="Abrir alerta" target={alert.external ? "_blank" : undefined} rel={alert.external ? "noopener noreferrer external" : undefined}><ExternalLink size={16} /></a> : null}
                   <button
                     aria-label="Borrar alerta"
                     className="icon-button danger-icon-button"

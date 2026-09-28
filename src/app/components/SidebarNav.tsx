@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
+import { getWebsiteAdminAlertCounts, totalWebsiteAdminAlerts } from "@/lib/website-admin-alerts";
 
 type SidebarNavProps = {
   current?: string;
@@ -45,7 +46,11 @@ const navItems: NavItem[] = [
 
 export async function SidebarNav({ current }: SidebarNavProps) {
   const currentItem = navItems.find((item) => item.href === current);
-  const noticeAlertCount = await getUnreadTrialNoticeCount();
+  const [noticeAlertCount, websiteAlertCounts] = await Promise.all([
+    getUnreadTrialNoticeCount(),
+    getWebsiteAdminAlertCounts()
+  ]);
+  const websiteAlertCount = totalWebsiteAdminAlerts(websiteAlertCounts);
 
   return (
     <aside className="sidebar">
@@ -77,7 +82,7 @@ export async function SidebarNav({ current }: SidebarNavProps) {
           {navItems.map((item) => (
             <a
               key={item.href}
-              className={item.href === "/avisos" && noticeAlertCount ? "nav-alert" : undefined}
+              className={(item.href === "/avisos" && noticeAlertCount) || (item.href === "/alertas" && websiteAlertCount) ? "nav-alert" : undefined}
               href={item.href}
               aria-current={current === item.href ? "page" : undefined}
               target={item.external ? "_blank" : undefined}
@@ -85,6 +90,7 @@ export async function SidebarNav({ current }: SidebarNavProps) {
             >
               {item.label}
               {item.href === "/avisos" && noticeAlertCount ? <span className="nav-alert-count">{noticeAlertCount}</span> : null}
+              {item.href === "/alertas" && websiteAlertCount ? <span className="nav-alert-count">{websiteAlertCount}</span> : null}
             </a>
           ))}
         </div>
@@ -93,7 +99,7 @@ export async function SidebarNav({ current }: SidebarNavProps) {
         {navItems.map((item) => (
           <a
             key={item.href}
-            className={item.href === "/avisos" && noticeAlertCount ? "nav-alert" : undefined}
+            className={(item.href === "/avisos" && noticeAlertCount) || (item.href === "/alertas" && websiteAlertCount) ? "nav-alert" : undefined}
             href={item.href}
             aria-current={current === item.href ? "page" : undefined}
             target={item.external ? "_blank" : undefined}
@@ -101,6 +107,7 @@ export async function SidebarNav({ current }: SidebarNavProps) {
           >
             {item.label}
             {item.href === "/avisos" && noticeAlertCount ? <span className="nav-alert-count">{noticeAlertCount}</span> : null}
+            {item.href === "/alertas" && websiteAlertCount ? <span className="nav-alert-count">{websiteAlertCount}</span> : null}
           </a>
         ))}
       </nav>
