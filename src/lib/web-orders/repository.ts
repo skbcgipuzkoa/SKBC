@@ -14,13 +14,39 @@ import type {
 export type CampaignOrder = WebOrder & { items: WebOrderItem[] };
 export type CatalogProduct = WebOrderProduct & { variants: WebOrderVariant[] };
 
+export const WEB_ORDER_RPC_CONTRACTS = {
+  assignPaymentMethod: {
+    name: "assign_skbc_order_payment_method",
+    args: ["p_order_id", "p_payment_method"],
+    requiresOpenCampaign: true
+  },
+  closeCampaign: {
+    name: "close_skbc_order_campaign",
+    args: ["p_campaign_id"],
+    locksCampaign: true,
+    preparesCommunications: true
+  }
+} as const;
+
+export const SUPPLIER_SUMMARY_SCHEMA_FIELDS = [
+  "supplier_reference",
+  "size",
+  "cost_cents"
+] as const;
+
+export type SupplierOrderItem = Pick<WebOrderItem, "product_name" | "quantity"> & {
+  supplier_reference: string;
+  size: string;
+  cost_cents: number;
+};
+
 export type SupplierSummaryRow = {
-  sku: string;
+  supplierReference: string;
   productName: string;
-  variantName: string;
+  size: string;
   quantity: number;
-  unitPriceCents: number;
-  totalPriceCents: number;
+  unitCostCents: number;
+  totalCostCents: number;
 };
 
 export type CatalogProductInput = Omit<WebOrderProduct, "id" | "created_at" | "updated_at"> & {
@@ -63,28 +89,36 @@ export async function listCampaignOrders(campaignId: string) {
 
 export async function getSupplierSummary(campaignId: string) {
   const orders = await listCampaignOrders(campaignId);
+  return summarizeSupplierItems(
+    orders.flatMap((order) => order.items) as unknown as SupplierOrderItem[]
+  );
+}
+
+export function summarizeSupplierItems(items: SupplierOrderItem[]) {
   const grouped = new Map<string, SupplierSummaryRow>();
 
-  for (const item of orders.flatMap((order) => order.items)) {
-    const key = [item.sku, item.product_name, item.variant_name, item.unit_price_cents].join("\u0000");
+  for (const item of items) {
+    const key = [item.supplier_reference, item.size].join("\u0000");
     const current = grouped.get(key);
     if (current) {
       current.quantity += item.quantity;
-      current.totalPriceCents += item.line_total_cents;
+      current.totalCostCents += item.cost_cents * item.quantity;
     } else {
       grouped.set(key, {
-        sku: item.sku,
+        supplierReference: item.supplier_reference,
         productName: item.product_name,
-        variantName: item.variant_name,
+        size: item.size,
         quantity: item.quantity,
-        unitPriceCents: item.unit_price_cents,
-        totalPriceCents: item.line_total_cents
+        unitCostCents: item.cost_cents,
+        totalCostCents: item.cost_cents * item.quantity
       });
     }
   }
 
   return [...grouped.values()].sort((left, right) =>
-    `${left.sku}\u0000${left.variantName}`.localeCompare(`${right.sku}\u0000${right.variantName}`)
+    `${left.supplierReference}\u0000${left.size}`.localeCompare(
+      `${right.supplierReference}\u0000${right.size}`
+    )
   );
 }
 
@@ -123,25 +157,31 @@ export async function updateVariantPricing(variantId: string, input: VariantPric
 }
 
 export async function assignPaymentMethod(orderId: string, paymentMethod: WebOrderPaymentMethod) {
-  const { data, error } = await createWebOrdersClient()
-    .from("skbc_merch_orders")
-    .update({ payment_method: paymentMethod })
-    .eq("id", orderId)
-    .select("*")
-    .single();
+  // SQL contract: lock the order and its campaign, reject unless the campaign
+  // is open, update payment_method, and return the updated order atomically.
+  const { data, error } = await createWebOrdersClient().rpc(
+    WEB_ORDER_RPC_CONTRACTS.assignPaymentMethod.name,
+    { p_order_id: orderId, p_payment_method: paymentMethod }
+  );
 
   if (error) throw error;
-  return data as WebOrder;
+  return requireRpcResult<WebOrder>(data, WEB_ORDER_RPC_CONTRACTS.assignPaymentMethod.name);
 }
 
 export async function closeCampaign(campaignId: string) {
   // SQL contract: lock and close the campaign, freeze its orders, prepare one
   // communication per payer, then return the campaign and prepared row count.
-  const { data, error } = await createWebOrdersClient().rpc("close_skbc_order_campaign", {
-    p_campaign_id: campaignId
-  });
+  const { data, error } = await createWebOrdersClient().rpc(
+    WEB_ORDER_RPC_CONTRACTS.closeCampaign.name,
+    { p_campaign_id: campaignId }
+  );
 
   if (error) throw error;
-  if (!data) throw new Error("Campaign close RPC returned no result.");
-  return data as CloseCampaignResult;
+  return requireRpcResult<CloseCampaignResult>(data, WEB_ORDER_RPC_CONTRACTS.closeCampaign.name);
+}
+
+function requireRpcResult<T>(data: unknown, rpcName: string): T {
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result) throw new Error(`${rpcName} returned no result.`);
+  return result as T;
 }
