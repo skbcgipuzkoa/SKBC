@@ -22,6 +22,7 @@ import { createTrashItem, restoreTrashItem } from "@/lib/trash";
 import { kidsGrades } from "@/lib/grades";
 import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
 import { convertProvisionalMember } from "@/lib/provisional-members";
+import { beltColorForGrade, isPendingBeltSize, pendingBeltSize } from "@/lib/exam-belt-orders";
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -4001,52 +4002,111 @@ export async function createBeltOrderLineAction(formData: FormData) {
     redirect("/");
   }
 
-  const catalogItemId = String(formData.get("catalogItemId") ?? "").trim() || null;
   const memberId = String(formData.get("memberId") ?? "").trim() || null;
   const studentName = String(formData.get("studentName") ?? "").trim();
-  const requestTitle = String(formData.get("requestTitle") ?? "").trim() || "Pedido general";
-  const item = String(formData.get("item") ?? "").trim();
-  const color = String(formData.get("color") ?? "").trim() || null;
-  const size = String(formData.get("size") ?? "").trim() || null;
+  const grade = String(formData.get("grade") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim() || beltColorForGrade(grade);
+  const size = String(formData.get("size") ?? "").trim() || pendingBeltSize;
   const quantity = Math.max(1, Number.parseInt(String(formData.get("quantity") ?? "1"), 10) || 1);
-  const unitPriceCents = parseEuroCents(String(formData.get("unitPrice") ?? ""));
-  const paidAmountCents = parseEuroCents(String(formData.get("paidAmount") ?? ""));
-  const paymentStatus = normalizePaymentStatus(String(formData.get("paymentStatus") ?? "")) ?? inferPaymentStatus(unitPriceCents * quantity, paidAmountCents);
-  const status = normalizeBeltStatus(String(formData.get("status") ?? "")) ?? "pending";
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
-  if ((!memberId && !studentName) || !item) {
-    redirect("/pedidos-cinturones?error=belt");
+  if ((!memberId && !studentName) || !grade) {
+    redirect("/pedidos-cinturones?tab=belts&error=belt");
   }
 
   const today = new Date().toISOString().slice(0, 10);
   const supabase = createAdminClient();
   const { error } = await supabase.from("belt_order_lines").insert({
-    catalog_item_id: catalogItemId,
-    exam_title: requestTitle,
+    exam_title: "Alta manual",
+    grade,
     member_id: memberId,
     student_name: studentName || null,
-    item,
+    item: "Cinturon",
     color,
     size,
     quantity,
-    unit_price_cents: unitPriceCents,
-    total_price_cents: unitPriceCents * quantity,
-    paid_amount_cents: paidAmountCents,
-    payment_status: paymentStatus,
-    paid_on: paidAmountCents > 0 ? today : null,
+    unit_price_cents: 0,
+    total_price_cents: 0,
+    paid_amount_cents: 0,
+    payment_status: "unpaid",
     requested_on: today,
-    status,
+    status: "pending",
     notes,
     created_by: "WEB SKBC"
   });
 
   if (error) {
     console.error("Error creating belt order line", error);
-    redirect("/pedidos-cinturones?error=belt");
+    redirect("/pedidos-cinturones?tab=belts&error=belt");
   }
 
-  redirect("/pedidos-cinturones?saved=belt");
+  redirect("/pedidos-cinturones?tab=belts&saved=belt");
+}
+
+export async function updateExamBeltOrderAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const lineId = String(formData.get("lineId") ?? "").trim();
+  const grade = String(formData.get("grade") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim() || beltColorForGrade(grade);
+  const size = String(formData.get("size") ?? "").trim() || pendingBeltSize;
+  const quantity = Math.max(1, Number.parseInt(String(formData.get("quantity") ?? "1"), 10) || 1);
+  const status = normalizeBeltStatus(String(formData.get("status") ?? "")) ?? "pending";
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!lineId || !grade || (status !== "pending" && isPendingBeltSize(size))) {
+    redirect("/pedidos-cinturones?tab=belts&error=belt-measure");
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dateFields =
+    status === "ordered" ? { ordered_on: today } :
+    status === "received" ? { received_on: today } :
+    status === "delivered" ? { delivered_on: today } : {};
+
+  const { error } = await createAdminClient()
+    .from("belt_order_lines")
+    .update({ grade, color, size, quantity, status, notes, ...dateFields, updated_at: new Date().toISOString() })
+    .eq("id", lineId);
+
+  if (error) {
+    console.error("Error updating exam belt order", error);
+    redirect("/pedidos-cinturones?tab=belts&error=belt");
+  }
+  revalidatePath("/pedidos-cinturones");
+  redirect("/pedidos-cinturones?tab=belts&saved=belt");
+}
+
+export async function deleteExamBeltOrderAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const lineId = String(formData.get("lineId") ?? "").trim();
+  if (!lineId) redirect("/pedidos-cinturones?tab=belts&error=belt");
+
+  const supabase = createAdminClient();
+  const { data: snapshot, error: readError } = await supabase
+    .from("belt_order_lines")
+    .select("*")
+    .eq("id", lineId)
+    .maybeSingle<Record<string, unknown>>();
+  if (readError || !snapshot) redirect("/pedidos-cinturones?tab=belts&error=belt");
+
+  await createTrashItem({
+    supabase,
+    entityType: "exam_belt_order",
+    entityLabel: String(snapshot.student_name ?? snapshot.grade ?? "Cinturon"),
+    sourceTable: "belt_order_lines",
+    sourceId: lineId,
+    snapshot,
+    notes: "Pedido interno de cinturon eliminado."
+  });
+
+  const { error } = await supabase.from("belt_order_lines").delete().eq("id", lineId);
+  if (error) {
+    console.error("Error deleting exam belt order", error);
+    redirect("/pedidos-cinturones?tab=belts&error=belt");
+  }
+  revalidatePath("/pedidos-cinturones");
+  redirect("/pedidos-cinturones?tab=belts&saved=belt-delete");
 }
 
 export async function createOrderCatalogItemAction(formData: FormData) {

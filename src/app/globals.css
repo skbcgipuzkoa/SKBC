@@ -11427,6 +11427,41 @@ tbody tr:hover {
 .material-empty strong { color: var(--ink); }
 .material-belt-workflow { display: grid; gap: 18px; }
 
+.exam-belt-panel { display: grid; gap: 18px; }
+.belt-heading { align-items: flex-start; }
+.belt-heading h2 { margin: 2px 0 6px; }
+.belt-heading p { max-width: 780px; }
+.belt-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.belt-metrics article { min-height: 118px; display: flex; flex-direction: column; justify-content: space-between; }
+.belt-metrics article > span { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--muted); }
+.belt-metrics article > strong { font-size: 2rem; }
+.belt-manual-create > summary { cursor: pointer; }
+.belt-filters { grid-template-columns: minmax(260px, 1fr) minmax(190px, 260px) auto; }
+.belt-order-list { display: grid; gap: 10px; }
+.belt-order-card { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; overflow: hidden; }
+.belt-order-card.needs-measure { border-left: 5px solid #c58b16; }
+.belt-order-card > summary { cursor: pointer; display: grid; grid-template-columns: minmax(220px, 1.5fr) minmax(130px, .8fr) minmax(150px, .9fr) auto; align-items: center; gap: 16px; padding: 16px 18px; list-style: none; }
+.belt-order-card > summary::-webkit-details-marker { display: none; }
+.belt-order-card > summary span:not(.belt-status) { display: grid; gap: 3px; }
+.belt-order-card > summary small { color: var(--muted); }
+.belt-edit-form { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 12px; padding: 18px; border-top: 1px solid var(--line); background: var(--surface-soft); }
+.belt-edit-form .wide { grid-column: 1 / -1; }
+.belt-record-meta { display: flex; gap: 14px; padding: 0 18px 14px; color: var(--muted); font-size: .88rem; background: var(--surface-soft); }
+.belt-order-card .danger-inline-form { padding: 0 18px 18px; background: var(--surface-soft); }
+
+@media (max-width: 1050px) {
+  .belt-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .belt-edit-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .belt-order-card > summary { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 680px) {
+  .belt-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .belt-filters, .belt-edit-form, .belt-order-card > summary { grid-template-columns: 1fr; }
+  .belt-metrics article { min-height: 104px; }
+  .belt-record-meta { flex-direction: column; gap: 4px; }
+}
+
 @media (max-width: 1080px) {
   .material-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .material-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

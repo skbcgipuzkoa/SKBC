@@ -31,6 +31,7 @@ export type MaterialOrdersDashboardProps = {
   catalog: CatalogProduct[];
   communications: CommunicationView[];
   loadError?: string;
+  initialTab?: TabId;
   children: ReactNode;
 };
 
@@ -40,13 +41,13 @@ const tabs = [
   ["payments", "Cobros y comunicaciones"],
   ["catalog", "Catálogo"],
   ["history", "Histórico"],
-  ["belts", "Cinturones internos"]
+  ["belts", "Cinturones de examen"]
 ] as const;
 
 type TabId = (typeof tabs)[number][0];
 
 export function MaterialOrdersDashboard(props: MaterialOrdersDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabId>(props.loadError ? "belts" : "monthly");
+  const [activeTab, setActiveTab] = useState<TabId>(props.initialTab ?? (props.loadError ? "belts" : "monthly"));
   const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
     monthly: null,
     supplier: null,

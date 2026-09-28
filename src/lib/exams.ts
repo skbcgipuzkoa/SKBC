@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { syncLegacyExam } from "@/lib/legacy-sheet-sync";
 import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
+import { ensureExamBeltOrder } from "@/lib/exam-belt-orders";
 
 type MemberForExam = {
   id: string;
@@ -117,6 +118,20 @@ export async function registerExam({
     await syncLegacyExam(examId);
   } catch (error) {
     console.error("Error syncing exam to legacy sheet", error);
+  }
+
+  try {
+    await ensureExamBeltOrder({
+      examId,
+      memberId: member.id,
+      studentName: member.display_name,
+      examDate,
+      targetGrade: grade,
+      program: member.class,
+      createdBy: registeredBy
+    });
+  } catch (error) {
+    console.error("Error creating automatic exam belt order", { examId, memberId: member.id, error });
   }
 
   return { examId, memberLegacyId: member.legacy_id, cycleAttendance };
