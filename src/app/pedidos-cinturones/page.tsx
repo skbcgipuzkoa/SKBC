@@ -1,6 +1,7 @@
 import { LogOut, PackageCheck, PlusCircle, ShoppingBag, WalletCards } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
+import { MaterialOrdersDashboard, type MaterialOrdersDashboardProps } from "@/components/material-orders-dashboard";
 import {
   createBeltOrderLineAction,
   createOrderCatalogItemAction,
@@ -12,6 +13,16 @@ import {
 } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { advanceCampaignStatus } from "@/lib/web-orders/campaigns";
+import { createWebOrdersClient } from "@/lib/web-orders/client";
+import {
+  getCurrentCampaign,
+  getSupplierSummary,
+  listCampaignOrders,
+  listCatalog,
+  type CampaignOrder
+} from "@/lib/web-orders/repository";
+import type { WebOrderCampaign, WebOrderCommunication } from "@/lib/web-orders/types";
 import { redirect } from "next/navigation";
 
 type Member = {
@@ -76,6 +87,7 @@ export default async function PedidosPage({
   }
 
   const params = await searchParams;
+  const materialData = await loadMaterialDashboardData();
   const supabase = createAdminClient();
   const [{ data: members, error: membersError }, { data: catalog, error: catalogError }, { data: lines, error: linesError }] = await Promise.all([
     supabase
@@ -129,6 +141,8 @@ export default async function PedidosPage({
 
         {params.saved ? <p className="save-ok">Cambios guardados correctamente.</p> : null}
         {params.error ? <p className="form-error">No se pudo guardar el cambio.</p> : null}
+
+        <MaterialOrdersDashboard {...materialData}>
 
         <section className="grid stats compact" aria-label="Resumen pedidos">
           <article className="card">
@@ -344,9 +358,59 @@ export default async function PedidosPage({
             </tbody>
           </table>
         </section>
+        </MaterialOrdersDashboard>
       </main>
     </div>
   );
+}
+
+async function loadMaterialDashboardData(): Promise<Omit<MaterialOrdersDashboardProps, "children">> {
+  try {
+    const client = createWebOrdersClient();
+    const currentCampaign = await getCurrentCampaign();
+    const [campaignResult, catalog, currentOrders, supplierSummary] = await Promise.all([
+      client.from("skbc_order_campaigns").select("*").order("period_start", { ascending: false }),
+      listCatalog(),
+      currentCampaign ? listCampaignOrders(currentCampaign.id) : Promise.resolve([]),
+      currentCampaign ? getSupplierSummary(currentCampaign.id) : Promise.resolve([])
+    ]);
+    if (campaignResult.error) throw campaignResult.error;
+
+    const campaigns = ((campaignResult.data ?? []) as WebOrderCampaign[]).map((campaign) => advanceCampaignStatus(campaign));
+    const historyCampaignIds = campaigns.filter((campaign) => campaign.status === "closed").map((campaign) => campaign.id);
+    const historyResult = historyCampaignIds.length
+      ? await client.from("skbc_merch_orders").select("*, items:skbc_merch_order_items(*)").in("campaign_id", historyCampaignIds).order("created_at", { ascending: true })
+      : { data: [], error: null };
+    if (historyResult.error) throw historyResult.error;
+
+    const orderIds = currentOrders.map((order) => order.id);
+    const communicationResult = orderIds.length
+      ? await client.from("skbc_order_communications").select("*").in("order_id", orderIds).order("created_at", { ascending: true })
+      : { data: [], error: null };
+    if (communicationResult.error) throw communicationResult.error;
+
+    return {
+      campaign: currentCampaign ? advanceCampaignStatus(currentCampaign) : null,
+      campaigns,
+      orders: currentOrders,
+      historyOrders: (historyResult.data ?? []) as CampaignOrder[],
+      supplierSummary,
+      catalog,
+      communications: (communicationResult.data ?? []) as WebOrderCommunication[]
+    };
+  } catch (error) {
+    console.error("Unable to load material orders dashboard.", error);
+    return {
+      campaign: null,
+      campaigns: [],
+      orders: [],
+      historyOrders: [],
+      supplierSummary: [],
+      catalog: [],
+      communications: [],
+      loadError: "Revisa la conexión privada con la base de datos de pedidos de la web."
+    };
+  }
 }
 
 function StatusActions({ line }: { line: OrderLine }) {
