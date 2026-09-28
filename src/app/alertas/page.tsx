@@ -119,7 +119,7 @@ export default async function AlertasPage() {
     id: `website-testimonials-${websiteAlerts.pendingTestimonials}`,
     level: "warn",
     title: `${websiteAlerts.pendingTestimonials} ${websiteAlerts.pendingTestimonials === 1 ? "testimonio pendiente" : "testimonios pendientes"} en la web`,
-    detail: "Hay nuevos testimonios esperando revision en el administrador de la pagina web.",
+    detail: "Abre el administrador de la pagina web y gestiona los testimonios pendientes.",
     href: WEBSITE_ADMIN_URL,
     external: true
   });
@@ -128,7 +128,7 @@ export default async function AlertasPage() {
     id: `website-kenshi-${websiteAlerts.pendingKenshiRegistrations}`,
     level: "warn",
     title: `${websiteAlerts.pendingKenshiRegistrations} ${websiteAlerts.pendingKenshiRegistrations === 1 ? "solicitud nueva" : "solicitudes nuevas"} de Area Kenshi`,
-    detail: "Hay solicitudes de alumnos o familias esperando revision en el administrador de la pagina web.",
+    detail: "Abre el administrador de la pagina web y gestiona las solicitudes de Area Kenshi pendientes.",
     href: WEBSITE_ADMIN_URL,
     external: true
   });
