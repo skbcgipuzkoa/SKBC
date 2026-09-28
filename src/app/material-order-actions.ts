@@ -14,6 +14,12 @@ import {
 } from "@/lib/web-orders/repository";
 import { advanceCampaignStatus } from "@/lib/web-orders/campaigns";
 import type { WebOrderJson } from "@/lib/web-orders/types";
+import { createWebOrdersClient } from "@/lib/web-orders/client";
+import {
+  sendPreparedMaterialOrderCommunications,
+  type MaterialOrderPaymentMethod,
+  type PreparedMaterialOrderCommunication
+} from "@/lib/email-notifications";
 
 const uuid = z.string().uuid();
 const optionalUrl = z.union([z.literal(""), z.string().url()]);
@@ -55,6 +61,16 @@ const closeSchema = z.object({
   expectedOrderCount: z.coerce.number().int().min(0),
   expectedCommunicationCount: z.coerce.number().int().min(0),
   unresolvedCount: z.coerce.number().int().min(0)
+});
+
+const sendCommunicationsSchema = z.object({
+  communicationIds: z.array(uuid).min(1).max(100),
+  mode: z.enum(["test", "send", "force-resend"]),
+  forceConfirmed: z.boolean()
+}).superRefine((value, context) => {
+  if (value.mode === "force-resend" && !value.forceConfirmed) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["forceConfirmed"], message: "El reenvío forzado requiere confirmación explícita." });
+  }
 });
 
 export async function updateMaterialProductAction(formData: FormData) {
@@ -152,6 +168,57 @@ export async function closeMaterialCampaignAction(formData: FormData) {
   refresh("campaign-closed");
 }
 
+export async function sendMaterialCampaignCommunicationsAction(formData: FormData) {
+  await requireInternalAccess();
+  const input = sendCommunicationsSchema.parse({
+    communicationIds: JSON.parse(String(formData.get("communicationIds") ?? "[]")),
+    mode: formData.get("mode"),
+    forceConfirmed: formData.get("forceConfirmed") === "yes"
+  });
+  const client = createWebOrdersClient();
+  const { data, error } = await client
+    .from("skbc_order_communications")
+    .select("id,status,recipient_name,recipient_email,snapshot")
+    .in("id", input.communicationIds)
+    .eq("channel", "email")
+    .eq("direction", "outbound");
+  if (error) throw error;
+  if ((data ?? []).length !== input.communicationIds.length) throw new Error("La selección de comunicaciones cambió. Recarga la página.");
+
+  const communications: PreparedMaterialOrderCommunication[] = [];
+  for (const row of data ?? []) {
+    if (row.status === "sent" && input.mode === "send") continue;
+    try {
+      communications.push(parsePreparedCommunication(row));
+    } catch (parseError) {
+      if (input.mode === "test") throw parseError;
+      const { error: updateError } = await client.from("skbc_order_communications").update({
+        status: "failed",
+        sent_at: null,
+        failed_at: new Date().toISOString(),
+        failure_message: conciseActionError(parseError)
+      }).eq("id", row.id);
+      if (updateError) throw updateError;
+    }
+  }
+  if (!communications.length && input.mode === "test") throw new Error("No hay comunicaciones válidas para la vista previa.");
+  const result = await sendPreparedMaterialOrderCommunications({
+    communications,
+    testOnly: input.mode === "test",
+    forceResend: input.mode === "force-resend",
+    update: async (id, outcome) => {
+      const { error: updateError } = await client.from("skbc_order_communications").update({
+        status: outcome.status,
+        sent_at: outcome.sentAt,
+        failed_at: outcome.failedAt,
+        failure_message: outcome.error
+      }).eq("id", id);
+      if (updateError) throw updateError;
+    }
+  });
+  refresh(input.mode === "test" ? "communication-preview-sent" : `communications-sent-${result.sentCount}-failed-${result.failedCount}`);
+}
+
 async function requireInternalAccess() {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 }
@@ -165,4 +232,46 @@ function parseAttributes(value: string): Record<string, WebOrderJson | undefined
   const parsed: unknown = JSON.parse(value);
   if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
   return parsed as Record<string, WebOrderJson | undefined>;
+}
+
+function parsePreparedCommunication(row: Record<string, unknown>): PreparedMaterialOrderCommunication {
+  const snapshot = requiredRecord(row.snapshot, "snapshot");
+  const campaign = requiredRecord(snapshot.campaign, "campaign");
+  const rawItems = z.array(z.record(z.string(), z.unknown())).min(1).parse(snapshot.items);
+  const paymentMethod = z.enum(["cash", "bank", "paid"]).parse(snapshot.payment_method) as MaterialOrderPaymentMethod;
+  const recipientEmail = z.string().trim().email().parse(row.recipient_email ?? snapshot.customer_email);
+  return {
+    id: uuid.parse(row.id),
+    status: z.enum(["prepared", "sent", "failed"]).parse(row.status),
+    recipientEmail,
+    payerName: z.string().trim().min(1).parse(row.recipient_name ?? snapshot.customer_name),
+    paymentMethod,
+    campaignReference: `${formatCampaignDate(campaign.period_start)} - ${formatCampaignDate(campaign.period_end)}`,
+    orderNumber: z.string().trim().min(1).parse(snapshot.order_number),
+    items: rawItems.map((item, index) => ({
+      id: z.string().default(`line-${index + 1}`).parse(item.id),
+      recipient: z.string().trim().min(1).catch("Pedido familiar").parse(item.recipient ?? item.recipient_name),
+      productName: z.string().trim().min(1).parse(item.product_name),
+      variantName: z.string().trim().min(1).parse(item.variant_name ?? item.size),
+      sku: z.string().trim().min(1).parse(item.sku),
+      quantity: z.coerce.number().int().min(1).parse(item.quantity),
+      unitPriceCents: z.coerce.number().int().min(0).parse(item.unit_price_cents),
+      lineTotalCents: z.coerce.number().int().min(0).parse(item.line_total_cents)
+    }))
+  };
+}
+
+function requiredRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || Array.isArray(value) || typeof value !== "object") throw new Error(`La comunicación no contiene ${label} válido.`);
+  return value as Record<string, unknown>;
+}
+
+function formatCampaignDate(value: unknown) {
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(value);
+  return new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Madrid" }).format(new Date(`${date}T12:00:00Z`));
+}
+
+function conciseActionError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "Error desconocido.");
+  return message.replace(/\s+/g, " ").trim().slice(0, 240);
 }

@@ -7,6 +7,7 @@ import { SubmitButton } from "@/app/components/SubmitButton";
 import {
   assignMaterialPaymentAction,
   closeMaterialCampaignAction,
+  sendMaterialCampaignCommunicationsAction,
   updateMaterialProductAction,
   updateMaterialVariantAction
 } from "@/app/material-order-actions";
@@ -15,7 +16,12 @@ import type { ManagementCampaignStatus } from "@/lib/web-orders/campaigns";
 import type { WebOrderCampaign, WebOrderCommunication, WebOrderJson } from "@/lib/web-orders/types";
 
 type CampaignView = Omit<WebOrderCampaign, "status"> & { status: ManagementCampaignStatus };
-type CommunicationView = WebOrderCommunication & { status?: string | null };
+type CommunicationView = WebOrderCommunication & {
+  status?: "prepared" | "sent" | "failed" | null;
+  recipient_name?: string | null;
+  recipient_email?: string | null;
+  failure_message?: string | null;
+};
 
 export type MaterialOrdersDashboardProps = {
   campaign: CampaignView | null;
@@ -163,14 +169,22 @@ function SupplierView({ rows, campaign }: { rows: SupplierSummaryRow[]; campaign
 }
 
 function PaymentsView({ orders, communications, campaign }: { orders: CampaignOrder[]; communications: CommunicationView[]; campaign: CampaignView | null }) {
+  const communicationIds = JSON.stringify(communications.map((communication) => communication.id));
+  const pendingCount = communications.filter((communication) => communication.status !== "sent").length;
+  const sentCount = communications.filter((communication) => communication.status === "sent").length;
   return <div className="material-tab-panel">
     <section className="material-section">
       <div className="material-section-heading"><div><h2>Cobros</h2><p>La forma de pago se asigna por responsable y se incluirá en la comunicación preparada.</p></div></div>
       <div className="material-payment-list">{orders.length ? orders.map((order) => <div className="material-payment-row" key={order.id}><div><strong>{order.customer_name}</strong><span>{order.order_number ?? "Sin número"} · {order.customer_email ?? "Sin email"}</span></div><strong>{money(order.total_cents ?? order.items.reduce((sum, item) => sum + item.line_total_cents, 0))}</strong><form action={assignMaterialPaymentAction}><input type="hidden" name="orderId" value={order.id} /><select name="paymentMethod" defaultValue={order.payment_method ?? ""} aria-label={`Pago de ${order.customer_name}`} required disabled={campaign?.status !== "open"}><option value="" disabled>Asignar pago</option><option value="cash">Entregar en el club</option><option value="bank">Cargar en cuenta</option><option value="paid">Pagado</option></select><PaymentSubmitButton disabled={campaign?.status !== "open"} /></form></div>) : <p className="muted">No hay pedidos en la campaña.</p>}</div>
     </section>
     <section className="material-section">
-      <div className="material-section-heading"><div><h2>Comunicaciones</h2><p>{campaign?.status === "closed" ? "Preparadas para revisión. El envío se implementa en la siguiente tarea." : "Se prepararán al cerrar la campaña; nunca se envían automáticamente."}</p></div><span>{communications.length} preparadas</span></div>
-      {communications.length ? <div className="material-communication-list">{communications.map((communication) => <details key={communication.id}><summary><span><strong>{communication.subject || "Comunicación de pedido"}</strong><small>{communication.status ?? "preparada"}</small></span><b>Vista previa</b></summary><pre>{communication.body}</pre></details>)}</div> : <EmptyState title="Sin comunicaciones preparadas" detail="Cierra la campaña cuando todos los datos estén revisados." />}
+      <div className="material-section-heading"><div><h2>Comunicaciones</h2><p>{campaign?.status === "closed" ? "Revisa los destinatarios y envía primero una prueba interna. Cada familia recibe únicamente su pedido." : "Se prepararán al cerrar la campaña; nunca se envían automáticamente."}</p></div><span>{pendingCount} pendientes · {sentCount} enviadas</span></div>
+      {communications.length ? <><div className="material-communication-list">{communications.map((communication) => <details key={communication.id}><summary><span><strong>{communication.recipient_name || communication.subject || "Comunicación de pedido"}</strong><small>{communication.recipient_email ?? "Sin email"} · {communication.status ?? "preparada"}</small></span><b>Revisar</b></summary>{communication.body ? <pre>{communication.body}</pre> : <p className="muted">El email profesional se generará desde la instantánea congelada del pedido.</p>}{communication.failure_message ? <p className="form-error">{communication.failure_message}</p> : null}</details>)}</div>
+        {campaign?.status === "closed" ? <div className="material-campaign-actions">
+          <form action={sendMaterialCampaignCommunicationsAction}><input type="hidden" name="communicationIds" value={communicationIds} /><button className="secondary-button" type="submit" name="mode" value="test">Enviar prueba al club</button></form>
+          <form action={sendMaterialCampaignCommunicationsAction} onSubmit={(event) => { if (!window.confirm(`Se procesarán ${pendingCount} comunicaciones pendientes, una por familia. ¿Continuar?`)) event.preventDefault(); }}><input type="hidden" name="communicationIds" value={communicationIds} /><button type="submit" name="mode" value="send" disabled={!pendingCount}>Enviar pendientes</button></form>
+          {sentCount ? <form action={sendMaterialCampaignCommunicationsAction} onSubmit={(event) => { if (!window.confirm(`Esto reenviará también ${sentCount} comunicaciones ya enviadas. ¿Confirmas el reenvío forzado?`)) event.preventDefault(); }}><input type="hidden" name="communicationIds" value={communicationIds} /><input type="hidden" name="forceConfirmed" value="yes" /><button className="danger-button" type="submit" name="mode" value="force-resend">Forzar reenvío de todas</button></form> : null}
+        </div> : null}</> : <EmptyState title="Sin comunicaciones preparadas" detail="Cierra la campaña cuando todos los datos estén revisados." />}
     </section>
   </div>;
 }

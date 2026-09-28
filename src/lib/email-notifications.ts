@@ -31,6 +31,131 @@ export type MaterialOrderEmailGroup = {
   items: Array<{ student: string; concept: string; amountCents: number }>;
 };
 
+export type PreparedMaterialOrderCommunication = {
+  id: string;
+  status: "prepared" | "sent" | "failed";
+  recipientEmail: string;
+  payerName: string;
+  paymentMethod: MaterialOrderPaymentMethod;
+  campaignReference: string;
+  orderNumber: string;
+  items: Array<{
+    id: string;
+    recipient: string;
+    productName: string;
+    variantName: string;
+    sku: string;
+    quantity: number;
+    unitPriceCents: number;
+    lineTotalCents: number;
+  }>;
+};
+
+export type PreparedMaterialOrderMail = {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+};
+
+export function buildPreparedMaterialOrderEmail(communication: PreparedMaterialOrderCommunication): PreparedMaterialOrderMail {
+  const total = materialCommunicationTotal(communication);
+  const subject = `Pedido de material SKBC ${communication.orderNumber}`;
+  const itemText = communication.items.map((item) =>
+    `- ${item.recipient}: ${item.productName} · ${item.variantName} · ${item.quantity} x ${formatEuros(item.unitPriceCents)} = ${formatEuros(item.lineTotalCents)}`
+  );
+  const text = [
+    `Hola, ${communication.payerName}:`,
+    "",
+    "Gracias por confiar en SKBC Gipuzkoa. Este es el detalle de vuestro pedido de material:",
+    "",
+    ...itemText,
+    "",
+    `Total: ${formatEuros(total)}`,
+    preparedPaymentMessage(communication.paymentMethod),
+    `Campaña: ${communication.campaignReference}`,
+    `Referencia del pedido: ${communication.orderNumber}`,
+    "",
+    "Un saludo,",
+    "SKBC Gipuzkoa"
+  ].join("\n");
+  const rows = communication.items.map((item) => `
+    <tr data-material-item="${escapeHtml(item.id)}">
+      <td style="padding:12px;border-bottom:1px solid #e4e9f0"><strong>${escapeHtml(item.recipient)}</strong><br><span style="color:#667085">${escapeHtml(item.productName)} · ${escapeHtml(item.variantName)} · Ref. ${escapeHtml(item.sku)}</span></td>
+      <td style="padding:12px;border-bottom:1px solid #e4e9f0;text-align:center">${item.quantity}</td>
+      <td style="padding:12px;border-bottom:1px solid #e4e9f0;text-align:right;white-space:nowrap">${formatEuros(item.lineTotalCents)}</td>
+    </tr>`).join("");
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#172033;line-height:1.55;max-width:640px;margin:0 auto">
+    <div style="background:#0057b8;color:#fff;padding:18px 24px"><img src="https://www.skbcgipuzkoa.com/assets/logo-skbc.png" width="68" height="68" alt="SKBC Gipuzkoa" style="display:block;background:#fff;border-radius:8px;padding:4px"><strong style="display:block;margin-top:10px;font-size:20px">SKBC Gipuzkoa</strong><span>Pedido de material del club</span></div>
+    <div style="padding:24px;border:1px solid #d7e0eb;border-top:0"><p>Hola, <strong>${escapeHtml(communication.payerName)}</strong>:</p><p>Gracias por confiar en SKBC Gipuzkoa. Este es el detalle de vuestro pedido de material.</p>
+    <table style="width:100%;border-collapse:collapse;margin:20px 0"><thead><tr><th style="padding:10px;text-align:left;background:#f4f7fb">Artículo</th><th style="padding:10px;background:#f4f7fb">Cant.</th><th style="padding:10px;text-align:right;background:#f4f7fb">Importe</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="2" style="padding:14px 12px;background:#eef4fb"><strong>Total</strong></td><td style="padding:14px 12px;background:#eef4fb;text-align:right;font-size:20px;color:#003f88"><strong>${formatEuros(total)}</strong></td></tr></tfoot></table>
+    <div style="background:#f8fafc;border-left:4px solid #0057b8;padding:14px 16px;margin:20px 0"><strong>Forma de pago</strong><br>${escapeHtml(preparedPaymentMessage(communication.paymentMethod))}</div>
+    <p style="color:#667085"><strong>Campaña:</strong> ${escapeHtml(communication.campaignReference)}<br><strong>Referencia:</strong> ${escapeHtml(communication.orderNumber)}</p><p style="margin-top:28px">Un saludo,<br><strong>SKBC Gipuzkoa</strong></p>
+    <div style="border-top:1px solid #d7e0eb;margin-top:28px;padding-top:18px;text-align:center;color:#667085;font-size:13px"><a href="https://www.instagram.com/skbc_gipuzkoa/" style="color:#0057b8;margin:0 8px">Instagram</a><a href="https://www.facebook.com/100094925771992" style="color:#0057b8;margin:0 8px">Facebook</a><a href="https://www.youtube.com/@SKBCGIPUZKOA" style="color:#0057b8;margin:0 8px">YouTube</a><a href="https://www.skbcgipuzkoa.com/" style="color:#0057b8;margin:0 8px">Web</a></div></div></div>`;
+  return { to: communication.recipientEmail, subject, text, html };
+}
+
+export function buildPreparedMaterialOrderPreview(communications: PreparedMaterialOrderCommunication[], clubEmail: string): PreparedMaterialOrderMail {
+  const messages = communications.map(buildPreparedMaterialOrderEmail);
+  return {
+    to: clubEmail,
+    subject: `[PRUEBA] Comunicaciones de material SKBC (${messages.length})`,
+    text: messages.map((message) => message.text).join("\n\n--------------------\n\n"),
+    html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#172033"><h1>Vista previa interna</h1>${messages.map((message) => message.html).join('<hr style="margin:32px 0;border:0;border-top:2px solid #172033">')}</div>`
+  };
+}
+
+export async function processPreparedMaterialOrderCommunications(
+  communications: PreparedMaterialOrderCommunication[],
+  options: {
+    send: (mail: PreparedMaterialOrderMail) => Promise<unknown>;
+    update: (id: string, outcome: { status: "sent" | "failed"; sentAt: string | null; failedAt: string | null; error: string | null }) => Promise<unknown>;
+    testRecipient?: string;
+    forceResend?: boolean;
+    now?: () => string;
+  }
+) {
+  if (options.testRecipient) {
+    await options.send(buildPreparedMaterialOrderPreview(communications, options.testRecipient));
+    return { previewOnly: true, sentCount: 0, failedCount: 0, skippedCount: 0 };
+  }
+  let sentCount = 0;
+  let failedCount = 0;
+  let skippedCount = 0;
+  for (const communication of communications) {
+    if (communication.status === "sent" && !options.forceResend) {
+      skippedCount += 1;
+      continue;
+    }
+    try {
+      await options.send(buildPreparedMaterialOrderEmail(communication));
+      await options.update(communication.id, { status: "sent", sentAt: options.now?.() ?? new Date().toISOString(), failedAt: null, error: null });
+      sentCount += 1;
+    } catch (error) {
+      await options.update(communication.id, { status: "failed", sentAt: null, failedAt: options.now?.() ?? new Date().toISOString(), error: conciseEmailError(error) });
+      failedCount += 1;
+    }
+  }
+  return { previewOnly: false, sentCount, failedCount, skippedCount };
+}
+
+export async function sendPreparedMaterialOrderCommunications(input: {
+  communications: PreparedMaterialOrderCommunication[];
+  testOnly?: boolean;
+  forceResend?: boolean;
+  update: Parameters<typeof processPreparedMaterialOrderCommunications>[1]["update"];
+}) {
+  const transporter = createTransporter();
+  const from = cleanEnv(process.env.SKBC_EMAIL_FROM) ?? "SKBC Gipuzkoa <skbcgipuzkoa@gmail.com>";
+  const testRecipient = input.testOnly ? cleanEnv(process.env.SKBC_EMAIL_USER) ?? "skbcgipuzkoa@gmail.com" : undefined;
+  return processPreparedMaterialOrderCommunications(input.communications, {
+    testRecipient,
+    forceResend: input.forceResend,
+    update: input.update,
+    send: (mail) => transporter.sendMail({ from, ...mail })
+  });
+}
+
 export async function sendMaterialOrderEmailCampaign(input: {
   subject: string;
   groups: MaterialOrderEmailGroup[];
@@ -301,6 +426,10 @@ function materialOrderTotal(group: MaterialOrderEmailGroup) {
   return group.items.reduce((sum, item) => sum + item.amountCents, 0);
 }
 
+function materialCommunicationTotal(communication: PreparedMaterialOrderCommunication) {
+  return communication.items.reduce((sum, item) => sum + item.lineTotalCents, 0);
+}
+
 function formatEuros(cents: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
@@ -309,6 +438,12 @@ function paymentMessage(method: MaterialOrderPaymentMethod) {
   if (method === "bank") return "El importe se cargara en la cuenta bancaria habitual. No es necesario traer dinero al club.";
   if (method === "paid") return "Pago recibido. No queda ningun importe pendiente por este pedido.";
   return "Cuando os venga bien, podéis entregar el importe en el club. Muchas gracias.";
+}
+
+function preparedPaymentMessage(method: MaterialOrderPaymentMethod) {
+  if (method === "bank") return "El importe se cargará en la cuenta bancaria habitual. No tenéis que hacer nada más.";
+  if (method === "paid") return "El pago ya está recibido. No queda ningún importe pendiente por este pedido.";
+  return "Podéis entregar el importe en el club cuando os venga bien. Muchas gracias.";
 }
 
 function paymentMethodLabel(method: MaterialOrderPaymentMethod) {
@@ -336,4 +471,8 @@ function escapeHtml(value: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || "Error desconocido.");
+}
+
+function conciseEmailError(error: unknown) {
+  return errorMessage(error).replace(/\s+/g, " ").trim().slice(0, 240) || "Error desconocido.";
 }
