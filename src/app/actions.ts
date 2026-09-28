@@ -9,7 +9,7 @@ import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { runSkbcBackup } from "@/lib/backups";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
 import { generateDiplomaForExam } from "@/lib/diplomas";
-import { sendStudentEmailNotification, type EmailAudience } from "@/lib/email-notifications";
+import { sendMaterialOrderEmailCampaign, sendStudentEmailNotification, type EmailAudience, type MaterialOrderEmailGroup } from "@/lib/email-notifications";
 import { deleteExam, registerExam, saveExamReport } from "@/lib/exams";
 import { createIntegratedExamEvent, createIntegratedExamItem, deleteIntegratedExamEvent, deleteIntegratedExamItem, finalizeIntegratedExamEvent, submitIntegratedExamScores, updateIntegratedExamItem, type IntegratedExamProgram } from "@/lib/integrated-exams";
 import { archiveLegacyRowsToDrive } from "@/lib/legacy-rows-archive";
@@ -332,6 +332,33 @@ export async function sendStudentEmailNotificationAction(formData: FormData) {
   }
 
   redirect(`/notificaciones?saved=email&detail=${encodeURIComponent(`${result.sentCount}/${result.recipientCount} emails enviados`)}`);
+}
+
+export async function sendMaterialOrderEmailCampaignAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const subject = String(formData.get("subject") ?? "").trim();
+  const testOnly = String(formData.get("mode") ?? "") === "test";
+  let groups: MaterialOrderEmailGroup[] = [];
+  try {
+    groups = JSON.parse(String(formData.get("groups") ?? "[]")) as MaterialOrderEmailGroup[];
+  } catch {
+    redirect("/notificaciones?error=material-email&detail=El%20desglose%20del%20pedido%20no%20es%20valido");
+  }
+
+  if (!subject || !Array.isArray(groups) || !groups.length) {
+    redirect("/notificaciones?error=material-email&detail=Faltan%20datos%20del%20pedido");
+  }
+
+  let result: Awaited<ReturnType<typeof sendMaterialOrderEmailCampaign>>;
+  try {
+    result = await sendMaterialOrderEmailCampaign({ subject, groups, testOnly });
+  } catch (error) {
+    console.error("Error sending material order email campaign", error);
+    redirect(`/notificaciones?error=material-email&detail=${encodeURIComponent(errorMessage(error))}`);
+  }
+  const detail = testOnly ? "Prueba enviada al correo del club" : `${result.sentCount}/${result.recipientCount} comunicaciones enviadas`;
+  redirect(`/notificaciones?saved=material-email&detail=${encodeURIComponent(detail)}`);
 }
 
 export async function updateTelegramNotificationSettingAction(formData: FormData) {

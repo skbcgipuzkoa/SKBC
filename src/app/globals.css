@@ -10866,3 +10866,89 @@ tbody tr:hover {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
 }
+.material-campaign-form,
+.material-campaign-groups,
+.material-campaign-editor,
+.material-order-lines {
+  display: grid;
+  gap: 14px;
+}
+
+.material-campaign-toolbar,
+.material-campaign-actions,
+.material-campaign-group > summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.material-campaign-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.material-campaign-group > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px;
+}
+
+.material-campaign-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.material-campaign-group > summary span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.material-campaign-editor {
+  border-top: 1px solid var(--line);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 14px;
+}
+
+.material-campaign-editor label {
+  display: grid;
+  gap: 6px;
+}
+
+.material-order-lines,
+.material-email-preview,
+.material-campaign-editor > .danger-button {
+  grid-column: 1 / -1;
+}
+
+.material-order-line {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(220px, 2fr) 110px 42px;
+}
+
+.material-email-preview {
+  background: #f8fafc;
+  border-left: 4px solid var(--brand);
+  padding: 14px 16px;
+}
+
+.material-email-preview p,
+.material-email-preview ul {
+  margin: 8px 0 0;
+}
+
+@media (max-width: 760px) {
+  .material-campaign-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .material-order-line {
+    grid-template-columns: 1fr;
+  }
+
+  .material-order-line .icon-button {
+    justify-self: end;
+  }
+}
