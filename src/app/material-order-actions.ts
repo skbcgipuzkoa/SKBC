@@ -13,7 +13,6 @@ import {
   upsertCatalogProduct
 } from "@/lib/web-orders/repository";
 import { advanceCampaignStatus } from "@/lib/web-orders/campaigns";
-import type { WebOrderJson } from "@/lib/web-orders/types";
 import { createWebOrdersClient } from "@/lib/web-orders/client";
 import {
   sendPreparedMaterialOrderCommunications,
@@ -37,15 +36,22 @@ const productSchema = z.object({
 
 const variantSchema = z.object({
   variantId: uuid,
-  unitPriceCents: z.coerce.number().int().min(0).max(1_000_000),
+  priceCents: z.coerce.number().int().min(0).max(1_000_000),
   costCents: z.coerce.number().int().min(0).max(1_000_000),
   marginCents: z.coerce.number().int().min(-1_000_000).max(1_000_000),
+  costBasis: z.string().trim().min(1).max(500),
   promotionPriceCents: z.union([z.literal(""), z.coerce.number().int().min(0).max(1_000_000)]),
   promotionStartsOn: optionalDate,
   promotionEndsOn: optionalDate,
+  promotionActive: z.boolean(),
   active: z.boolean(),
-  attributes: z.string().min(1)
 }).superRefine((value, context) => {
+  if (value.priceCents !== value.costCents + value.marginCents) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["priceCents"], message: "El precio final debe ser coste más margen." });
+  }
+  if (value.promotionActive && value.promotionPriceCents === "") {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["promotionPriceCents"], message: "Una promoción activa requiere precio." });
+  }
   if (value.promotionStartsOn && value.promotionEndsOn && value.promotionStartsOn > value.promotionEndsOn) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["promotionEndsOn"], message: "La promoción no puede terminar antes de empezar." });
   }
@@ -101,29 +107,27 @@ export async function updateMaterialVariantAction(formData: FormData) {
   await requireInternalAccess();
   const input = variantSchema.parse({
     variantId: formData.get("variantId"),
-    unitPriceCents: formData.get("unitPriceCents"),
+    priceCents: formData.get("priceCents"),
     costCents: formData.get("costCents"),
     marginCents: formData.get("marginCents"),
+    costBasis: formData.get("costBasis"),
     promotionPriceCents: formData.get("promotionPriceCents"),
     promotionStartsOn: formData.get("promotionStartsOn"),
     promotionEndsOn: formData.get("promotionEndsOn"),
+    promotionActive: formData.get("promotionActive") === "on",
     active: formData.get("active") === "on",
-    attributes: formData.get("attributes")
   });
 
-  const previousAttributes = parseAttributes(input.attributes);
-  const attributes: WebOrderJson = {
-    ...previousAttributes,
+  const pricingUpdate = {
     cost_cents: input.costCents,
     margin_cents: input.marginCents,
+    price_cents: input.priceCents,
+    cost_basis: input.costBasis,
     promotion_price_cents: input.promotionPriceCents === "" ? null : input.promotionPriceCents,
-    promotion_starts_on: input.promotionStartsOn || null,
-    promotion_ends_on: input.promotionEndsOn || null
-  };
-  const pricingUpdate = {
-    unit_price_cents: input.unitPriceCents,
+    promotion_starts_at: input.promotionStartsOn || null,
+    promotion_ends_at: input.promotionEndsOn || null,
+    promotion_is_active: input.promotionActive,
     is_active: input.active,
-    attributes
   };
 
   await updateVariantPricing(input.variantId, pricingUpdate);
@@ -226,12 +230,6 @@ async function requireInternalAccess() {
 function refresh(saved: string): never {
   revalidatePath("/pedidos-cinturones");
   redirect(`/pedidos-cinturones?saved=${saved}`);
-}
-
-function parseAttributes(value: string): Record<string, WebOrderJson | undefined> {
-  const parsed: unknown = JSON.parse(value);
-  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
-  return parsed as Record<string, WebOrderJson | undefined>;
 }
 
 function parsePreparedCommunication(row: Record<string, unknown>): PreparedMaterialOrderCommunication {

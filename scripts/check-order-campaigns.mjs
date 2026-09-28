@@ -164,11 +164,35 @@ assert.match(closeCampaignText, /expectedOrderCount:\s*number/);
 assert.match(closeCampaignText, /expectedCommunicationCount:\s*number/);
 assert.match(closeCampaignText, /p_expected_order_count:\s*expectedOrderCount/);
 assert.match(closeCampaignText, /p_expected_communication_count:\s*expectedCommunicationCount/);
+assert.match(closeCampaignText, /parseCloseCampaignResult\(data\)/);
+
+const closeResultParser = repositoryFile.statements.find(
+  (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "parseCloseCampaignResult"
+);
+assert.ok(closeResultParser, "close RPC result must be runtime validated");
+const closeResultJavaScript = ts.transpileModule(closeResultParser.getText(repositoryFile).replace(/^function /, "export function "), {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
+}).outputText;
+const { parseCloseCampaignResult } = await import(`data:text/javascript,${encodeURIComponent(closeResultJavaScript)}`);
+assert.deepEqual(parseCloseCampaignResult([{
+  campaign_id: "10000000-0000-4000-8000-000000000001",
+  order_count: 2,
+  prepared_communication_count: 1
+}]), {
+  campaign_id: "10000000-0000-4000-8000-000000000001",
+  order_count: 2,
+  prepared_communication_count: 1
+});
+assert.throws(() => parseCloseCampaignResult([{ campaign_id: "bad", order_count: 2 }]), /invalid result/i);
 
 const actionsSource = await readFile(
   new URL("../src/app/material-order-actions.ts", import.meta.url),
   "utf8"
 );
+assert.doesNotMatch(actionsSource, /attributes\s*=\s*\{[\s\S]*cost_cents/);
+for (const field of ["cost_cents", "margin_cents", "price_cents", "cost_basis", "promotion_price_cents", "promotion_starts_at", "promotion_ends_at", "promotion_is_active"]) {
+  assert.match(actionsSource, new RegExp(`${field}:`), `variant updates must write ${field}`);
+}
 assert.match(actionsSource, /getCampaignById\(input\.campaignId\)/);
 assert.match(actionsSource, /advanceCampaignStatus\(campaign/);
 assert.match(actionsSource, /status\s*!==\s*"pending_close"/);

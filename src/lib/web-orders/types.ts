@@ -37,7 +37,16 @@ export type WebOrderVariant = {
   sku: string;
   name: string;
   attributes: WebOrderJson;
+  supplier_reference: string;
+  cost_cents: number;
+  margin_cents: number;
+  price_cents: number;
   unit_price_cents: number;
+  cost_basis: string;
+  promotion_price_cents: number | null;
+  promotion_starts_at: string | null;
+  promotion_ends_at: string | null;
+  promotion_is_active: boolean;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -84,6 +93,10 @@ export type WebOrderItem = {
   product_name: string;
   variant_name: string;
   sku: string;
+  supplier_reference: string;
+  size: string;
+  recipient: string | null;
+  cost_cents: number;
   quantity: number;
   unit_price_cents: number;
   line_total_cents: number;

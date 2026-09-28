@@ -55,11 +55,20 @@ export type CatalogProductInput = Omit<WebOrderProduct, "id" | "created_at" | "u
 
 export type VariantPricingInput = Pick<
   WebOrderVariant,
-  "unit_price_cents" | "is_active"
+  | "cost_cents"
+  | "margin_cents"
+  | "price_cents"
+  | "cost_basis"
+  | "promotion_price_cents"
+  | "promotion_starts_at"
+  | "promotion_ends_at"
+  | "promotion_is_active"
+  | "is_active"
 >;
 
 export type CloseCampaignResult = {
-  campaign: WebOrderCampaign;
+  campaign_id: string;
+  order_count: number;
   prepared_communication_count: number;
 };
 
@@ -196,7 +205,20 @@ export async function closeCampaign(
   );
 
   if (error) throw error;
-  return requireRpcResult<CloseCampaignResult>(data, WEB_ORDER_RPC_CONTRACTS.closeCampaign.name);
+  return parseCloseCampaignResult(data);
+}
+
+export function parseCloseCampaignResult(data: unknown): CloseCampaignResult {
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result || typeof result !== "object") throw new Error("close_skbc_order_campaign returned an invalid result.");
+  const row = result as Record<string, unknown>;
+  if (
+    typeof row.campaign_id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.campaign_id) ||
+    !Number.isInteger(row.order_count) || Number(row.order_count) < 0 ||
+    !Number.isInteger(row.prepared_communication_count) || Number(row.prepared_communication_count) < 0
+  ) throw new Error("close_skbc_order_campaign returned an invalid result.");
+  return row as CloseCampaignResult;
 }
 
 function requireRpcResult<T>(data: unknown, rpcName: string): T {
