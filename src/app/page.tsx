@@ -162,10 +162,10 @@ export async function AdminDashboard() {
   const openDisplayClasses = mergeCombinedClassPreviews(openClasses ?? []);
 
   const stats = [
-    { label: "Activos", value: activeMembers ?? 0, icon: Users },
-    { label: "Adultos", value: adultMembers ?? 0, icon: GraduationCap },
-    { label: "Ninos", value: kidsMembers ?? 0, icon: Users },
-    { label: "Abiertas", value: openDisplayClasses.length, icon: CalendarCheck }
+    { label: "Activos", value: activeMembers ?? 0, icon: Users, href: null },
+    { label: "Adultos", value: adultMembers ?? 0, icon: GraduationCap, href: null },
+    { label: "Ninos", value: kidsMembers ?? 0, icon: Users, href: null },
+    { label: "Clases sin cerrar", value: openDisplayClasses.length, icon: CalendarCheck, href: "/clases?status=open" }
   ];
 
   return (
@@ -203,13 +203,18 @@ export async function AdminDashboard() {
         <section className="grid stats home-stats" aria-label="Resumen">
           {stats.map((item) => {
             const Icon = item.icon;
-            return (
-              <article className="card" key={item.label}>
+            const content = (
+              <>
                 <Icon aria-hidden="true" size={20} />
                 <h2>{item.label}</h2>
                 <div className="metric">{item.value}</div>
-              </article>
+              </>
             );
+            return item.href ? (
+              <a className="card home-stat-link" href={item.href} key={item.label} aria-label={`${item.label}: ${item.value}. Ver detalle`}>
+                {content}
+              </a>
+            ) : <article className="card" key={item.label}>{content}</article>;
           })}
         </section>
 

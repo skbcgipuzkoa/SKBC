@@ -28,7 +28,7 @@ type ClaseDisplay = Clase & {
 export default async function ClasesPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; month?: string }>;
+  searchParams: Promise<{ saved?: string; month?: string; status?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -36,12 +36,14 @@ export default async function ClasesPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  let classesQuery = supabase
     .from("classes")
     .select("legacy_id,class_date,name,class_group,class_type,responsible,status,plan_generated,closed")
     .order("class_date", { ascending: false })
-    .limit(100)
-    .returns<Clase[]>();
+    .limit(100);
+  const showOpenOnly = params.status === "open";
+  if (showOpenOnly) classesQuery = classesQuery.eq("closed", false);
+  const { data, error } = await classesQuery.returns<Clase[]>();
 
   if (error) throw error;
   const displayClasses = mergeCombinedClasses(data ?? []);
@@ -58,7 +60,7 @@ export default async function ClasesPage({
         <div className="topbar">
           <div>
             <p className="eyebrow">Gestion de clases</p>
-            <h1>Clases</h1>
+            <h1>{showOpenOnly ? "Clases sin cerrar" : "Clases"}</h1>
           </div>
           <div className="top-actions compact-mobile-actions">
             <a className="primary-link" href="/clases/nueva">Nueva clase</a>
@@ -70,11 +72,15 @@ export default async function ClasesPage({
           </div>
         </div>
         {params.saved === "deleted" ? <p className="save-ok">Clase eliminada del sistema nuevo.</p> : null}
+        <nav className="filter-tabs" aria-label="Filtrar clases">
+          <a className={!showOpenOnly ? "active" : ""} href="/clases">Todas</a>
+          <a className={showOpenOnly ? "active" : ""} href="/clases?status=open">Sin cerrar</a>
+        </nav>
         <section className="class-calendar" aria-label="Calendario de clases">
           <div className="calendar-head">
-            <a className="mini-action" href={`/clases?month=${previousMonth}`}>Anterior</a>
+            <a className="mini-action" href={`/clases?month=${previousMonth}${showOpenOnly ? "&status=open" : ""}`}>Anterior</a>
             <h2>{monthLabel}</h2>
-            <a className="mini-action" href={`/clases?month=${nextMonth}`}>Siguiente</a>
+            <a className="mini-action" href={`/clases?month=${nextMonth}${showOpenOnly ? "&status=open" : ""}`}>Siguiente</a>
           </div>
           <div className="calendar-weekdays" aria-hidden="true">
             <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
