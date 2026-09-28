@@ -89,6 +89,9 @@ export type VariantPricingInput = Pick<
   | "is_active"
 >;
 
+type CatalogVariantFields = Omit<WebOrderVariant, "id" | "created_at" | "updated_at">;
+export type CatalogVariantInput = CatalogVariantFields;
+
 export type CloseCampaignResult = {
   campaign_id: string;
   order_count: number;
@@ -268,6 +271,16 @@ export async function updateVariantPricing(variantId: string, input: VariantPric
     .from("skbc_merch_variants")
     .update(input)
     .eq("id", variantId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as WebOrderVariant;
+}
+
+export async function createCatalogVariant(input: CatalogVariantInput) {
+  const { data, error } = await createWebOrdersClient()
+    .from("skbc_merch_variants").insert(input as CatalogVariantFields)
     .select("*")
     .single();
 

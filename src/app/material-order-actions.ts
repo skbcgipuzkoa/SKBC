@@ -11,6 +11,7 @@ import {
   closeCampaign,
   completeCommunicationAttempt,
   countEligibleCommunicationGroups,
+  createCatalogVariant,
   getCampaignById,
   listCampaignOrders,
   reconcileCommunication,
@@ -27,6 +28,11 @@ import {
 
 const uuid = z.string().uuid();
 const optionalUrl = z.union([z.literal(""), z.string().url()]);
+const optionalImagePath = z.union([
+  z.literal(""),
+  z.string().url(),
+  z.string().regex(/^\/?assets\/[a-zA-Z0-9/_-]+\.[a-zA-Z0-9]+$/)
+]);
 const optionalDate = z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]);
 
 const productSchema = z.object({
@@ -34,14 +40,23 @@ const productSchema = z.object({
   slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   name: z.string().trim().min(2).max(160),
   supplierReference: z.string().trim().min(1).max(160),
+  brand: z.string().trim().max(120),
+  category: z.string().trim().min(1).max(120),
+  recommendedLevel: z.string().trim().max(240),
+  weight: z.string().trim().max(80),
   description: z.string().trim().max(1200),
-  imageUrl: optionalUrl,
+  imageUrl: optionalImagePath,
+  sourceUrl: optionalUrl,
+  imageAttribution: z.string().trim().max(500),
   sortOrder: z.coerce.number().int().min(0).max(10000),
   active: z.boolean()
+}).superRefine((value, context) => {
+  if ((value.imageUrl || value.sourceUrl) && !value.imageAttribution) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["imageAttribution"], message: "Las imágenes y fuentes requieren atribución." });
+  }
 });
 
-const variantSchema = z.object({
-  variantId: uuid,
+const variantFieldsSchema = z.object({
   priceCents: z.coerce.number().int().min(0).max(1_000_000),
   costCents: z.coerce.number().int().min(0).max(1_000_000),
   marginCents: z.coerce.number().int().min(-1_000_000).max(1_000_000),
@@ -51,7 +66,9 @@ const variantSchema = z.object({
   promotionEndsOn: optionalDate,
   promotionActive: z.boolean(),
   active: z.boolean(),
-}).superRefine((value, context) => {
+});
+
+function validateVariantPricing(value: z.infer<typeof variantFieldsSchema>, context: z.RefinementCtx) {
   if (value.priceCents !== value.costCents + value.marginCents) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["priceCents"], message: "El precio final debe ser coste más margen." });
   }
@@ -61,10 +78,21 @@ const variantSchema = z.object({
   if (value.promotionStartsOn && value.promotionEndsOn && value.promotionStartsOn > value.promotionEndsOn) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["promotionEndsOn"], message: "La promoción no puede terminar antes de empezar." });
   }
-});
+}
+
+const variantSchema = variantFieldsSchema.extend({ variantId: uuid }).superRefine(validateVariantPricing);
+
+const createVariantSchema = variantFieldsSchema.extend({
+  productId: uuid,
+  sku: z.string().trim().min(1).max(160),
+  size: z.string().trim().min(1).max(120),
+  supplierReference: z.string().trim().min(1).max(160),
+  sortOrder: z.coerce.number().int().min(0).max(10000)
+}).superRefine(validateVariantPricing);
 
 const paymentSchema = z.object({
   orderId: uuid,
+  campaignId: uuid,
   paymentMethod: z.enum(["cash", "bank", "paid"])
 });
 
@@ -105,23 +133,79 @@ export async function updateMaterialProductAction(formData: FormData) {
     slug: formData.get("slug"),
     name: formData.get("name"),
     supplierReference: formData.get("supplierReference"),
+    brand: formData.get("brand"),
+    category: formData.get("category"),
+    recommendedLevel: formData.get("recommendedLevel"),
+    weight: formData.get("weight"),
     description: formData.get("description"),
     imageUrl: formData.get("imageUrl"),
+    sourceUrl: formData.get("sourceUrl"),
+    imageAttribution: formData.get("imageAttribution"),
     sortOrder: formData.get("sortOrder"),
     active: formData.get("active") === "on"
   });
 
-  await upsertCatalogProduct({
-    ...(input.productId ? { id: input.productId } : {}),
+  const editableFields = {
     slug: input.slug,
     name: input.name,
+    brand: input.brand || null,
     supplier_reference: input.supplierReference,
+    category: input.category,
+    recommended_level: input.recommendedLevel || null,
+    weight: input.weight || null,
     description: input.description || null,
     image_url: input.imageUrl || null,
+    source_url: input.sourceUrl || null,
+    image_attribution: input.imageAttribution || null,
+    sort_order: input.sortOrder,
+    is_active: input.active
+  };
+  await upsertCatalogProduct(input.productId
+    ? { id: input.productId, ...editableFields }
+    : { ...editableFields, catalog_owner: "management", metadata: {} });
+  refresh("catalog-saved");
+}
+
+export async function createMaterialVariantAction(formData: FormData) {
+  await requireInternalAccess();
+  const input = createVariantSchema.parse({
+    productId: formData.get("productId"),
+    sku: formData.get("sku"),
+    size: formData.get("size"),
+    supplierReference: formData.get("supplierReference"),
+    priceCents: formData.get("priceCents"),
+    costCents: formData.get("costCents"),
+    marginCents: formData.get("marginCents"),
+    costBasis: formData.get("costBasis"),
+    promotionPriceCents: formData.get("promotionPriceCents"),
+    promotionStartsOn: formData.get("promotionStartsOn"),
+    promotionEndsOn: formData.get("promotionEndsOn"),
+    promotionActive: formData.get("promotionActive") === "on",
+    sortOrder: formData.get("sortOrder"),
+    active: formData.get("active") === "on"
+  });
+
+  await createCatalogVariant({
+    product_id: input.productId,
+    sku: input.sku,
+    name: input.size,
+    attributes: { size: input.size },
+    supplier_reference: input.supplierReference,
+    cost_cents: input.costCents,
+    margin_cents: input.marginCents,
+    price_cents: input.priceCents,
+    unit_price_cents: input.priceCents,
+    cost_basis: input.costBasis,
+    promotion_price_cents: input.promotionPriceCents === "" ? null : input.promotionPriceCents,
+    promotion_starts_at: input.promotionStartsOn || null,
+    promotion_ends_at: input.promotionEndsOn || null,
+    promotion_is_active: input.promotionActive,
+    catalog_owner: "management",
+    metadata: {},
     sort_order: input.sortOrder,
     is_active: input.active
   });
-  refresh("catalog-saved");
+  refresh("catalog-variant-created");
 }
 
 export async function updateMaterialVariantAction(formData: FormData) {
@@ -159,10 +243,11 @@ export async function assignMaterialPaymentAction(formData: FormData) {
   await requireInternalAccess();
   const input = paymentSchema.parse({
     orderId: formData.get("orderId"),
+    campaignId: formData.get("campaignId"),
     paymentMethod: formData.get("paymentMethod")
   });
   await assignPaymentMethod(input.orderId, input.paymentMethod);
-  refresh("payment-saved");
+  refresh("payment-saved", input.campaignId);
 }
 
 export async function closeMaterialCampaignAction(formData: FormData) {
@@ -193,7 +278,7 @@ export async function closeMaterialCampaignAction(formData: FormData) {
     input.expectedOrderCount,
     input.expectedCommunicationCount
   );
-  refresh("campaign-closed");
+  refresh("campaign-closed", input.campaignId);
 }
 
 export async function sendMaterialCampaignCommunicationsAction(formData: FormData) {
@@ -267,7 +352,7 @@ export async function sendMaterialCampaignCommunicationsAction(formData: FormDat
     totals.failedCount += result.failedCount;
     totals.ambiguousCount += result.ambiguousCount;
   }
-  refresh(`communications-sent-${totals.sentCount}-failed-${totals.failedCount}-ambiguous-${totals.ambiguousCount}`);
+  refresh(`communications-sent-${totals.sentCount}-failed-${totals.failedCount}-ambiguous-${totals.ambiguousCount}`, input.campaignId);
 }
 
 export async function reconcileMaterialCommunicationAction(formData: FormData) {
@@ -285,16 +370,17 @@ export async function reconcileMaterialCommunicationAction(formData: FormData) {
     attemptToken: input.attemptToken,
     delivered: input.delivered === "yes"
   });
-  refresh("communication-reconciled");
+  refresh("communication-reconciled", input.campaignId);
 }
 
 async function requireInternalAccess() {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 }
 
-function refresh(saved: string): never {
+function refresh(saved: string, campaignId?: string): never {
   revalidatePath("/pedidos-cinturones");
-  redirect(`/pedidos-cinturones?saved=${saved}`);
+  const campaign = campaignId ? `&campaign=${encodeURIComponent(campaignId)}` : "";
+  redirect(`/pedidos-cinturones?saved=${saved}${campaign}`);
 }
 
 function parsePreparedCommunication(row: Record<string, unknown>): PreparedMaterialOrderCommunication {

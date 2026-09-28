@@ -10990,6 +10990,31 @@ tbody tr:hover {
   color: #fff;
 }
 
+.material-campaign-selector {
+  align-items: end;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+}
+
+.material-campaign-selector label {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.material-campaign-selector select {
+  min-height: 40px;
+  width: 100%;
+}
+
 .material-tab-panel {
   display: grid;
   gap: 16px;
@@ -11370,6 +11395,10 @@ tbody tr:hover {
 }
 
 @media (max-width: 760px) {
+  .material-campaign-selector {
+    grid-template-columns: 1fr;
+  }
+
   .material-orders { gap: 12px; }
   .material-tabs { margin: 0 -2px; }
   .material-campaign-head,

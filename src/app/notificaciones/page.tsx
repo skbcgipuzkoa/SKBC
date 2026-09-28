@@ -1,12 +1,10 @@
 import { Bell, LogOut, Mail, PauseCircle, PlayCircle, Send } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { logoutAction, sendMaterialOrderEmailCampaignAction, sendStudentEmailNotificationAction, sendTelegramNotificationAction, updateTelegramNotificationSettingAction, updateTelegramScheduledPauseAction } from "@/app/actions";
+import { logoutAction, sendStudentEmailNotificationAction, sendTelegramNotificationAction, updateTelegramNotificationSettingAction, updateTelegramScheduledPauseAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { EmailRecipientPicker, type EmailRecipientOption } from "@/components/email-recipient-picker";
-import { MaterialOrderEmailCampaign } from "@/components/material-order-email-campaign";
-import type { MaterialOrderEmailGroup } from "@/lib/email-notifications";
 
 type NotificationLog = {
   id: string;
@@ -222,22 +220,6 @@ export default async function NotificacionesPage({
         <section className="card email-notification-card">
           <div className="section-heading-row">
             <div>
-              <h2>Pedido de material</h2>
-              <p className="muted">Revisa el desglose personalizado, envia una prueba al club y confirma despues las comunicaciones familiares.</p>
-            </div>
-            <Mail aria-hidden="true" size={22} />
-          </div>
-          <MaterialOrderEmailCampaign
-            action={sendMaterialOrderEmailCampaignAction}
-            members={(emailMembersResult.data ?? []).map((member) => ({ id: member.id, name: member.display_name, email: member.family_email }))}
-            initialGroups={materialOrderGroups(emailMembersResult.data ?? [])}
-          />
-          <p className="muted">Fuera de las comunicaciones: Alvaro 87,00 € (Aiala, Gorka y palo) y SKBC 5,00 € (cinturon de Aritz). Total general comprobado: 637,00 €.</p>
-        </section>
-
-        <section className="card email-notification-card">
-          <div className="section-heading-row">
-            <div>
               <h2>Email a alumnos</h2>
               <p className="muted">Envia comunicados individuales desde skbcgipuzkoa@gmail.com a los emails familiares guardados en cada kenshi.</p>
             </div>
@@ -413,30 +395,4 @@ function formatDateTime(value: string) {
 
 function daysAgoIso(days: number) {
   return new Date(Date.now() - days * 86_400_000).toISOString();
-}
-
-function materialOrderGroups(members: Array<{ id: string; display_name: string; family_email: string }>): MaterialOrderEmailGroup[] {
-  const memberId = (...names: string[]) => {
-    const candidates = names.map(normalizeName);
-    return members.find((member) => {
-      const displayName = normalizeName(member.display_name);
-      return candidates.some((candidate) => displayName === candidate || displayName.startsWith(`${candidate} `));
-    })?.id ?? "";
-  };
-  return [
-    { memberId: memberId("Borja"), payerName: "Borja", paymentMethod: "cash", items: [{ student: "Borja", concept: "Dogi entrenamiento, talla 4", amountCents: 4500 }] },
-    { memberId: memberId("Aixa"), payerName: "Aixa", paymentMethod: "bank", items: [{ student: "Iraia Beloqui", concept: "Dogi basico, talla 3", amountCents: 3500 }, { student: "Aixa", concept: "Dogi basico, talla 3", amountCents: 3500 }, { student: "Aixa", concept: "Cinturon blanco adulto", amountCents: 500 }] },
-    { memberId: memberId("Inma"), payerName: "Inma", paymentMethod: "cash", items: [{ student: "Inma", concept: "Dogi basico, talla 3", amountCents: 3500 }, { student: "Inma", concept: "Cinturon blanco adulto", amountCents: 500 }] },
-    { memberId: memberId("Robert"), payerName: "Robert", paymentMethod: "cash", items: [{ student: "Robert", concept: "Dogi entrenamiento, talla 6", amountCents: 4500 }, { student: "Robert", concept: "Dogi entrenamiento, talla 6", amountCents: 4500 }, { student: "Robert", concept: "Cinturon blanco adulto", amountCents: 500 }] },
-    { memberId: memberId("Lukas Pereira"), payerName: "Familia de Lukas", paymentMethod: "paid", items: [{ student: "Lukas Pereira", concept: "Dogi basico, talla 0", amountCents: 3000 }, { student: "Lukas Pereira", concept: "Cinturon blanco infantil", amountCents: 500 }] },
-    { memberId: memberId("Ainhoa Gissel Alvarez", "Ainhoa Gissel Alvarez Maldonado"), payerName: "Familia de Ainhoa Gissel", paymentMethod: "cash", items: [{ student: "Ainhoa Gissel", concept: "Dogi basico, talla 1", amountCents: 3000 }, { student: "Ainhoa Gissel", concept: "Cinturon blanco infantil", amountCents: 500 }] },
-    { memberId: memberId("Aritz Amonarriz", "Aritz Amonarriz Barrado"), payerName: "Miren Amonarriz", paymentMethod: "cash", items: [{ student: "Aritz Amonarriz", concept: "Dogi basico, talla 00", amountCents: 3000 }, { student: "Aritz Amonarriz", concept: "Cinturon blanco infantil", amountCents: 500 }, { student: "Alaine Amonarriz", concept: "Dogi basico, talla 0", amountCents: 3000 }, { student: "Alaine Amonarriz", concept: "Cinturon blanco infantil", amountCents: 500 }] },
-    { memberId: memberId("Elaia Serrano Berdote"), payerName: "Familia de Elaia", paymentMethod: "cash", items: [{ student: "Elaia Serrano Berdote", concept: "Dogi basico, talla 1", amountCents: 3000 }, { student: "Elaia Serrano Berdote", concept: "Cinturon blanco infantil", amountCents: 500 }] },
-    { memberId: memberId("Ainhoa Arias Florez"), payerName: "Familia de Ainhoa Arias", paymentMethod: "cash", items: [{ student: "Ainhoa Arias", concept: "Dogi basico, talla 00", amountCents: 3000 }, { student: "Ainhoa Arias", concept: "Cinturon blanco infantil", amountCents: 500 }] },
-    { memberId: memberId("Aritz Aramendi"), payerName: "Aritz Aramendi", paymentMethod: "bank", items: [{ student: "Aritz Aramendi", concept: "Dogi kata competicion, talla 7", amountCents: 8000 }] }
-  ];
-}
-
-function normalizeName(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase().replace(/\s+/g, " ");
 }

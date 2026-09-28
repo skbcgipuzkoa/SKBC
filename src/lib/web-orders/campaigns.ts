@@ -36,6 +36,27 @@ export function advanceCampaignStatus(
   return madridToday > campaign.period_end ? { ...campaign, status: "pending_close" } : campaign;
 }
 
+export function selectManagementCampaign(
+  campaigns: WebOrderCampaign[],
+  selectedCampaignId?: string,
+  at: Date = new Date()
+) {
+  const selected = campaigns.find((campaign) => campaign.id === selectedCampaignId);
+  if (selected) return advanceCampaignStatus(selected, at);
+
+  const actionable = campaigns
+    .map((campaign) => advanceCampaignStatus(campaign, at))
+    .filter((campaign) => campaign.status === "pending_close")
+    .sort((left, right) => left.period_start.localeCompare(right.period_start));
+  if (actionable[0]) return actionable[0];
+
+  const period = getCampaignPeriod(at);
+  const current = campaigns.find(
+    (campaign) => campaign.period_start === period.startsOn && campaign.period_end === period.endsOn
+  );
+  return current ? advanceCampaignStatus(current, at) : campaigns[0] ? advanceCampaignStatus(campaigns[0], at) : null;
+}
+
 type DateParts = { year: number; month: number; day: number };
 
 function madridDateParts(date: Date): DateParts {

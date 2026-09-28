@@ -13,10 +13,9 @@ import {
 } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { advanceCampaignStatus } from "@/lib/web-orders/campaigns";
+import { advanceCampaignStatus, selectManagementCampaign } from "@/lib/web-orders/campaigns";
 import { createWebOrdersClient } from "@/lib/web-orders/client";
 import {
-  getCurrentCampaign,
   getSupplierSummary,
   listCampaignOrders,
   listCatalog,
@@ -80,14 +79,14 @@ type SummaryLine = {
 export default async function PedidosPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; error?: string; status?: string; payment?: string; q?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; status?: string; payment?: string; q?: string; campaign?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
   }
 
   const params = await searchParams;
-  const materialData = await loadMaterialDashboardData();
+  const materialData = await loadMaterialDashboardData(params.campaign);
   const supabase = createAdminClient();
   const [{ data: members, error: membersError }, { data: catalog, error: catalogError }, { data: lines, error: linesError }] = await Promise.all([
     supabase
@@ -364,19 +363,21 @@ export default async function PedidosPage({
   );
 }
 
-async function loadMaterialDashboardData(): Promise<Omit<MaterialOrdersDashboardProps, "children">> {
+async function loadMaterialDashboardData(selectedCampaignId?: string): Promise<Omit<MaterialOrdersDashboardProps, "children">> {
   try {
     const client = createWebOrdersClient();
-    const currentCampaign = await getCurrentCampaign();
-    const [campaignResult, catalog, currentOrders, supplierSummary] = await Promise.all([
+    const [campaignResult, catalog] = await Promise.all([
       client.from("skbc_order_campaigns").select("*").order("period_start", { ascending: false }),
-      listCatalog(),
-      currentCampaign ? listCampaignOrders(currentCampaign.id) : Promise.resolve([]),
-      currentCampaign ? getSupplierSummary(currentCampaign.id) : Promise.resolve([])
+      listCatalog()
     ]);
     if (campaignResult.error) throw campaignResult.error;
 
-    const campaigns = ((campaignResult.data ?? []) as WebOrderCampaign[]).map((campaign) => advanceCampaignStatus(campaign));
+    const rawCampaigns = (campaignResult.data ?? []) as WebOrderCampaign[];
+    const campaigns = rawCampaigns.map((campaign) => advanceCampaignStatus(campaign));
+    const selectedCampaign = selectManagementCampaign(rawCampaigns, selectedCampaignId);
+    const [currentOrders, supplierSummary] = selectedCampaign
+      ? await Promise.all([listCampaignOrders(selectedCampaign.id), getSupplierSummary(selectedCampaign.id)])
+      : [[], []];
     const historyCampaignIds = campaigns.filter((campaign) => campaign.status === "closed").map((campaign) => campaign.id);
     const historyResult = historyCampaignIds.length
       ? await client.from("skbc_merch_orders").select("*, items:skbc_merch_order_items(*)").in("campaign_id", historyCampaignIds).order("created_at", { ascending: true })
@@ -390,7 +391,7 @@ async function loadMaterialDashboardData(): Promise<Omit<MaterialOrdersDashboard
     if (communicationResult.error) throw communicationResult.error;
 
     return {
-      campaign: currentCampaign ? advanceCampaignStatus(currentCampaign) : null,
+      campaign: selectedCampaign,
       campaigns,
       orders: currentOrders,
       historyOrders: (historyResult.data ?? []) as CampaignOrder[],

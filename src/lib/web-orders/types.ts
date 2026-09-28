@@ -24,8 +24,16 @@ export type WebOrderProduct = {
   slug: string;
   name: string;
   description: string | null;
+  brand: string | null;
   supplier_reference: string;
+  category: string | null;
+  recommended_level: string | null;
+  weight: string | null;
   image_url: string | null;
+  source_url: string | null;
+  image_attribution: string | null;
+  catalog_owner: string | null;
+  metadata: WebOrderJson;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -48,6 +56,8 @@ export type WebOrderVariant = {
   promotion_starts_at: string | null;
   promotion_ends_at: string | null;
   promotion_is_active: boolean;
+  catalog_owner: string | null;
+  metadata: WebOrderJson;
   sort_order: number;
   is_active: boolean;
   created_at: string;

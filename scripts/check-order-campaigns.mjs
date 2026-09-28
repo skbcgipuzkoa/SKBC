@@ -9,7 +9,7 @@ const campaignsSource = await readFile(
 const campaignsJavaScript = ts.transpileModule(campaignsSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
 }).outputText;
-const { advanceCampaignStatus, getCampaignPeriod } = await import(
+const { advanceCampaignStatus, getCampaignPeriod, selectManagementCampaign } = await import(
   `data:text/javascript,${encodeURIComponent(campaignsJavaScript)}`
 );
 
@@ -37,6 +37,28 @@ assert.equal(
   advanceCampaignStatus(openCampaign, new Date("2026-10-15T21:59:59Z")).status,
   "open",
   "the campaign remains open through 15 October in Europe/Madrid"
+);
+
+const campaignChoices = [
+  { ...openCampaign, id: "current", period_start: "2026-10-16", period_end: "2026-11-15" },
+  { ...openCampaign, id: "oldest-actionable", period_start: "2026-08-16", period_end: "2026-09-15" },
+  { ...openCampaign, id: "newer-actionable", period_start: "2026-09-16", period_end: "2026-10-15" },
+  { ...openCampaign, id: "closed", period_start: "2026-07-16", period_end: "2026-08-15", status: "closed" }
+];
+assert.equal(
+  selectManagementCampaign(campaignChoices, undefined, new Date("2026-10-20T12:00:00Z"))?.id,
+  "oldest-actionable",
+  "the oldest expired open campaign is actionable by default"
+);
+assert.equal(
+  selectManagementCampaign(campaignChoices, "closed", new Date("2026-10-20T12:00:00Z"))?.id,
+  "closed",
+  "an explicit campaign selection can open historical closed workflow data"
+);
+assert.equal(
+  selectManagementCampaign(campaignChoices, "missing", new Date("2026-10-20T12:00:00Z"))?.id,
+  "oldest-actionable",
+  "an invalid selection falls back to the actionable default"
 );
 assert.equal(
   advanceCampaignStatus(openCampaign, new Date("2026-10-15T22:00:00Z")).status,
@@ -69,6 +91,7 @@ for (const operation of [
   "getSupplierSummary",
   "listCatalog",
   "upsertCatalogProduct",
+  "createCatalogVariant",
   "updateVariantPricing",
   "assignPaymentMethod",
   "closeCampaign"
@@ -152,6 +175,8 @@ assert.doesNotMatch(repositorySource, /\.upsert\(/, "catalog products must not u
 assert.match(repositorySource, /if\s*\(input\.id\)[\s\S]+\.update\([\s\S]+\.eq\("id",\s*id\)/, "existing products must use update-by-ID only");
 assert.match(repositorySource, /supplier_reference:\s*string/, "new products must require supplier_reference");
 assert.match(repositorySource, /\.insert\(input as CatalogProductFields\)/, "complete create payloads must use insert");
+assert.match(repositorySource, /export type CatalogVariantInput/, "variant creation must have a complete input contract");
+assert.match(repositorySource, /from\("skbc_merch_variants"\)\.insert\(input as CatalogVariantFields\)/, "new variants must use an explicit insert");
 const assignPaymentFunction = repositoryFile.statements.find(
   (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "assignPaymentMethod"
 );
@@ -205,6 +230,11 @@ assert.match(
 );
 assert.match(actionsSource, /supplierReference:\s*z\.string\(\)\.trim\(\)\.min\(1\)/, "product validation must require supplier reference");
 assert.match(actionsSource, /supplier_reference:\s*input\.supplierReference/, "product action must pass supplier reference");
+assert.match(actionsSource, /category:\s*z\.string\(\)\.trim\(\)\.min\(1\)/, "product validation must require category");
+assert.match(actionsSource, /export async function createMaterialVariantAction/, "variant creation needs a server action");
+for (const field of ["productId", "sku", "size", "supplierReference", "costCents", "marginCents", "priceCents", "promotionPriceCents", "active"]) {
+  assert.match(actionsSource, new RegExp(`${field}:\\s*formData\\.get\\("${field}"\\)|${field}:\\s*formData\\.get\\("${field}"\\) === "on"`), `variant creation must parse ${field}`);
+}
 
 const dashboardSource = await readFile(
   new URL("../src/components/material-orders-dashboard.tsx", import.meta.url),
@@ -243,6 +273,17 @@ for (const key of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
 assert.match(dashboardSource, /campaign\.status !== "pending_close"/);
 assert.match(dashboardSource, /order\.status !== "cancelled"[^\n]+customer_email/, "cancelled orders must not block close validation");
 assert.match(dashboardSource, /name="supplierReference"/, "catalog form must submit supplier reference");
+assert.match(dashboardSource, /action=\{updateMaterialProductAction\}[\s\S]*name="productId" value=""/, "catalog must expose product creation");
+assert.match(dashboardSource, /action=\{createMaterialVariantAction\}/, "each product must expose variant creation");
+for (const field of ["category", "imageUrl", "sourceUrl", "imageAttribution", "sku", "size", "costCents", "marginCents", "priceCents", "promotionPriceCents", "active"]) {
+  assert.match(dashboardSource, new RegExp(`name=["']${field}["']`), `catalog UI must expose ${field}`);
+}
+
+const pageSource = await readFile(new URL("../src/app/pedidos-cinturones/page.tsx", import.meta.url), "utf8");
+assert.match(pageSource, /campaign\?: string/, "the route must accept an explicit campaign query parameter");
+assert.match(pageSource, /selectManagementCampaign\(rawCampaigns, selectedCampaignId\)/, "dashboard loading must resolve the selected campaign");
+assert.match(pageSource, /listCampaignOrders\(selectedCampaign\.id\)/, "orders must load for the selected campaign");
+assert.match(pageSource, /getSupplierSummary\(selectedCampaign\.id\)/, "supplier summary must load for the selected campaign");
 
 const groupingFunction = repositoryFile.statements.find(
   (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "countEligibleCommunicationGroups"
