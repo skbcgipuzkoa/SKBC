@@ -31,6 +31,7 @@ import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { driveImageUrl } from "@/lib/drive";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
 import { AttendanceDayForm } from "./AttendanceDayForm";
 import { ManualTechniqueForm } from "./ManualTechniqueForm";
@@ -97,6 +98,7 @@ type MemberOption = {
   legacy_id: string | null;
   display_name: string;
   grade: string | null;
+  photo_url: string | null;
 };
 
 type AttendanceClassOption = {
@@ -206,7 +208,7 @@ export default async function ClaseDetailPage({
       .returns<GroupRow[]>(),
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,grade")
+      .select("id,legacy_id,display_name,grade,photo_url")
       .eq("class", clase.class_group)
       .eq("status", "active")
       .order("display_name")
@@ -229,7 +231,7 @@ export default async function ClaseDetailPage({
       .returns<AttendanceClassOption[]>(),
     supabase
       .from("members")
-      .select("id,legacy_id,display_name,grade,class")
+      .select("id,legacy_id,display_name,grade,class,photo_url")
       .eq("status", "active")
       .in("class", ["adults", "kids"])
       .order("display_name")
@@ -454,6 +456,7 @@ export default async function ClaseDetailPage({
           {pendingKidsDayMembers.length ? pendingKidsDayMembers.map((member) => (
             <label className="check-row" key={member.id}>
               <input name={`memberIds:${kidsDayClass.id}`} type="checkbox" value={member.id} />
+              <AttendanceAvatar name={member.display_name} photoUrl={member.photo_url} />
               <span>
                 <strong>{member.display_name}</strong>
                 <small>{member.grade ?? "Sin grado"}</small>
@@ -507,6 +510,7 @@ export default async function ClaseDetailPage({
                   {pendingMembers.length ? pendingMembers.map((member) => (
                     <label className="check-row" key={member.id}>
                       <input name={`memberIds:${dayClass.id}`} type="checkbox" value={member.id} />
+                      <AttendanceAvatar name={member.display_name} photoUrl={member.photo_url} />
                       <span>
                         <strong>{member.display_name}</strong>
                         <small>{member.grade ?? "Sin grado"}</small>
@@ -704,6 +708,7 @@ export default async function ClaseDetailPage({
               {pendingClassMembers.length ? pendingClassMembers.map((member) => (
                 <label className="check-row" key={member.id}>
                   <input name="memberIds" type="checkbox" value={member.id} />
+                  <AttendanceAvatar name={member.display_name} photoUrl={member.photo_url} />
                   <span>
                     <strong>{member.display_name}</strong>
                     <small>{member.grade ?? "Sin grado"}</small>
@@ -1415,6 +1420,17 @@ export default async function ClaseDetailPage({
       </main>
     </div>
   );
+}
+
+function AttendanceAvatar({ name, photoUrl }: { name: string; photoUrl: string | null }) {
+  const src = driveImageUrl(photoUrl);
+  return src
+    ? <img className="attendance-avatar" src={src} alt={`Foto de ${name}`} />
+    : <span className="attendance-avatar attendance-avatar-placeholder" aria-hidden="true">{initials(name)}</span>;
+}
+
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
 function ChildLightPlanPanel({

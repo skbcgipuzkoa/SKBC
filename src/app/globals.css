@@ -3954,7 +3954,7 @@ tbody tr:hover {
   cursor: pointer;
   display: grid;
   gap: 10px;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 22px 52px minmax(0, 1fr);
   min-height: 52px;
   padding: 8px 10px;
 }
@@ -3976,7 +3976,7 @@ tbody tr:hover {
 .attendance-options {
   display: grid;
   gap: 6px;
-  grid-column: 2;
+  grid-column: 3;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
@@ -10296,6 +10296,10 @@ tbody tr:hover {
   padding: 12px;
 }
 
+.dojo-member-row {
+  grid-template-columns: auto 58px minmax(0, 1fr);
+}
+
 .dojo-member-row input[type="checkbox"],
 .dojo-technique input[type="checkbox"] {
   height: 28px;
@@ -10323,7 +10327,7 @@ tbody tr:hover {
 .dojo-member-options {
   display: grid;
   gap: 8px;
-  grid-column: 2;
+  grid-column: 3;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -10794,6 +10798,10 @@ tbody tr:hover {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
+  .dojo-member-row {
+    grid-template-columns: auto 52px minmax(0, 1fr);
+  }
+
   .dojo-member-options {
     grid-column: 1 / -1;
     grid-template-columns: 1fr;
@@ -10957,6 +10965,26 @@ tbody tr:hover {
   display: grid;
   gap: 18px;
   min-width: 0;
+}
+
+.attendance-avatar {
+  align-items: center;
+  aspect-ratio: 1;
+  background: #e8eef5;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: flex;
+  font-size: 14px;
+  font-weight: 900;
+  height: 52px;
+  justify-content: center;
+  object-fit: cover;
+  overflow: hidden;
+  width: 52px;
+}
+
+.attendance-avatar-placeholder {
+  color: var(--brand-strong);
 }
 
 .home-stat-link {

@@ -17,6 +17,7 @@ import { ProvisionalAttendanceForm } from "@/components/provisional-attendance-f
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { driveImageUrl } from "@/lib/drive";
 import { notFound, redirect } from "next/navigation";
 
 type ClassRow = {
@@ -45,6 +46,7 @@ type MemberRow = {
   display_name: string;
   grade: string | null;
   class: "kids" | "adults";
+  photo_url: string | null;
 };
 
 type AttendanceRow = {
@@ -141,7 +143,7 @@ export default async function DojoClassPage({
       : Promise.resolve({ data: [] as PlanRow[] }),
     supabase
       .from("members")
-      .select("id,display_name,grade,class")
+      .select("id,display_name,grade,class,photo_url")
       .eq("status", "active")
       .in("class", ["kids", "adults"])
       .order("display_name")
@@ -453,6 +455,7 @@ function DojoCheck({ name, member, children }: { name: string; member: MemberRow
   return (
     <label className="dojo-member-row">
       <input type="checkbox" name={name} value={member.id} />
+      <AttendanceAvatar name={member.display_name} photoUrl={member.photo_url} />
       <span>
         <strong>{member.display_name}</strong>
         <small>{member.grade ?? "Sin grado"}</small>
@@ -460,6 +463,17 @@ function DojoCheck({ name, member, children }: { name: string; member: MemberRow
       {children ? <div className="dojo-member-options">{children}</div> : null}
     </label>
   );
+}
+
+function AttendanceAvatar({ name, photoUrl }: { name: string; photoUrl: string | null }) {
+  const src = driveImageUrl(photoUrl);
+  return src
+    ? <img className="attendance-avatar" src={src} alt={`Foto de ${name}`} />
+    : <span className="attendance-avatar attendance-avatar-placeholder" aria-hidden="true">{initials(name)}</span>;
+}
+
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
 function DojoChildPlanPanel({
