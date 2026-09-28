@@ -24,7 +24,8 @@ const dependencyNames = new Set([
   "materialCommunicationTotal",
   "preparedPaymentMessage",
   "conciseEmailError",
-  "errorMessage"
+  "errorMessage",
+  "isDefinitiveSmtpRejection"
 ]);
 const declarations = sourceFile.statements
   .filter((statement) => ts.isFunctionDeclaration(statement) && statement.name && dependencyNames.has(statement.name.text))
@@ -85,12 +86,18 @@ const result = await api.processPreparedMaterialOrderCommunications(
   [
     aixa,
     prepared({ ...robert, id: "comm-persist", recipientEmail: "persist@example.com" }),
+    prepared({ ...robert, id: "comm-timeout", recipientEmail: "timeout@example.com" }),
     prepared({ ...robert, id: "comm-smtp", recipientEmail: "smtp-fail@example.com" })
   ],
   {
     send: async (mail) => {
       sends.push(mail);
-      if (mail.to === "smtp-fail@example.com") throw new Error("SMTP rejected recipient and a very long diagnostic".repeat(20));
+      if (mail.to === "timeout@example.com") {
+        throw Object.assign(new Error("Connection timed out after DATA"), { code: "ETIMEDOUT" });
+      }
+      if (mail.to === "smtp-fail@example.com") {
+        throw Object.assign(new Error("550 recipient rejected ".repeat(20)), { responseCode: 550, accepted: [] });
+      }
     },
     complete: async (communication, outcome) => {
       completions.push({ id: communication.id, ...outcome });
@@ -104,14 +111,14 @@ const result = await api.processPreparedMaterialOrderCommunications(
 );
 assert.equal(result.sentCount, 1);
 assert.equal(result.failedCount, 1);
-assert.equal(result.ambiguousCount, 1);
-assert.deepEqual(sends.map((mail) => mail.to), ["aixa@example.com", "persist@example.com", "smtp-fail@example.com"]);
+assert.equal(result.ambiguousCount, 2);
+assert.deepEqual(sends.map((mail) => mail.to), ["aixa@example.com", "persist@example.com", "timeout@example.com", "smtp-fail@example.com"]);
 assert.deepEqual(completions.map(({ id, outcome }) => ({ id, outcome })), [
   { id: "comm-aixa", outcome: "delivered" },
   { id: "comm-persist", outcome: "delivered" },
   { id: "comm-smtp", outcome: "smtp_failed" }
 ]);
-assert.deepEqual(ambiguous.map(({ id }) => id), ["comm-persist"], "SMTP-success persistence failures require manual reconciliation");
+assert.deepEqual(ambiguous.map(({ id }) => id), ["comm-persist", "comm-timeout"], "timeouts and SMTP-success persistence failures require manual reconciliation");
 assert.ok(completions[2].error.length <= 240, "stored SMTP errors are concise");
 
 const testSends = [];

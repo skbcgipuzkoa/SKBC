@@ -133,12 +133,22 @@ export async function processPreparedMaterialOrderCommunications(
     try {
       await options.send(buildPreparedMaterialOrderEmail(communication));
     } catch (smtpError) {
-      await options.complete(communication, {
-        outcome: "smtp_failed",
-        completedAt: options.now?.() ?? new Date().toISOString(),
-        error: conciseEmailError(smtpError)
-      });
-      failedCount += 1;
+      const message = conciseEmailError(smtpError);
+      if (isDefinitiveSmtpRejection(smtpError)) {
+        await options.complete(communication, {
+          outcome: "smtp_failed",
+          completedAt: options.now?.() ?? new Date().toISOString(),
+          error: message
+        });
+        failedCount += 1;
+      } else {
+        try {
+          await options.markDeliveredUnconfirmed(communication, message);
+        } catch {
+          // The claim remains "sending", which is also non-retryable and requires reconciliation.
+        }
+        ambiguousCount += 1;
+      }
       continue;
     }
     try {
@@ -176,88 +186,6 @@ export async function sendPreparedMaterialOrderCommunications(input: {
     markDeliveredUnconfirmed: input.markDeliveredUnconfirmed,
     send: (mail) => transporter.sendMail({ from, ...mail })
   });
-}
-
-export async function sendMaterialOrderEmailCampaign(input: {
-  subject: string;
-  groups: MaterialOrderEmailGroup[];
-  testOnly?: boolean;
-}) {
-  const subject = input.subject.trim();
-  const groups = input.groups.filter((group) => group.memberId && group.payerName.trim() && group.items.length);
-  if (!subject || !groups.length || groups.length > 50) throw new Error("Faltan destinatarios o asunto para el pedido.");
-
-  const supabase = createAdminClient();
-  const memberIds = [...new Set(groups.map((group) => group.memberId))];
-  const { data, error } = await supabase
-    .from("members")
-    .select("id,legacy_id,display_name,class,grade,status,family_email,semaphore,next_exam_on")
-    .in("id", memberIds)
-    .eq("status", "active")
-    .returns<MemberEmailRow[]>();
-  if (error) throw error;
-
-  const members = new Map((data ?? []).map((member) => [member.id, member]));
-  const deliveries = groups.map((group) => {
-    const member = members.get(group.memberId);
-    const email = splitEmails(member?.family_email ?? null)[0];
-    if (!member || !email) throw new Error(`No hay email familiar para ${group.payerName}.`);
-    const items = group.items
-      .slice(0, 20)
-      .map((item) => ({ student: item.student.trim(), concept: item.concept.trim(), amountCents: Math.max(0, Math.round(item.amountCents)) }))
-      .filter((item) => item.student && item.concept && item.amountCents > 0);
-    if (!items.length) throw new Error(`El pedido de ${group.payerName} no tiene articulos validos.`);
-    return { group: { ...group, payerName: group.payerName.trim(), items }, member, email };
-  });
-
-  const transporter = createTransporter();
-  const from = cleanEnv(process.env.SKBC_EMAIL_FROM) ?? "SKBC Gipuzkoa <skbcgipuzkoa@gmail.com>";
-  const failures: Array<{ email: string; name: string; error: string }> = [];
-  let sentCount = 0;
-
-  if (input.testOnly) {
-    const testEmail = cleanEnv(process.env.SKBC_EMAIL_USER) ?? "skbcgipuzkoa@gmail.com";
-    await transporter.sendMail({
-      from,
-      to: testEmail,
-      subject: `[PRUEBA] ${subject}`,
-      text: deliveries.map(({ group }) => buildMaterialText(group)).join("\n\n--------------------\n\n"),
-      html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#172033"><h1>Vista previa de la campana</h1>${deliveries.map(({ group }) => buildMaterialHtml(group)).join('<hr style="margin:32px 0;border:0;border-top:1px solid #d7e0eb">')}</div>`
-    });
-    sentCount = 1;
-  } else {
-    for (const { group, email } of deliveries) {
-      try {
-        await transporter.sendMail({ from, to: email, subject, text: buildMaterialText(group), html: buildMaterialHtml(group) });
-        sentCount += 1;
-      } catch (error) {
-        failures.push({ email, name: group.payerName, error: errorMessage(error) });
-      }
-    }
-  }
-
-  const recipientCount = input.testOnly ? 1 : deliveries.length;
-  const status = sentCount === recipientCount ? "sent" : sentCount > 0 ? "partial" : "failed";
-  const summary = deliveries.map(({ group }) => `${group.payerName}: ${formatEuros(materialOrderTotal(group))} (${paymentMethodLabel(group.paymentMethod)})`).join("\n");
-  const recipients = input.testOnly
-    ? [{ name: "Prueba interna SKBC", email: cleanEnv(process.env.SKBC_EMAIL_USER) ?? "skbcgipuzkoa@gmail.com", legacy_id: null }]
-    : deliveries.map(({ group, member, email }) => ({ name: group.payerName, email, legacy_id: member.legacy_id }));
-  await supabase.from("email_notification_logs").insert({
-    audience: input.testOnly ? "material_order_test" : "material_order",
-    subject: input.testOnly ? `[PRUEBA] ${subject}` : subject,
-    body: summary,
-    recipients,
-    failures,
-    recipient_count: recipientCount,
-    sent_count: sentCount,
-    failed_count: failures.length,
-    status,
-    error_message: failures.length ? failures.map((failure) => `${failure.email}: ${failure.error}`).join(" | ") : null,
-    sent_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  });
-  if (status === "failed") throw new Error(failures[0]?.error ?? "No se pudo enviar ningun email.");
-  return { status, sentCount, recipientCount, failedCount: failures.length };
 }
 
 export async function sendStudentEmailNotification(input: {
@@ -423,31 +351,6 @@ function buildHtmlMessage(body: string, name: string) {
   `;
 }
 
-function buildMaterialText(group: MaterialOrderEmailGroup) {
-  return [
-    `Hola, ${group.payerName}:`,
-    "",
-    "Te enviamos el detalle del pedido de material del club:",
-    "",
-    ...group.items.map((item) => `- ${item.student}: ${item.concept} - ${formatEuros(item.amountCents)}`),
-    "",
-    `TOTAL: ${formatEuros(materialOrderTotal(group))}`,
-    paymentMessage(group.paymentMethod),
-    "",
-    "Gracias,",
-    "SKBC Gipuzkoa"
-  ].join("\n");
-}
-
-function buildMaterialHtml(group: MaterialOrderEmailGroup) {
-  const rows = group.items.map((item) => `<tr><td style="padding:12px;border-bottom:1px solid #e4e9f0"><strong>${escapeHtml(item.student)}</strong><br><span style="color:#667085">${escapeHtml(item.concept)}</span></td><td style="padding:12px;border-bottom:1px solid #e4e9f0;text-align:right;white-space:nowrap"><strong>${formatEuros(item.amountCents)}</strong></td></tr>`).join("");
-  return `<div style="font-family:Arial,Helvetica,sans-serif;color:#172033;line-height:1.55;max-width:640px;margin:0 auto"><div style="background:#0057b8;color:#fff;padding:18px 24px;display:flex;align-items:center;gap:16px"><img src="https://www.skbcgipuzkoa.com/assets/logo-skbc.png" width="68" height="68" alt="SKBC Gipuzkoa" style="display:block;background:#fff;border-radius:8px;padding:4px"><div><strong style="font-size:20px">SKBC Gipuzkoa</strong><div style="margin-top:4px;opacity:.9">Pedido de material del club</div></div></div><div style="padding:24px;border:1px solid #d7e0eb;border-top:0"><p>Hola, <strong>${escapeHtml(group.payerName)}</strong>:</p><p>Te enviamos el detalle del pedido de material del club.</p><table style="width:100%;border-collapse:collapse;margin:20px 0">${rows}<tr><td style="padding:14px 12px;background:#eef4fb"><strong>Total</strong></td><td style="padding:14px 12px;background:#eef4fb;text-align:right;font-size:20px;color:#003f88"><strong>${formatEuros(materialOrderTotal(group))}</strong></td></tr></table><div style="background:#f8fafc;border-left:4px solid #0057b8;padding:14px 16px;margin:20px 0"><strong>Forma de pago</strong><br>${escapeHtml(paymentMessage(group.paymentMethod))}</div><p style="margin-top:28px">Gracias,<br><strong>SKBC Gipuzkoa</strong></p><div style="border-top:1px solid #d7e0eb;margin-top:28px;padding-top:18px;text-align:center;color:#667085;font-size:13px"><div style="margin-bottom:10px">Síguenos y mantente al día con el club</div><a href="https://www.instagram.com/skbc_gipuzkoa/" style="color:#0057b8;text-decoration:none;margin:0 8px">Instagram</a><a href="https://www.facebook.com/100094925771992" style="color:#0057b8;text-decoration:none;margin:0 8px">Facebook</a><a href="https://www.youtube.com/@SKBCGIPUZKOA" style="color:#0057b8;text-decoration:none;margin:0 8px">YouTube</a><a href="https://www.skbcgipuzkoa.com/" style="color:#0057b8;text-decoration:none;margin:0 8px">Web</a></div></div></div>`;
-}
-
-function materialOrderTotal(group: MaterialOrderEmailGroup) {
-  return group.items.reduce((sum, item) => sum + item.amountCents, 0);
-}
-
 function materialCommunicationTotal(communication: PreparedMaterialOrderCommunication) {
   return communication.items.reduce((sum, item) => sum + item.lineTotalCents, 0);
 }
@@ -456,23 +359,11 @@ function formatEuros(cents: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-function paymentMessage(method: MaterialOrderPaymentMethod) {
-  if (method === "bank") return "El importe se cargara en la cuenta bancaria habitual. No es necesario traer dinero al club.";
-  if (method === "paid") return "Pago recibido. No queda ningun importe pendiente por este pedido.";
-  return "Cuando os venga bien, podéis entregar el importe en el club. Muchas gracias.";
-}
-
 function preparedPaymentMessage(method: MaterialOrderPaymentMethod) {
   if (method === "mixed") return "Los pedidos agrupados tienen formas de pago distintas. Consulta las referencias indicadas o contacta con el club si necesitas confirmación.";
   if (method === "bank") return "El importe se cargará en la cuenta bancaria habitual. No tenéis que hacer nada más.";
   if (method === "paid") return "El pago ya está recibido. No queda ningún importe pendiente por este pedido.";
   return "Podéis entregar el importe en el club cuando os venga bien. Muchas gracias.";
-}
-
-function paymentMethodLabel(method: MaterialOrderPaymentMethod) {
-  if (method === "bank") return "Cuenta corriente";
-  if (method === "paid") return "Pagado";
-  return "Entregar en el club";
 }
 
 function normalizeSemaphore(value: string | null) {
@@ -498,4 +389,14 @@ function errorMessage(error: unknown) {
 
 function conciseEmailError(error: unknown) {
   return errorMessage(error).replace(/\s+/g, " ").trim().slice(0, 240) || "Error desconocido.";
+}
+
+function isDefinitiveSmtpRejection(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const smtpError = error as { responseCode?: unknown; accepted?: unknown };
+  return typeof smtpError.responseCode === "number"
+    && smtpError.responseCode >= 500
+    && smtpError.responseCode < 600
+    && Array.isArray(smtpError.accepted)
+    && smtpError.accepted.length === 0;
 }
