@@ -7,6 +7,7 @@ import { SubmitButton } from "@/app/components/SubmitButton";
 import {
   assignMaterialPaymentAction,
   closeMaterialCampaignAction,
+  reconcileMaterialCommunicationAction,
   sendMaterialCampaignCommunicationsAction,
   updateMaterialProductAction,
   updateMaterialVariantAction
@@ -17,10 +18,7 @@ import type { WebOrderCampaign, WebOrderCommunication } from "@/lib/web-orders/t
 
 type CampaignView = Omit<WebOrderCampaign, "status"> & { status: ManagementCampaignStatus };
 type CommunicationView = WebOrderCommunication & {
-  status?: "prepared" | "sent" | "failed" | null;
-  recipient_name?: string | null;
-  recipient_email?: string | null;
-  failure_message?: string | null;
+  status: "prepared" | "sending" | "sent" | "failed" | "delivered_unconfirmed";
 };
 
 export type MaterialOrdersDashboardProps = {
@@ -106,7 +104,7 @@ function MonthlyView({ campaign, orders, communications, totals, unresolved }: M
   const [size, setSize] = useState("");
   const [orderStatus, setOrderStatus] = useState("");
   if (!campaign) return <EmptyState title="No hay campaña activa" detail="La campaña mensual todavía no existe en la base de datos de la web." />;
-  const expectedCommunications = new Set(orders.map((order) => order.customer_email?.trim().toLowerCase()).filter(Boolean)).size;
+  const expectedCommunications = new Set(orders.filter((order) => order.status !== "cancelled").map((order) => order.customer_email?.trim().toLowerCase()).filter(Boolean)).size;
   const closeDisabled = campaign.status !== "pending_close" || unresolved > 0 || orders.length === 0;
   const products = [...new Set(orders.flatMap((order) => order.items.map((item) => item.product_name)))].sort();
   const sizes = [...new Set(orders.flatMap((order) => order.items.map((item) => item.variant_name)))].sort();
@@ -170,20 +168,24 @@ function SupplierView({ rows, campaign }: { rows: SupplierSummaryRow[]; campaign
 
 function PaymentsView({ orders, communications, campaign }: { orders: CampaignOrder[]; communications: CommunicationView[]; campaign: CampaignView | null }) {
   const communicationIds = JSON.stringify(communications.map((communication) => communication.id));
-  const pendingCount = communications.filter((communication) => communication.status !== "sent").length;
+  const pending = communications.filter((communication) => communication.status === "prepared" || communication.status === "failed");
+  const pendingIds = JSON.stringify(pending.map((communication) => communication.id));
+  const sentIds = JSON.stringify(communications.filter((communication) => communication.status === "sent").map((communication) => communication.id));
+  const pendingCount = pending.length;
   const sentCount = communications.filter((communication) => communication.status === "sent").length;
+  const ambiguousCount = communications.filter((communication) => communication.status === "sending" || communication.status === "delivered_unconfirmed").length;
   return <div className="material-tab-panel">
     <section className="material-section">
       <div className="material-section-heading"><div><h2>Cobros</h2><p>La forma de pago se asigna por responsable y se incluirá en la comunicación preparada.</p></div></div>
       <div className="material-payment-list">{orders.length ? orders.map((order) => <div className="material-payment-row" key={order.id}><div><strong>{order.customer_name}</strong><span>{order.order_number ?? "Sin número"} · {order.customer_email ?? "Sin email"}</span></div><strong>{money(order.total_cents ?? order.items.reduce((sum, item) => sum + item.line_total_cents, 0))}</strong><form action={assignMaterialPaymentAction}><input type="hidden" name="orderId" value={order.id} /><select name="paymentMethod" defaultValue={order.payment_method ?? ""} aria-label={`Pago de ${order.customer_name}`} required disabled={campaign?.status !== "open"}><option value="" disabled>Asignar pago</option><option value="cash">Entregar en el club</option><option value="bank">Cargar en cuenta</option><option value="paid">Pagado</option></select><PaymentSubmitButton disabled={campaign?.status !== "open"} /></form></div>) : <p className="muted">No hay pedidos en la campaña.</p>}</div>
     </section>
     <section className="material-section">
-      <div className="material-section-heading"><div><h2>Comunicaciones</h2><p>{campaign?.status === "closed" ? "Revisa los destinatarios y envía primero una prueba interna. Cada familia recibe únicamente su pedido." : "Se prepararán al cerrar la campaña; nunca se envían automáticamente."}</p></div><span>{pendingCount} pendientes · {sentCount} enviadas</span></div>
-      {communications.length ? <><div className="material-communication-list">{communications.map((communication) => <details key={communication.id}><summary><span><strong>{communication.recipient_name || communication.subject || "Comunicación de pedido"}</strong><small>{communication.recipient_email ?? "Sin email"} · {communication.status ?? "preparada"}</small></span><b>Revisar</b></summary>{communication.body ? <pre>{communication.body}</pre> : <p className="muted">El email profesional se generará desde la instantánea congelada del pedido.</p>}{communication.failure_message ? <p className="form-error">{communication.failure_message}</p> : null}</details>)}</div>
+      <div className="material-section-heading"><div><h2>Comunicaciones</h2><p>{campaign?.status === "closed" ? "Revisa los destinatarios y envía primero una prueba interna. Cada familia recibe un único email con todos sus pedidos." : "Se prepararán al cerrar la campaña; nunca se envían automáticamente."}</p></div><span>{pendingCount} pendientes · {sentCount} enviadas · {ambiguousCount} por conciliar</span></div>
+      {communications.length ? <><div className="material-communication-list">{communications.map((communication) => <details key={communication.id}><summary><span><strong>{communication.recipient_name || communication.subject || "Comunicación de pedido"}</strong><small>{communication.recipient_email ?? "Sin email"} · {communication.status}</small></span><b>Revisar</b></summary>{communication.body ? <pre>{communication.body}</pre> : <p className="muted">El email profesional se generará desde la instantánea congelada de la familia.</p>}{communication.failure_message ? <p className="form-error">{communication.failure_message}</p> : null}{campaign && communication.attempt_token && (communication.status === "sending" || communication.status === "delivered_unconfirmed") ? <form action={reconcileMaterialCommunicationAction} onSubmit={(event) => { if (!window.confirm("Confirma el resultado verificado manualmente. Esta decisión quedará auditada.")) event.preventDefault(); }}><input type="hidden" name="campaignId" value={campaign.id} /><input type="hidden" name="communicationId" value={communication.id} /><input type="hidden" name="attemptToken" value={communication.attempt_token} /><input type="hidden" name="reconcileConfirmed" value="yes" /><label>Resultado verificado<select name="delivered" required defaultValue=""><option value="" disabled>Seleccionar</option><option value="yes">Entregado</option><option value="no">No entregado; permitir reintento</option></select></label><button type="submit" className="secondary-button">Conciliar intento</button></form> : null}</details>)}</div>
         {campaign?.status === "closed" ? <div className="material-campaign-actions">
-          <form action={sendMaterialCampaignCommunicationsAction}><input type="hidden" name="communicationIds" value={communicationIds} /><button className="secondary-button" type="submit" name="mode" value="test">Enviar prueba al club</button></form>
-          <form action={sendMaterialCampaignCommunicationsAction} onSubmit={(event) => { if (!window.confirm(`Se procesarán ${pendingCount} comunicaciones pendientes, una por familia. ¿Continuar?`)) event.preventDefault(); }}><input type="hidden" name="communicationIds" value={communicationIds} /><button type="submit" name="mode" value="send" disabled={!pendingCount}>Enviar pendientes</button></form>
-          {sentCount ? <form action={sendMaterialCampaignCommunicationsAction} onSubmit={(event) => { if (!window.confirm(`Esto reenviará también ${sentCount} comunicaciones ya enviadas. ¿Confirmas el reenvío forzado?`)) event.preventDefault(); }}><input type="hidden" name="communicationIds" value={communicationIds} /><input type="hidden" name="forceConfirmed" value="yes" /><button className="danger-button" type="submit" name="mode" value="force-resend">Forzar reenvío de todas</button></form> : null}
+          <form action={sendMaterialCampaignCommunicationsAction}><input type="hidden" name="campaignId" value={campaign.id} /><input type="hidden" name="communicationIds" value={communicationIds} /><button className="secondary-button" type="submit" name="mode" value="test">Enviar prueba al club</button></form>
+          <form action={sendMaterialCampaignCommunicationsAction} onSubmit={(event) => { if (!window.confirm(`Se procesarán ${pendingCount} comunicaciones pendientes, una por familia. ¿Continuar?`)) event.preventDefault(); }}><input type="hidden" name="campaignId" value={campaign.id} /><input type="hidden" name="communicationIds" value={pendingIds} /><label className="check-row"><input type="checkbox" name="sendConfirmed" value="yes" required /> Confirmo el envío final de esta campaña cerrada</label><button type="submit" name="mode" value="send" disabled={!pendingCount}>Enviar pendientes</button></form>
+          {sentCount ? <form action={sendMaterialCampaignCommunicationsAction} onSubmit={(event) => { if (!window.confirm(`Esto reenviará ${sentCount} comunicaciones ya enviadas. ¿Confirmas el reenvío forzado?`)) event.preventDefault(); }}><input type="hidden" name="campaignId" value={campaign.id} /><input type="hidden" name="communicationIds" value={sentIds} /><input type="hidden" name="forceConfirmed" value="yes" /><label className="check-row"><input type="checkbox" name="sendConfirmed" value="yes" required /> Confirmo el reenvío forzado</label><button className="danger-button" type="submit" name="mode" value="force-resend">Forzar reenvío de enviadas</button></form> : null}
         </div> : null}</> : <EmptyState title="Sin comunicaciones preparadas" detail="Cierra la campaña cuando todos los datos estén revisados." />}
     </section>
   </div>;
@@ -192,7 +194,7 @@ function PaymentsView({ orders, communications, campaign }: { orders: CampaignOr
 function CatalogView({ products }: { products: CatalogProduct[] }) {
   return <div className="material-tab-panel"><section className="material-section"><div className="material-section-heading"><div><h2>Catálogo público</h2><p>Coste, margen, precio final, disponibilidad y promoción por variante.</p></div><span>{products.length} productos</span></div>
     <div className="material-catalog-list">{products.length ? products.map((product) => <details key={product.id} className="material-catalog-product"><summary><span><strong>{product.name}</strong><small>{product.slug} · {product.variants.length} variantes · {product.is_active ? "visible" : "oculto"}</small></span><b>Editar</b></summary>
-      <form action={updateMaterialProductAction} className="material-form-grid"><input type="hidden" name="productId" value={product.id} /><label>Nombre<input name="name" defaultValue={product.name} required /></label><label>Slug<input name="slug" defaultValue={product.slug} required /></label><label>Orden<input name="sortOrder" type="number" min="0" defaultValue={product.sort_order} required /></label><label>Imagen<input name="imageUrl" type="url" defaultValue={product.image_url ?? ""} /></label><label className="material-wide">Descripción<textarea name="description" rows={2} defaultValue={product.description ?? ""} /></label><label className="check-row"><input name="active" type="checkbox" defaultChecked={product.is_active} /> Producto visible</label><div className="material-form-action"><SubmitButton pendingLabel="Guardando producto...">Guardar producto</SubmitButton></div></form>
+      <form action={updateMaterialProductAction} className="material-form-grid"><input type="hidden" name="productId" value={product.id} /><label>Nombre<input name="name" defaultValue={product.name} required /></label><label>Slug<input name="slug" defaultValue={product.slug} required /></label><label>Referencia proveedor<input name="supplierReference" defaultValue={product.supplier_reference} required /></label><label>Orden<input name="sortOrder" type="number" min="0" defaultValue={product.sort_order} required /></label><label>Imagen<input name="imageUrl" type="url" defaultValue={product.image_url ?? ""} /></label><label className="material-wide">Descripción<textarea name="description" rows={2} defaultValue={product.description ?? ""} /></label><label className="check-row"><input name="active" type="checkbox" defaultChecked={product.is_active} /> Producto visible</label><div className="material-form-action"><SubmitButton pendingLabel="Guardando producto...">Guardar producto</SubmitButton></div></form>
       <div className="material-variant-list">{product.variants.map((variant) => <VariantForm key={variant.id} variant={variant} />)}</div>
     </details>) : <EmptyState title="Catálogo vacío" detail="No hay productos publicados en la base de datos de la web." />}</div>
   </section></div>;
@@ -225,7 +227,7 @@ function CloseCampaignButton({ disabled }: { disabled: boolean }) { const { pend
 function PaymentSubmitButton({ disabled }: { disabled: boolean }) { const { pending } = useFormStatus(); return <button type="submit" className="mini-action" disabled={disabled || pending} aria-busy={pending}>{pending ? "..." : "Guardar"}</button>; }
 function EmptyState({ title, detail }: { title: string; detail: string }) { return <div className="material-empty"><strong>{title}</strong><span>{detail}</span></div>; }
 function summarize(orders: CampaignOrder[]) { return { orderCount: orders.length, articleCount: orders.flatMap((order) => order.items).reduce((sum, item) => sum + item.quantity, 0), totalCents: orders.reduce((sum, order) => sum + (order.total_cents ?? order.items.reduce((itemSum, item) => itemSum + item.line_total_cents, 0)), 0) }; }
-function unresolvedOrderCount(orders: CampaignOrder[]) { return orders.filter((order) => !order.customer_email?.trim() || !order.customer_phone?.trim() || !order.payment_method).length; }
+function unresolvedOrderCount(orders: CampaignOrder[]) { return orders.filter((order) => order.status !== "cancelled" && (!order.customer_email?.trim() || !order.customer_phone?.trim() || !order.payment_method)).length; }
 function money(cents: number) { return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100); }
 function formatPeriod(campaign: CampaignView) { return `${formatDate(campaign.period_start)} - ${formatDate(campaign.period_end)}`; }
 function formatDate(value: string) { return new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Madrid" }).format(new Date(`${value}T12:00:00Z`)); }

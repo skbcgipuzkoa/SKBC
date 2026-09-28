@@ -25,6 +25,18 @@ export const WEB_ORDER_RPC_CONTRACTS = {
     args: ["p_campaign_id", "p_expected_order_count", "p_expected_communication_count"],
     locksCampaign: true,
     preparesCommunications: true
+  },
+  claimCommunication: {
+    name: "claim_skbc_order_communication",
+    args: ["p_campaign_id", "p_communication_id", "p_attempt_token", "p_force_resend", "p_confirmed"]
+  },
+  completeCommunication: {
+    name: "complete_skbc_order_communication_attempt",
+    args: ["p_campaign_id", "p_communication_id", "p_attempt_token", "p_outcome", "p_error_message"]
+  },
+  reconcileCommunication: {
+    name: "reconcile_skbc_order_communication",
+    args: ["p_campaign_id", "p_communication_id", "p_attempt_token", "p_delivered", "p_confirmed"]
   }
 } as const;
 
@@ -49,8 +61,19 @@ export type SupplierSummaryRow = {
   totalCostCents: number;
 };
 
-export type CatalogProductInput = Omit<WebOrderProduct, "id" | "created_at" | "updated_at"> & {
-  id?: string;
+type CatalogProductFields = Omit<WebOrderProduct, "id" | "created_at" | "updated_at">;
+export type CatalogProductInput =
+  | ({ id: string } & Partial<CatalogProductFields>)
+  | ({ id?: never } & CatalogProductFields & { supplier_reference: string });
+
+export type ClaimedCommunication = {
+  communication_id: string;
+  communication_status: "sending";
+  recipient_name: string | null;
+  recipient_email: string | null;
+  snapshot: unknown;
+  attempt_token: string;
+  attempt_started_at: string;
 };
 
 export type VariantPricingInput = Pick<
@@ -142,6 +165,17 @@ export function summarizeSupplierItems(items: SupplierOrderItem[]) {
   );
 }
 
+export function countEligibleCommunicationGroups(
+  orders: Array<Pick<WebOrder, "status" | "customer_email">>
+) {
+  return new Set(
+    orders
+      .filter((order) => order.status !== "cancelled")
+      .map((order) => order.customer_email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email))
+  ).size;
+}
+
 export async function listCatalog() {
   const { data, error } = await createWebOrdersClient()
     .from("skbc_merch_products")
@@ -154,14 +188,79 @@ export async function listCatalog() {
 }
 
 export async function upsertCatalogProduct(input: CatalogProductInput) {
-  const { data, error } = await createWebOrdersClient()
-    .from("skbc_merch_products")
-    .upsert(input, { onConflict: input.id ? "id" : "slug" })
-    .select("*")
-    .single();
+  const client = createWebOrdersClient();
+  let result;
+  if (input.id) {
+    const { id, ...changes } = input;
+    result = await client.from("skbc_merch_products").update(changes).eq("id", id).select("*").single();
+  } else {
+    result = await client.from("skbc_merch_products").insert(input as CatalogProductFields).select("*").single();
+  }
+  const { data, error } = result;
 
   if (error) throw error;
   return data as WebOrderProduct;
+}
+
+export async function claimCommunication(input: {
+  campaignId: string;
+  communicationId: string;
+  attemptToken: string;
+  forceResend: boolean;
+}) {
+  const { data, error } = await createWebOrdersClient().rpc(
+    WEB_ORDER_RPC_CONTRACTS.claimCommunication.name,
+    {
+      p_campaign_id: input.campaignId,
+      p_communication_id: input.communicationId,
+      p_attempt_token: input.attemptToken,
+      p_force_resend: input.forceResend,
+      p_confirmed: true
+    }
+  );
+  if (error) throw error;
+  return requireRpcResult<ClaimedCommunication>(data, WEB_ORDER_RPC_CONTRACTS.claimCommunication.name);
+}
+
+export async function completeCommunicationAttempt(input: {
+  campaignId: string;
+  communicationId: string;
+  attemptToken: string;
+  outcome: "delivered" | "smtp_failed" | "delivered_unconfirmed";
+  errorMessage: string | null;
+}) {
+  const { data, error } = await createWebOrdersClient().rpc(
+    WEB_ORDER_RPC_CONTRACTS.completeCommunication.name,
+    {
+      p_campaign_id: input.campaignId,
+      p_communication_id: input.communicationId,
+      p_attempt_token: input.attemptToken,
+      p_outcome: input.outcome,
+      p_error_message: input.errorMessage
+    }
+  );
+  if (error) throw error;
+  return requireRpcResult<{ communication_id: string; communication_status: string }>(data, WEB_ORDER_RPC_CONTRACTS.completeCommunication.name);
+}
+
+export async function reconcileCommunication(input: {
+  campaignId: string;
+  communicationId: string;
+  attemptToken: string;
+  delivered: boolean;
+}) {
+  const { data, error } = await createWebOrdersClient().rpc(
+    WEB_ORDER_RPC_CONTRACTS.reconcileCommunication.name,
+    {
+      p_campaign_id: input.campaignId,
+      p_communication_id: input.communicationId,
+      p_attempt_token: input.attemptToken,
+      p_delivered: input.delivered,
+      p_confirmed: true
+    }
+  );
+  if (error) throw error;
+  return requireRpcResult<{ communication_id: string; communication_status: string }>(data, WEB_ORDER_RPC_CONTRACTS.reconcileCommunication.name);
 }
 
 export async function updateVariantPricing(variantId: string, input: VariantPricingInput) {

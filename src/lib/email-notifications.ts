@@ -22,7 +22,7 @@ type Recipient = {
   legacyId: string | null;
 };
 
-export type MaterialOrderPaymentMethod = "cash" | "bank" | "paid";
+export type MaterialOrderPaymentMethod = "cash" | "bank" | "paid" | "mixed";
 
 export type MaterialOrderEmailGroup = {
   memberId: string;
@@ -33,7 +33,9 @@ export type MaterialOrderEmailGroup = {
 
 export type PreparedMaterialOrderCommunication = {
   id: string;
-  status: "prepared" | "sent" | "failed";
+  status: "prepared" | "sending" | "sent" | "failed" | "delivered_unconfirmed";
+  campaignId: string;
+  attemptToken: string | null;
   recipientEmail: string;
   payerName: string;
   paymentMethod: MaterialOrderPaymentMethod;
@@ -109,49 +111,69 @@ export async function processPreparedMaterialOrderCommunications(
   communications: PreparedMaterialOrderCommunication[],
   options: {
     send: (mail: PreparedMaterialOrderMail) => Promise<unknown>;
-    update: (id: string, outcome: { status: "sent" | "failed"; sentAt: string | null; failedAt: string | null; error: string | null }) => Promise<unknown>;
+    complete: (communication: PreparedMaterialOrderCommunication, outcome: {
+      outcome: "delivered" | "smtp_failed";
+      completedAt: string;
+      error: string | null;
+    }) => Promise<unknown>;
+    markDeliveredUnconfirmed: (communication: PreparedMaterialOrderCommunication, error: string) => Promise<unknown>;
     testRecipient?: string;
-    forceResend?: boolean;
     now?: () => string;
   }
 ) {
   if (options.testRecipient) {
     await options.send(buildPreparedMaterialOrderPreview(communications, options.testRecipient));
-    return { previewOnly: true, sentCount: 0, failedCount: 0, skippedCount: 0 };
+    return { previewOnly: true, sentCount: 0, failedCount: 0, ambiguousCount: 0 };
   }
   let sentCount = 0;
   let failedCount = 0;
-  let skippedCount = 0;
+  let ambiguousCount = 0;
   for (const communication of communications) {
-    if (communication.status === "sent" && !options.forceResend) {
-      skippedCount += 1;
+    if (communication.status !== "sending" || !communication.attemptToken) throw new Error("La comunicación no tiene una reclamación de envío activa.");
+    try {
+      await options.send(buildPreparedMaterialOrderEmail(communication));
+    } catch (smtpError) {
+      await options.complete(communication, {
+        outcome: "smtp_failed",
+        completedAt: options.now?.() ?? new Date().toISOString(),
+        error: conciseEmailError(smtpError)
+      });
+      failedCount += 1;
       continue;
     }
     try {
-      await options.send(buildPreparedMaterialOrderEmail(communication));
-      await options.update(communication.id, { status: "sent", sentAt: options.now?.() ?? new Date().toISOString(), failedAt: null, error: null });
+      await options.complete(communication, {
+        outcome: "delivered",
+        completedAt: options.now?.() ?? new Date().toISOString(),
+        error: null
+      });
       sentCount += 1;
-    } catch (error) {
-      await options.update(communication.id, { status: "failed", sentAt: null, failedAt: options.now?.() ?? new Date().toISOString(), error: conciseEmailError(error) });
-      failedCount += 1;
+    } catch (persistenceError) {
+      const message = conciseEmailError(persistenceError);
+      try {
+        await options.markDeliveredUnconfirmed(communication, message);
+      } catch {
+        // The claim remains "sending", which is also non-retryable and requires reconciliation.
+      }
+      ambiguousCount += 1;
     }
   }
-  return { previewOnly: false, sentCount, failedCount, skippedCount };
+  return { previewOnly: false, sentCount, failedCount, ambiguousCount };
 }
 
 export async function sendPreparedMaterialOrderCommunications(input: {
   communications: PreparedMaterialOrderCommunication[];
   testOnly?: boolean;
-  forceResend?: boolean;
-  update: Parameters<typeof processPreparedMaterialOrderCommunications>[1]["update"];
+  complete: Parameters<typeof processPreparedMaterialOrderCommunications>[1]["complete"];
+  markDeliveredUnconfirmed: Parameters<typeof processPreparedMaterialOrderCommunications>[1]["markDeliveredUnconfirmed"];
 }) {
   const transporter = createTransporter();
   const from = cleanEnv(process.env.SKBC_EMAIL_FROM) ?? "SKBC Gipuzkoa <skbcgipuzkoa@gmail.com>";
   const testRecipient = input.testOnly ? cleanEnv(process.env.SKBC_EMAIL_USER) ?? "skbcgipuzkoa@gmail.com" : undefined;
   return processPreparedMaterialOrderCommunications(input.communications, {
     testRecipient,
-    forceResend: input.forceResend,
-    update: input.update,
+    complete: input.complete,
+    markDeliveredUnconfirmed: input.markDeliveredUnconfirmed,
     send: (mail) => transporter.sendMail({ from, ...mail })
   });
 }
@@ -441,6 +463,7 @@ function paymentMessage(method: MaterialOrderPaymentMethod) {
 }
 
 function preparedPaymentMessage(method: MaterialOrderPaymentMethod) {
+  if (method === "mixed") return "Los pedidos agrupados tienen formas de pago distintas. Consulta las referencias indicadas o contacta con el club si necesitas confirmación.";
   if (method === "bank") return "El importe se cargará en la cuenta bancaria habitual. No tenéis que hacer nada más.";
   if (method === "paid") return "El pago ya está recibido. No queda ningún importe pendiente por este pedido.";
   return "Podéis entregar el importe en el club cuando os venga bien. Muchas gracias.";

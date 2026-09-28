@@ -148,7 +148,10 @@ assert.deepEqual(
 );
 
 assert.match(repositorySource, /\.eq\("period_start",\s*period\.startsOn\)/);
-assert.match(repositorySource, /\.upsert\(input,\s*\{\s*onConflict:\s*input\.id\s*\?\s*"id"\s*:\s*"slug"\s*\}\)/);
+assert.doesNotMatch(repositorySource, /\.upsert\(/, "catalog products must not use ambiguous upsert semantics");
+assert.match(repositorySource, /if\s*\(input\.id\)[\s\S]+\.update\([\s\S]+\.eq\("id",\s*id\)/, "existing products must use update-by-ID only");
+assert.match(repositorySource, /supplier_reference:\s*string/, "new products must require supplier_reference");
+assert.match(repositorySource, /\.insert\(input as CatalogProductFields\)/, "complete create payloads must use insert");
 const assignPaymentFunction = repositoryFile.statements.find(
   (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "assignPaymentMethod"
 );
@@ -200,6 +203,8 @@ assert.match(
   actionsSource,
   /closeCampaign\(\s*input\.campaignId,\s*input\.expectedOrderCount,\s*input\.expectedCommunicationCount\s*\)/s
 );
+assert.match(actionsSource, /supplierReference:\s*z\.string\(\)\.trim\(\)\.min\(1\)/, "product validation must require supplier reference");
+assert.match(actionsSource, /supplier_reference:\s*input\.supplierReference/, "product action must pass supplier reference");
 
 const dashboardSource = await readFile(
   new URL("../src/components/material-orders-dashboard.tsx", import.meta.url),
@@ -236,5 +241,24 @@ for (const key of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
   assert.match(dashboardSource, new RegExp(`case ["']${key}["']`));
 }
 assert.match(dashboardSource, /campaign\.status !== "pending_close"/);
+assert.match(dashboardSource, /order\.status !== "cancelled"[^\n]+customer_email/, "cancelled orders must not block close validation");
+assert.match(dashboardSource, /name="supplierReference"/, "catalog form must submit supplier reference");
+
+const groupingFunction = repositoryFile.statements.find(
+  (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "countEligibleCommunicationGroups"
+);
+assert.ok(groupingFunction, "repository must export the close-preview grouping helper");
+const groupingJavaScript = ts.transpileModule(groupingFunction.getText(repositoryFile), {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
+}).outputText;
+const { countEligibleCommunicationGroups } = await import(
+  `data:text/javascript,${encodeURIComponent(groupingJavaScript)}`
+);
+assert.equal(countEligibleCommunicationGroups([
+  { status: "pending", customer_email: " Family@Example.com " },
+  { status: "paid", customer_email: "family@example.COM" },
+  { status: "cancelled", customer_email: "other@example.com" },
+  { status: "pending", customer_email: null }
+]), 1, "preview count must normalize shared emails and exclude cancelled orders");
 
 console.log("Order campaign checks passed.");

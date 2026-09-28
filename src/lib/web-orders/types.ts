@@ -24,6 +24,7 @@ export type WebOrderProduct = {
   slug: string;
   name: string;
   description: string | null;
+  supplier_reference: string;
   image_url: string | null;
   sort_order: number;
   is_active: boolean;
@@ -108,8 +109,18 @@ export type WebOrderCommunication = {
   order_id: string;
   channel: WebOrderCommunicationChannel;
   direction: WebOrderCommunicationDirection;
+  status: "prepared" | "sending" | "sent" | "failed" | "delivered_unconfirmed";
+  recipient_name: string | null;
+  recipient_email: string | null;
+  snapshot: WebOrderJson;
   subject: string | null;
-  body: string;
+  body: string | null;
+  prepared_at: string | null;
+  sent_at: string | null;
+  failed_at: string | null;
+  failure_message: string | null;
+  attempt_token: string | null;
+  attempt_started_at: string | null;
   created_by: string | null;
   created_at: string;
 };

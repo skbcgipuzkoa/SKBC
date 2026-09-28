@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
 const source = await readFile(new URL("../src/lib/email-notifications.ts", import.meta.url), "utf8");
+const actionsSource = await readFile(new URL("../src/app/material-order-actions.ts", import.meta.url), "utf8");
+const repositorySource = await readFile(new URL("../src/lib/web-orders/repository.ts", import.meta.url), "utf8");
+const dashboardSource = await readFile(new URL("../src/components/material-orders-dashboard.tsx", import.meta.url), "utf8");
 const sourceFile = ts.createSourceFile("email-notifications.ts", source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
 const required = [
   "buildPreparedMaterialOrderEmail",
@@ -76,56 +79,74 @@ assert.equal("cc" in preview, false);
 assert.equal("bcc" in preview, false);
 
 const sends = [];
-const updates = [];
+const completions = [];
+const ambiguous = [];
 const result = await api.processPreparedMaterialOrderCommunications(
-  [{ ...robert, status: "sent" }, aixa, prepared({ ...robert, id: "comm-failed", recipientEmail: "fail@example.com", status: "failed" })],
+  [
+    aixa,
+    prepared({ ...robert, id: "comm-persist", recipientEmail: "persist@example.com" }),
+    prepared({ ...robert, id: "comm-smtp", recipientEmail: "smtp-fail@example.com" })
+  ],
   {
     send: async (mail) => {
       sends.push(mail);
-      if (mail.to === "fail@example.com") throw new Error("SMTP exposed secret and a very long diagnostic".repeat(20));
+      if (mail.to === "smtp-fail@example.com") throw new Error("SMTP rejected recipient and a very long diagnostic".repeat(20));
     },
-    update: async (id, outcome) => updates.push({ id, ...outcome }),
+    complete: async (communication, outcome) => {
+      completions.push({ id: communication.id, ...outcome });
+      if (communication.id === "comm-persist" && outcome.outcome === "delivered") {
+        throw new Error("database unavailable after SMTP acceptance");
+      }
+    },
+    markDeliveredUnconfirmed: async (communication, error) => ambiguous.push({ id: communication.id, error }),
     now: () => "2026-09-28T12:00:00.000Z"
   }
 );
-assert.equal(result.skippedCount, 1, "sent rows are skipped without forced resend");
 assert.equal(result.sentCount, 1);
 assert.equal(result.failedCount, 1);
-assert.deepEqual(sends.map((mail) => mail.to), ["aixa@example.com", "fail@example.com"]);
-assert.deepEqual(updates.map(({ id, status }) => ({ id, status })), [
-  { id: "comm-aixa", status: "sent" },
-  { id: "comm-failed", status: "failed" }
+assert.equal(result.ambiguousCount, 1);
+assert.deepEqual(sends.map((mail) => mail.to), ["aixa@example.com", "persist@example.com", "smtp-fail@example.com"]);
+assert.deepEqual(completions.map(({ id, outcome }) => ({ id, outcome })), [
+  { id: "comm-aixa", outcome: "delivered" },
+  { id: "comm-persist", outcome: "delivered" },
+  { id: "comm-smtp", outcome: "smtp_failed" }
 ]);
-assert.equal(updates[0].sentAt, "2026-09-28T12:00:00.000Z");
-assert.equal(updates[1].sentAt, null);
-assert.ok(updates[1].error.length <= 240, "stored errors are concise");
-
-const forced = [];
-await api.processPreparedMaterialOrderCommunications([{ ...robert, status: "sent" }], {
-  forceResend: true,
-  send: async (mail) => forced.push(mail.to),
-  update: async () => {}
-});
-assert.deepEqual(forced, ["robert@example.com"], "an explicitly confirmed forced resend may include sent rows");
+assert.deepEqual(ambiguous.map(({ id }) => id), ["comm-persist"], "SMTP-success persistence failures require manual reconciliation");
+assert.ok(completions[2].error.length <= 240, "stored SMTP errors are concise");
 
 const testSends = [];
 const testUpdates = [];
 const testResult = await api.processPreparedMaterialOrderCommunications([robert, aixa], {
   testRecipient: "club@skbc.test",
   send: async (mail) => testSends.push(mail),
-  update: async (...args) => testUpdates.push(args)
+    complete: async (...args) => testUpdates.push(args),
+    markDeliveredUnconfirmed: async (...args) => testUpdates.push(args)
 });
 assert.equal(testResult.previewOnly, true);
 assert.equal(testSends.length, 1);
 assert.equal(testSends[0].to, "club@skbc.test");
 assert.equal(testUpdates.length, 0, "test mode never changes real communication outcomes");
 
+assert.match(actionsSource, /campaignId:\s*formData\.get\("campaignId"\)/, "final send must include the campaign ID");
+assert.match(actionsSource, /sendConfirmed:\s*formData\.get\("sendConfirmed"\) === "yes"/, "server action must validate explicit send confirmation");
+assert.match(actionsSource, /new Set\(input\.communicationIds\)\.size !== input\.communicationIds\.length/, "duplicate communication IDs must be rejected");
+assert.match(actionsSource, /preview\.campaignId !== input\.campaignId/, "mixed or foreign campaign snapshots must be rejected before claims");
+assert.doesNotMatch(actionsSource, /from\("skbc_order_communications"\)\.update/, "delivery state changes must use RPCs only");
+for (const rpc of ["claim_skbc_order_communication", "complete_skbc_order_communication_attempt", "reconcile_skbc_order_communication"]) {
+  assert.match(repositorySource, new RegExp(rpc), `missing ${rpc} repository contract`);
+}
+assert.match(repositorySource, /p_attempt_token:\s*input\.attemptToken/, "claims and completions must bind an attempt token");
+assert.match(dashboardSource, /name="sendConfirmed"[^>]+required/, "final send confirmation control is required");
+assert.match(dashboardSource, /name="reconcileConfirmed" value="yes"/, "ambiguous attempts need an explicit reconciliation control");
+
 console.log("Material order email privacy and retry checks passed.");
 
 function prepared(overrides = {}) {
   return {
     id: "comm-default",
-    status: "prepared",
+    status: "sending",
+    campaignId: "campaign-closed",
+    attemptToken: "attempt-default",
     recipientEmail: "robert@example.com",
     payerName: "Robert Etxeberria",
     paymentMethod: "cash",

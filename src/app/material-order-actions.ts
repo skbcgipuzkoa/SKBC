@@ -1,14 +1,19 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { hasInternalAccess } from "@/lib/auth";
 import {
   assignPaymentMethod,
+  claimCommunication,
   closeCampaign,
+  completeCommunicationAttempt,
+  countEligibleCommunicationGroups,
   getCampaignById,
   listCampaignOrders,
+  reconcileCommunication,
   updateVariantPricing,
   upsertCatalogProduct
 } from "@/lib/web-orders/repository";
@@ -25,9 +30,10 @@ const optionalUrl = z.union([z.literal(""), z.string().url()]);
 const optionalDate = z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]);
 
 const productSchema = z.object({
-  productId: uuid,
+  productId: z.union([uuid, z.literal("")]),
   slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   name: z.string().trim().min(2).max(160),
+  supplierReference: z.string().trim().min(1).max(160),
   description: z.string().trim().max(1200),
   imageUrl: optionalUrl,
   sortOrder: z.coerce.number().int().min(0).max(10000),
@@ -70,21 +76,35 @@ const closeSchema = z.object({
 });
 
 const sendCommunicationsSchema = z.object({
+  campaignId: uuid,
   communicationIds: z.array(uuid).min(1).max(100),
   mode: z.enum(["test", "send", "force-resend"]),
+  sendConfirmed: z.boolean(),
   forceConfirmed: z.boolean()
 }).superRefine((value, context) => {
+  if (value.mode !== "test" && !value.sendConfirmed) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["sendConfirmed"], message: "El envío final requiere confirmación explícita." });
+  }
   if (value.mode === "force-resend" && !value.forceConfirmed) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["forceConfirmed"], message: "El reenvío forzado requiere confirmación explícita." });
   }
 });
 
+const reconcileSchema = z.object({
+  campaignId: uuid,
+  communicationId: uuid,
+  attemptToken: uuid,
+  delivered: z.enum(["yes", "no"]),
+  reconcileConfirmed: z.boolean()
+}).refine((value) => value.reconcileConfirmed, { path: ["reconcileConfirmed"], message: "La reconciliación requiere confirmación explícita." });
+
 export async function updateMaterialProductAction(formData: FormData) {
   await requireInternalAccess();
   const input = productSchema.parse({
-    productId: formData.get("productId"),
+    productId: formData.get("productId") ?? "",
     slug: formData.get("slug"),
     name: formData.get("name"),
+    supplierReference: formData.get("supplierReference"),
     description: formData.get("description"),
     imageUrl: formData.get("imageUrl"),
     sortOrder: formData.get("sortOrder"),
@@ -92,9 +112,10 @@ export async function updateMaterialProductAction(formData: FormData) {
   });
 
   await upsertCatalogProduct({
-    id: input.productId,
+    ...(input.productId ? { id: input.productId } : {}),
     slug: input.slug,
     name: input.name,
+    supplier_reference: input.supplierReference,
     description: input.description || null,
     image_url: input.imageUrl || null,
     sort_order: input.sortOrder,
@@ -159,10 +180,13 @@ export async function closeMaterialCampaignAction(formData: FormData) {
   }
   const currentOrders = await listCampaignOrders(input.campaignId);
   const unresolvedCount = currentOrders.filter((order) =>
-    !order.customer_email?.trim() || !order.customer_phone?.trim() || !order.payment_method
+    order.status !== "cancelled" && (!order.customer_email?.trim() || !order.customer_phone?.trim() || !order.payment_method)
   ).length;
   if (unresolvedCount > 0 || input.unresolvedCount > 0) throw new Error("La campaña contiene datos sin resolver.");
   if (currentOrders.length !== input.expectedOrderCount) throw new Error("El número de pedidos cambió. Recarga la página antes de cerrar.");
+  if (countEligibleCommunicationGroups(currentOrders) !== input.expectedCommunicationCount) {
+    throw new Error("El número de familias con email cambió. Recarga la página antes de cerrar.");
+  }
 
   await closeCampaign(
     input.campaignId,
@@ -175,10 +199,15 @@ export async function closeMaterialCampaignAction(formData: FormData) {
 export async function sendMaterialCampaignCommunicationsAction(formData: FormData) {
   await requireInternalAccess();
   const input = sendCommunicationsSchema.parse({
+    campaignId: formData.get("campaignId"),
     communicationIds: JSON.parse(String(formData.get("communicationIds") ?? "[]")),
     mode: formData.get("mode"),
+    sendConfirmed: formData.get("sendConfirmed") === "yes",
     forceConfirmed: formData.get("forceConfirmed") === "yes"
   });
+  if (new Set(input.communicationIds).size !== input.communicationIds.length) throw new Error("La selección contiene comunicaciones duplicadas.");
+  const campaign = await getCampaignById(input.campaignId);
+  if (!campaign || campaign.status !== "closed") throw new Error("La campaña debe estar cerrada y revisada antes del envío.");
   const client = createWebOrdersClient();
   const { data, error } = await client
     .from("skbc_order_communications")
@@ -189,38 +218,74 @@ export async function sendMaterialCampaignCommunicationsAction(formData: FormDat
   if (error) throw error;
   if ((data ?? []).length !== input.communicationIds.length) throw new Error("La selección de comunicaciones cambió. Recarga la página.");
 
-  const communications: PreparedMaterialOrderCommunication[] = [];
+  const previews: PreparedMaterialOrderCommunication[] = [];
   for (const row of data ?? []) {
-    if (row.status === "sent" && input.mode === "send") continue;
-    try {
-      communications.push(parsePreparedCommunication(row));
-    } catch (parseError) {
-      if (input.mode === "test") throw parseError;
-      const { error: updateError } = await client.from("skbc_order_communications").update({
-        status: "failed",
-        sent_at: null,
-        failed_at: new Date().toISOString(),
-        failure_message: conciseActionError(parseError)
-      }).eq("id", row.id);
-      if (updateError) throw updateError;
-    }
+    const preview = parsePreparedCommunication(row);
+    if (preview.campaignId !== input.campaignId) throw new Error("Todas las comunicaciones deben pertenecer exactamente a la campaña seleccionada.");
+    previews.push(preview);
   }
-  if (!communications.length && input.mode === "test") throw new Error("No hay comunicaciones válidas para la vista previa.");
-  const result = await sendPreparedMaterialOrderCommunications({
-    communications,
-    testOnly: input.mode === "test",
-    forceResend: input.mode === "force-resend",
-    update: async (id, outcome) => {
-      const { error: updateError } = await client.from("skbc_order_communications").update({
-        status: outcome.status,
-        sent_at: outcome.sentAt,
-        failed_at: outcome.failedAt,
-        failure_message: outcome.error
-      }).eq("id", id);
-      if (updateError) throw updateError;
-    }
+  if (input.mode === "test") {
+    await sendPreparedMaterialOrderCommunications({
+      communications: previews,
+      testOnly: true,
+      complete: async () => undefined,
+      markDeliveredUnconfirmed: async () => undefined
+    });
+    refresh("communication-preview-sent");
+  }
+
+  const totals = { sentCount: 0, failedCount: 0, ambiguousCount: 0 };
+  for (const preview of previews) {
+    const claimed = await claimCommunication({
+      campaignId: input.campaignId,
+      communicationId: preview.id,
+      attemptToken: randomUUID(),
+      forceResend: input.mode === "force-resend"
+    });
+    const result = await sendPreparedMaterialOrderCommunications({
+      communications: [parsePreparedCommunication(claimed)],
+      complete: async (communication, outcome) => {
+        await completeCommunicationAttempt({
+          campaignId: communication.campaignId,
+          communicationId: communication.id,
+          attemptToken: communication.attemptToken!,
+          outcome: outcome.outcome,
+          errorMessage: outcome.error
+        });
+      },
+      markDeliveredUnconfirmed: async (communication, errorMessage) => {
+        await completeCommunicationAttempt({
+          campaignId: communication.campaignId,
+          communicationId: communication.id,
+          attemptToken: communication.attemptToken!,
+          outcome: "delivered_unconfirmed",
+          errorMessage
+        });
+      }
+    });
+    totals.sentCount += result.sentCount;
+    totals.failedCount += result.failedCount;
+    totals.ambiguousCount += result.ambiguousCount;
+  }
+  refresh(`communications-sent-${totals.sentCount}-failed-${totals.failedCount}-ambiguous-${totals.ambiguousCount}`);
+}
+
+export async function reconcileMaterialCommunicationAction(formData: FormData) {
+  await requireInternalAccess();
+  const input = reconcileSchema.parse({
+    campaignId: formData.get("campaignId"),
+    communicationId: formData.get("communicationId"),
+    attemptToken: formData.get("attemptToken"),
+    delivered: formData.get("delivered"),
+    reconcileConfirmed: formData.get("reconcileConfirmed") === "yes"
   });
-  refresh(input.mode === "test" ? "communication-preview-sent" : `communications-sent-${result.sentCount}-failed-${result.failedCount}`);
+  await reconcileCommunication({
+    campaignId: input.campaignId,
+    communicationId: input.communicationId,
+    attemptToken: input.attemptToken,
+    delivered: input.delivered === "yes"
+  });
+  refresh("communication-reconciled");
 }
 
 async function requireInternalAccess() {
@@ -236,16 +301,24 @@ function parsePreparedCommunication(row: Record<string, unknown>): PreparedMater
   const snapshot = requiredRecord(row.snapshot, "snapshot");
   const campaign = requiredRecord(snapshot.campaign, "campaign");
   const rawItems = z.array(z.record(z.string(), z.unknown())).min(1).parse(snapshot.items);
-  const paymentMethod = z.enum(["cash", "bank", "paid"]).parse(snapshot.payment_method) as MaterialOrderPaymentMethod;
+  const paymentMethods = z.array(z.enum(["cash", "bank", "paid"])).min(1).parse(
+    snapshot.payment_methods ?? [snapshot.payment_method]
+  );
+  const paymentMethod = (new Set(paymentMethods).size === 1 ? paymentMethods[0] : "mixed") as MaterialOrderPaymentMethod;
   const recipientEmail = z.string().trim().email().parse(row.recipient_email ?? snapshot.customer_email);
+  const orderNumbers = z.array(z.string().trim().min(1)).min(1).parse(
+    snapshot.order_numbers ?? [snapshot.order_number]
+  );
   return {
-    id: uuid.parse(row.id),
-    status: z.enum(["prepared", "sent", "failed"]).parse(row.status),
+    id: uuid.parse(row.communication_id ?? row.id),
+    status: z.enum(["prepared", "sending", "sent", "failed", "delivered_unconfirmed"]).parse(row.communication_status ?? row.status),
+    campaignId: uuid.parse(campaign.id),
+    attemptToken: row.attempt_token ? uuid.parse(row.attempt_token) : null,
     recipientEmail,
     payerName: z.string().trim().min(1).parse(row.recipient_name ?? snapshot.customer_name),
     paymentMethod,
     campaignReference: `${formatCampaignDate(campaign.period_start)} - ${formatCampaignDate(campaign.period_end)}`,
-    orderNumber: z.string().trim().min(1).parse(snapshot.order_number),
+    orderNumber: orderNumbers.join(", "),
     items: rawItems.map((item, index) => ({
       id: z.string().default(`line-${index + 1}`).parse(item.id),
       recipient: z.string().trim().min(1).catch("Pedido familiar").parse(item.recipient ?? item.recipient_name),
@@ -267,9 +340,4 @@ function requiredRecord(value: unknown, label: string): Record<string, unknown> 
 function formatCampaignDate(value: unknown) {
   const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(value);
   return new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Madrid" }).format(new Date(`${date}T12:00:00Z`));
-}
-
-function conciseActionError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error || "Error desconocido.");
-  return message.replace(/\s+/g, " ").trim().slice(0, 240);
 }
