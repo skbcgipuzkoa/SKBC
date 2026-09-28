@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createClient } from "@supabase/supabase-js";
 
 const WEB_ORDERS_URL_ENV = "WEB_ORDERS_SUPABASE_URL";
