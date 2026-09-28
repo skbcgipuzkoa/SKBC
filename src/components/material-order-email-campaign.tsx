@@ -122,5 +122,5 @@ function paymentLabel(method: MaterialOrderPaymentMethod) {
 function paymentMessage(method: MaterialOrderPaymentMethod) {
   if (method === "bank") return "Se cargará en la cuenta bancaria habitual. No es necesario traer dinero.";
   if (method === "paid") return "Pago recibido. No queda ningún importe pendiente.";
-  return "El importe debe entregarse en el club.";
+  return "Cuando os venga bien, podéis entregar el importe en el club. Muchas gracias.";
 }

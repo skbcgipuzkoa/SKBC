@@ -308,7 +308,7 @@ function formatEuros(cents: number) {
 function paymentMessage(method: MaterialOrderPaymentMethod) {
   if (method === "bank") return "El importe se cargara en la cuenta bancaria habitual. No es necesario traer dinero al club.";
   if (method === "paid") return "Pago recibido. No queda ningun importe pendiente por este pedido.";
-  return "Por favor, entrega el importe en el club. Si ya lo has entregado, puedes ignorar este aviso.";
+  return "Cuando os venga bien, podéis entregar el importe en el club. Muchas gracias.";
 }
 
 function paymentMethodLabel(method: MaterialOrderPaymentMethod) {
