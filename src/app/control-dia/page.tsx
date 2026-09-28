@@ -132,7 +132,7 @@ export default async function ControlDiaPage({
     buildCheck({
       label: "Clase adultos",
       detail: adultClass ? `${adultClass.name} - ${adultClass.closed ? "cerrada" : "abierta"}` : "No hay clase adulta creada",
-      status: adultClass ? "ok" : "warn",
+      status: adultClass ? "ok" : "neutral",
       href: adultClass?.legacy_id ? `/clases/${adultClass.legacy_id}` : "/clases/nueva"
     }),
     buildCheck({
@@ -150,7 +150,7 @@ export default async function ControlDiaPage({
     buildCheck({
       label: "Clase ninos",
       detail: kidsClass ? `${kidsClass.name} - ${kidsClass.closed ? "cerrada" : "abierta"}` : "No hay clase infantil creada",
-      status: kidsClass ? "ok" : "warn",
+      status: kidsClass ? "ok" : "neutral",
       href: kidsClass?.legacy_id ? `/clases/${kidsClass.legacy_id}` : "/clases/nueva"
     }),
     buildCheck({
@@ -177,11 +177,13 @@ export default async function ControlDiaPage({
     })
   ];
 
-  const overall = checks.some((item) => item.status === "danger")
+  const overall: DayStatus = checks.some((item) => item.status === "danger")
     ? "danger"
     : checks.some((item) => item.status === "warn")
       ? "warn"
-      : "ok";
+      : dayClasses.length
+        ? "ok"
+        : "neutral";
 
   return (
     <div className="shell">
@@ -202,8 +204,8 @@ export default async function ControlDiaPage({
         <section className={`control-hero control-${overall}`}>
           <div>
             <span className="tag">{formatDate(selectedDate)}</span>
-            <h2>{overall === "ok" ? "Todo lo importante esta grabado" : overall === "warn" ? "Hay puntos para revisar" : "Hay incidencias que corregir"}</h2>
-            <p className="muted">Antes de terminar el dia, revisa que asistencia, tecnicas, fichas, rankings y copias hayan quedado reflejadas en Supabase.</p>
+            <h2>{overall === "neutral" ? "No hay actividad registrada para este dia" : overall === "ok" ? "Todo lo importante esta grabado" : overall === "warn" ? "Hay puntos para revisar" : "Hay incidencias que corregir"}</h2>
+            <p className="muted">{overall === "neutral" ? "No hay clases ni asistencias que comprobar en la fecha seleccionada." : "Antes de terminar el dia, revisa que asistencia, tecnicas, fichas, rankings y copias hayan quedado reflejadas en Supabase."}</p>
           </div>
           <div className="control-date-form">
             <form action="/control-dia" method="get">
@@ -226,7 +228,7 @@ export default async function ControlDiaPage({
         ) : null}
 
         <section className="control-summary-grid">
-          <MetricCard icon={CalendarCheck} label="Clases del dia" value={String(visualClassCount)} tone={dayClasses.length ? "ok" : "warn"} />
+          <MetricCard icon={CalendarCheck} label="Clases del dia" value={String(visualClassCount)} tone={dayClasses.length ? "ok" : "neutral"} />
           <MetricCard icon={Users} label="Adultos" value={String(adultAttendance.length)} tone={adultAttendance.length ? "ok" : "neutral"} />
           <MetricCard icon={Users} label="Ninos" value={String(kidsAttendance.length)} tone={kidsAttendance.length ? "ok" : "neutral"} />
           <MetricCard icon={ClipboardCheck} label="Sync fallidos" value={String(syncFailed.length)} tone={syncFailed.length ? "danger" : "ok"} />
