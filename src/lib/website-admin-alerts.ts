@@ -46,6 +46,26 @@ export function totalWebsiteAdminAlerts(counts: WebsiteAdminAlertCounts) {
   return counts.pendingTestimonials + counts.pendingKenshiRegistrations;
 }
 
+export async function isPendingWebsiteAdminItem(type: "testimonial" | "kenshi", id: string) {
+  const url = process.env.WEBSITE_SUPABASE_URL || DEFAULT_WEBSITE_SUPABASE_URL;
+  const anonKey = process.env.WEBSITE_SUPABASE_ANON_KEY || DEFAULT_WEBSITE_SUPABASE_ANON_KEY;
+  try {
+    const response = await fetch(`${url}/rest/v1/rpc/skbc_is_pending_admin_item`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ item_type: type, item_id: id }),
+      cache: "no-store"
+    });
+    return response.ok && await response.json() === true;
+  } catch {
+    return false;
+  }
+}
+
 function safeCount(value: unknown) {
   const count = Number(value);
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
