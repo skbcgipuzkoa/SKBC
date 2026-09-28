@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { saveDelegateTechnicalStepAction, startDelegateClassAction, submitDelegateClassAction } from "@/app/actions";
 import { adultGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { driveImageUrl } from "@/lib/drive";
 
 type DelegateMode = "adults" | "kids" | "combined";
 
@@ -51,6 +52,7 @@ type MemberOption = {
   display_name: string;
   grade: string | null;
   class: "kids" | "adults";
+  photo_url: string | null;
 };
 
 export default async function DelegateClassPage({
@@ -115,7 +117,7 @@ export default async function DelegateClassPage({
       .returns<AttendanceRow[]>(),
     supabase
       .from("members")
-      .select("id,display_name,grade,class")
+      .select("id,display_name,grade,class,photo_url")
       .in("class", classGroups)
       .eq("status", "active")
       .order("display_name")
@@ -310,6 +312,7 @@ function DelegateAttendanceSection({
         {pendingMembers.length ? pendingMembers.map((member) => (
           <label className="delegate-check delegate-check-with-options" key={member.id}>
             <input name={`memberIds:${clase.id}`} type="checkbox" value={member.id} />
+            <AttendanceAvatar name={member.display_name} photoUrl={member.photo_url} />
             <span>
               <strong>{member.display_name}</strong>
               <small>{member.grade ?? "Sin grado"}</small>
@@ -334,6 +337,17 @@ function DelegateAttendanceSection({
       </div>
     </section>
   );
+}
+
+function AttendanceAvatar({ name, photoUrl }: { name: string; photoUrl: string | null }) {
+  const src = driveImageUrl(photoUrl);
+  return src
+    ? <img className="attendance-avatar" src={src} alt={`Foto de ${name}`} />
+    : <span className="attendance-avatar attendance-avatar-placeholder" aria-hidden="true">{initials(name)}</span>;
+}
+
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
 function groupPlanByGrade(plan: PlanRow[]) {
