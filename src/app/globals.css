@@ -11359,12 +11359,18 @@ tbody tr:hover {
 .material-family-payment.status-cash_paid { background: #e6f6ed; border-left: 7px solid #24915b; }
 .material-family-payment.status-bank_submitted { background: #e7f2fb; border-left: 7px solid #1769aa; }
 .material-family-payment.status-pending { background: #fff5d9; border-left: 7px solid #d19720; }
-.material-family-payment-main { align-items: center; display: grid; gap: 12px; grid-template-columns: minmax(210px, 1fr) auto minmax(330px, .9fr) minmax(330px, .9fr); padding: 14px 18px 10px; }
+.material-family-payment-main { align-items: end; display: grid; gap: 12px; grid-template-columns: minmax(210px, 1fr) auto minmax(170px, 210px) minmax(170px, 210px); padding: 14px 18px 10px; }
 .material-family-payment-person { min-width: 0; }
 .material-family-payment-person small { color: var(--muted); display: block; margin-top: 4px; overflow-wrap: anywhere; }
 .material-family-payment-total { font-size: 18px; white-space: nowrap; }
 .material-payment-statuses { border: 0; display: grid; gap: 6px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; min-width: 0; padding: 0; }
 .material-inline-status-form { min-width: 0; }
+.material-status-select { color: var(--muted); display: grid; font-size: 11px; font-weight: 800; gap: 4px; min-width: 0; }
+.material-status-select select { appearance: auto; border: 1px solid #aebdcb; border-radius: 6px; color: #122038; font-size: 13px; font-weight: 800; min-height: 42px; padding: 7px 9px; width: 100%; }
+.material-status-select .select-pending, .material-status-select .select-delivery-pending { background: #fff0bd; border-color: #bf8b16; color: #755300; }
+.material-status-select .select-cash_paid, .material-status-select .select-delivery-delivered { background: #dff3e8; border-color: #24915b; color: #17613c; }
+.material-status-select .select-bank_submitted { background: #dceefa; border-color: #1769aa; color: #105182; }
+.material-status-select .select-delivery-partial { background: #ffe5c7; border-color: #b56b16; color: #7a4308; }
 .payment-choice { cursor: pointer; min-width: 0; position: relative; }
 .payment-choice input { height: 1px; opacity: 0; position: absolute; width: 1px; }
 .payment-choice span { align-items: center; background: rgba(255,255,255,.7); border: 1px solid #b8c4d2; border-radius: 6px; display: flex; font-size: 12px; font-weight: 800; justify-content: center; min-height: 38px; padding: 6px 9px; text-align: center; }
@@ -11387,6 +11393,10 @@ tbody tr:hover {
 .material-note-forms form { align-items: end; display: grid; gap: 10px; grid-template-columns: minmax(180px, 1fr) auto; }
 .material-note-forms form:last-child { grid-template-columns: 150px minmax(220px, 1fr) auto; }
 .material-note-forms select { border: 1px solid var(--line); border-radius: 6px; min-height: 40px; padding: 7px 9px; width: 100%; }
+.material-order-tracking > summary { cursor: pointer; list-style: none; }
+.material-order-tracking > summary::-webkit-details-marker { display: none; }
+.material-order-tracking > summary h2::before { content: "▸"; display: inline-block; margin-right: 8px; transition: transform .15s ease; }
+.material-order-tracking[open] > summary h2::before { transform: rotate(90deg); }
 .material-payment-date { color: var(--muted); display: block; margin-top: 9px; }
 
 .material-communication-list details,
@@ -11532,8 +11542,8 @@ tbody tr:hover {
   .material-variant-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .material-variant-id { grid-column: 1 / -1; }
   .material-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .material-family-payment-main { grid-template-columns: minmax(180px, 1fr) auto; }
-  .material-inline-status-form { grid-column: 1 / -1; }
+  .material-family-payment-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .material-family-payment-total { justify-self: end; }
   .material-order-groups article { grid-template-columns: 1fr auto auto; }
   .material-order-groups article form { grid-column: 1 / -1; }
   .material-note-forms, .material-note-forms form, .material-note-forms form:last-child { grid-template-columns: 1fr; }
