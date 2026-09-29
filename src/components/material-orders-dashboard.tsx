@@ -194,7 +194,7 @@ function PaymentsView({ orders, communications, campaign, familyPayments }: { or
     <section className="material-section">
       <div className="material-section-heading"><div><h2>Seguimiento de pagos por familia</h2><p>El último pedido enviado se recupera tal como se comunicó. Cada familia aparece una sola vez, aunque tenga varios alumnos o artículos.</p></div><span>{familyPayments.length} familias</span></div>
       <div className="material-payment-summary"><Metric icon={<ReceiptText size={18} />} label="Total pedido" value={money(paymentTotal)} /><Metric icon={<CalendarClock size={18} />} label="Pendiente" value={money(paymentPending)} /><Metric icon={<CheckCircle2 size={18} />} label="Efectivo recibido" value={money(cashReceived)} /><Metric icon={<PackageCheck size={18} />} label="Enviado al banco" value={money(bankSubmitted)} /></div>
-      <div className="material-family-payment-list">{familyPayments.length ? familyPayments.map((payment) => <details key={payment.id} className={`material-family-payment status-${payment.status}`}><summary><span><strong>{payment.recipient_name}</strong><small>{familyRecipients(payment.recipients)} · {paymentMethodLabel(payment.intended_payment_method)}</small></span><b>{money(payment.total_cents)}</b></summary><div className="material-family-payment-body"><ul>{familyItems(payment.items).map((item, index) => <li key={`${payment.id}-${index}`}><span>{item.label}</span><strong>{item.amount}</strong></li>)}</ul><form action={updateMaterialFamilyPaymentAction}><input type="hidden" name="paymentId" value={payment.id} /><input type="hidden" name="campaignId" value={payment.campaign_id} /><label>Estado<select name="status" defaultValue={payment.status}><option value="pending">Pendiente</option><option value="cash_paid">Pagado en efectivo</option><option value="bank_submitted">Cobro enviado al banco</option></select></label><label>Notas<input name="notes" defaultValue={payment.notes ?? ""} placeholder="Fecha, persona que entrega o aclaración" /></label><SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton></form>{payment.status_on ? <small className="material-payment-date">Actualizado el {formatDate(payment.status_on)}</small> : null}</div></details>) : <EmptyState title="Sin pagos familiares recuperados" detail="Los pagos aparecerán al cerrar una campaña y preparar sus comunicaciones familiares." />}</div>
+      <div className="material-family-payment-list">{familyPayments.length ? familyPayments.map((payment) => <FamilyPaymentRow key={payment.id} payment={payment} />) : <EmptyState title="Sin pagos familiares recuperados" detail="Los pagos aparecerán al cerrar una campaña y preparar sus comunicaciones familiares." />}</div>
     </section>
     <section className="material-section">
       <div className="material-section-heading"><div><h2>Comunicaciones</h2><p>{campaign?.status === "closed" ? "Revisa los destinatarios y envía primero una prueba interna. Cada familia recibe un único email con todos sus pedidos." : "Se prepararán al cerrar la campaña; nunca se envían automáticamente."}</p></div><span>{pendingCount} pendientes · {sentCount} enviadas · {ambiguousCount} por conciliar</span></div>
@@ -206,6 +206,28 @@ function PaymentsView({ orders, communications, campaign, familyPayments }: { or
         </div> : null}</> : <EmptyState title="Sin comunicaciones preparadas" detail="Cierra la campaña cuando todos los datos estén revisados." />}
     </section>
   </div>;
+}
+
+function FamilyPaymentRow({ payment }: { payment: WebOrderFamilyPayment }) {
+  const statuses = [
+    ["pending", "Pendiente"],
+    ["cash_paid", "Pagado"],
+    ["bank_submitted", "Pasado por cuenta"]
+  ] as const;
+  return <article className={`material-family-payment status-${payment.status}`}>
+    <form action={updateMaterialFamilyPaymentAction}>
+      <input type="hidden" name="paymentId" value={payment.id} />
+      <input type="hidden" name="campaignId" value={payment.campaign_id} />
+      <div className="material-family-payment-main">
+        <div className="material-family-payment-person"><strong>{payment.recipient_name}</strong><small>{familyRecipients(payment.recipients)} · {paymentMethodLabel(payment.intended_payment_method)}</small></div>
+        <strong className="material-family-payment-total">{money(payment.total_cents)}</strong>
+        <fieldset className="material-payment-statuses" aria-label={`Estado de pago de ${payment.recipient_name}`}>
+          {statuses.map(([status, label]) => <label key={status} className={`payment-choice choice-${status}`}><input type="radio" name="status" value={status} defaultChecked={payment.status === status} onChange={(event) => event.currentTarget.form?.requestSubmit()} /><span>{label}</span></label>)}
+        </fieldset>
+      </div>
+      <details className="material-family-payment-detail"><summary>Ver desglose y notas</summary><div className="material-family-payment-body"><ul>{familyItems(payment.items).map((item, index) => <li key={`${payment.id}-${index}`}><span>{item.label}</span><strong>{item.amount}</strong></li>)}</ul><div className="material-payment-notes"><label>Notas<input name="notes" defaultValue={payment.notes ?? ""} placeholder="Fecha, persona que entrega o aclaración" /></label><SubmitButton pendingLabel="Guardando...">Guardar nota</SubmitButton></div>{payment.status_on ? <small className="material-payment-date">Actualizado el {formatDate(payment.status_on)}</small> : null}</div></details>
+    </form>
+  </article>;
 }
 
 function CatalogView({ products }: { products: CatalogProduct[] }) {
