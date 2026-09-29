@@ -5,6 +5,8 @@ import { getCampaignPeriod } from "./campaigns";
 import type {
   WebOrder,
   WebOrderCampaign,
+  WebOrderFamilyPayment,
+  WebOrderFamilyPaymentStatus,
   WebOrderItem,
   WebOrderPaymentMethod,
   WebOrderProduct,
@@ -131,6 +133,40 @@ export async function listCampaignOrders(campaignId: string) {
 
   if (error) throw error;
   return (data ?? []) as CampaignOrder[];
+}
+
+export async function listCampaignFamilyPayments(campaignId: string) {
+  const { data, error } = await createWebOrdersClient()
+    .from("skbc_order_family_payments")
+    .select("*")
+    .eq("campaign_id", campaignId)
+    .order("recipient_name", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as WebOrderFamilyPayment[];
+}
+
+export async function updateFamilyPayment(input: {
+  paymentId: string;
+  campaignId: string;
+  status: WebOrderFamilyPaymentStatus;
+  notes: string | null;
+}) {
+  const { data, error } = await createWebOrdersClient()
+    .from("skbc_order_family_payments")
+    .update({
+      status: input.status,
+      status_on: input.status === "pending" ? null : new Date().toISOString().slice(0, 10),
+      notes: input.notes,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", input.paymentId)
+    .eq("campaign_id", input.campaignId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as WebOrderFamilyPayment;
 }
 
 export async function getSupplierSummary(campaignId: string) {

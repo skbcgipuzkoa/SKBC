@@ -134,3 +134,24 @@ export type WebOrderCommunication = {
   created_by: string | null;
   created_at: string;
 };
+
+export type WebOrderFamilyPaymentStatus = "pending" | "cash_paid" | "bank_submitted";
+
+export type WebOrderFamilyPayment = {
+  id: string;
+  campaign_id: string;
+  family_key: string;
+  recipient_name: string;
+  recipient_email: string | null;
+  recipient_phone: string | null;
+  order_ids: string[];
+  recipients: WebOrderJson;
+  items: WebOrderJson;
+  total_cents: number;
+  intended_payment_method: "cash" | "bank" | "paid" | "mixed";
+  status: WebOrderFamilyPaymentStatus;
+  status_on: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};

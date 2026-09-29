@@ -15,6 +15,7 @@ import {
   getCampaignById,
   listCampaignOrders,
   reconcileCommunication,
+  updateFamilyPayment,
   updateVariantPricing,
   upsertCatalogProduct
 } from "@/lib/web-orders/repository";
@@ -95,6 +96,13 @@ const paymentSchema = z.object({
   orderId: uuid,
   campaignId: uuid,
   paymentMethod: z.enum(["cash", "bank", "paid"])
+});
+
+const familyPaymentSchema = z.object({
+  paymentId: uuid,
+  campaignId: uuid,
+  status: z.enum(["pending", "cash_paid", "bank_submitted"]),
+  notes: z.string().trim().max(1000)
 });
 
 const closeSchema = z.object({
@@ -251,6 +259,18 @@ export async function assignMaterialPaymentAction(formData: FormData) {
   refresh("payment-saved", input.campaignId);
 }
 
+export async function updateMaterialFamilyPaymentAction(formData: FormData) {
+  await requireInternalAccess();
+  const input = familyPaymentSchema.parse({
+    paymentId: formData.get("paymentId"),
+    campaignId: formData.get("campaignId"),
+    status: formData.get("status"),
+    notes: formData.get("notes")
+  });
+  await updateFamilyPayment({ ...input, notes: input.notes || null });
+  refresh("family-payment-saved", input.campaignId, "payments");
+}
+
 export async function closeMaterialCampaignAction(formData: FormData) {
   await requireInternalAccess();
   const input = closeSchema.parse({
@@ -374,10 +394,11 @@ async function requireInternalAccess() {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 }
 
-function refresh(saved: string, campaignId?: string): never {
+function refresh(saved: string, campaignId?: string, tab?: string): never {
   revalidatePath("/pedidos-cinturones");
   const campaign = campaignId ? `&campaign=${encodeURIComponent(campaignId)}` : "";
-  redirect(`/pedidos-cinturones?saved=${saved}${campaign}`);
+  const selectedTab = tab ? `&tab=${encodeURIComponent(tab)}` : "";
+  redirect(`/pedidos-cinturones?saved=${saved}${campaign}${selectedTab}`);
 }
 
 function parsePreparedCommunication(row: Record<string, unknown>): PreparedMaterialOrderCommunication {

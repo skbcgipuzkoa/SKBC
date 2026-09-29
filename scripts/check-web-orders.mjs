@@ -49,6 +49,8 @@ assert.deepEqual([...aliases.keys()].sort(), [
   "WebOrderCommunication",
   "WebOrderCommunicationChannel",
   "WebOrderCommunicationDirection",
+  "WebOrderFamilyPayment",
+  "WebOrderFamilyPaymentStatus",
   "WebOrderItem",
   "WebOrderJson",
   "WebOrderPaymentMethod",

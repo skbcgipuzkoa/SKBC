@@ -10,12 +10,13 @@ import {
   createMaterialVariantAction,
   reconcileMaterialCommunicationAction,
   sendMaterialCampaignCommunicationsAction,
+  updateMaterialFamilyPaymentAction,
   updateMaterialProductAction,
   updateMaterialVariantAction
 } from "@/app/material-order-actions";
 import type { CampaignOrder, CatalogProduct, SupplierSummaryRow } from "@/lib/web-orders/repository";
 import type { ManagementCampaignStatus } from "@/lib/web-orders/campaigns";
-import type { WebOrderCampaign, WebOrderCommunication } from "@/lib/web-orders/types";
+import type { WebOrderCampaign, WebOrderCommunication, WebOrderFamilyPayment, WebOrderJson } from "@/lib/web-orders/types";
 
 type CampaignView = Omit<WebOrderCampaign, "status"> & { status: ManagementCampaignStatus };
 type CommunicationView = WebOrderCommunication & {
@@ -30,6 +31,7 @@ export type MaterialOrdersDashboardProps = {
   supplierSummary: SupplierSummaryRow[];
   catalog: CatalogProduct[];
   communications: CommunicationView[];
+  familyPayments: WebOrderFamilyPayment[];
   loadError?: string;
   initialTab?: TabId;
   children: ReactNode;
@@ -97,7 +99,7 @@ export function MaterialOrdersDashboard(props: MaterialOrdersDashboardProps) {
 
     <div id="material-panel-monthly" role="tabpanel" aria-labelledby="material-tab-monthly" hidden={activeTab !== "monthly"}>{activeTab === "monthly" ? <MonthlyView {...props} totals={totals} unresolved={unresolved} /> : null}</div>
     <div id="material-panel-supplier" role="tabpanel" aria-labelledby="material-tab-supplier" hidden={activeTab !== "supplier"}>{activeTab === "supplier" ? <SupplierView rows={props.supplierSummary} campaign={props.campaign} /> : null}</div>
-    <div id="material-panel-payments" role="tabpanel" aria-labelledby="material-tab-payments" hidden={activeTab !== "payments"}>{activeTab === "payments" ? <PaymentsView orders={props.orders} communications={props.communications} campaign={props.campaign} /> : null}</div>
+    <div id="material-panel-payments" role="tabpanel" aria-labelledby="material-tab-payments" hidden={activeTab !== "payments"}>{activeTab === "payments" ? <PaymentsView orders={props.orders} communications={props.communications} campaign={props.campaign} familyPayments={props.familyPayments} /> : null}</div>
     <div id="material-panel-catalog" role="tabpanel" aria-labelledby="material-tab-catalog" hidden={activeTab !== "catalog"}>{activeTab === "catalog" ? <CatalogView products={props.catalog} /> : null}</div>
     <div id="material-panel-history" role="tabpanel" aria-labelledby="material-tab-history" hidden={activeTab !== "history"}>{activeTab === "history" ? <HistoryView campaigns={props.campaigns} orders={props.historyOrders} /> : null}</div>
     <div id="material-panel-belts" role="tabpanel" aria-labelledby="material-tab-belts" hidden={activeTab !== "belts"} className="material-belt-workflow">{activeTab === "belts" ? props.children : null}</div>
@@ -172,7 +174,7 @@ function SupplierView({ rows, campaign }: { rows: SupplierSummaryRow[]; campaign
   </div>;
 }
 
-function PaymentsView({ orders, communications, campaign }: { orders: CampaignOrder[]; communications: CommunicationView[]; campaign: CampaignView | null }) {
+function PaymentsView({ orders, communications, campaign, familyPayments }: { orders: CampaignOrder[]; communications: CommunicationView[]; campaign: CampaignView | null; familyPayments: WebOrderFamilyPayment[] }) {
   const communicationIds = JSON.stringify(communications.map((communication) => communication.id));
   const pending = communications.filter((communication) => communication.status === "prepared" || communication.status === "failed");
   const pendingIds = JSON.stringify(pending.map((communication) => communication.id));
@@ -180,10 +182,19 @@ function PaymentsView({ orders, communications, campaign }: { orders: CampaignOr
   const pendingCount = pending.length;
   const sentCount = communications.filter((communication) => communication.status === "sent").length;
   const ambiguousCount = communications.filter((communication) => communication.status === "sending" || communication.status === "delivered_unconfirmed").length;
+  const paymentTotal = familyPayments.reduce((sum, payment) => sum + payment.total_cents, 0);
+  const cashReceived = familyPayments.filter((payment) => payment.status === "cash_paid").reduce((sum, payment) => sum + payment.total_cents, 0);
+  const bankSubmitted = familyPayments.filter((payment) => payment.status === "bank_submitted").reduce((sum, payment) => sum + payment.total_cents, 0);
+  const paymentPending = familyPayments.filter((payment) => payment.status === "pending").reduce((sum, payment) => sum + payment.total_cents, 0);
   return <div className="material-tab-panel">
     <section className="material-section">
       <div className="material-section-heading"><div><h2>Cobros</h2><p>La forma de pago se asigna por responsable y se incluirá en la comunicación preparada.</p></div></div>
       <div className="material-payment-list">{orders.length ? orders.map((order) => <div className="material-payment-row" key={order.id}><div><strong>{order.customer_name}</strong><span>{order.order_number ?? "Sin número"} · {order.customer_email ?? "Sin email"}</span></div><strong>{money(order.total_cents ?? order.items.reduce((sum, item) => sum + item.line_total_cents, 0))}</strong><form action={assignMaterialPaymentAction}><input type="hidden" name="orderId" value={order.id} /><input type="hidden" name="campaignId" value={campaign?.id ?? ""} /><select name="paymentMethod" defaultValue={order.payment_method ?? ""} aria-label={`Pago de ${order.customer_name}`} required disabled={campaign?.status === "closed"}><option value="" disabled>Asignar pago</option><option value="cash">Entregar en el club</option><option value="bank">Cargar en cuenta</option><option value="paid">Pagado</option></select><PaymentSubmitButton disabled={campaign?.status === "closed"} /></form></div>) : <p className="muted">No hay pedidos en la campaña.</p>}</div>
+    </section>
+    <section className="material-section">
+      <div className="material-section-heading"><div><h2>Seguimiento de pagos por familia</h2><p>El último pedido enviado se recupera tal como se comunicó. Cada familia aparece una sola vez, aunque tenga varios alumnos o artículos.</p></div><span>{familyPayments.length} familias</span></div>
+      <div className="material-payment-summary"><Metric icon={<ReceiptText size={18} />} label="Total pedido" value={money(paymentTotal)} /><Metric icon={<CalendarClock size={18} />} label="Pendiente" value={money(paymentPending)} /><Metric icon={<CheckCircle2 size={18} />} label="Efectivo recibido" value={money(cashReceived)} /><Metric icon={<PackageCheck size={18} />} label="Enviado al banco" value={money(bankSubmitted)} /></div>
+      <div className="material-family-payment-list">{familyPayments.length ? familyPayments.map((payment) => <details key={payment.id} className={`material-family-payment status-${payment.status}`}><summary><span><strong>{payment.recipient_name}</strong><small>{familyRecipients(payment.recipients)} · {paymentMethodLabel(payment.intended_payment_method)}</small></span><b>{money(payment.total_cents)}</b></summary><div className="material-family-payment-body"><ul>{familyItems(payment.items).map((item, index) => <li key={`${payment.id}-${index}`}><span>{item.label}</span><strong>{item.amount}</strong></li>)}</ul><form action={updateMaterialFamilyPaymentAction}><input type="hidden" name="paymentId" value={payment.id} /><input type="hidden" name="campaignId" value={payment.campaign_id} /><label>Estado<select name="status" defaultValue={payment.status}><option value="pending">Pendiente</option><option value="cash_paid">Pagado en efectivo</option><option value="bank_submitted">Cobro enviado al banco</option></select></label><label>Notas<input name="notes" defaultValue={payment.notes ?? ""} placeholder="Fecha, persona que entrega o aclaración" /></label><SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton></form>{payment.status_on ? <small className="material-payment-date">Actualizado el {formatDate(payment.status_on)}</small> : null}</div></details>) : <EmptyState title="Sin pagos familiares recuperados" detail="Los pagos aparecerán al cerrar una campaña y preparar sus comunicaciones familiares." />}</div>
     </section>
     <section className="material-section">
       <div className="material-section-heading"><div><h2>Comunicaciones</h2><p>{campaign?.status === "closed" ? "Revisa los destinatarios y envía primero una prueba interna. Cada familia recibe un único email con todos sus pedidos." : "Se prepararán al cerrar la campaña; nunca se envían automáticamente."}</p></div><span>{pendingCount} pendientes · {sentCount} enviadas · {ambiguousCount} por conciliar</span></div>
@@ -246,6 +257,25 @@ function campaignMessage(campaign: CampaignView) { return campaign.status === "c
 function daysLabel(campaign: CampaignView) { if (campaign.status === "closed") return "Cerrada"; const today = new Date(); const end = new Date(`${campaign.period_end}T23:59:59+02:00`); const days = Math.ceil((end.getTime() - today.getTime()) / 86400000); return days < 0 ? `${Math.abs(days)} días vencida` : days === 0 ? "Termina hoy" : `${days} días`; }
 function supplierReference(sku: string) { return sku.includes("-") ? sku.slice(0, sku.lastIndexOf("-")) : sku; }
 function itemRecipient(item: CampaignOrder["items"][number]) { return item.recipient?.trim() || "Sin indicar"; }
+function familyRecipients(value: WebOrderJson) {
+  if (!Array.isArray(value)) return "Pedido familiar";
+  const names = value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+  return names.length ? names.join(", ") : "Pedido familiar";
+}
+function familyItems(value: WebOrderJson) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw) => {
+    if (!raw || Array.isArray(raw) || typeof raw !== "object") return [];
+    const item = raw as Record<string, WebOrderJson | undefined>;
+    const product = typeof item.product_name === "string" ? item.product_name : "Artículo";
+    const variant = typeof item.variant_name === "string" ? item.variant_name : typeof item.size === "string" ? item.size : "";
+    const recipient = typeof item.recipient === "string" ? item.recipient : "";
+    const quantity = typeof item.quantity === "number" ? item.quantity : 1;
+    const cents = typeof item.line_total_cents === "number" ? item.line_total_cents : typeof item.total_cents === "number" ? item.total_cents : 0;
+    return [{ label: [recipient, product, variant, quantity > 1 ? `${quantity} ud.` : ""].filter(Boolean).join(" · "), amount: money(cents) }];
+  });
+}
+function paymentMethodLabel(method: WebOrderFamilyPayment["intended_payment_method"]) { return method === "cash" ? "Previsto en efectivo" : method === "bank" ? "Previsto por cuenta" : method === "paid" ? "Ya constaba pagado" : "Formas de pago combinadas"; }
 function confirmClose(event: FormEvent<HTMLFormElement>, orders: number, communications: number) { if (!window.confirm(`Vas a cerrar ${orders} pedidos y preparar ${communications} comunicaciones. No se enviará ningún email. ¿Continuar?`)) event.preventDefault(); }
 export function csvCell(value: string | number) { const text = String(value); const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text; return /[",\r\n]/.test(safeText) ? `"${safeText.replaceAll('"', '""')}"` : safeText; }
 function exportSupplierCsv(rows: SupplierSummaryRow[]) { const headers = ["Referencia", "Producto", "Talla", "Cantidad", "Coste unitario", "Coste total"]; const lines = rows.map((row) => [row.supplierReference, row.productName, row.size, row.quantity, (row.unitCostCents / 100).toFixed(2), (row.totalCostCents / 100).toFixed(2)]); const blob = new Blob(["\uFEFF" + [headers, ...lines].map((line) => line.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "pedido-proveedor.csv"; link.click(); URL.revokeObjectURL(url); }

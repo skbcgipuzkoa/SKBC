@@ -7,7 +7,7 @@ import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { advanceCampaignStatus, selectManagementCampaign } from "@/lib/web-orders/campaigns";
 import { createWebOrdersClient } from "@/lib/web-orders/client";
-import { getSupplierSummary, listCampaignOrders, listCatalog, type CampaignOrder } from "@/lib/web-orders/repository";
+import { getSupplierSummary, listCampaignFamilyPayments, listCampaignOrders, listCatalog, type CampaignOrder } from "@/lib/web-orders/repository";
 import type { WebOrderCampaign, WebOrderCommunication } from "@/lib/web-orders/types";
 import { redirect } from "next/navigation";
 
@@ -41,7 +41,7 @@ export default async function PedidosPage({ searchParams }: {
       </div>
       {params.saved ? <p className="save-ok">Cambios guardados correctamente.</p> : null}
       {params.error && params.error !== "belt-measure" ? <p className="form-error">No se pudo guardar el cambio.</p> : null}
-      <MaterialOrdersDashboard {...materialData} initialTab={params.tab === "belts" || params.saved || params.error || params.status || params.q ? "belts" : undefined}>
+      <MaterialOrdersDashboard {...materialData} initialTab={params.tab === "payments" ? "payments" : params.tab === "belts" || params.saved || params.error || params.status || params.q ? "belts" : undefined}>
         <BeltOrdersPanel members={members ?? []} lines={lines ?? []} params={params} />
       </MaterialOrdersDashboard>
     </main>
@@ -60,9 +60,9 @@ async function loadMaterialDashboardData(selectedCampaignId?: string): Promise<O
     const rawCampaigns = (campaignResult.data ?? []) as WebOrderCampaign[];
     const campaigns = rawCampaigns.map((campaign) => advanceCampaignStatus(campaign));
     const selectedCampaign = selectManagementCampaign(rawCampaigns, selectedCampaignId);
-    const [currentOrders, supplierSummary] = selectedCampaign
-      ? await Promise.all([listCampaignOrders(selectedCampaign.id), getSupplierSummary(selectedCampaign.id)])
-      : [[], []];
+    const [currentOrders, supplierSummary, familyPayments] = selectedCampaign
+      ? await Promise.all([listCampaignOrders(selectedCampaign.id), getSupplierSummary(selectedCampaign.id), listCampaignFamilyPayments(selectedCampaign.id)])
+      : [[], [], []];
     const historyCampaignIds = campaigns.filter((campaign) => campaign.status === "closed").map((campaign) => campaign.id);
     const historyResult = historyCampaignIds.length
       ? await client.from("skbc_merch_orders").select("*, items:skbc_merch_order_items(*)").in("campaign_id", historyCampaignIds).order("created_at", { ascending: true })
@@ -82,7 +82,8 @@ async function loadMaterialDashboardData(selectedCampaignId?: string): Promise<O
       historyOrders: (historyResult.data ?? []) as CampaignOrder[],
       supplierSummary,
       catalog,
-      communications: (communicationResult.data ?? []) as WebOrderCommunication[]
+      communications: (communicationResult.data ?? []) as WebOrderCommunication[],
+      familyPayments
     };
   } catch (error) {
     console.error("Unable to load material orders dashboard.", error);
@@ -94,6 +95,7 @@ async function loadMaterialDashboardData(selectedCampaignId?: string): Promise<O
       supplierSummary: [],
       catalog: [],
       communications: [],
+      familyPayments: [],
       loadError: "Revisa la conexion privada con la base de datos de pedidos de la web."
     };
   }

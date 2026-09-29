@@ -10726,6 +10726,8 @@ tbody tr:hover {
 }
 
 @media (max-width: 900px) {
+  .material-payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .material-family-payment-body form { grid-template-columns: 1fr; }
   .class-audit-calendar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -10755,6 +10757,7 @@ tbody tr:hover {
 }
 
 @media (max-width: 560px) {
+  .material-payment-summary { grid-template-columns: 1fr; }
   .class-audit-calendar-grid {
     grid-template-columns: 1fr;
   }
@@ -11324,6 +11327,42 @@ tbody tr:hover {
 .material-payment-row span { color: var(--muted); display: block; font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
 .material-payment-row form { align-items: center; display: flex; gap: 7px; }
 .material-payment-row select { border: 1px solid var(--line); border-radius: 6px; min-height: 38px; min-width: 190px; padding: 7px 9px; }
+
+.material-payment-summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 14px 18px;
+}
+
+.material-payment-summary > div {
+  background: #f5f8fc;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+}
+
+.material-payment-summary span { align-items: center; color: var(--muted); display: flex; font-size: 12px; font-weight: 800; gap: 6px; }
+.material-payment-summary strong { font-size: 19px; }
+.material-family-payment-list { border-top: 1px solid var(--line); }
+.material-family-payment { border-bottom: 1px solid var(--line); }
+.material-family-payment:last-child { border-bottom: 0; }
+.material-family-payment > summary { align-items: center; cursor: pointer; display: flex; gap: 14px; justify-content: space-between; padding: 15px 18px; }
+.material-family-payment > summary span { min-width: 0; }
+.material-family-payment > summary small { color: var(--muted); display: block; margin-top: 4px; overflow-wrap: anywhere; }
+.material-family-payment > summary b { white-space: nowrap; }
+.material-family-payment.status-cash_paid > summary { border-left: 4px solid #24915b; }
+.material-family-payment.status-bank_submitted > summary { border-left: 4px solid #1769aa; }
+.material-family-payment.status-pending > summary { border-left: 4px solid #d19720; }
+.material-family-payment-body { background: #f8fafc; border-top: 1px solid var(--line); padding: 14px 18px; }
+.material-family-payment-body ul { list-style: none; margin: 0 0 14px; padding: 0; }
+.material-family-payment-body li { align-items: baseline; border-bottom: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; padding: 8px 0; }
+.material-family-payment-body form { align-items: end; display: grid; gap: 10px; grid-template-columns: minmax(190px, .7fr) minmax(240px, 1.5fr) auto; }
+.material-family-payment-body label { color: var(--muted); display: grid; font-size: 12px; font-weight: 800; gap: 5px; }
+.material-family-payment-body input, .material-family-payment-body select { border: 1px solid var(--line); border-radius: 6px; min-height: 40px; padding: 7px 9px; width: 100%; }
+.material-payment-date { color: var(--muted); display: block; margin-top: 9px; }
 
 .material-communication-list details,
 .material-catalog-product {
