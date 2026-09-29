@@ -192,24 +192,26 @@ function mergeCombinedClasses(classes: Clase[]) {
     const kids = dayClasses.find((clase) => clase.class_group === "kids");
 
     if (adults && kids) {
+      const correctionOpen = (adults.closed && adults.status === "pending") || (kids.closed && kids.status === "pending");
       merged.push({
         ...adults,
         display_group: "combined",
         display_name: combinedClassName(adults, kids),
-        display_status: adults.status === "correction" || kids.status === "correction" ? "correction" : adults.status === "cancelled" || kids.status === "cancelled" ? "cancelled" : adults.closed && kids.closed ? "completed" : "pending",
-        display_closed: adults.status !== "correction" && kids.status !== "correction" && adults.closed && kids.closed,
+        display_status: correctionOpen ? "correction" : adults.status === "cancelled" || kids.status === "cancelled" ? "cancelled" : adults.closed && kids.closed ? "completed" : "pending",
+        display_closed: !correctionOpen && adults.closed && kids.closed,
         companion: kids
       });
       continue;
     }
 
     dayClasses.forEach((clase) => {
+      const correctionOpen = clase.closed && clase.status === "pending";
       merged.push({
         ...clase,
         display_group: clase.class_group,
         display_name: clase.name,
-        display_status: clase.status,
-        display_closed: clase.status !== "correction" && clase.closed
+        display_status: correctionOpen ? "correction" : clase.status,
+        display_closed: !correctionOpen && clase.closed
       });
     });
   }

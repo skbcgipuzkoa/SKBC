@@ -1483,7 +1483,7 @@ export async function addManualClassTechniqueAction(formData: FormData) {
     if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
     if (techniqueError || !technique) throw techniqueError ?? new Error("Tecnica no encontrada.");
     if (groupsError) throw groupsError;
-    if ((clase.closed && clase.status !== "correction") || clase.class_group !== "adults") throw new Error("Solo se pueden anadir tecnicas manuales a clases adultas abiertas o en correccion.");
+    if ((clase.closed && clase.status !== "pending") || clase.class_group !== "adults") throw new Error("Solo se pueden anadir tecnicas manuales a clases adultas abiertas o en correccion.");
 
     const normalizedSelected = new Set(selectedGrades.map(normalizeActionGrade));
     const targetGroups = (groups ?? []).filter((group) => !normalizedSelected.size || normalizedSelected.has(normalizeActionGrade(group.grade)));
@@ -1557,7 +1557,7 @@ export async function removeManualClassTechniqueAction(formData: FormData) {
       .eq("id", classId)
       .single<{ id: string; closed: boolean; status: string }>();
     if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
-    if (clase.closed && clase.status !== "correction") throw new Error("No se pueden quitar tecnicas manuales de una clase cerrada.");
+    if (clase.closed && clase.status !== "pending") throw new Error("No se pueden quitar tecnicas manuales de una clase cerrada.");
 
     const { error } = await supabase
       .from("technical_plans")
@@ -1887,22 +1887,44 @@ export async function updateClassAction(formData: FormData) {
   }
 
   const supabase = createAdminClient();
-  const { data: currentClass } = await supabase
+  const { data: currentClass, error: currentClassError } = await supabase
     .from("classes")
-    .select("class_date")
+    .select("class_date,closed,status")
     .eq("id", classId)
-    .maybeSingle<{ class_date: string }>();
+    .maybeSingle<{ class_date: string; closed: boolean; status: "pending" | "completed" | "cancelled" }>();
+
+  if (currentClassError || !currentClass) {
+    redirect(`/clases/${legacyId}?error=class`);
+  }
+
+  const isCorrection = currentClass.closed && currentClass.status === "pending";
+  let affectedClassIds = [classId];
+
+  if (isCorrection && currentClass?.class_date && currentClass.class_date !== classDate) {
+    const { data: dayClasses, error: dayClassesError } = await supabase
+      .from("classes")
+      .select("id")
+      .eq("class_date", currentClass.class_date)
+      .eq("closed", true)
+      .eq("status", "pending")
+      .in("class_group", ["kids", "adults"])
+      .returns<Array<{ id: string }>>();
+
+    if (dayClassesError || !dayClasses?.length) {
+      redirect(`/clases/${legacyId}?error=class`);
+    }
+    affectedClassIds = dayClasses.map((item) => item.id);
+  }
 
   const { error } = await supabase
     .from("classes")
     .update({
-      class_date: classDate,
       name,
       class_type: classType,
       responsible,
       notes,
-      closed,
-      status: closed ? "completed" : "pending",
+      closed: isCorrection ? true : closed,
+      status: isCorrection ? "pending" : closed ? "completed" : "pending",
       updated_at: new Date().toISOString()
     })
     .eq("id", classId);
@@ -1912,12 +1934,24 @@ export async function updateClassAction(formData: FormData) {
   }
 
   if (currentClass?.class_date && currentClass.class_date !== classDate) {
+    const { error: classDateError } = await supabase
+      .from("classes")
+      .update({ class_date: classDate, updated_at: new Date().toISOString() })
+      .in("id", affectedClassIds);
+
+    if (classDateError) {
+      console.error("Error updating class date", classDateError);
+      redirect(`/clases/${legacyId}?error=class`);
+    }
+
     const relatedUpdates = await Promise.all([
-      supabase.from("attendance_logs").update({ attended_on: classDate }).eq("class_id", classId),
-      supabase.from("technical_plans").update({ class_date: classDate, updated_at: new Date().toISOString() }).eq("class_id", classId),
-      supabase.from("dojo_technical_history").update({ class_date: classDate }).eq("class_id", classId),
-      supabase.from("member_technical_history").update({ class_date: classDate }).eq("class_id", classId),
-      supabase.from("member_technique_assignments").update({ assigned_on: classDate }).eq("class_id", classId)
+      supabase.from("attendance_logs").update({ attended_on: classDate }).in("class_id", affectedClassIds),
+      supabase.from("provisional_attendance").update({ attended_on: classDate }).in("class_id", affectedClassIds),
+      supabase.from("technical_plans").update({ class_date: classDate, updated_at: new Date().toISOString() }).in("class_id", affectedClassIds),
+      supabase.from("dojo_technical_history").update({ class_date: classDate }).in("class_id", affectedClassIds),
+      supabase.from("member_technical_history").update({ class_date: classDate }).in("class_id", affectedClassIds),
+      supabase.from("member_technique_assignments").update({ assigned_on: classDate }).in("class_id", affectedClassIds),
+      supabase.from("child_syllabus_history").update({ practiced_on: classDate, updated_at: new Date().toISOString() }).in("class_id", affectedClassIds)
     ]);
 
     const updateError = relatedUpdates.find((result) => result.error)?.error;
@@ -1926,7 +1960,9 @@ export async function updateClassAction(formData: FormData) {
       redirect(`/clases/${legacyId}?error=class`);
     }
 
-    await recalculateClassExamStatus(classId);
+    for (const affectedClassId of affectedClassIds) {
+      await recalculateClassExamStatus(affectedClassId);
+    }
     await recalculateChildRankings();
   }
 
@@ -2653,14 +2689,16 @@ export async function reopenClassForCorrectionAction(formData: FormData) {
 
   const { data: reopenedClasses, error } = await supabase
     .from("classes")
-    .update({ status: "correction", updated_at: new Date().toISOString() })
+    // A closed class with pending status is the durable correction state.
+    // class_status is a Postgres enum and does not include "correction".
+    .update({ status: "pending", updated_at: new Date().toISOString() })
     .eq("class_date", clase.class_date)
     .eq("closed", true)
     .in("class_group", ["kids", "adults"])
     .select("legacy_id,class_group")
     .returns<Array<{ legacy_id: string | null; class_group: "kids" | "adults" }>>();
 
-  if (error) {
+  if (error || !reopenedClasses?.length) {
     console.error("Error reopening class for correction", error);
     redirect(`/clases/${legacyId}?error=correction`);
   }
@@ -2690,7 +2728,7 @@ export async function finishClassCorrectionAction(formData: FormData) {
     .from("classes")
     .select("id,class_group")
     .eq("class_date", clase.class_date)
-    .eq("status", "correction")
+    .eq("status", "pending")
     .eq("closed", true)
     .in("class_group", ["kids", "adults"])
     .returns<Array<{ id: string; class_group: "kids" | "adults" }>>();
@@ -2725,7 +2763,7 @@ export async function finishClassCorrectionAction(formData: FormData) {
     console.error("Error finishing class correction", error);
     await supabase
       .from("classes")
-      .update({ closed: true, status: "correction", updated_at: new Date().toISOString() })
+      .update({ closed: true, status: "pending", updated_at: new Date().toISOString() })
       .in("id", correctionClassIds);
     redirect(`/clases/${legacyId}?error=correction-close`);
   }

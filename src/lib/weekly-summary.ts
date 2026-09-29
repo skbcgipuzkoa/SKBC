@@ -26,7 +26,7 @@ export async function generateWeeklySummary(options: { sendTelegram?: boolean; f
   const payload: WeeklySummaryPayload = {
     classes: classes.length,
     openClasses: classes.filter((row) => !row.closed).length,
-    correctedClasses: classes.filter((row) => row.status === "correction").length,
+    correctedClasses: classes.filter((row) => row.closed && row.status === "pending").length,
     attendance: attendance.length,
     kidsAttendance: attendance.filter((row) => (Array.isArray(row.members) ? row.members[0] : row.members)?.class === "kids").length,
     adultAttendance: attendance.filter((row) => (Array.isArray(row.members) ? row.members[0] : row.members)?.class === "adults").length,

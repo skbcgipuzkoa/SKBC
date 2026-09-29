@@ -70,7 +70,7 @@ export default async function AlertasPage() {
     supabase
       .from("classes")
       .select("id,legacy_id,name,class_date,class_group,closed,plan_generated,status")
-      .or("closed.eq.false,status.eq.correction")
+      .or("closed.eq.false,and(closed.eq.true,status.eq.pending)")
       .lt("class_date", today)
       .order("class_date", { ascending: false })
       .limit(30)
@@ -151,11 +151,12 @@ export default async function AlertasPage() {
   });
 
   for (const clase of openOldClasses ?? []) {
+    const isCorrection = clase.closed && clase.status === "pending";
     alerts.push({
       id: `class-${clase.id}`,
       level: "danger",
-      title: clase.status === "correction" ? `Clase en correccion: ${clase.name}` : `Clase antigua abierta: ${clase.name}`,
-      detail: `${clase.class_date} - ${clase.class_group === "kids" ? "ninos" : "adultos"}. ${clase.status === "correction" ? "Termina y cierra la correccion pendiente." : "Conviene cerrarla o eliminarla si fue una prueba."}`,
+      title: isCorrection ? `Clase en correccion: ${clase.name}` : `Clase antigua abierta: ${clase.name}`,
+      detail: `${clase.class_date} - ${clase.class_group === "kids" ? "ninos" : "adultos"}. ${isCorrection ? "Termina y cierra la correccion pendiente." : "Conviene cerrarla o eliminarla si fue una prueba."}`,
       href: clase.legacy_id ? `/clases/${clase.legacy_id}` : "/clases"
     });
   }

@@ -264,7 +264,8 @@ export default async function ClaseDetailPage({
   const delegateLink = delegateLinks?.[0] ?? null;
   const delegateMode = delegateModeFromCreatedBy(delegateLink?.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
   const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}?mode=${delegateMode}` : null;
-  const isCorrectionMode = clase.status === "correction" || (dayClasses ?? []).some((item) => item.status === "correction");
+  const isCorrectionMode = (clase.closed && clase.status === "pending")
+    || (dayClasses ?? []).some((item) => item.closed && item.status === "pending");
   const canEditClosedClass = !clase.closed || isCorrectionMode;
   const correctionSection = String(query.edit ?? "");
   const activeStep = clase.class_group === "adults"
