@@ -136,6 +136,7 @@ export type WebOrderCommunication = {
 };
 
 export type WebOrderFamilyPaymentStatus = "pending" | "cash_paid" | "bank_submitted";
+export type WebOrderFamilyDeliveryStatus = "pending" | "partial" | "delivered";
 
 export type WebOrderFamilyPayment = {
   id: string;
@@ -152,6 +153,8 @@ export type WebOrderFamilyPayment = {
   status: WebOrderFamilyPaymentStatus;
   status_on: string | null;
   notes: string | null;
+  delivery_status: WebOrderFamilyDeliveryStatus;
+  delivery_note: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -8,9 +8,11 @@ import {
   assignMaterialPaymentAction,
   closeMaterialCampaignAction,
   createMaterialVariantAction,
+  deleteCompletedMaterialCampaignAction,
   reconcileMaterialCommunicationAction,
   sendMaterialCampaignCommunicationsAction,
   updateMaterialFamilyPaymentAction,
+  updateMaterialFamilyDeliveryAction,
   updateMaterialProductAction,
   updateMaterialVariantAction
 } from "@/app/material-order-actions";
@@ -32,6 +34,7 @@ export type MaterialOrdersDashboardProps = {
   catalog: CatalogProduct[];
   communications: CommunicationView[];
   familyPayments: WebOrderFamilyPayment[];
+  allFamilyPayments: WebOrderFamilyPayment[];
   loadError?: string;
   initialTab?: TabId;
   children: ReactNode;
@@ -99,7 +102,7 @@ export function MaterialOrdersDashboard(props: MaterialOrdersDashboardProps) {
 
     <div id="material-panel-monthly" role="tabpanel" aria-labelledby="material-tab-monthly" hidden={activeTab !== "monthly"}>{activeTab === "monthly" ? <MonthlyView {...props} totals={totals} unresolved={unresolved} /> : null}</div>
     <div id="material-panel-supplier" role="tabpanel" aria-labelledby="material-tab-supplier" hidden={activeTab !== "supplier"}>{activeTab === "supplier" ? <SupplierView rows={props.supplierSummary} campaign={props.campaign} /> : null}</div>
-    <div id="material-panel-payments" role="tabpanel" aria-labelledby="material-tab-payments" hidden={activeTab !== "payments"}>{activeTab === "payments" ? <PaymentsView orders={props.orders} communications={props.communications} campaign={props.campaign} familyPayments={props.familyPayments} /> : null}</div>
+    <div id="material-panel-payments" role="tabpanel" aria-labelledby="material-tab-payments" hidden={activeTab !== "payments"}>{activeTab === "payments" ? <PaymentsView orders={props.orders} communications={props.communications} campaign={props.campaign} campaigns={props.campaigns} familyPayments={props.familyPayments} allFamilyPayments={props.allFamilyPayments} /> : null}</div>
     <div id="material-panel-catalog" role="tabpanel" aria-labelledby="material-tab-catalog" hidden={activeTab !== "catalog"}>{activeTab === "catalog" ? <CatalogView products={props.catalog} /> : null}</div>
     <div id="material-panel-history" role="tabpanel" aria-labelledby="material-tab-history" hidden={activeTab !== "history"}>{activeTab === "history" ? <HistoryView campaigns={props.campaigns} orders={props.historyOrders} /> : null}</div>
     <div id="material-panel-belts" role="tabpanel" aria-labelledby="material-tab-belts" hidden={activeTab !== "belts"} className="material-belt-workflow">{activeTab === "belts" ? props.children : null}</div>
@@ -174,7 +177,7 @@ function SupplierView({ rows, campaign }: { rows: SupplierSummaryRow[]; campaign
   </div>;
 }
 
-function PaymentsView({ orders, communications, campaign, familyPayments }: { orders: CampaignOrder[]; communications: CommunicationView[]; campaign: CampaignView | null; familyPayments: WebOrderFamilyPayment[] }) {
+function PaymentsView({ orders, communications, campaign, campaigns, familyPayments, allFamilyPayments }: { orders: CampaignOrder[]; communications: CommunicationView[]; campaign: CampaignView | null; campaigns: CampaignView[]; familyPayments: WebOrderFamilyPayment[]; allFamilyPayments: WebOrderFamilyPayment[] }) {
   const communicationIds = JSON.stringify(communications.map((communication) => communication.id));
   const pending = communications.filter((communication) => communication.status === "prepared" || communication.status === "failed");
   const pendingIds = JSON.stringify(pending.map((communication) => communication.id));
@@ -187,6 +190,16 @@ function PaymentsView({ orders, communications, campaign, familyPayments }: { or
   const bankSubmitted = familyPayments.filter((payment) => payment.status === "bank_submitted").reduce((sum, payment) => sum + payment.total_cents, 0);
   const paymentPending = familyPayments.filter((payment) => payment.status === "pending").reduce((sum, payment) => sum + payment.total_cents, 0);
   return <div className="material-tab-panel">
+    <section className="material-section">
+      <div className="material-section-heading"><div><h2>Pedidos conjuntos</h2><p>Cada bloque corresponde a un pedido completo y mantiene separados sus pagos y entregas.</p></div><span>{campaigns.length} pedidos</span></div>
+      <div className="material-order-groups">{campaigns.length ? campaigns.map((item) => {
+        const rows = allFamilyPayments.filter((payment) => payment.campaign_id === item.id);
+        const paymentOpen = rows.filter((payment) => payment.status === "pending").length;
+        const deliveryOpen = rows.filter((payment) => payment.delivery_status !== "delivered").length;
+        const complete = rows.length > 0 && paymentOpen === 0 && deliveryOpen === 0;
+        return <article key={item.id} className={item.id === campaign?.id ? "is-selected" : ""}><div><strong>Pedido {formatDate(item.period_end)}</strong><span>{rows.length} familias · {paymentOpen} pagos pendientes · {deliveryOpen} entregas pendientes</span></div><b>{money(rows.reduce((sum, payment) => sum + payment.total_cents, 0))}</b><a className="secondary-button" href={`/pedidos-cinturones?campaign=${item.id}&tab=payments`}>{item.id === campaign?.id ? "Abierto" : "Gestionar"}</a>{complete ? <form action={deleteCompletedMaterialCampaignAction} onSubmit={(event) => { if (!window.confirm("El pedido está completamente pagado y entregado. Se eliminará definitivamente. ¿Continuar?")) event.preventDefault(); }}><input type="hidden" name="campaignId" value={item.id} /><button type="submit" className="danger-button">Eliminar pedido</button></form> : null}</article>;
+      }) : <EmptyState title="Sin pedidos conjuntos" detail="Los nuevos pedidos aparecerán aquí como grupos independientes." />}</div>
+    </section>
     <section className="material-section">
       <div className="material-section-heading"><div><h2>Cobros</h2><p>La forma de pago se asigna por responsable y se incluirá en la comunicación preparada.</p></div></div>
       <div className="material-payment-list">{orders.length ? orders.map((order) => <div className="material-payment-row" key={order.id}><div><strong>{order.customer_name}</strong><span>{order.order_number ?? "Sin número"} · {order.customer_email ?? "Sin email"}</span></div><strong>{money(order.total_cents ?? order.items.reduce((sum, item) => sum + item.line_total_cents, 0))}</strong><form action={assignMaterialPaymentAction}><input type="hidden" name="orderId" value={order.id} /><input type="hidden" name="campaignId" value={campaign?.id ?? ""} /><select name="paymentMethod" defaultValue={order.payment_method ?? ""} aria-label={`Pago de ${order.customer_name}`} required disabled={campaign?.status === "closed"}><option value="" disabled>Asignar pago</option><option value="cash">Entregar en el club</option><option value="bank">Cargar en cuenta</option><option value="paid">Pagado</option></select><PaymentSubmitButton disabled={campaign?.status === "closed"} /></form></div>) : <p className="muted">No hay pedidos en la campaña.</p>}</div>
@@ -214,19 +227,24 @@ function FamilyPaymentRow({ payment }: { payment: WebOrderFamilyPayment }) {
     ["cash_paid", "Pagado"],
     ["bank_submitted", "Pasado por cuenta"]
   ] as const;
-  return <article className={`material-family-payment status-${payment.status}`}>
-    <form action={updateMaterialFamilyPaymentAction}>
+  const deliveries = [["pending", "Pendiente"], ["partial", "Parcial / nota"], ["delivered", "Entregado"]] as const;
+  return <article className={`material-family-payment status-${payment.status} delivery-${payment.delivery_status}`}>
+    <div className="material-family-payment-main">
+      <div className="material-family-payment-person"><strong>{payment.recipient_name}</strong><small>{familyRecipients(payment.recipients)} · {paymentMethodLabel(payment.intended_payment_method)}</small></div>
+      <strong className="material-family-payment-total">{money(payment.total_cents)}</strong>
+      <form action={updateMaterialFamilyPaymentAction} className="material-inline-status-form">
       <input type="hidden" name="paymentId" value={payment.id} />
       <input type="hidden" name="campaignId" value={payment.campaign_id} />
-      <div className="material-family-payment-main">
-        <div className="material-family-payment-person"><strong>{payment.recipient_name}</strong><small>{familyRecipients(payment.recipients)} · {paymentMethodLabel(payment.intended_payment_method)}</small></div>
-        <strong className="material-family-payment-total">{money(payment.total_cents)}</strong>
-        <fieldset className="material-payment-statuses" aria-label={`Estado de pago de ${payment.recipient_name}`}>
+      <input type="hidden" name="notes" value={payment.notes ?? ""} />
+      <fieldset className="material-payment-statuses" aria-label={`Estado de pago de ${payment.recipient_name}`}>
           {statuses.map(([status, label]) => <label key={status} className={`payment-choice choice-${status}`}><input type="radio" name="status" value={status} defaultChecked={payment.status === status} onChange={(event) => event.currentTarget.form?.requestSubmit()} /><span>{label}</span></label>)}
-        </fieldset>
-      </div>
-      <details className="material-family-payment-detail"><summary>Ver desglose y notas</summary><div className="material-family-payment-body"><ul>{familyItems(payment.items).map((item, index) => <li key={`${payment.id}-${index}`}><span>{item.label}</span><strong>{item.amount}</strong></li>)}</ul><div className="material-payment-notes"><label>Notas<input name="notes" defaultValue={payment.notes ?? ""} placeholder="Fecha, persona que entrega o aclaración" /></label><SubmitButton pendingLabel="Guardando...">Guardar nota</SubmitButton></div>{payment.status_on ? <small className="material-payment-date">Actualizado el {formatDate(payment.status_on)}</small> : null}</div></details>
-    </form>
+      </fieldset></form>
+      <form action={updateMaterialFamilyDeliveryAction} className="material-inline-status-form delivery-form">
+        <input type="hidden" name="paymentId" value={payment.id} /><input type="hidden" name="campaignId" value={payment.campaign_id} /><input type="hidden" name="deliveryNote" value={payment.delivery_note ?? ""} />
+        <fieldset className="material-payment-statuses" aria-label={`Estado de entrega de ${payment.recipient_name}`}>{deliveries.map(([status, label]) => <label key={status} className={`payment-choice delivery-choice choice-delivery-${status}`}><input type="radio" name="deliveryStatus" value={status} defaultChecked={payment.delivery_status === status} onChange={(event) => { if (status === "partial" && !payment.delivery_note) { const detail = event.currentTarget.closest("article")?.querySelector("details"); if (detail) detail.open = true; return; } event.currentTarget.form?.requestSubmit(); }} /><span>{label}</span></label>)}</fieldset>
+      </form>
+    </div>
+    <details className="material-family-payment-detail"><summary>Ver desglose y notas</summary><div className="material-family-payment-body"><ul>{familyItems(payment.items).map((item, index) => <li key={`${payment.id}-${index}`}><span>{item.label}</span><strong>{item.amount}</strong></li>)}</ul><div className="material-note-forms"><form action={updateMaterialFamilyPaymentAction}><input type="hidden" name="paymentId" value={payment.id} /><input type="hidden" name="campaignId" value={payment.campaign_id} /><input type="hidden" name="status" value={payment.status} /><label>Nota de pago<input name="notes" defaultValue={payment.notes ?? ""} placeholder="Aclaración sobre el cobro" /></label><SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton></form><form action={updateMaterialFamilyDeliveryAction}><input type="hidden" name="paymentId" value={payment.id} /><input type="hidden" name="campaignId" value={payment.campaign_id} /><label>Estado de entrega<select name="deliveryStatus" defaultValue={payment.delivery_status}><option value="pending">Pendiente</option><option value="partial">Entrega parcial</option><option value="delivered">Entregado</option></select></label><label>Nota de entrega<input name="deliveryNote" defaultValue={payment.delivery_note ?? ""} placeholder="Ej.: entregado pantalón; falta chaqueta" /></label><SubmitButton pendingLabel="Guardando...">Guardar entrega</SubmitButton></form></div>{payment.status_on ? <small className="material-payment-date">Pago actualizado el {formatDate(payment.status_on)}</small> : null}</div></details>
   </article>;
 }
 

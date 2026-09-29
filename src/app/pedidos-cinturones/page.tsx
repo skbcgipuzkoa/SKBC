@@ -7,7 +7,7 @@ import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { advanceCampaignStatus, selectManagementCampaign } from "@/lib/web-orders/campaigns";
 import { createWebOrdersClient } from "@/lib/web-orders/client";
-import { getSupplierSummary, listCampaignFamilyPayments, listCampaignOrders, listCatalog, type CampaignOrder } from "@/lib/web-orders/repository";
+import { getSupplierSummary, listAllFamilyPayments, listCampaignFamilyPayments, listCampaignOrders, listCatalog, type CampaignOrder } from "@/lib/web-orders/repository";
 import type { WebOrderCampaign, WebOrderCommunication } from "@/lib/web-orders/types";
 import { redirect } from "next/navigation";
 
@@ -51,9 +51,10 @@ export default async function PedidosPage({ searchParams }: {
 async function loadMaterialDashboardData(selectedCampaignId?: string): Promise<Omit<MaterialOrdersDashboardProps, "children">> {
   try {
     const client = createWebOrdersClient();
-    const [campaignResult, catalog] = await Promise.all([
+    const [campaignResult, catalog, allFamilyPayments] = await Promise.all([
       client.from("skbc_order_campaigns").select("*").order("period_start", { ascending: false }),
-      listCatalog()
+      listCatalog(),
+      listAllFamilyPayments()
     ]);
     if (campaignResult.error) throw campaignResult.error;
 
@@ -83,7 +84,8 @@ async function loadMaterialDashboardData(selectedCampaignId?: string): Promise<O
       supplierSummary,
       catalog,
       communications: (communicationResult.data ?? []) as WebOrderCommunication[],
-      familyPayments
+      familyPayments,
+      allFamilyPayments
     };
   } catch (error) {
     console.error("Unable to load material orders dashboard.", error);
@@ -96,6 +98,7 @@ async function loadMaterialDashboardData(selectedCampaignId?: string): Promise<O
       catalog: [],
       communications: [],
       familyPayments: [],
+      allFamilyPayments: [],
       loadError: "Revisa la conexion privada con la base de datos de pedidos de la web."
     };
   }

@@ -12,10 +12,12 @@ import {
   completeCommunicationAttempt,
   countEligibleCommunicationGroups,
   createCatalogVariant,
+  deleteCompletedCampaign,
   getCampaignById,
   listCampaignOrders,
   reconcileCommunication,
   updateFamilyPayment,
+  updateFamilyDelivery,
   updateVariantPricing,
   upsertCatalogProduct
 } from "@/lib/web-orders/repository";
@@ -103,6 +105,17 @@ const familyPaymentSchema = z.object({
   campaignId: uuid,
   status: z.enum(["pending", "cash_paid", "bank_submitted"]),
   notes: z.string().trim().max(1000)
+});
+
+const familyDeliverySchema = z.object({
+  paymentId: uuid,
+  campaignId: uuid,
+  deliveryStatus: z.enum(["pending", "partial", "delivered"]),
+  deliveryNote: z.string().trim().max(1000)
+}).superRefine((value, context) => {
+  if (value.deliveryStatus === "partial" && !value.deliveryNote) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["deliveryNote"], message: "La entrega parcial requiere indicar qué falta." });
+  }
 });
 
 const closeSchema = z.object({
@@ -269,6 +282,31 @@ export async function updateMaterialFamilyPaymentAction(formData: FormData) {
   });
   await updateFamilyPayment({ ...input, notes: input.notes || null });
   refresh("family-payment-saved", input.campaignId, "payments");
+}
+
+export async function updateMaterialFamilyDeliveryAction(formData: FormData) {
+  await requireInternalAccess();
+  const input = familyDeliverySchema.parse({
+    paymentId: formData.get("paymentId"),
+    campaignId: formData.get("campaignId"),
+    deliveryStatus: formData.get("deliveryStatus"),
+    deliveryNote: formData.get("deliveryNote")
+  });
+  await updateFamilyDelivery({
+    paymentId: input.paymentId,
+    campaignId: input.campaignId,
+    status: input.deliveryStatus,
+    note: input.deliveryNote || null
+  });
+  refresh("family-delivery-saved", input.campaignId, "payments");
+}
+
+export async function deleteCompletedMaterialCampaignAction(formData: FormData) {
+  await requireInternalAccess();
+  const campaignId = uuid.parse(formData.get("campaignId"));
+  await deleteCompletedCampaign(campaignId);
+  revalidatePath("/pedidos-cinturones");
+  redirect("/pedidos-cinturones?saved=completed-order-deleted&tab=payments");
 }
 
 export async function closeMaterialCampaignAction(formData: FormData) {

@@ -6,6 +6,7 @@ import type {
   WebOrder,
   WebOrderCampaign,
   WebOrderFamilyPayment,
+  WebOrderFamilyDeliveryStatus,
   WebOrderFamilyPaymentStatus,
   WebOrderItem,
   WebOrderPaymentMethod,
@@ -146,6 +147,16 @@ export async function listCampaignFamilyPayments(campaignId: string) {
   return (data ?? []) as WebOrderFamilyPayment[];
 }
 
+export async function listAllFamilyPayments() {
+  const { data, error } = await createWebOrdersClient()
+    .from("skbc_order_family_payments")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as WebOrderFamilyPayment[];
+}
+
 export async function updateFamilyPayment(input: {
   paymentId: string;
   campaignId: string;
@@ -167,6 +178,43 @@ export async function updateFamilyPayment(input: {
 
   if (error) throw error;
   return data as WebOrderFamilyPayment;
+}
+
+export async function updateFamilyDelivery(input: {
+  paymentId: string;
+  campaignId: string;
+  status: WebOrderFamilyDeliveryStatus;
+  note: string | null;
+}) {
+  const { data, error } = await createWebOrdersClient()
+    .from("skbc_order_family_payments")
+    .update({
+      delivery_status: input.status,
+      delivery_note: input.note,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", input.paymentId)
+    .eq("campaign_id", input.campaignId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as WebOrderFamilyPayment;
+}
+
+export async function deleteCompletedCampaign(campaignId: string) {
+  const client = createWebOrdersClient();
+  const { data: payments, error: readError } = await client
+    .from("skbc_order_family_payments")
+    .select("status,delivery_status")
+    .eq("campaign_id", campaignId);
+  if (readError) throw readError;
+  if (!payments?.length) throw new Error("El pedido no contiene seguimientos familiares.");
+  if (payments.some((payment) => payment.status === "pending" || payment.delivery_status !== "delivered")) {
+    throw new Error("El pedido todavía contiene pagos o entregas pendientes.");
+  }
+  const { error } = await client.from("skbc_order_campaigns").delete().eq("id", campaignId);
+  if (error) throw error;
 }
 
 export async function getSupplierSummary(campaignId: string) {
