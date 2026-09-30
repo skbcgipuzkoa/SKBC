@@ -10324,6 +10324,19 @@ tbody tr:hover {
   font-weight: 800;
 }
 
+.class-return-banner {
+  align-items: center;
+  background: #0f1b2d;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  font-weight: 800;
+  margin-bottom: 14px;
+  min-height: 44px;
+  padding: 9px 15px;
+  text-decoration: none;
+}
+
 .dojo-member-options {
   display: grid;
   gap: 8px;

@@ -10,13 +10,15 @@ import { createWebOrdersClient } from "@/lib/web-orders/client";
 import { getSupplierSummary, listAllFamilyPayments, listCampaignFamilyPayments, listCampaignOrders, listCatalog, type CampaignOrder } from "@/lib/web-orders/repository";
 import type { WebOrderCampaign, WebOrderCommunication } from "@/lib/web-orders/types";
 import { redirect } from "next/navigation";
+import { safeClassReturnPath } from "@/lib/class-return";
 
 export default async function PedidosPage({ searchParams }: {
-  searchParams: Promise<{ saved?: string; error?: string; status?: string; q?: string; campaign?: string; tab?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; status?: string; q?: string; campaign?: string; tab?: string; returnTo?: string }>;
 }) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 
   const params = await searchParams;
+  const returnTo = safeClassReturnPath(params.returnTo);
   const materialData = await loadMaterialDashboardData(params.campaign);
   const supabase = createAdminClient();
   const [{ data: members, error: membersError }, { data: lines, error: linesError }] = await Promise.all([
@@ -39,9 +41,10 @@ export default async function PedidosPage({ searchParams }: {
         <div><p className="eyebrow">Pedidos del club</p><h1>Pedidos</h1></div>
         <form action={logoutAction}><button className="icon-button" type="submit" title="Salir" aria-label="Salir"><LogOut aria-hidden="true" size={18} /></button></form>
       </div>
+      {returnTo ? <a className="class-return-banner" href={returnTo}>Volver a la clase</a> : null}
       {params.saved ? <p className="save-ok">Cambios guardados correctamente.</p> : null}
       {params.error && params.error !== "belt-measure" ? <p className="form-error">No se pudo guardar el cambio.</p> : null}
-      <MaterialOrdersDashboard {...materialData} initialTab={params.tab === "payments" ? "payments" : params.tab === "belts" || params.saved || params.error || params.status || params.q ? "belts" : undefined}>
+      <MaterialOrdersDashboard {...materialData} returnTo={returnTo} initialTab={params.tab === "payments" ? "payments" : params.tab === "belts" || params.saved || params.error || params.status || params.q ? "belts" : undefined}>
         <BeltOrdersPanel members={members ?? []} lines={lines ?? []} params={params} />
       </MaterialOrdersDashboard>
     </main>

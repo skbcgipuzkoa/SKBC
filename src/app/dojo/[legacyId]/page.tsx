@@ -14,6 +14,7 @@ import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { ClassSectionNav, type ClassSectionLink } from "@/components/class-section-nav";
 import { ProvisionalAttendanceForm } from "@/components/provisional-attendance-form";
+import { PersistentAttendanceForm } from "@/components/persistent-attendance-form";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -214,6 +215,7 @@ export default async function DojoClassPage({
     ])
     : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }, { data: [] as ChildSyllabusItemRow[] }];
   const childSyllabusItems = filterChildSyllabusItemsByGrade(rawChildSyllabusItems ?? [], childSyllabusGradeKeys);
+  const dojoReturnTo = `/dojo/${mainClass.legacy_id ?? legacyId}?step=${step}${step === "kids" && query.section === "kids-technical" ? "&section=kids-technical" : ""}`;
 
   return (
     <main className="dojo-page dojo-work-page">
@@ -244,7 +246,9 @@ export default async function DojoClassPage({
               { id: "adult-technical", label: "Tecnica adultos", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=techniques`, done: completedPlan > 0 },
               { id: "adult-attendance", label: "Asistencia adultos", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=adults`, done: adultAttendance.length > 0 }
             ] : []),
-            { id: "close", label: "Revisar y cerrar", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=close`, done: Boolean(adultClass?.closed && (!kidsClass || kidsClass.closed)) }
+            { id: "close", label: "Revisar y cerrar", href: `/dojo/${mainClass.legacy_id ?? legacyId}?step=close`, done: Boolean(adultClass?.closed && (!kidsClass || kidsClass.closed)) },
+            { id: "orders", label: "Pedidos", href: `/pedidos-cinturones?tab=payments&returnTo=${encodeURIComponent(dojoReturnTo)}` },
+            { id: "deliveries", label: "Entregas", href: `/entregas?returnTo=${encodeURIComponent(dojoReturnTo)}` }
           ] satisfies ClassSectionLink[]}
         />
       ) : null}
@@ -270,7 +274,7 @@ export default async function DojoClassPage({
                 open={query.section === "kids-technical"}
               />
               <ProvisionalAttendanceForm classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} />
-              <form action={addBulkAttendanceAction} className="dojo-check-list">
+              <PersistentAttendanceForm className="dojo-check-list" storageKey={`dojo-attendance:${kidsClass.id}`}>
                 <input type="hidden" name="classId" value={kidsClass.id} />
                 <input type="hidden" name="legacyId" value={kidsClass.legacy_id ?? legacyId} />
                 <input type="hidden" name="returnLegacyId" value={mainClass.legacy_id ?? legacyId} />
@@ -278,7 +282,7 @@ export default async function DojoClassPage({
                 <input type="hidden" name="groupClassIds" value={kidsClass.id} />
                 {pendingKids.map((member) => <DojoCheck key={member.id} name={`memberIds:${kidsClass.id}`} member={member} />)}
                 {pendingKids.length ? <DojoSubmitButton pendingLabel="Guardando niños...">Guardar niños y seguir</DojoSubmitButton> : <a className="dojo-primary-button" href={`/dojo/${mainClass.legacy_id ?? legacyId}?step=techniques`}>Seguir a técnicas</a>}
-              </form>
+              </PersistentAttendanceForm>
               {!kidsClass.closed ? (
                 <form action={closeKidsClassAction} className="dojo-secondary-form">
                   <input type="hidden" name="classId" value={kidsClass.id} />

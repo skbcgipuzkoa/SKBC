@@ -785,7 +785,9 @@ export default async function ClaseDetailPage({
       { id: "adult-technical", label: "Tecnica adultos", href: `/clases/${legacyId}?section=adult-technical#plan-tecnico`, done: completedPlan > 0 },
       { id: "adult-attendance", label: "Asistencia adultos", href: `/clases/${legacyId}?step=asistencia#asistencia`, done: adultRegisteredCount > 0 }
     ] : []),
-    { id: "close", label: "Revisar y cerrar", href: clase.class_group === "adults" ? `/clases/${legacyId}?step=cierre#revision-final` : `/clases/${legacyId}#cierre-clase`, done: clase.closed }
+    { id: "close", label: "Revisar y cerrar", href: clase.class_group === "adults" ? `/clases/${legacyId}?step=cierre#revision-final` : `/clases/${legacyId}#cierre-clase`, done: clase.closed },
+    { id: "orders", label: "Pedidos", href: `/pedidos-cinturones?tab=payments&returnTo=${encodeURIComponent(`/clases/${legacyId}${query.step ? `?step=${encodeURIComponent(String(query.step))}` : query.section ? `?section=${encodeURIComponent(String(query.section))}` : ""}`)}` },
+    { id: "deliveries", label: "Entregas", href: `/entregas?returnTo=${encodeURIComponent(`/clases/${legacyId}${query.step ? `?step=${encodeURIComponent(String(query.step))}` : query.section ? `?section=${encodeURIComponent(String(query.section))}` : ""}`)}` }
   ];
 
   return (

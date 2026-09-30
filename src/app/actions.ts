@@ -1325,6 +1325,8 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
   const itemId = String(formData.get("itemId") ?? "");
   const memberId = String(formData.get("memberId") ?? "");
   const checked = String(formData.get("checked") ?? "") === "1";
+  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
+  const returnQuery = returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : "";
 
   if (!campaignId || !itemId || !memberId) redirect("/entregas?error=delivery");
 
@@ -1343,7 +1345,7 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
 
     if (error) {
       console.error("Error marking delivery", error);
-      redirect(`/entregas?campaign=${campaignId}&error=delivery`);
+      redirect(`/entregas?campaign=${campaignId}&error=delivery${returnQuery}`);
     }
   } else {
     const { error } = await supabase
@@ -1354,12 +1356,12 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
 
     if (error) {
       console.error("Error unmarking delivery", error);
-      redirect(`/entregas?campaign=${campaignId}&error=delivery`);
+      redirect(`/entregas?campaign=${campaignId}&error=delivery${returnQuery}`);
     }
   }
 
   revalidatePath("/entregas");
-  redirect(`/entregas?campaign=${campaignId}&saved=delivery`);
+  redirect(`/entregas?campaign=${campaignId}&saved=delivery${returnQuery}`);
 }
 
 function normalizeDistributionAudience(value: string) {

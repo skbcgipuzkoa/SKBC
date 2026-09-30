@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { hasInternalAccess } from "@/lib/auth";
+import { safeClassReturnPath } from "@/lib/class-return";
 import {
   assignPaymentMethod,
   claimCommunication,
@@ -281,7 +282,7 @@ export async function updateMaterialFamilyPaymentAction(formData: FormData) {
     notes: formData.get("notes")
   });
   await updateFamilyPayment({ ...input, notes: input.notes || null });
-  refresh("family-payment-saved", input.campaignId, "payments");
+  refresh("family-payment-saved", input.campaignId, "payments", safeClassReturnPath(String(formData.get("returnTo") ?? "")));
 }
 
 export async function updateMaterialFamilyDeliveryAction(formData: FormData) {
@@ -298,7 +299,7 @@ export async function updateMaterialFamilyDeliveryAction(formData: FormData) {
     status: input.deliveryStatus,
     note: input.deliveryNote || null
   });
-  refresh("family-delivery-saved", input.campaignId, "payments");
+  refresh("family-delivery-saved", input.campaignId, "payments", safeClassReturnPath(String(formData.get("returnTo") ?? "")));
 }
 
 export async function deleteCompletedMaterialCampaignAction(formData: FormData) {
@@ -432,11 +433,12 @@ async function requireInternalAccess() {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 }
 
-function refresh(saved: string, campaignId?: string, tab?: string): never {
+function refresh(saved: string, campaignId?: string, tab?: string, returnTo?: string): never {
   revalidatePath("/pedidos-cinturones");
   const campaign = campaignId ? `&campaign=${encodeURIComponent(campaignId)}` : "";
   const selectedTab = tab ? `&tab=${encodeURIComponent(tab)}` : "";
-  redirect(`/pedidos-cinturones?saved=${saved}${campaign}${selectedTab}`);
+  const classReturn = returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : "";
+  redirect(`/pedidos-cinturones?saved=${saved}${campaign}${selectedTab}${classReturn}`);
 }
 
 function parsePreparedCommunication(row: Record<string, unknown>): PreparedMaterialOrderCommunication {

@@ -10,6 +10,7 @@ import {
 } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeClassReturnPath } from "@/lib/class-return";
 
 type Audience = "all" | "kids" | "adults";
 
@@ -46,11 +47,12 @@ type DeliveryCheck = {
 export default async function EntregasPage({
   searchParams
 }: {
-  searchParams: Promise<{ campaign?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ campaign?: string; saved?: string; error?: string; returnTo?: string }>;
 }) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 
   const params = await searchParams;
+  const returnTo = safeClassReturnPath(params.returnTo);
   const supabase = createAdminClient();
   const [
     { data: campaigns, error: campaignError },
@@ -116,6 +118,7 @@ export default async function EntregasPage({
             </button>
           </form>
         </div>
+        {returnTo ? <a className="class-return-banner" href={returnTo}>Volver a la clase</a> : null}
 
         {params.saved ? <p className="save-ok">Cambios guardados.</p> : null}
         {params.error ? <p className="form-error">No se ha podido guardar este control.</p> : null}
@@ -176,7 +179,7 @@ export default async function EntregasPage({
                 const count = targetMembers.reduce((sum, member) => sum + countMemberChecks(targetItems, checkedKeys, member.id), 0);
                 const missing = Math.max(total - count, 0);
                 return (
-                  <a className={campaign.id === selectedCampaign?.id ? "delivery-campaign selected" : "delivery-campaign"} href={`/entregas?campaign=${campaign.id}`} key={campaign.id}>
+                  <a className={campaign.id === selectedCampaign?.id ? "delivery-campaign selected" : "delivery-campaign"} href={`/entregas?campaign=${campaign.id}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`} key={campaign.id}>
                     <span>
                       <strong>{campaign.title}</strong>
                       <small>{audienceLabel(campaign.audience)} · {targetItems.length || 1} casilla(s) · {count}/{total} marcas</small>
@@ -247,6 +250,7 @@ export default async function EntregasPage({
                               <input type="hidden" name="itemId" value={item.id} />
                               <input type="hidden" name="memberId" value={member.id} />
                               <input type="hidden" name="checked" value={checked ? "0" : "1"} />
+                              <input type="hidden" name="returnTo" value={returnTo} />
                               <button className={checked ? "delivery-check checked" : "delivery-check"} type="submit">
                                 {checked ? "✓ " : ""}{item.label}
                               </button>
