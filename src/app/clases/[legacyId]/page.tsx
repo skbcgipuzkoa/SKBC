@@ -443,6 +443,7 @@ export default async function ClaseDetailPage({
         plan={childClassPlan}
         groupWork={childClassGroupWork ?? []}
         syllabusItems={childSyllabusItems ?? []}
+        targetedSyllabusItems={childExamSyllabusItems ?? fallbackChildSyllabusItems ?? []}
         members={kidsDayMembers}
         compact
         open={query.section === "kids-technical"}
@@ -1143,6 +1144,7 @@ export default async function ClaseDetailPage({
               plan={childClassPlan}
               groupWork={childClassGroupWork ?? []}
               syllabusItems={childSyllabusItems ?? []}
+              targetedSyllabusItems={childExamSyllabusItems ?? fallbackChildSyllabusItems ?? []}
               members={classMembers ?? []}
               open={requestedSection === "kids-technical"}
             />
@@ -1159,6 +1161,7 @@ export default async function ClaseDetailPage({
               plan={childClassPlan}
               groupWork={childClassGroupWork ?? []}
               syllabusItems={childSyllabusItems ?? []}
+              targetedSyllabusItems={childExamSyllabusItems ?? fallbackChildSyllabusItems ?? []}
               members={kidsDayMembers}
             />
           </section>
@@ -1443,6 +1446,7 @@ function ChildLightPlanPanel({
   plan,
   groupWork,
   syllabusItems,
+  targetedSyllabusItems,
   members,
   compact = false,
   open = false
@@ -1453,6 +1457,7 @@ function ChildLightPlanPanel({
   plan: ChildClassPlanRow | null;
   groupWork: ChildClassGroupWorkRow[];
   syllabusItems: ChildSyllabusItemRow[];
+  targetedSyllabusItems: ChildSyllabusItemRow[];
   members: MemberOption[];
   compact?: boolean;
   open?: boolean;
@@ -1461,6 +1466,7 @@ function ChildLightPlanPanel({
   const selectedSyllabusItems = new Set(plan?.syllabus_item_ids ?? []);
   const memberNames = new Map(members.map((member) => [member.id, member.display_name]));
   const syllabusByGrade = groupChildSyllabusByGrade(syllabusItems);
+  const targetedSyllabusByGrade = groupChildSyllabusByGrade(targetedSyllabusItems);
   const selectedSyllabusCount = syllabusItems.filter((item) => selectedSyllabusItems.has(item.id)).length;
 
   return (
@@ -1524,8 +1530,8 @@ function ChildLightPlanPanel({
           </div>
         </fieldset>
         <fieldset className="child-syllabus-plan-fieldset">
-          <legend>Temario de examen sugerido</legend>
-          <p className="muted">Puntos reales del programa infantil para los grados objetivo presentes en la clase. Marca solo lo trabajado hoy.</p>
+          <legend>Trabajo general para toda la clase</legend>
+          <p className="muted">Estas marcas se aplican al grupo general. Para una técnica hecha solo por algunos niños, utiliza el bloque individual de debajo.</p>
           {syllabusByGrade.length ? (
             <div className="child-syllabus-plan-list">
               {syllabusByGrade.map(([grade, items], index) => (
@@ -1552,6 +1558,29 @@ function ChildLightPlanPanel({
           ) : (
             <p className="muted">No hay temario infantil activo para los grados objetivo de esta clase.</p>
           )}
+        </fieldset>
+        <fieldset className="child-targeted-technique">
+          <legend>Añadir técnica hecha por alumnos concretos</legend>
+          <p className="muted">Selecciona la técnica y únicamente los niños que la han practicado. Su grado actual no limita la selección.</p>
+          <label>
+            Técnica realizada
+            <select name="targetedSyllabusItemId" defaultValue="">
+              <option value="">No añadir técnica individual</option>
+              {targetedSyllabusByGrade.map(([grade, items]) => (
+                <optgroup key={grade} label={grade}>
+                  {items.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <div className="child-member-mini-list">
+            {members.map((member) => (
+              <label key={member.id}>
+                <input type="checkbox" name="targetedMemberIds" value={member.id} />
+                <span>{member.display_name}</span>
+              </label>
+            ))}
+          </div>
         </fieldset>
         <label>
           Nota rapida

@@ -10337,6 +10337,21 @@ tbody tr:hover {
   text-decoration: none;
 }
 
+.child-targeted-technique {
+  background: #eef6ff;
+  border: 1px solid #a9c9eb;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.child-targeted-technique legend {
+  color: #064f96;
+  font-weight: 900;
+  padding: 0 6px;
+}
+
 .dojo-member-options {
   display: grid;
   gap: 8px;

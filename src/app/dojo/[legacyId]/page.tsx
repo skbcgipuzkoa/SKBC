@@ -271,6 +271,7 @@ export default async function DojoClassPage({
                 groupWork={childClassGroupWork ?? []}
                 members={kids}
                 syllabusItems={childSyllabusItems}
+                targetedSyllabusItems={rawChildSyllabusItems ?? []}
                 open={query.section === "kids-technical"}
               />
               <ProvisionalAttendanceForm classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} />
@@ -488,6 +489,7 @@ function DojoChildPlanPanel({
   groupWork,
   members,
   syllabusItems,
+  targetedSyllabusItems,
   open
 }: {
   classId: string;
@@ -497,12 +499,14 @@ function DojoChildPlanPanel({
   groupWork: ChildClassGroupWorkRow[];
   members: MemberRow[];
   syllabusItems: ChildSyllabusItemRow[];
+  targetedSyllabusItems: ChildSyllabusItemRow[];
   open?: boolean;
 }) {
   const activities = new Set(plan?.activities ?? []);
   const selectedSyllabusItems = new Set(plan?.syllabus_item_ids ?? []);
   const memberNames = new Map(members.map((member) => [member.id, member.display_name]));
   const groupedSyllabusItems = groupChildSyllabusItems(syllabusItems);
+  const groupedTargetedSyllabusItems = groupChildSyllabusItems(targetedSyllabusItems);
 
   return (
     <details className="dojo-child-plan" id="tecnica-ninos" open={open || undefined}>
@@ -566,8 +570,8 @@ function DojoChildPlanPanel({
         </fieldset>
         {groupedSyllabusItems.length ? (
           <fieldset>
-            <legend>Temario de examen sugerido</legend>
-            <p className="muted">Puntos reales del programa infantil para los grados objetivo presentes en la clase. Marca solo lo trabajado hoy.</p>
+            <legend>Trabajo general para toda la clase</legend>
+            <p className="muted">Estas marcas se aplican al grupo general. Para una técnica hecha solo por algunos niños, usa el bloque individual de debajo.</p>
             <div className="dojo-child-syllabus-list">
               {groupedSyllabusItems.map(([grade, items]) => (
                 <details key={grade}>
@@ -596,6 +600,29 @@ function DojoChildPlanPanel({
             <p className="muted">No hay temario infantil activo para los grados objetivo de esta clase.</p>
           </fieldset>
         )}
+        <fieldset className="child-targeted-technique">
+          <legend>Añadir técnica hecha por alumnos concretos</legend>
+          <p className="muted">Elige una técnica y marca solo quién la ha trabajado. No se aplicará automáticamente a otros niños del mismo grado.</p>
+          <label>
+            Técnica realizada
+            <select name="targetedSyllabusItemId" defaultValue="">
+              <option value="">No añadir técnica individual</option>
+              {groupedTargetedSyllabusItems.map(([grade, items]) => (
+                <optgroup key={grade} label={grade}>
+                  {items.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <div className="dojo-child-member-grid">
+            {members.map((member) => (
+              <label key={member.id}>
+                <input type="checkbox" name="targetedMemberIds" value={member.id} />
+                <span>{member.display_name}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <label>
           Nota rapida
           <textarea name="notes" rows={2} defaultValue={plan?.notes ?? ""} placeholder="Opcional: como fue la clase, actitud general, algo a recordar..." />

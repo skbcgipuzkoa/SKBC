@@ -2834,9 +2834,16 @@ export async function saveChildClassPlanAction(formData: FormData) {
   const memberIds = Array.from(new Set(
     formData.getAll("groupMemberIds").map((value) => String(value).trim()).filter(Boolean)
   ));
+  const targetedSyllabusItemId = String(formData.get("targetedSyllabusItemId") ?? "").trim();
+  const targetedMemberIds = Array.from(new Set(
+    formData.getAll("targetedMemberIds").map((value) => String(value).trim()).filter(Boolean)
+  ));
 
   if (!classId || !legacyId) {
     redirect(returnTo || "/clases?error=kids-plan");
+  }
+  if (targetedSyllabusItemId && !targetedMemberIds.length) {
+    redirect(returnTo || `/clases/${legacyId}?error=kids-plan&detail=${encodeURIComponent("Selecciona al menos un alumno para esa tecnica.")}`);
   }
 
   const supabase = createAdminClient();
@@ -2880,6 +2887,25 @@ export async function saveChildClassPlanAction(formData: FormData) {
 
       if (groupError) throw groupError;
     }
+    if (targetedSyllabusItemId) {
+      const { data: syllabusItem, error: syllabusItemError } = await supabase
+        .from("child_syllabus_items")
+        .select("id,title,grade")
+        .eq("id", targetedSyllabusItemId)
+        .eq("active", true)
+        .single<{ id: string; title: string; grade: string | null }>();
+      if (syllabusItemError || !syllabusItem) throw syllabusItemError ?? new Error("Tecnica infantil no encontrada.");
+
+      const { error: targetedError } = await supabase.from("child_class_group_work").insert({
+        class_id: classId,
+        group_label: `Tecnica concreta${syllabusItem.grade ? ` - ${syllabusItem.grade}` : ""}`,
+        content: syllabusItem.title,
+        member_ids: targetedMemberIds,
+        notes: `${CHILD_TARGETED_SYLLABUS_PREFIX}${syllabusItem.id}`,
+        updated_at: now
+      });
+      if (targetedError) throw targetedError;
+    }
     await syncChildSyllabusHistoryForClass(supabase, classId);
   } catch (error) {
     console.error("Error saving child class plan", error);
@@ -2904,6 +2930,11 @@ export async function deleteChildClassGroupWorkAction(formData: FormData) {
   }
 
   const supabase = createAdminClient();
+  const { data: groupWork } = await supabase
+    .from("child_class_group_work")
+    .select("class_id")
+    .eq("id", id)
+    .maybeSingle<{ class_id: string }>();
   const { error } = await supabase
     .from("child_class_group_work")
     .delete()
@@ -2913,6 +2944,8 @@ export async function deleteChildClassGroupWorkAction(formData: FormData) {
     console.error("Error deleting child class group work", error);
     redirect(returnTo || `/clases/${legacyId}?error=kids-plan&detail=${encodeURIComponent(error.message)}`);
   }
+
+  if (groupWork?.class_id) await syncChildSyllabusHistoryForClass(supabase, groupWork.class_id);
 
   revalidatePath(`/clases/${legacyId}`);
   redirect(returnTo || `/clases/${legacyId}?saved=kids-plan-delete`);
@@ -4079,7 +4112,6 @@ export async function createBeltOrderLineAction(formData: FormData) {
     console.error("Error creating belt order line", error);
     redirect("/pedidos-cinturones?tab=belts&error=belt");
   }
-
   redirect("/pedidos-cinturones?tab=belts&saved=belt");
 }
 
@@ -5161,8 +5193,10 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
   }
 }
 
+const CHILD_TARGETED_SYLLABUS_PREFIX = "SKBC_SYLLABUS_ITEM:";
+
 async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof createAdminClient>, classId: string) {
-  const [{ data: clase, error: classError }, { data: plan, error: planError }, { data: attendances, error: attendanceError }] = await Promise.all([
+  const [{ data: clase, error: classError }, { data: plan, error: planError }, { data: attendances, error: attendanceError }, { data: targetedWork, error: targetedWorkError }] = await Promise.all([
     supabase
       .from("classes")
       .select("id,class_date,class_group")
@@ -5177,15 +5211,27 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
       .from("attendance_logs")
       .select("id,member_id,official_grade,trained_grade")
       .eq("class_id", classId)
-      .returns<Array<{ id: string; member_id: string; official_grade: string | null; trained_grade: string | null }>>()
+      .returns<Array<{ id: string; member_id: string; official_grade: string | null; trained_grade: string | null }>>(),
+    supabase
+      .from("child_class_group_work")
+      .select("member_ids,notes")
+      .eq("class_id", classId)
+      .like("notes", `${CHILD_TARGETED_SYLLABUS_PREFIX}%`)
+      .returns<Array<{ member_ids: string[] | null; notes: string | null }>>()
   ]);
 
   if (classError) throw classError;
   if (planError) throw planError;
   if (attendanceError) throw attendanceError;
+  if (targetedWorkError) throw targetedWorkError;
   if (!clase || clase.class_group !== "kids") return;
 
-  const syllabusItemIds = Array.from(new Set((plan?.syllabus_item_ids ?? []).filter(Boolean)));
+  const planSyllabusItemIds = Array.from(new Set((plan?.syllabus_item_ids ?? []).filter(Boolean)));
+  const targetedItems = (targetedWork ?? []).map((work) => ({
+    itemId: String(work.notes ?? "").slice(CHILD_TARGETED_SYLLABUS_PREFIX.length).trim(),
+    memberIds: new Set(work.member_ids ?? [])
+  })).filter((work) => work.itemId && work.memberIds.size);
+  const syllabusItemIds = Array.from(new Set([...planSyllabusItemIds, ...targetedItems.map((work) => work.itemId)]));
   const { error: deleteError } = await supabase
     .from("child_syllabus_history")
     .delete()
@@ -5224,11 +5270,15 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
       : mode === "other_grade"
         ? childSyllabusGradeSearchLabels(String(override?.trained_grade ?? ""))
         : [];
+    const generalItems = syllabusItems.filter((item) => planSyllabusItemIds.includes(item.id));
     const itemsForAttendance = targetGrades.length
-      ? syllabusItems.filter((item) => targetGrades.includes(String(item.grade ?? "").trim().toUpperCase().replace(/\s+/g, " ")))
-      : syllabusItems;
+      ? generalItems.filter((item) => targetGrades.includes(String(item.grade ?? "").trim().toUpperCase().replace(/\s+/g, " ")))
+      : generalItems;
+    const targetedItemIds = new Set(targetedItems.filter((work) => work.memberIds.has(attendance.member_id)).map((work) => work.itemId));
+    const selectedItems = new Map(itemsForAttendance.map((item) => [item.id, item]));
+    syllabusItems.filter((item) => targetedItemIds.has(item.id)).forEach((item) => selectedItems.set(item.id, item));
 
-    for (const item of itemsForAttendance) {
+    for (const item of selectedItems.values()) {
       rows.push({
         member_id: attendance.member_id,
         class_id: classId,
