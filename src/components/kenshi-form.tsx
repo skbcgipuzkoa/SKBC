@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { adultGrades, kidsGrades } from "@/lib/grades";
+import { splitContactValues } from "@/lib/member-contacts";
 
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
@@ -34,6 +35,9 @@ type Props = {
 export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, error, saved }: Props) {
   const [memberClass, setMemberClass] = useState<"kids" | "adults">(initial?.class ?? "adults");
   const gradeOptions = useMemo(() => (memberClass === "kids" ? kidsGrades : adultGrades), [memberClass]);
+  const [familyEmail, familyEmail2 = ""] = splitContactValues(initial?.familyEmail, "email");
+  const [guardianName, guardianName2 = ""] = splitContactValues(initial?.guardianName);
+  const [guardianPhone, guardianPhone2 = ""] = splitContactValues(initial?.guardianPhone);
 
   return (
     <form action={action} className="edit-form" encType="multipart/form-data">
@@ -67,10 +71,35 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
             <option value="inactive">Inactivo</option>
           </select>
         </label>
-        <label>Email familia<input name="familyEmail" defaultValue={initial?.familyEmail ?? ""} /></label>
-        <label>Tutor<input name="guardianName" defaultValue={initial?.guardianName ?? ""} /></label>
-        <label>Telefono tutor<input name="guardianPhone" defaultValue={initial?.guardianPhone ?? ""} /></label>
-        <label>Telefono alumno<input name="studentPhone" defaultValue={initial?.studentPhone ?? ""} /></label>
+        {memberClass === "kids" ? (
+          <fieldset className="wide guardian-contacts">
+            <legend>Contactos familiares</legend>
+            <div className="guardian-contact-grid">
+              <section>
+                <strong>Tutor 1</strong>
+                <label>Nombre<input name="guardianName" defaultValue={guardianName ?? ""} /></label>
+                <label>Email<input name="familyEmail" type="email" defaultValue={familyEmail ?? ""} /></label>
+                <label>Telefono<input name="guardianPhone" defaultValue={guardianPhone ?? ""} /></label>
+              </section>
+              <section>
+                <strong>Tutor 2</strong>
+                <label>Nombre<input name="guardianName2" defaultValue={guardianName2} /></label>
+                <label>Email<input name="familyEmail2" type="email" defaultValue={familyEmail2} /></label>
+                <label>Telefono<input name="guardianPhone2" defaultValue={guardianPhone2} /></label>
+              </section>
+            </div>
+          </fieldset>
+        ) : (
+          <>
+            <label>Email alumno<input name="familyEmail" type="email" defaultValue={familyEmail ?? ""} /></label>
+            <input type="hidden" name="familyEmail2" value={familyEmail2} />
+            <input type="hidden" name="guardianName" value={guardianName ?? ""} />
+            <input type="hidden" name="guardianName2" value={guardianName2} />
+            <input type="hidden" name="guardianPhone" value={guardianPhone ?? ""} />
+            <input type="hidden" name="guardianPhone2" value={guardianPhone2} />
+          </>
+        )}
+        <label>{memberClass === "kids" ? "Telefono alumno (opcional)" : "Telefono alumno"}<input name="studentPhone" defaultValue={initial?.studentPhone ?? ""} /></label>
         <label>Foto perfil<input name="profilePhoto" type="file" accept="image/*" /></label>
         <label className="checkbox-line">
           <input type="checkbox" name="freeTrialEnabled" defaultChecked={initial?.freeTrialEnabled ?? false} />

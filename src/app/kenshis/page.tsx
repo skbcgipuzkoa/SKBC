@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { driveImageUrl } from "@/lib/drive";
+import { splitContactValues } from "@/lib/member-contacts";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Kenshi = {
@@ -183,7 +184,12 @@ export default async function KenshisPage({
                   </td>
                   <td data-label="Grado">{kenshi.grade || <span className="muted">Sin grado</span>}</td>
                   <td data-label="Contacto">
-                    <ContactPills email={kenshi.family_email} phone={kenshi.guardian_phone || kenshi.student_phone} />
+                    <ContactPills
+                      email={kenshi.family_email}
+                      phone={kenshi.class === "kids"
+                        ? kenshi.guardian_phone || kenshi.student_phone
+                        : kenshi.student_phone || kenshi.guardian_phone}
+                    />
                   </td>
                   <td data-label="Ficha">
                     <span className="link-stack">
@@ -211,21 +217,23 @@ function kenshiFilterHref(filter: KenshiFilter, search: string) {
 }
 
 function ContactPills({ email, phone }: { email: string | null; phone: string | null }) {
-  if (!email && !phone) return <span className="muted">-</span>;
+  const emails = splitContactValues(email, "email");
+  const phones = splitContactValues(phone);
+  if (!emails.length && !phones.length) return <span className="muted">-</span>;
   return (
     <span className="contact-pills">
-      {email ? (
-        <a className="contact-pill email" href={`mailto:${email}`}>
+      {emails.map((contactEmail) => (
+        <a className="contact-pill email" href={`mailto:${contactEmail}`} key={contactEmail}>
           <Mail aria-hidden="true" size={13} />
-          <span>{email}</span>
+          <span>{contactEmail}</span>
         </a>
-      ) : null}
-      {phone ? (
-        <a className="contact-pill phone" href={`tel:${phone.replace(/\s+/g, "")}`}>
+      ))}
+      {phones.map((contactPhone) => (
+        <a className="contact-pill phone" href={`tel:${contactPhone.replace(/\s+/g, "")}`} key={contactPhone}>
           <Phone aria-hidden="true" size={13} />
-          <span>{phone}</span>
+          <span>{contactPhone}</span>
         </a>
-      ) : null}
+      ))}
     </span>
   );
 }

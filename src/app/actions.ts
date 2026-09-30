@@ -17,6 +17,7 @@ import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior,
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { joinContactValues } from "@/lib/member-contacts";
 import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/telegram-notifications";
 import { createTrashItem, restoreTrashItem } from "@/lib/trash";
 import { kidsGrades } from "@/lib/grades";
@@ -626,9 +627,9 @@ export async function updateKenshiAction(formData: FormData) {
     birth_date: birthDate,
     exam_history: String(formData.get("examHistory") ?? "").trim() || null,
     site_url: String(formData.get("siteUrl") ?? "").trim() || null,
-    family_email: String(formData.get("familyEmail") ?? "").trim() || null,
-    guardian_name: String(formData.get("guardianName") ?? "").trim() || null,
-    guardian_phone: String(formData.get("guardianPhone") ?? "").trim() || null,
+    family_email: joinContactValues(formData.get("familyEmail"), formData.get("familyEmail2"), "email"),
+    guardian_name: joinContactValues(formData.get("guardianName"), formData.get("guardianName2")),
+    guardian_phone: joinContactValues(formData.get("guardianPhone"), formData.get("guardianPhone2")),
     student_phone: String(formData.get("studentPhone") ?? "").trim() || null,
     address: String(formData.get("address") ?? "").trim() || null,
     free_trial_enabled: freeTrial.enabled,
@@ -704,9 +705,9 @@ export async function createKenshiAction(formData: FormData) {
     birth_date: birthDate,
     exam_history: String(formData.get("examHistory") ?? "").trim() || null,
     site_url: String(formData.get("siteUrl") ?? "").trim() || null,
-    family_email: String(formData.get("familyEmail") ?? "").trim() || null,
-    guardian_name: String(formData.get("guardianName") ?? "").trim() || null,
-    guardian_phone: String(formData.get("guardianPhone") ?? "").trim() || null,
+    family_email: joinContactValues(formData.get("familyEmail"), formData.get("familyEmail2"), "email"),
+    guardian_name: joinContactValues(formData.get("guardianName"), formData.get("guardianName2")),
+    guardian_phone: joinContactValues(formData.get("guardianPhone"), formData.get("guardianPhone2")),
     student_phone: String(formData.get("studentPhone") ?? "").trim() || null,
     address: String(formData.get("address") ?? "").trim() || null,
     free_trial_enabled: freeTrial.enabled,

@@ -3423,6 +3423,44 @@ tbody tr:hover {
   grid-column: 1 / -1;
 }
 
+.guardian-contacts {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 4px 0;
+  padding: 14px;
+}
+
+.guardian-contacts legend {
+  color: var(--ink);
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.guardian-contact-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.guardian-contact-grid section {
+  background: #f7f9fc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.guardian-contact-grid strong {
+  color: var(--ink);
+}
+
+@media (max-width: 720px) {
+  .guardian-contact-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .form-grid input,
 .form-grid select,
 .form-grid textarea,
