@@ -13,3 +13,4 @@ coverage
 supabase/.branches
 supabase/.temp
 legacy-appscript
+tmp/pdfs/

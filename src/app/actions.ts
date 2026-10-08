@@ -18,6 +18,7 @@ import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/m
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { joinContactValues } from "@/lib/member-contacts";
+import { getFamilyUnitContext, upsertFamilyBillingTask } from "@/lib/family-units";
 import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/telegram-notifications";
 import { createTrashItem, restoreTrashItem } from "@/lib/trash";
 import { kidsGrades } from "@/lib/grades";
@@ -1363,6 +1364,74 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
 
   revalidatePath("/entregas");
   redirect(`/entregas?campaign=${campaignId}&saved=delivery${returnQuery}`);
+}
+
+export async function createFamilyUnitAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  const selectedIds = formData.getAll("memberIds").map(String).map((value) => value.trim()).filter(Boolean);
+  const memberIds = [...new Set([memberId, ...selectedIds])];
+  if (!memberId || !legacyId || memberIds.length < 2) redirect(`/kenshis/${encodeURIComponent(legacyId)}?error=family-members`);
+  const supabase = createAdminClient();
+  const { data: occupied } = await supabase.from("family_unit_members").select("member_id").in("member_id", memberIds).returns<Array<{ member_id: string }>>();
+  if (occupied?.length) redirect(`/kenshis/${encodeURIComponent(legacyId)}?error=family-occupied`);
+  const { data: unit, error } = await supabase.from("family_units").insert({ name: null }).select("id").single<{ id: string }>();
+  if (error || !unit) redirect(`/kenshis/${encodeURIComponent(legacyId)}?error=family-save`);
+  const { error: memberError } = await supabase.from("family_unit_members").insert(memberIds.map((id) => ({ family_unit_id: unit.id, member_id: id })));
+  if (memberError) {
+    await supabase.from("family_units").delete().eq("id", unit.id);
+    redirect(`/kenshis/${encodeURIComponent(legacyId)}?error=family-save`);
+  }
+  revalidateFamilyPaths(legacyId);
+  redirect(`/kenshis/${encodeURIComponent(legacyId)}?saved=family`);
+}
+
+export async function addFamilyUnitMembersAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const unitId = String(formData.get("unitId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  const memberIds = [...new Set(formData.getAll("memberIds").map(String).map((value) => value.trim()).filter(Boolean))];
+  if (!unitId || !legacyId || !memberIds.length) redirect(`/kenshis/${encodeURIComponent(legacyId)}?error=family-members`);
+  const { error } = await createAdminClient().from("family_unit_members").insert(memberIds.map((memberId) => ({ family_unit_id: unitId, member_id: memberId })));
+  if (error) redirect(`/kenshis/${encodeURIComponent(legacyId)}?error=family-occupied`);
+  revalidateFamilyPaths(legacyId);
+  redirect(`/kenshis/${encodeURIComponent(legacyId)}?saved=family`);
+}
+
+export async function removeFamilyUnitMemberAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const unitId = String(formData.get("unitId") ?? "").trim();
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const legacyId = String(formData.get("legacyId") ?? "").trim();
+  if (!unitId || !memberId || !legacyId) redirect(`/kenshis/${encodeURIComponent(legacyId)}?error=family-save`);
+  const { error } = await createAdminClient().from("family_unit_members").delete().eq("family_unit_id", unitId).eq("member_id", memberId);
+  if (error) redirect(`/kenshis/${encodeURIComponent(legacyId)}?error=family-save`);
+  revalidateFamilyPaths(legacyId);
+  redirect(`/kenshis/${encodeURIComponent(legacyId)}?saved=family`);
+}
+
+export async function confirmFamilyBillingSheetDeliveredAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const returnPath = safeReturnPath(String(formData.get("returnPath") ?? "")) || "/avisos";
+  if (!memberId) redirect(`${returnPath}?error=trial`);
+  try {
+    await upsertFamilyBillingTask(await getFamilyUnitContext(memberId), "delivered");
+  } catch (error) {
+    console.error("Error confirming family billing sheet delivery", error);
+    redirect(`${returnPath}?error=trial`);
+  }
+  revalidatePath("/avisos");
+  revalidatePath("/sistema");
+  revalidatePath("/kenshis");
+  redirect(`${returnPath}?saved=trial`);
+}
+
+function revalidateFamilyPaths(legacyId: string) {
+  revalidatePath(`/kenshis/${legacyId}`);
+  revalidatePath("/avisos");
+  revalidatePath("/sistema");
 }
 
 function normalizeDistributionAudience(value: string) {

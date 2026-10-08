@@ -4,10 +4,12 @@ import { CopyFichaLinkButton } from "@/app/kenshis/[legacyId]/CopyFichaLinkButto
 import { notFound, redirect } from "next/navigation";
 import { addMemberNoteAction, ensureFichaTokenAction, logoutAction, saveChildBehaviorAction, saveChildNoteAction, transitionChildToAdultAction, undoChildToAdultTransitionAction, updateKenshiAction, updateMemberNoteAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
+import { FamilyUnitManager } from "@/components/family-unit-manager";
 import { hasInternalAccess } from "@/lib/auth";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
 import { adultGrades } from "@/lib/grades";
+import { getEligibleFamilyMembers, getFamilyUnitContext } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Member = {
@@ -303,6 +305,8 @@ export default async function KenshiDetailPage({
   const latestExam = exams?.[0] ?? null;
   const latestCourse = courses?.[0] ?? null;
   const hasConfiguredTechnicalArea = hasTechnicalAreaForGrade(technicalAreaResult.data ?? [], member.grade);
+  const familyContext = await getFamilyUnitContext(member.id);
+  const familyOptions = await getEligibleFamilyMembers(familyContext.unitId);
 
   return (
     <div className="shell">
@@ -381,6 +385,12 @@ export default async function KenshiDetailPage({
             </div>
           </article>
         </section>
+
+        {notices.saved === "family" ? <p className="save-ok">Unidad familiar actualizada.</p> : null}
+        {notices.error === "family-members" ? <p className="form-error">Selecciona al menos otro kenshi para crear o ampliar la unidad familiar.</p> : null}
+        {notices.error === "family-occupied" ? <p className="form-error">Uno de los kenshis seleccionados ya pertenece a otra unidad familiar.</p> : null}
+        {notices.error === "family-save" ? <p className="form-error">No se pudo actualizar la unidad familiar.</p> : null}
+        <FamilyUnitManager context={familyContext} options={familyOptions} currentMemberId={member.id} legacyId={member.legacy_id ?? legacyId} />
 
         <section className="card" id="notas-internas">
           <div className="section-heading-row"><div><h2>Notas internas</h2><p className="muted">Solo visibles para administracion.</p></div></div>

@@ -1,5 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-import { freeTrialEndDate } from "@/lib/free-trial";
+import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { getWebsiteAdminAlertCounts, totalWebsiteAdminAlerts } from "@/lib/website-admin-alerts";
 
 type SidebarNavProps = {
@@ -118,17 +117,9 @@ export async function SidebarNav({ current }: SidebarNavProps) {
 async function getUnreadTrialNoticeCount() {
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const to = today;
-    const { data, error } = await createAdminClient()
-      .from("members")
-      .select("joined_on,free_trial_started_on,free_trial_ends_on")
-      .eq("status", "active")
-      .eq("free_trial_enabled", true)
-      .is("free_trial_notice_read_at", null);
-    if (error) return 0;
-    return (data ?? []).filter((member) => {
-      const noticeOn = freeTrialEndDate(member.free_trial_started_on ?? member.joined_on);
-      return Boolean(noticeOn) && noticeOn! <= to;
+    return (await getPendingFamilyBillingContexts()).filter((context) => {
+      const noticeOn = context.billing.newestMember?.trialEndsOn;
+      return Boolean(noticeOn) && noticeOn! <= today;
     }).length;
   } catch {
     return 0;

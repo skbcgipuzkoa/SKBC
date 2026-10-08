@@ -3455,10 +3455,32 @@ tbody tr:hover {
   color: var(--ink);
 }
 
+.family-unit-card { margin-top: 20px; }
+.family-unit-summary { display: grid; gap: 10px; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 16px 0; }
+.family-unit-summary > div { background: #f4f7fb; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 5px; padding: 12px; }
+.family-unit-summary span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.family-unit-summary strong { font-size: 18px; }
+.family-member-list { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.family-member-list article { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; padding: 12px 14px; }
+.family-member-list article:last-child { border-bottom: 0; }
+.family-member-list article.is-newest { background: #eef6ff; border-left: 5px solid var(--brand); }
+.family-member-list small { color: var(--muted); display: block; margin-top: 3px; }
+.family-add-form { display: grid; gap: 12px; margin-top: 16px; }
+.family-add-form > label { display: grid; gap: 6px; }
+.family-add-form input[type="search"] { border: 1px solid var(--line); border-radius: 8px; min-height: 42px; padding: 8px 10px; }
+.family-add-form > button { justify-self: start; }
+.family-member-options { border: 1px solid var(--line); border-radius: 8px; display: grid; max-height: 250px; overflow: auto; }
+.family-member-options > label { align-items: center; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; gap: 10px; padding: 10px 12px; }
+.family-member-options > label:last-of-type { border-bottom: 0; }
+.family-member-options small { color: var(--muted); display: block; }
+.family-member-options .muted { padding: 12px; }
+
 @media (max-width: 720px) {
   .guardian-contact-grid {
     grid-template-columns: 1fr;
   }
+  .family-unit-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .family-unit-summary > div:last-child { grid-column: 1 / -1; }
 }
 
 .form-grid input,

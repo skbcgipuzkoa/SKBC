@@ -2,9 +2,9 @@ import { AlertTriangle, Bell, CheckCircle2, LogOut, Pin } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
 import { SeasonReviewSelector } from "@/app/avisos/SeasonReviewSelector";
-import { createInternalNoticeAction, logoutAction, markFreeTrialNoticeReadAction, updateInternalNoticeStatusAction } from "@/app/actions";
+import { confirmFamilyBillingSheetDeliveredAction, createInternalNoticeAction, logoutAction, updateInternalNoticeStatusAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
-import { freeTrialEndDate, resolveFreeTrialBillingDate } from "@/lib/free-trial";
+import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
@@ -99,7 +99,6 @@ export default async function AvisosPage({
   const trialEnd = today();
   const [
     { data, error },
-    trialResult,
     examResult,
     busenEligibilityResult,
     busenAttendanceResult,
@@ -114,13 +113,6 @@ export default async function AvisosPage({
       .order("created_at", { ascending: false })
       .limit(300)
       .returns<InternalNotice[]>(),
-    supabase
-      .from("members")
-      .select("id,legacy_id,display_name,class,grade,joined_on,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at")
-      .eq("status", "active")
-      .eq("free_trial_enabled", true)
-      .order("free_trial_ends_on", { ascending: true, nullsFirst: false })
-      .returns<FreeTrialMember[]>(),
     supabase
       .from("members")
       .select("id,legacy_id,display_name,class,grade,joined_on,birth_date,semaphore,next_exam_on,exam_notice,attendance_count,minimum_attendance,missing_attendance")
@@ -152,7 +144,6 @@ export default async function AvisosPage({
   ]);
 
   if (error) throw error;
-  if (trialResult.error) throw trialResult.error;
   if (examResult.error) throw examResult.error;
   if (busenEligibilityResult.error) throw busenEligibilityResult.error;
   if (busenAttendanceResult.error) throw busenAttendanceResult.error;
@@ -161,18 +152,9 @@ export default async function AvisosPage({
 
   const notices = data ?? [];
   const examMembers = examResult.data ?? [];
-  const trialNotices = (trialResult.data ?? [])
-    .map((member) => ({
-      ...member,
-      free_trial_notice_on: freeTrialEndDate(member.free_trial_started_on ?? member.joined_on),
-      free_trial_billing_on: resolveFreeTrialBillingDate(member.free_trial_started_on ?? member.joined_on, member.free_trial_ends_on)
-    }))
-    .filter((member) =>
-      Boolean(member.free_trial_notice_on) &&
-      member.free_trial_notice_on! <= trialEnd &&
-      !member.free_trial_notice_read_at
-    )
-    .sort((a, b) => (a.free_trial_notice_on ?? "9999-12-31").localeCompare(b.free_trial_notice_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name, "es"));
+  const trialNotices = (await getPendingFamilyBillingContexts())
+    .filter((context) => Boolean(context.billing.newestMember?.trialEndsOn) && context.billing.newestMember!.trialEndsOn! <= trialEnd)
+    .sort((a, b) => (a.billing.newestMember?.trialEndsOn ?? "9999-12-31").localeCompare(b.billing.newestMember?.trialEndsOn ?? "9999-12-31"));
   const transitionCandidates = buildTransitionCandidates(examMembers);
   const upcomingExamNotices = buildUpcomingExamNotices(examMembers);
   const busenNotices = buildBusenNotices(examMembers, busenEligibilityResult.data ?? [], busenAttendanceResult.data ?? []);
@@ -248,27 +230,27 @@ export default async function AvisosPage({
           </div>
           {trialNotices.length ? (
             <div className="notice-admin-list compact-list">
-              {trialNotices.map((member) => {
-                const state = trialState(member.free_trial_notice_on ?? null);
-                const trialStartOn = member.free_trial_started_on ?? member.joined_on;
+              {trialNotices.map((context) => {
+                const member = context.billing.newestMember!;
+                const state = trialState(member.trialEndsOn);
                 return (
-                  <article className={`notice-admin-card ${state.className}`} key={member.id}>
+                  <article className={`notice-admin-card ${state.className}`} key={`${member.id}-${context.billing.compositionSignature}`}>
                     <div className="notice-admin-head">
                       <div>
-                        <span className="notice-admin-meta">{member.class === "kids" ? "Ninos" : "Adultos"} · {member.grade ?? "Sin grado"}</span>
-                        <h2>{member.display_name}</h2>
+                        <span className="notice-admin-meta">{context.billing.members.length} {context.billing.members.length === 1 ? "persona" : "personas"} · Cuota {formatEuro(context.billing.totalCents)}</span>
+                        <h2>{context.unitName || context.billing.members.map((item) => item.display_name).join(", ")}</h2>
                       </div>
                       <span className={`state-badge ${state.badge}`}>{state.label}</span>
                     </div>
                     <p>
-                      Ingreso: {member.joined_on ? formatShortDate(member.joined_on) : "-"} ·
-                      Inicio mes gratis: {trialStartOn ? formatShortDate(trialStartOn) : "-"} ·
-                      Fin mes gratis: {member.free_trial_notice_on ? formatShortDate(member.free_trial_notice_on) : "-"} ·
-                      Primer cobro posible: {member.free_trial_billing_on ? formatShortDate(member.free_trial_billing_on) : "-"}
+                      Nueva incorporación: {member.display_name} ·
+                      Fin mes gratis: {member.trialEndsOn ? formatShortDate(member.trialEndsOn) : "-"} ·
+                      Primer cobro unificado: {context.billing.billingOn ? formatShortDate(context.billing.billingOn) : "-"}
                     </p>
                     <div className="notice-action-row">
-                      {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}`}>Abrir kenshi</a> : null}
-                      <form action={markFreeTrialNoticeReadAction}>
+                      {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}`}>Abrir familia</a> : null}
+                      {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}/hoja-cobro`} target="_blank" rel="noreferrer">Generar hoja de cobro</a> : null}
+                      <form action={confirmFamilyBillingSheetDeliveredAction}>
                         <input type="hidden" name="memberId" value={member.id} />
                         <input type="hidden" name="returnPath" value="/avisos" />
                         <SubmitButton pendingLabel="Confirmando...">Confirmar hoja entregada</SubmitButton>
@@ -616,6 +598,10 @@ function trialState(endOn: string | null) {
   if (endOn < now) return { label: "Mes gratis finalizado", badge: "state-pendiente", className: "notice-priority-urgent" };
   if (endOn === now) return { label: "Finaliza hoy", badge: "state-en-progreso", className: "notice-priority-high" };
   return { label: "Finaliza pronto", badge: "state-completada", className: "notice-priority-normal" };
+}
+
+function formatEuro(cents: number) {
+  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
 function areaLabel(value: string) {

@@ -1,4 +1,4 @@
-import { freeTrialEndDate, resolveFreeTrialBillingDate } from "@/lib/free-trial";
+import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type NotificationType = "daily_ranking" | "monthly_stats" | "semester_stats" | "yearly_stats" | "test";
@@ -370,7 +370,7 @@ async function buildDailyDigest() {
     kids,
     todayClasses: todayClassesResult.data ?? [],
     birthdayAlerts: birthdayAlerts(members),
-    freeTrialAlerts: freeTrialAlerts(members),
+    freeTrialAlerts: await freeTrialAlerts(),
     readyForExam: readyForExam(members),
     upcomingForExam: upcomingForExam(members)
   };
@@ -678,34 +678,19 @@ function upcomingForExam(members: Member[]) {
     }));
 }
 
-function freeTrialAlerts(members: Member[]) {
+async function freeTrialAlerts() {
   const limit = todayIso();
-  return members
-    .map((member) => {
-      const joinedOn = member.free_trial_started_on ?? member.joined_on ?? null;
-      return {
-        member,
-        joinedOn,
-        noticeOn: freeTrialEndDate(joinedOn),
-        billingOn: resolveFreeTrialBillingDate(joinedOn, member.free_trial_ends_on)
-      };
-    })
-    .filter(({ member, noticeOn }) =>
-      member.status === "active" &&
-      member.free_trial_enabled &&
-      !member.free_trial_notice_read_at &&
-      Boolean(noticeOn) &&
-      noticeOn! <= limit
-    )
-    .sort((a, b) => (a.noticeOn ?? "9999-12-31").localeCompare(b.noticeOn ?? "9999-12-31") || a.member.display_name.localeCompare(b.member.display_name))
-    .map(({ member, joinedOn, noticeOn, billingOn }) => ({
-      name: member.display_name,
-      grade: member.grade ?? "-",
-      className: member.class === "kids" ? "ninos" : "adultos",
-      joinedOn,
-      noticeOn,
-      billingOn,
-      endsOn: noticeOn
+  return (await getPendingFamilyBillingContexts())
+    .filter((context) => Boolean(context.billing.newestMember?.trialEndsOn) && context.billing.newestMember!.trialEndsOn! <= limit)
+    .sort((a, b) => (a.billing.newestMember?.trialEndsOn ?? "9999-12-31").localeCompare(b.billing.newestMember?.trialEndsOn ?? "9999-12-31"))
+    .map((context) => ({
+      name: context.unitName || context.billing.members.map((member) => member.display_name).join(", "),
+      grade: `${context.billing.members.length} personas`,
+      className: "unidad familiar",
+      joinedOn: context.billing.newestMember?.trialStartedOn ?? null,
+      noticeOn: context.billing.newestMember?.trialEndsOn ?? null,
+      billingOn: context.billing.billingOn,
+      endsOn: context.billing.newestMember?.trialEndsOn ?? null
     }));
 }
 
@@ -735,7 +720,7 @@ function formatBirthdayAlerts(rows: ReturnType<typeof birthdayAlerts>) {
   ].join("\n");
 }
 
-function formatFreeTrialAlerts(rows: ReturnType<typeof freeTrialAlerts>) {
+function formatFreeTrialAlerts(rows: Awaited<ReturnType<typeof freeTrialAlerts>>) {
   if (!rows.length) return "<b>Hojas de cobro</b>\nSin entregas pendientes.";
   const today = todayIso();
   return [
