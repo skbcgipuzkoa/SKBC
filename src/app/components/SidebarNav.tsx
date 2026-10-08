@@ -118,7 +118,7 @@ export async function SidebarNav({ current }: SidebarNavProps) {
 async function getUnreadTrialNoticeCount() {
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const to = addDays(today, 7);
+    const to = today;
     const { data, error } = await createAdminClient()
       .from("members")
       .select("joined_on,free_trial_started_on,free_trial_ends_on")
@@ -133,10 +133,4 @@ async function getUnreadTrialNoticeCount() {
   } catch {
     return 0;
   }
-}
-
-function addDays(value: string, days: number) {
-  const date = new Date(`${value}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
 }

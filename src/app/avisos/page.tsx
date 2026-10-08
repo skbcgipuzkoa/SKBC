@@ -96,8 +96,7 @@ export default async function AvisosPage({
   const params = await searchParams;
   const selectedStatus = params.status ?? "active";
   const supabase = createAdminClient();
-  const readArchiveLimit = addDays(today(), -30);
-  const trialEnd = addDays(today(), 7);
+  const trialEnd = today();
   const [
     { data, error },
     trialResult,
@@ -171,10 +170,9 @@ export default async function AvisosPage({
     .filter((member) =>
       Boolean(member.free_trial_notice_on) &&
       member.free_trial_notice_on! <= trialEnd &&
-      (!member.free_trial_notice_read_at || member.free_trial_notice_read_at.slice(0, 10) >= readArchiveLimit)
+      !member.free_trial_notice_read_at
     )
     .sort((a, b) => (a.free_trial_notice_on ?? "9999-12-31").localeCompare(b.free_trial_notice_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name, "es"));
-  const unreadTrialNotices = trialNotices.filter((member) => !member.free_trial_notice_read_at);
   const transitionCandidates = buildTransitionCandidates(examMembers);
   const upcomingExamNotices = buildUpcomingExamNotices(examMembers);
   const busenNotices = buildBusenNotices(examMembers, busenEligibilityResult.data ?? [], busenAttendanceResult.data ?? []);
@@ -204,7 +202,7 @@ export default async function AvisosPage({
         </div>
 
         {params.saved === "notice" ? <p className="save-ok">Aviso actualizado correctamente.</p> : null}
-        {params.saved === "trial" ? <p className="save-ok">Aviso de mes gratis marcado como leido.</p> : null}
+        {params.saved === "trial" ? <p className="save-ok">Hoja de cobro marcada como entregada.</p> : null}
         {params.error === "notice" ? <p className="form-error">No se ha podido guardar el aviso.</p> : null}
         {params.error === "trial" ? <p className="form-error">No se ha podido actualizar el aviso de mes gratis.</p> : null}
 
@@ -237,15 +235,15 @@ export default async function AvisosPage({
 
         <SeasonReviewSelector members={reviewMembersResult.data ?? []} />
 
-        <section className={unreadTrialNotices.length ? "card attention-card blink-alert" : "card"}>
+        <section className={trialNotices.length ? "card attention-card blink-alert" : "card"}>
           <div className="section-heading-row">
             <div>
               <p className="eyebrow">Promocion primer mes</p>
-              <h2>Mes gratis por revisar</h2>
-              <p className="muted">Altas activas cuyo mes de prueba vence esta semana o vencio recientemente. Tambien entra en el parte diario de Telegram.</p>
+              <h2>Hojas de cobro por entregar</h2>
+              <p className="muted">Cuando termine el mes gratuito, entrega la hoja de cobro al kenshi y confírmalo aquí. También entra en el parte diario de Telegram.</p>
             </div>
-            <span className={unreadTrialNotices.length ? "state-badge state-pendiente" : "state-badge state-completada"}>
-              {unreadTrialNotices.length} sin leer
+            <span className={trialNotices.length ? "state-badge state-pendiente" : "state-badge state-completada"}>
+              {trialNotices.length} pendientes
             </span>
           </div>
           {trialNotices.length ? (
@@ -270,22 +268,18 @@ export default async function AvisosPage({
                     </p>
                     <div className="notice-action-row">
                       {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}`}>Abrir kenshi</a> : null}
-                      {member.free_trial_notice_read_at ? (
-                        <span className="muted">Leido {formatDate(member.free_trial_notice_read_at)}</span>
-                      ) : (
-                        <form action={markFreeTrialNoticeReadAction}>
-                          <input type="hidden" name="memberId" value={member.id} />
-                          <input type="hidden" name="returnPath" value="/avisos" />
-                          <SubmitButton pendingLabel="Marcando...">Marcar leido</SubmitButton>
-                        </form>
-                      )}
+                      <form action={markFreeTrialNoticeReadAction}>
+                        <input type="hidden" name="memberId" value={member.id} />
+                        <input type="hidden" name="returnPath" value="/avisos" />
+                        <SubmitButton pendingLabel="Confirmando...">Confirmar hoja entregada</SubmitButton>
+                      </form>
                     </div>
                   </article>
                 );
               })}
             </div>
           ) : (
-            <p className="muted">No hay meses gratis venciendo ahora.</p>
+            <p className="muted">No hay hojas de cobro pendientes de entrega.</p>
           )}
         </section>
 

@@ -780,7 +780,7 @@ export async function markFreeTrialNoticeReadAction(formData: FormData) {
     .eq("id", memberId);
 
   if (error) {
-    console.error("Error marking free trial notice as read", error);
+    console.error("Error confirming free trial payment sheet delivery", error);
     redirect(`${returnPath}?error=trial`);
   }
 

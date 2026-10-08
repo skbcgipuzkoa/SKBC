@@ -679,7 +679,7 @@ function upcomingForExam(members: Member[]) {
 }
 
 function freeTrialAlerts(members: Member[]) {
-  const limit = isoDate(addDays(new Date(), 7));
+  const limit = todayIso();
   return members
     .map((member) => {
       const joinedOn = member.free_trial_started_on ?? member.joined_on ?? null;
@@ -736,10 +736,10 @@ function formatBirthdayAlerts(rows: ReturnType<typeof birthdayAlerts>) {
 }
 
 function formatFreeTrialAlerts(rows: ReturnType<typeof freeTrialAlerts>) {
-  if (!rows.length) return "<b>Mes gratis</b>\nSin vencimientos pendientes.";
+  if (!rows.length) return "<b>Hojas de cobro</b>\nSin entregas pendientes.";
   const today = todayIso();
   return [
-    "<b>Mes gratis pendiente de cobro</b>",
+    "<b>Hojas de cobro por entregar</b>",
     ...rows.slice(0, 12).map((row) => {
       const state = row.noticeOn && row.noticeOn < today ? "mes gratis finalizado" : row.noticeOn === today ? "mes gratis finaliza hoy" : "mes gratis finaliza";
       return `- <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${state}${row.noticeOn ? ` ${formatHumanDate(row.noticeOn)}` : ""}${row.billingOn ? ` - primer cobro ${formatHumanDate(row.billingOn)}` : ""}${row.joinedOn ? ` - ingreso ${formatHumanDate(row.joinedOn)}` : ""}`;
