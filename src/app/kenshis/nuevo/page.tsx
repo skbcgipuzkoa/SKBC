@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createKenshiAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
 import { hasInternalAccess } from "@/lib/auth";
+import { getBillingSettings } from "@/lib/billing-settings";
 
 export default async function NewKenshiPage({
   searchParams
@@ -15,6 +16,7 @@ export default async function NewKenshiPage({
   }
 
   const notices = await searchParams;
+  const billingSettings = await getBillingSettings();
   const returnTo = sanitizeKenshiReturnTo(notices.returnTo);
 
   return (
@@ -35,7 +37,7 @@ export default async function NewKenshiPage({
             action={createKenshiAction}
             submitLabel="Crear kenshi"
             error={notices.error === "kenshi"}
-            initial={{ class: "adults", status: "active", freeTrialEnabled: true }}
+            initial={{ class: "adults", status: "active", freeTrialEnabled: billingSettings.freeTrialPromotionEnabled }}
           />
         </section>
       </main>

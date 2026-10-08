@@ -1,4 +1,5 @@
 import { calculateFamilyBilling, type FamilyBillingMember } from "@/lib/family-billing";
+import { getBillingRates } from "@/lib/billing-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type FamilyUnitContext = {
@@ -7,10 +8,11 @@ export type FamilyUnitContext = {
   billing: ReturnType<typeof calculateFamilyBilling>;
 };
 
-const memberSelect = "id,legacy_id,display_name,class,status,joined_on,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at";
+const memberSelect = "id,legacy_id,display_name,class,status,joined_on,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at";
 
 export async function getFamilyUnitContext(memberId: string): Promise<FamilyUnitContext> {
   const supabase = createAdminClient();
+  const rates = await getBillingRates();
   const { data: membership } = await supabase
     .from("family_unit_members")
     .select("family_unit_id")
@@ -20,7 +22,7 @@ export async function getFamilyUnitContext(memberId: string): Promise<FamilyUnit
   if (!membership) {
     const { data, error } = await supabase.from("members").select(memberSelect).eq("id", memberId).single<FamilyBillingMember>();
     if (error || !data) throw error ?? new Error("Kenshi no encontrado.");
-    return { unitId: null, unitName: null, billing: calculateFamilyBilling([data]) };
+    return { unitId: null, unitName: null, billing: calculateFamilyBilling([data], rates) };
   }
 
   const [{ data: unit }, { data: rows, error: memberError }] = await Promise.all([
@@ -31,7 +33,7 @@ export async function getFamilyUnitContext(memberId: string): Promise<FamilyUnit
   const ids = (rows ?? []).map((row) => row.member_id);
   const { data: members, error } = await supabase.from("members").select(memberSelect).in("id", ids).returns<FamilyBillingMember[]>();
   if (error) throw error;
-  return { unitId: membership.family_unit_id, unitName: unit?.name ?? null, billing: calculateFamilyBilling(members ?? []) };
+  return { unitId: membership.family_unit_id, unitName: unit?.name ?? null, billing: calculateFamilyBilling(members ?? [], rates) };
 }
 
 export async function getEligibleFamilyMembers(unitId: string | null) {
@@ -47,6 +49,7 @@ export async function getEligibleFamilyMembers(unitId: string | null) {
 
 export async function getPendingFamilyBillingContexts() {
   const supabase = createAdminClient();
+  const rates = await getBillingRates();
   const [{ data: members, error }, { data: memberships }, { data: units }, { data: delivered }] = await Promise.all([
     supabase.from("members").select(memberSelect).eq("status", "active").returns<FamilyBillingMember[]>(),
     supabase.from("family_unit_members").select("member_id,family_unit_id").returns<Array<{ member_id: string; family_unit_id: string }>>(),
@@ -69,7 +72,7 @@ export async function getPendingFamilyBillingContexts() {
   }
   const deliveredKeys = new Set((delivered ?? []).map((task) => `${task.subject_member_id}:${task.composition_signature}`));
   return [...groups.entries()].flatMap(([key, familyMembers]) => {
-    const billing = calculateFamilyBilling(familyMembers);
+    const billing = calculateFamilyBilling(familyMembers, rates);
     const legacyStandaloneDelivered = key.startsWith("member:") && Boolean(billing.newestMember?.free_trial_notice_read_at);
     if (!billing.newestMember || legacyStandaloneDelivered || deliveredKeys.has(`${billing.newestMember.id}:${billing.compositionSignature}`)) return [];
     return [{ unitId: key.startsWith("member:") ? null : key, unitName: unitNames.get(key) ?? null, billing }];

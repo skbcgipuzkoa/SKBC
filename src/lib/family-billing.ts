@@ -10,6 +10,7 @@ export type FamilyBillingMember = {
   joined_on: string | null;
   free_trial_started_on: string | null;
   free_trial_ends_on: string | null;
+  free_trial_enabled?: boolean | null;
   free_trial_notice_read_at?: string | null;
 };
 
@@ -31,8 +32,18 @@ export type FamilyBillingSummary = {
   compositionSignature: string;
 };
 
-export function baseFeeCents(memberClass: FamilyBillingMember["class"]) {
-  return memberClass === "kids" ? 2500 : 3000;
+export type FamilyBillingRates = {
+  kidsFeeCents: number;
+  adultsFeeCents: number;
+};
+
+export const DEFAULT_FAMILY_BILLING_RATES: FamilyBillingRates = {
+  kidsFeeCents: 2500,
+  adultsFeeCents: 3000
+};
+
+export function baseFeeCents(memberClass: FamilyBillingMember["class"], rates = DEFAULT_FAMILY_BILLING_RATES) {
+  return memberClass === "kids" ? rates.kidsFeeCents : rates.adultsFeeCents;
 }
 
 export function familyDiscountCents(memberCount: number) {
@@ -41,18 +52,19 @@ export function familyDiscountCents(memberCount: number) {
   return 500 + (memberCount - 2) * 1500;
 }
 
-export function calculateFamilyBilling(input: FamilyBillingMember[]): FamilyBillingSummary {
+export function calculateFamilyBilling(input: FamilyBillingMember[], rates = DEFAULT_FAMILY_BILLING_RATES): FamilyBillingSummary {
   const active = input.filter((member) => member.status === "active");
   const ordered = [...active].sort((a, b) => newestDate(b).localeCompare(newestDate(a)) || a.id.localeCompare(b.id));
   const newestId = ordered[0]?.id ?? null;
   const members = ordered.map((member) => {
-    const trialStartedOn = member.free_trial_started_on ?? member.joined_on;
+    const trialEnabled = member.free_trial_enabled ?? Boolean(member.free_trial_started_on);
+    const trialStartedOn = trialEnabled ? member.free_trial_started_on ?? member.joined_on : null;
     return {
       ...member,
-      baseFeeCents: baseFeeCents(member.class),
+      baseFeeCents: baseFeeCents(member.class, rates),
       trialStartedOn,
-      trialEndsOn: freeTrialEndDate(trialStartedOn),
-      firstBillingOn: resolveFreeTrialBillingDate(trialStartedOn, member.free_trial_ends_on),
+      trialEndsOn: trialEnabled ? freeTrialEndDate(trialStartedOn) : null,
+      firstBillingOn: trialEnabled ? resolveFreeTrialBillingDate(trialStartedOn, member.free_trial_ends_on) : null,
       isNewest: member.id === newestId
     };
   });

@@ -18,8 +18,9 @@ import {
 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { logoutAction } from "@/app/actions";
+import { logoutAction, updateBillingSettingsAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
+import { getBillingSettings } from "@/lib/billing-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const systemItems = [
@@ -79,12 +80,14 @@ const systemItems = [
   }
 ];
 
-export default async function SistemaPage() {
+export default async function SistemaPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
   }
 
   const supabase = createAdminClient();
+  const params = await searchParams;
+  const billingSettings = await getBillingSettings();
   const [
     activeMembers,
     openAdultClasses,
@@ -167,6 +170,33 @@ export default async function SistemaPage() {
             <div className="metric small">{latestBackupDate ? formatShortDate(latestBackupDate) : "Pendiente"}</div>
             <p className="muted">Ultima copia correcta del sistema nuevo.</p>
           </article>
+        </section>
+
+        <section className="card">
+          <div className="section-heading-row">
+            <div>
+              <p className="eyebrow">Configuracion economica</p>
+              <h2>Cuotas mensuales</h2>
+              <p className="muted">Se aplican a las nuevas hojas de cobro. Los descuentos familiares mantienen su importe actual.</p>
+            </div>
+          </div>
+          {params.saved === "billing-settings" ? <p className="success-banner">Cuotas mensuales actualizadas.</p> : null}
+          {params.error === "billing-settings" ? <p className="error-banner">Introduce dos importes validos mayores que cero.</p> : null}
+          <form action={updateBillingSettingsAction} className="form-grid">
+            <label>
+              Cuota infantil
+              <input name="kidsFee" type="number" min="0.01" step="0.01" defaultValue={euroInput(billingSettings.kidsFeeCents)} required />
+            </label>
+            <label>
+              Cuota adultos
+              <input name="adultsFee" type="number" min="0.01" step="0.01" defaultValue={euroInput(billingSettings.adultsFeeCents)} required />
+            </label>
+            <label className="checkbox-line wide">
+              <input name="freeTrialPromotionEnabled" type="checkbox" defaultChecked={billingSettings.freeTrialPromotionEnabled} />
+              Mes gratuito de prueba activo para nuevas altas
+            </label>
+            <button className="primary-button" type="submit">Guardar cuotas</button>
+          </form>
         </section>
 
         <h2 className="section-title">Acciones rapidas</h2>
@@ -259,4 +289,8 @@ function formatShortDate(value: string) {
     month: "2-digit",
     year: "numeric"
   }).format(new Date(value));
+}
+
+function euroInput(cents: number) {
+  return (cents / 100).toFixed(2);
 }

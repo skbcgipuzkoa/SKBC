@@ -1366,6 +1366,28 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
   redirect(`/entregas?campaign=${campaignId}&saved=delivery${returnQuery}`);
 }
 
+export async function updateBillingSettingsAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const kidsFeeCents = parseEuroCents(String(formData.get("kidsFee") ?? ""));
+  const adultsFeeCents = parseEuroCents(String(formData.get("adultsFee") ?? ""));
+  const freeTrialPromotionEnabled = formData.get("freeTrialPromotionEnabled") === "on";
+  if (!kidsFeeCents || !adultsFeeCents) redirect("/sistema?error=billing-settings");
+
+  const { error } = await createAdminClient().from("billing_settings").upsert({
+    id: "monthly_fees",
+    kids_fee_cents: kidsFeeCents,
+    adults_fee_cents: adultsFeeCents,
+    free_trial_promotion_enabled: freeTrialPromotionEnabled,
+    updated_at: new Date().toISOString()
+  });
+  if (error) redirect("/sistema?error=billing-settings");
+
+  revalidatePath("/sistema");
+  revalidatePath("/avisos");
+  revalidatePath("/kenshis");
+  redirect("/sistema?saved=billing-settings");
+}
+
 export async function createFamilyUnitAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
   const memberId = String(formData.get("memberId") ?? "").trim();

@@ -23,14 +23,19 @@ export async function renderFamilyBillingPdf(context: FamilyUnitContext) {
   y = drawParagraph(page, privacyText, PAGE.margin, y, PAGE.width - PAGE.margin * 2, 10, regular, 14);
   y -= 12;
   const newest = context.billing.newestMember;
-  page.drawText("INCORPORACION Y NUEVO COBRO FAMILIAR", { x: PAGE.margin, y, size: 11, font: bold, color: blue });
+  const hasFreeTrial = Boolean(newest?.trialStartedOn);
+  page.drawText(hasFreeTrial ? "INCORPORACION Y NUEVO COBRO FAMILIAR" : "INCORPORACION Y CUOTA FAMILIAR", { x: PAGE.margin, y, size: 11, font: bold, color: blue });
   y -= 20;
   y = drawLabelValue(page, "Nueva incorporacion", newest?.display_name ?? "Dato pendiente", y, fonts);
-  y = drawLabelValue(page, "Inicio del mes gratuito", humanDate(newest?.trialStartedOn), y, fonts);
-  y = drawLabelValue(page, "Fin del mes gratuito", humanDate(newest?.trialEndsOn), y, fonts);
-  y = drawLabelValue(page, "Primer cobro unificado", humanDate(context.billing.billingOn), y, fonts);
-  y -= 8;
-  y = drawParagraph(page, "Hasta la fecha indicada para el primer cobro unificado se mantendra la situacion de cobro anterior.", PAGE.margin, y, PAGE.width - PAGE.margin * 2, 10, bold, 14);
+  if (hasFreeTrial) {
+    y = drawLabelValue(page, "Inicio del mes gratuito", humanDate(newest?.trialStartedOn), y, fonts);
+    y = drawLabelValue(page, "Fin del mes gratuito", humanDate(newest?.trialEndsOn), y, fonts);
+    y = drawLabelValue(page, "Primer cobro unificado", humanDate(context.billing.billingOn), y, fonts);
+    y -= 8;
+    y = drawParagraph(page, "Hasta la fecha indicada para el primer cobro unificado se mantendra la situacion de cobro anterior.", PAGE.margin, y, PAGE.width - PAGE.margin * 2, 10, bold, 14);
+  } else {
+    y = drawLabelValue(page, "Promocion de mes gratuito", "No aplicada", y, fonts);
+  }
   y -= 18;
 
   ({ page, y } = ensureSpace(pdf, page, y, 120, fonts, "MIEMBROS INCLUIDOS EN LA CUOTA"));
@@ -41,7 +46,10 @@ export async function renderFamilyBillingPdf(context: FamilyUnitContext) {
     page.drawRectangle({ x: PAGE.margin, y: y - 43, width: PAGE.width - PAGE.margin * 2, height: 50, borderColor: line, borderWidth: 1, color: member.isNewest ? rgb(0.94, 0.97, 1) : rgb(1, 1, 1) });
     page.drawText(member.display_name, { x: PAGE.margin + 10, y: y - 9, size: 10, font: bold, color: navy });
     page.drawText(`${member.class === "kids" ? "Ninos" : "Adultos"} | Alta: ${humanDate(member.joined_on)} | Cuota base: ${money(member.baseFeeCents)}`, { x: PAGE.margin + 10, y: y - 25, size: 8.5, font: regular, color: muted });
-    page.drawText(`Mes gratuito: ${humanDate(member.trialStartedOn)} a ${humanDate(member.trialEndsOn)}${member.isNewest ? " | NUEVA INCORPORACION" : ""}`, { x: PAGE.margin + 10, y: y - 38, size: 8.5, font: regular, color: muted });
+    const memberDetail = member.trialStartedOn
+      ? `Mes gratuito: ${humanDate(member.trialStartedOn)} a ${humanDate(member.trialEndsOn)}`
+      : "Sin promocion de mes gratuito";
+    page.drawText(`${memberDetail}${member.isNewest ? " | NUEVA INCORPORACION" : ""}`, { x: PAGE.margin + 10, y: y - 38, size: 8.5, font: regular, color: muted });
     y -= 58;
   }
 
