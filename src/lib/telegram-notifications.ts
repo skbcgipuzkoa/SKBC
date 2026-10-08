@@ -1,4 +1,4 @@
-import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
+import { freeTrialEndDate, resolveFreeTrialBillingDate } from "@/lib/free-trial";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type NotificationType = "daily_ranking" | "monthly_stats" | "semester_stats" | "yearly_stats" | "test";
@@ -686,24 +686,26 @@ function freeTrialAlerts(members: Member[]) {
       return {
         member,
         joinedOn,
+        noticeOn: freeTrialEndDate(joinedOn),
         billingOn: resolveFreeTrialBillingDate(joinedOn, member.free_trial_ends_on)
       };
     })
-    .filter(({ member, billingOn }) =>
+    .filter(({ member, noticeOn }) =>
       member.status === "active" &&
       member.free_trial_enabled &&
       !member.free_trial_notice_read_at &&
-      Boolean(billingOn) &&
-      billingOn! <= limit
+      Boolean(noticeOn) &&
+      noticeOn! <= limit
     )
-    .sort((a, b) => (a.billingOn ?? "9999-12-31").localeCompare(b.billingOn ?? "9999-12-31") || a.member.display_name.localeCompare(b.member.display_name))
-    .map(({ member, joinedOn, billingOn }) => ({
+    .sort((a, b) => (a.noticeOn ?? "9999-12-31").localeCompare(b.noticeOn ?? "9999-12-31") || a.member.display_name.localeCompare(b.member.display_name))
+    .map(({ member, joinedOn, noticeOn, billingOn }) => ({
       name: member.display_name,
       grade: member.grade ?? "-",
       className: member.class === "kids" ? "ninos" : "adultos",
       joinedOn,
+      noticeOn,
       billingOn,
-      endsOn: billingOn
+      endsOn: noticeOn
     }));
 }
 
@@ -739,8 +741,8 @@ function formatFreeTrialAlerts(rows: ReturnType<typeof freeTrialAlerts>) {
   return [
     "<b>Mes gratis pendiente de cobro</b>",
     ...rows.slice(0, 12).map((row) => {
-      const state = row.billingOn && row.billingOn < today ? "cobro pendiente desde" : row.billingOn === today ? "empieza a pagar hoy" : "primer cobro";
-      return `- <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${state}${row.billingOn ? ` ${formatHumanDate(row.billingOn)}` : ""}${row.joinedOn ? ` - ingreso ${formatHumanDate(row.joinedOn)}` : ""}`;
+      const state = row.noticeOn && row.noticeOn < today ? "mes gratis finalizado" : row.noticeOn === today ? "mes gratis finaliza hoy" : "mes gratis finaliza";
+      return `- <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${state}${row.noticeOn ? ` ${formatHumanDate(row.noticeOn)}` : ""}${row.billingOn ? ` - primer cobro ${formatHumanDate(row.billingOn)}` : ""}${row.joinedOn ? ` - ingreso ${formatHumanDate(row.joinedOn)}` : ""}`;
     }),
     rows.length > 12 ? `Y ${rows.length - 12} mas.` : ""
   ].filter(Boolean).join("\n");

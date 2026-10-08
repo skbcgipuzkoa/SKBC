@@ -4,7 +4,7 @@ import { SubmitButton } from "@/app/components/SubmitButton";
 import { SeasonReviewSelector } from "@/app/avisos/SeasonReviewSelector";
 import { createInternalNoticeAction, logoutAction, markFreeTrialNoticeReadAction, updateInternalNoticeStatusAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
-import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
+import { freeTrialEndDate, resolveFreeTrialBillingDate } from "@/lib/free-trial";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
@@ -34,6 +34,7 @@ type FreeTrialMember = {
   free_trial_started_on: string | null;
   free_trial_ends_on: string | null;
   free_trial_notice_read_at: string | null;
+  free_trial_notice_on?: string | null;
   free_trial_billing_on?: string | null;
 };
 
@@ -164,14 +165,15 @@ export default async function AvisosPage({
   const trialNotices = (trialResult.data ?? [])
     .map((member) => ({
       ...member,
+      free_trial_notice_on: freeTrialEndDate(member.free_trial_started_on ?? member.joined_on),
       free_trial_billing_on: resolveFreeTrialBillingDate(member.free_trial_started_on ?? member.joined_on, member.free_trial_ends_on)
     }))
     .filter((member) =>
-      Boolean(member.free_trial_billing_on) &&
-      member.free_trial_billing_on! <= trialEnd &&
+      Boolean(member.free_trial_notice_on) &&
+      member.free_trial_notice_on! <= trialEnd &&
       (!member.free_trial_notice_read_at || member.free_trial_notice_read_at.slice(0, 10) >= readArchiveLimit)
     )
-    .sort((a, b) => (a.free_trial_billing_on ?? "9999-12-31").localeCompare(b.free_trial_billing_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name, "es"));
+    .sort((a, b) => (a.free_trial_notice_on ?? "9999-12-31").localeCompare(b.free_trial_notice_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name, "es"));
   const unreadTrialNotices = trialNotices.filter((member) => !member.free_trial_notice_read_at);
   const transitionCandidates = buildTransitionCandidates(examMembers);
   const upcomingExamNotices = buildUpcomingExamNotices(examMembers);
@@ -249,7 +251,7 @@ export default async function AvisosPage({
           {trialNotices.length ? (
             <div className="notice-admin-list compact-list">
               {trialNotices.map((member) => {
-                const state = trialState(member.free_trial_billing_on ?? null);
+                const state = trialState(member.free_trial_notice_on ?? null);
                 const trialStartOn = member.free_trial_started_on ?? member.joined_on;
                 return (
                   <article className={`notice-admin-card ${state.className}`} key={member.id}>
@@ -263,6 +265,7 @@ export default async function AvisosPage({
                     <p>
                       Ingreso: {member.joined_on ? formatShortDate(member.joined_on) : "-"} ·
                       Inicio mes gratis: {trialStartOn ? formatShortDate(trialStartOn) : "-"} ·
+                      Fin mes gratis: {member.free_trial_notice_on ? formatShortDate(member.free_trial_notice_on) : "-"} ·
                       Primer cobro posible: {member.free_trial_billing_on ? formatShortDate(member.free_trial_billing_on) : "-"}
                     </p>
                     <div className="notice-action-row">
@@ -616,9 +619,9 @@ function addDays(value: string, days: number) {
 function trialState(endOn: string | null) {
   const now = today();
   if (!endOn) return { label: "Sin fecha", badge: "state-pendiente", className: "notice-priority-normal" };
-  if (endOn < now) return { label: "Cobro pendiente", badge: "state-pendiente", className: "notice-priority-urgent" };
-  if (endOn === now) return { label: "Cobro hoy", badge: "state-en-progreso", className: "notice-priority-high" };
-  return { label: "Proximo cobro", badge: "state-completada", className: "notice-priority-normal" };
+  if (endOn < now) return { label: "Mes gratis finalizado", badge: "state-pendiente", className: "notice-priority-urgent" };
+  if (endOn === now) return { label: "Finaliza hoy", badge: "state-en-progreso", className: "notice-priority-high" };
+  return { label: "Finaliza pronto", badge: "state-completada", className: "notice-priority-normal" };
 }
 
 function areaLabel(value: string) {

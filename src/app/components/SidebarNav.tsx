@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
+import { freeTrialEndDate } from "@/lib/free-trial";
 import { getWebsiteAdminAlertCounts, totalWebsiteAdminAlerts } from "@/lib/website-admin-alerts";
 
 type SidebarNavProps = {
@@ -127,8 +127,8 @@ async function getUnreadTrialNoticeCount() {
       .is("free_trial_notice_read_at", null);
     if (error) return 0;
     return (data ?? []).filter((member) => {
-      const billingOn = resolveFreeTrialBillingDate(member.free_trial_started_on ?? member.joined_on, member.free_trial_ends_on);
-      return Boolean(billingOn) && billingOn! <= to;
+      const noticeOn = freeTrialEndDate(member.free_trial_started_on ?? member.joined_on);
+      return Boolean(noticeOn) && noticeOn! <= to;
     }).length;
   } catch {
     return 0;
