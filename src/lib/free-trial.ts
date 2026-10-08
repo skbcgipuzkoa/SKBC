@@ -32,9 +32,9 @@ export function firstBillingDateAfterFreeMonth(startedOn: string | null | undefi
   const trialEnd = parseIsoDate(freeTrialEndDate(startedOn));
   if (!trialEnd) return null;
 
-  // The first charge is made in arrears after one complete calendar month.
-  // If the trial ends on day 1, that month is complete; otherwise the next one is.
-  const monthsUntilBilling = trialEnd.getUTCDate() === 1 ? 1 : 2;
+  // Charges are issued on the 15th in arrears. A trial ending by the cutoff
+  // can be included in the following month's run; later endings skip a run.
+  const monthsUntilBilling = trialEnd.getUTCDate() <= 18 ? 1 : 2;
   return isoDate(new Date(Date.UTC(
     trialEnd.getUTCFullYear(),
     trialEnd.getUTCMonth() + monthsUntilBilling,
