@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, CheckCircle2, LogOut, Pin } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, LogOut, Pin, Printer } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
 import { SeasonReviewSelector } from "@/app/avisos/SeasonReviewSelector";
@@ -224,9 +224,17 @@ export default async function AvisosPage({
               <h2>Hojas de cobro por entregar</h2>
               <p className="muted">Cuando termine el mes gratuito, entrega la hoja de cobro al kenshi y confírmalo aquí. También entra en el parte diario de Telegram.</p>
             </div>
-            <span className={trialNotices.length ? "state-badge state-pendiente" : "state-badge state-completada"}>
-              {trialNotices.length} pendientes
-            </span>
+            <div className="notice-action-row">
+              {trialNotices.length ? (
+                <a className="secondary-button" href="/avisos/hojas-cobro" target="_blank" rel="noreferrer">
+                  <Printer aria-hidden="true" size={17} />
+                  Imprimir todas
+                </a>
+              ) : null}
+              <span className={trialNotices.length ? "state-badge state-pendiente" : "state-badge state-completada"}>
+                {trialNotices.length} pendientes
+              </span>
+            </div>
           </div>
           {trialNotices.length ? (
             <div className="notice-admin-list compact-list">
