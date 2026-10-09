@@ -16,7 +16,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
 
   const families = await getTreasuryFamilies();
   const expectedCents = families.reduce((sum, family) => sum + family.billing.totalCents, 0);
-  const billableMembers = families.reduce((sum, family) => sum + family.billing.members.length, 0);
+  const includedMembers = families.reduce((sum, family) => sum + family.billing.members.length, 0);
   const exemptMembers = families.reduce((sum, family) => sum + family.members.filter((member) => member.billing_enabled === false).length, 0);
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date();
@@ -40,7 +40,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
 
       <section className="grid stats compact treasury-stats">
         <article className="card"><Banknote size={20} /><h2>Cuota mensual prevista</h2><div className="metric">{money(expectedCents)}</div></article>
-        <article className="card"><Users size={20} /><h2>Con cuota activa</h2><div className="metric">{billableMembers}</div></article>
+        <article className="card"><Users size={20} /><h2>Incluidos en cuota</h2><div className="metric">{includedMembers}</div></article>
         <article className="card"><CheckCircle2 size={20} /><h2>Exentos</h2><div className="metric">{exemptMembers}</div></article>
         <article className={alerts.length ? "card attention-card" : "card"}><Bell size={20} /><h2>Avisos</h2><div className="metric">{alerts.length}</div></article>
       </section>
@@ -51,20 +51,20 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section className="card treasury-directory">
-        <div className="section-heading-row"><div><p className="eyebrow">Situación actual</p><h2>Familias y cuotas</h2><p className="muted">La cuota se activa o desactiva por persona. Los descuentos se calculan solo con quienes tienen cuota activa.</p></div><span className="state-badge state-completada">{families.length} unidades</span></div>
+        <div className="section-heading-row"><div><p className="eyebrow">Situación actual</p><h2>Familias y cuotas</h2><p className="muted">Aquí se indica quién se incluirá en la cuota. En las nuevas altas, el cobro no queda activo hasta completar la entrega de la hoja, recibir los datos bancarios y pulsar Activar cobro.</p></div><span className="state-badge state-completada">{families.length} unidades</span></div>
         <div className="treasury-family-list">
           {families.map((family) => {
             const subject = family.billing.newestMember;
             const hasOnboardingWorkflow = Boolean(subject?.trialEndsOn);
             const status = hasOnboardingWorkflow ? family.task?.status ?? "pending" : family.billing.members.length ? "active" : "exempt";
             return <details id={`family-${family.key}`} className={`treasury-family treasury-status-${status}`} key={family.key} open={status === "delivered"}>
-              <summary><span><strong>{familyLabel(family)}</strong><small>{family.members.length} miembros · {family.billing.members.length} con cuota</small></span><b>{money(family.billing.totalCents)}</b><span className={`state-badge treasury-badge-${status}`}>{statusLabel(status)}</span></summary>
+              <summary><span><strong>{familyLabel(family)}</strong><small>{family.members.length} miembros · {family.billing.members.length} incluidos al cobrar</small></span><b>{money(family.billing.totalCents)}</b><span className={`state-badge treasury-badge-${status}`}>{statusLabel(status)}</span></summary>
               <div className="treasury-family-body">
                 <div className="treasury-members">
                   {family.members.map((member) => <form action={updateMemberBillingAction} key={member.id} className={member.billing_enabled === false ? "treasury-member exempt" : "treasury-member"}>
                     <input type="hidden" name="memberId" value={member.id} />
                     <span><strong>{member.display_name}</strong><small>{member.class === "kids" ? "Niños" : "Adultos"}{member.free_trial_enabled ? ` · Mes gratis hasta ${date(member.free_trial_ends_on)}` : ""}</small></span>
-                    <label>Cuota<select name="billingEnabled" defaultValue={member.billing_enabled === false ? "false" : "true"}><option value="true">Activa</option><option value="false">Exento</option></select></label>
+                    <label>Al iniciar el cobro<select name="billingEnabled" defaultValue={member.billing_enabled === false ? "false" : "true"}><option value="true">Incluir en la cuota</option><option value="false">Exento de cuota</option></select></label>
                     <label>Nota<input name="billingNote" defaultValue={member.billing_note ?? ""} placeholder="Motivo opcional" /></label>
                     <SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton>
                   </form>)}
