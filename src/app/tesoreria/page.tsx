@@ -44,6 +44,8 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
         {actor === "tesorero" ? <form action={logoutTreasuryAction}><button className="icon-button" type="submit" title="Cerrar acceso" aria-label="Cerrar acceso"><LogOut size={18} /></button></form> : null}
       </div>
 
+      {actor === "tesorero" && alerts.length ? <a className="global-notice-alert blink-alert treasury-priority-alert" href="#avisos-tesoreria" aria-label={`${alerts.length} avisos de tesorería pendientes`}><span>Avisos de tesorería pendientes</span><strong>{alerts.length}</strong></a> : null}
+
       {params.saved ? <p className="save-ok">Información económica actualizada correctamente.</p> : null}
       {params.error && params.error !== "access" ? <p className="form-error">No se ha podido guardar el cambio.</p> : null}
 
@@ -67,7 +69,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
         <article className={alerts.length ? "card attention-card" : "card"}><Bell size={20} /><h2>Avisos</h2><div className="metric">{alerts.length}</div></article>
       </section>
 
-      <section className={alerts.length ? "card attention-card" : "card"}>
+      <section id="avisos-tesoreria" className={alerts.length ? "card attention-card" : "card"}>
         <div className="section-heading-row"><div><p className="eyebrow">Seguimiento</p><h2>Avisos de tesorería</h2><p className="muted">Meses gratuitos próximos a terminar y hojas entregadas pendientes de devolución.</p></div>{alerts.some((family) => family.billing.newestMember?.trialEndsOn && family.billing.newestMember!.trialEndsOn! <= today) ? <a className="secondary-button" href="/avisos/hojas-cobro" target="_blank"><Printer size={17} /> Imprimir hojas vencidas</a> : null}</div>
         {alerts.length ? <div className="treasury-alert-list">{alerts.map((family) => <a key={family.key} href={`#family-${family.key}`}><strong>{familyLabel(family)}</strong><span>{family.task?.status === "delivered" ? "Hoja entregada: faltan los datos bancarios" : `Fin del mes gratuito: ${date(family.billing.newestMember?.trialEndsOn)}`}</span></a>)}</div> : <p className="muted">No hay gestiones urgentes.</p>}
       </section>

@@ -11710,6 +11710,7 @@ tbody tr:hover {
 @media (max-width: 760px) { .treasury-correction-form { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .treasury-link-row { grid-template-columns: 1fr; } .treasury-link-row button { width: 100%; } }
 .treasury-stats .metric { font-size: 30px; }
+.treasury-priority-alert { margin-bottom: 18px; }
 .treasury-alert-list { display: grid; gap: 8px; margin-top: 16px; }
 .treasury-alert-list a { align-items: center; background: #fff8e6; border: 1px solid #edcf7e; border-radius: 7px; color: var(--ink); display: flex; gap: 14px; justify-content: space-between; padding: 12px 14px; text-decoration: none; }
 .treasury-alert-list a:hover { border-color: #ba7d00; }
