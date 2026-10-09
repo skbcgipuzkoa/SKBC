@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasInternalAccess } from "@/lib/auth";
 import { renderFamilyBillingPdf } from "@/lib/family-billing-pdf";
-import { getFamilyUnitContext, upsertFamilyBillingTask } from "@/lib/family-units";
+import { getFamilyUnitContext } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTreasuryActor } from "@/lib/treasury-auth";
 
@@ -13,7 +13,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!member) return new NextResponse("Kenshi no encontrado", { status: 404 });
   const context = await getFamilyUnitContext(member.id);
   const pdf = await renderFamilyBillingPdf(context);
-  await upsertFamilyBillingTask(context, "generated", actor ?? "alvaro");
   const download = request.nextUrl.searchParams.get("download") === "1";
   return new NextResponse(new Uint8Array(pdf), {
     headers: {

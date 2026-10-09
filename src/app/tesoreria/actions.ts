@@ -23,6 +23,24 @@ export async function updateTreasuryWorkflowAction(formData: FormData) {
   redirect("/tesoreria?saved=workflow");
 }
 
+export async function correctTreasuryWorkflowAction(formData: FormData) {
+  const actor = await getTreasuryActor();
+  if (actor !== "alvaro") redirect("/tesoreria?error=access");
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const status = String(formData.get("status") ?? "") as FamilyBillingStatus;
+  const detail = String(formData.get("note") ?? "").trim();
+  const note = detail ? `Corrección manual: ${detail}` : "Corrección manual desde el sistema";
+  if (!memberId || !["pending", "generated", "delivered", "received", "active"].includes(status)) redirect("/tesoreria?error=workflow");
+  try {
+    await upsertFamilyBillingTask(await getFamilyUnitContext(memberId), status, actor, note);
+  } catch (error) {
+    console.error("Error correcting treasury workflow", error);
+    redirect("/tesoreria?error=workflow");
+  }
+  revalidateTreasury();
+  redirect("/tesoreria?saved=workflow-correction");
+}
+
 export async function updateMemberBillingAction(formData: FormData) {
   const actor = await getTreasuryActor();
   if (!actor) redirect("/tesoreria?error=access");

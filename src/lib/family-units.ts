@@ -88,12 +88,14 @@ export async function upsertFamilyBillingTask(context: FamilyUnitContext, status
   const supabase = createAdminClient();
   const { data: existing } = await supabase
     .from("family_billing_sheet_tasks")
-    .select("id,status")
+    .select("id,status,generated_at,delivered_at,received_at,activated_at")
     .eq("subject_member_id", subject.id)
     .eq("composition_signature", context.billing.compositionSignature)
-    .maybeSingle<{ id: string; status: FamilyBillingStatus }>();
-  if (existing && ["received", "active"].includes(existing.status) && status === "generated") return;
+    .maybeSingle<{ id: string; status: FamilyBillingStatus; generated_at: string | null; delivered_at: string | null; received_at: string | null; activated_at: string | null }>();
   const now = new Date().toISOString();
+  const statusOrder: FamilyBillingStatus[] = ["pending", "generated", "delivered", "received", "active"];
+  const statusIndex = statusOrder.indexOf(status);
+  const timestamp = (stage: FamilyBillingStatus, previous: string | null | undefined) => statusIndex >= statusOrder.indexOf(stage) ? previous ?? now : null;
   const payload = {
     family_unit_id: context.unitId,
     subject_member_id: subject.id,
@@ -101,10 +103,10 @@ export async function upsertFamilyBillingTask(context: FamilyUnitContext, status
     status,
     billing_on: context.billing.billingOn,
     calculation_snapshot: context.billing,
-    generated_at: now,
-    delivered_at: status === "delivered" ? now : undefined,
-    received_at: status === "received" ? now : undefined,
-    activated_at: status === "active" ? now : undefined,
+    generated_at: timestamp("generated", existing?.generated_at),
+    delivered_at: timestamp("delivered", existing?.delivered_at),
+    received_at: timestamp("received", existing?.received_at),
+    activated_at: timestamp("active", existing?.activated_at),
     last_actor: actor,
     note,
     updated_at: now

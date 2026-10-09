@@ -1,7 +1,7 @@
 import { Banknote, Bell, CheckCircle2, FileText, LogOut, Printer, Users } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
-import { logoutTreasuryAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
+import { correctTreasuryWorkflowAction, logoutTreasuryAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
 import { familyLabel, getTreasuryFamilies } from "@/lib/treasury";
 import { getTreasuryActor } from "@/lib/treasury-auth";
 
@@ -77,6 +77,12 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
                     {status === "delivered" ? <WorkflowButton memberId={subject.id} status="received" label="Datos bancarios recibidos" /> : null}
                     {status === "received" ? <WorkflowButton memberId={subject.id} status="active" label="Activar cobro" /> : null}
                   </div>
+                  {actor === "alvaro" ? <form action={correctTreasuryWorkflowAction} className="treasury-correction-form">
+                    <input type="hidden" name="memberId" value={subject.id} />
+                    <label>Corregir estado<select name="status" defaultValue={status}><option value="pending">Pendiente de preparar</option><option value="generated">Hoja preparada</option><option value="delivered">Hoja entregada</option><option value="received">Datos bancarios recibidos</option><option value="active">Cobro activo</option></select></label>
+                    <label>Motivo<input name="note" placeholder="Motivo de la corrección" /></label>
+                    <SubmitButton pendingLabel="Corrigiendo...">Aplicar corrección</SubmitButton>
+                  </form> : null}
                   {family.task?.last_actor ? <p className="treasury-last-action">Último cambio por {actorLabel(family.task.last_actor)} · {dateTime(family.task.updated_at)}{family.task.note ? ` · ${family.task.note}` : ""}</p> : null}
                 </div> : family.billing.members.length ? <p className="treasury-current-note">Cuota ordinaria actual. No requiere seguimiento de hoja de alta.</p> : <p className="muted">Esta unidad no tiene ninguna cuota activa.</p>}
                 {family.events.length ? <details className="treasury-history"><summary>Ver historial</summary><ul>{family.events.map((event) => <li key={event.id}><span>{eventLabel(event.action)}{event.note ? ` · ${event.note}` : ""}</span><small>{actorLabel(event.actor)} · {dateTime(event.created_at)}</small></li>)}</ul></details> : null}
@@ -99,5 +105,5 @@ function money(cents: number) { return new Intl.NumberFormat("es-ES", { style: "
 function date(value?: string | null) { return value ? new Intl.DateTimeFormat("es-ES").format(new Date(`${value}T12:00:00`)) : "-"; }
 function dateTime(value: string) { return new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)); }
 function actorLabel(actor: string) { return actor === "tesorero" ? "Tesorero" : "Álvaro"; }
-function statusLabel(status: string) { return ({ pending: "Pendiente", generated: "Hoja generada", delivered: "Esperando devolución", received: "Datos recibidos", active: "Cuota activa", exempt: "Sin cuota" } as Record<string, string>)[status] ?? status; }
-function eventLabel(action: string) { return ({ generated: "Hoja generada", delivered: "Hoja entregada", received: "Datos bancarios recibidos", active: "Cobro activado", billing_enabled: "Cuota activada", billing_disabled: "Cuota desactivada" } as Record<string, string>)[action] ?? action; }
+function statusLabel(status: string) { return ({ pending: "Pendiente de preparar", generated: "Hoja preparada", delivered: "Esperando devolución", received: "Datos recibidos", active: "Cobro activo", exempt: "Sin cuota" } as Record<string, string>)[status] ?? status; }
+function eventLabel(action: string) { return ({ pending: "Devuelto a pendiente", generated: "Hoja preparada", delivered: "Hoja entregada", received: "Datos bancarios recibidos", active: "Cobro activado", billing_enabled: "Incluido en cuota", billing_disabled: "Exento de cuota" } as Record<string, string>)[action] ?? action; }

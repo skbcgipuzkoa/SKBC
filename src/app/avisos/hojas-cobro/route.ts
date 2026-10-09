@@ -2,7 +2,7 @@ import { PDFDocument } from "pdf-lib";
 import { NextRequest, NextResponse } from "next/server";
 import { hasInternalAccess } from "@/lib/auth";
 import { renderFamilyBillingPdf } from "@/lib/family-billing-pdf";
-import { getPendingFamilyBillingContexts, upsertFamilyBillingTask } from "@/lib/family-units";
+import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { getTreasuryActor } from "@/lib/treasury-auth";
 
 export async function GET(request: NextRequest) {
@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
     const source = await PDFDocument.load(await renderFamilyBillingPdf(context));
     const pages = await combined.copyPages(source, source.getPageIndices());
     pages.forEach((page) => combined.addPage(page));
-    await upsertFamilyBillingTask(context, "generated", actor ?? "alvaro");
   }
 
   const pdf = await combined.save();
