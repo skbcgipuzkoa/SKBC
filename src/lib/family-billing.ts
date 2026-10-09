@@ -12,6 +12,8 @@ export type FamilyBillingMember = {
   free_trial_ends_on: string | null;
   free_trial_enabled?: boolean | null;
   free_trial_notice_read_at?: string | null;
+  billing_enabled?: boolean | null;
+  billing_note?: string | null;
 };
 
 export type FamilyBillingLine = FamilyBillingMember & {
@@ -53,7 +55,7 @@ export function familyDiscountCents(memberCount: number) {
 }
 
 export function calculateFamilyBilling(input: FamilyBillingMember[], rates = DEFAULT_FAMILY_BILLING_RATES): FamilyBillingSummary {
-  const active = input.filter((member) => member.status === "active");
+  const active = input.filter((member) => member.status === "active" && member.billing_enabled !== false);
   const ordered = [...active].sort((a, b) => newestDate(b).localeCompare(newestDate(a)) || a.id.localeCompare(b.id));
   const newestId = ordered[0]?.id ?? null;
   const members = ordered.map((member) => {

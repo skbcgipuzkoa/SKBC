@@ -50,6 +50,16 @@ assert.equal(updatedRates.baseTotalCents, 5900);
 assert.equal(updatedRates.discountCents, 500);
 assert.equal(updatedRates.totalCents, 5400);
 
+const partiallyExemptFamily = calculateFamilyBilling([
+  member("adult", "adults", "2026-01-01"),
+  member("child-paying", "kids", "2026-02-01"),
+  { ...member("child-exempt", "kids", "2026-09-01"), billing_enabled: false }
+]);
+assert.equal(partiallyExemptFamily.members.length, 2);
+assert.equal(partiallyExemptFamily.baseTotalCents, 5500);
+assert.equal(partiallyExemptFamily.discountCents, 500);
+assert.equal(partiallyExemptFamily.totalCents, 5000);
+
 const noTrialMember = { ...member("no-trial", "adults", "2026-09-08"), free_trial_enabled: false };
 const noTrial = calculateFamilyBilling([noTrialMember]);
 assert.equal(noTrial.newestMember?.trialStartedOn, null);

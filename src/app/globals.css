@@ -11697,3 +11697,60 @@ tbody tr:hover {
   .material-form-grid,
   .material-variant-row { padding-left: 13px; padding-right: 13px; }
 }
+
+.treasury-shell { background: var(--page); min-height: 100vh; }
+.treasury-shell .treasury-main { margin: 0 auto; max-width: 1500px; }
+.treasury-locked { align-items: center; display: flex; flex-direction: column; gap: 14px; justify-content: center; min-height: 100vh; padding: 24px; text-align: center; }
+.treasury-locked img { height: 88px; width: 88px; }
+.treasury-locked h1, .treasury-locked p { margin: 0; }
+.treasury-stats .metric { font-size: 30px; }
+.treasury-alert-list { display: grid; gap: 8px; margin-top: 16px; }
+.treasury-alert-list a { align-items: center; background: #fff8e6; border: 1px solid #edcf7e; border-radius: 7px; color: var(--ink); display: flex; gap: 14px; justify-content: space-between; padding: 12px 14px; text-decoration: none; }
+.treasury-alert-list a:hover { border-color: #ba7d00; }
+.treasury-alert-list span { color: var(--muted); text-align: right; }
+.treasury-family-list { border-top: 1px solid var(--line); margin: 18px -24px -24px; }
+.treasury-family { border-bottom: 1px solid var(--line); }
+.treasury-family > summary { align-items: center; cursor: pointer; display: grid; gap: 14px; grid-template-columns: minmax(220px, 1fr) auto minmax(150px, auto); list-style: none; padding: 16px 24px; }
+.treasury-family > summary::-webkit-details-marker { display: none; }
+.treasury-family > summary span:first-child { min-width: 0; }
+.treasury-family > summary small { color: var(--muted); display: block; margin-top: 3px; }
+.treasury-family > summary > b { font-size: 18px; }
+.treasury-status-delivered > summary { background: #fff8df; }
+.treasury-status-received > summary { background: #eef8ff; }
+.treasury-status-active > summary { background: #eaf8f0; }
+.treasury-family-body { background: #f8fafc; border-top: 1px solid var(--line); padding: 16px 24px; }
+.treasury-members { display: grid; gap: 8px; }
+.treasury-member { align-items: end; background: white; border: 1px solid var(--line); border-left: 5px solid #218653; border-radius: 7px; display: grid; gap: 10px; grid-template-columns: minmax(210px, 1.2fr) 140px minmax(180px, 1fr) auto; padding: 11px 12px; }
+.treasury-member.exempt { background: #fff8e7; border-left-color: #bf7c00; }
+.treasury-member span small { color: var(--muted); display: block; margin-top: 3px; }
+.treasury-member label { color: var(--muted); display: grid; font-size: 12px; font-weight: 800; gap: 4px; }
+.treasury-member input, .treasury-member select { border: 1px solid var(--line); border-radius: 6px; min-height: 38px; padding: 7px 9px; width: 100%; }
+.treasury-member button { min-height: 38px; }
+.treasury-workflow { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 18px; justify-content: space-between; margin-top: 14px; padding-top: 14px; }
+.treasury-workflow h3, .treasury-workflow p { margin: 0; }
+.treasury-last-action { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+.treasury-history { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
+.treasury-history > summary { color: var(--brand-strong); cursor: pointer; font-weight: 800; }
+.treasury-history ul { list-style: none; margin: 10px 0 0; padding: 0; }
+.treasury-history li { align-items: baseline; border-top: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; padding: 8px 0; }
+.treasury-history small { color: var(--muted); }
+.treasury-badge-delivered { background: #fff0bd; color: #765000; }
+.treasury-badge-received { background: #dceefa; color: #105182; }
+.treasury-badge-active { background: #dff3e8; color: #17613c; }
+
+@media (max-width: 850px) {
+  .treasury-member { grid-template-columns: 1fr 130px; }
+  .treasury-member label:nth-of-type(2) { grid-column: 1 / -1; }
+  .treasury-workflow { align-items: stretch; flex-direction: column; }
+}
+
+@media (max-width: 600px) {
+  .treasury-family > summary { align-items: start; grid-template-columns: 1fr auto; padding: 14px; }
+  .treasury-family > summary .state-badge { grid-column: 1 / -1; justify-self: start; }
+  .treasury-family-body { padding: 12px 14px; }
+  .treasury-member { grid-template-columns: 1fr; }
+  .treasury-member label:nth-of-type(2) { grid-column: auto; }
+  .treasury-member button { width: 100%; }
+  .treasury-alert-list a, .treasury-history li { align-items: flex-start; flex-direction: column; }
+  .treasury-alert-list span { text-align: left; }
+}

@@ -34,6 +34,7 @@ const navItems: NavItem[] = [
   { label: "Proximos examenes", href: "/proximos-examenes" },
   { label: "Rankings", href: "/rankings" },
   { label: "Avisos", href: "/avisos" },
+  { label: "Tesoreria", href: "/tesoreria" },
   { label: "Alertas", href: "/alertas" },
   { label: "Resumen semanal", href: "/resumen-semanal" },
   { label: "Papelera", href: "/papelera" },

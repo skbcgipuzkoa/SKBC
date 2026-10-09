@@ -40,6 +40,7 @@ const BACKUP_TABLES = [
   "family_units",
   "family_unit_members",
   "family_billing_sheet_tasks",
+  "family_billing_events",
   "billing_settings",
   "telegram_notification_settings",
   "telegram_notification_logs",

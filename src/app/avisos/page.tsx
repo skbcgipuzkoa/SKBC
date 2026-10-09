@@ -2,7 +2,7 @@ import { AlertTriangle, Bell, CheckCircle2, LogOut, Pin, Printer } from "lucide-
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
 import { SeasonReviewSelector } from "@/app/avisos/SeasonReviewSelector";
-import { confirmFamilyBillingSheetDeliveredAction, createInternalNoticeAction, logoutAction, updateInternalNoticeStatusAction } from "@/app/actions";
+import { confirmFamilyBillingDataReceivedAction, confirmFamilyBillingSheetDeliveredAction, createInternalNoticeAction, logoutAction, updateInternalNoticeStatusAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -155,6 +155,11 @@ export default async function AvisosPage({
   const trialNotices = (await getPendingFamilyBillingContexts())
     .filter((context) => Boolean(context.billing.newestMember?.trialEndsOn) && context.billing.newestMember!.trialEndsOn! <= trialEnd)
     .sort((a, b) => (a.billing.newestMember?.trialEndsOn ?? "9999-12-31").localeCompare(b.billing.newestMember?.trialEndsOn ?? "9999-12-31"));
+  const trialSubjectIds = trialNotices.map((context) => context.billing.newestMember!.id);
+  const { data: trialTasks } = trialSubjectIds.length
+    ? await supabase.from("family_billing_sheet_tasks").select("subject_member_id,composition_signature,status").in("subject_member_id", trialSubjectIds).returns<Array<{ subject_member_id: string; composition_signature: string; status: string }>>()
+    : { data: [] };
+  const trialTaskByKey = new Map((trialTasks ?? []).map((task) => [`${task.subject_member_id}:${task.composition_signature}`, task]));
   const transitionCandidates = buildTransitionCandidates(examMembers);
   const upcomingExamNotices = buildUpcomingExamNotices(examMembers);
   const busenNotices = buildBusenNotices(examMembers, busenEligibilityResult.data ?? [], busenAttendanceResult.data ?? []);
@@ -185,6 +190,7 @@ export default async function AvisosPage({
 
         {params.saved === "notice" ? <p className="save-ok">Aviso actualizado correctamente.</p> : null}
         {params.saved === "trial" ? <p className="save-ok">Hoja de cobro marcada como entregada.</p> : null}
+        {params.saved === "bank-data" ? <p className="save-ok">Datos bancarios marcados como recibidos.</p> : null}
         {params.error === "notice" ? <p className="form-error">No se ha podido guardar el aviso.</p> : null}
         {params.error === "trial" ? <p className="form-error">No se ha podido actualizar el aviso de mes gratis.</p> : null}
 
@@ -241,6 +247,8 @@ export default async function AvisosPage({
               {trialNotices.map((context) => {
                 const member = context.billing.newestMember!;
                 const state = trialState(member.trialEndsOn);
+                const task = trialTaskByKey.get(`${member.id}:${context.billing.compositionSignature}`);
+                const awaitingReturn = task?.status === "delivered";
                 return (
                   <article className={`notice-admin-card ${state.className}`} key={`${member.id}-${context.billing.compositionSignature}`}>
                     <div className="notice-admin-head">
@@ -248,7 +256,7 @@ export default async function AvisosPage({
                         <span className="notice-admin-meta">{context.billing.members.length} {context.billing.members.length === 1 ? "persona" : "personas"} · Cuota {formatEuro(context.billing.totalCents)}</span>
                         <h2>{context.unitName || context.billing.members.map((item) => item.display_name).join(", ")}</h2>
                       </div>
-                      <span className={`state-badge ${state.badge}`}>{state.label}</span>
+                      <span className={`state-badge ${awaitingReturn ? "state-en-progreso" : state.badge}`}>{awaitingReturn ? "Pendiente de devolución" : state.label}</span>
                     </div>
                     <p>
                       Nueva incorporación: {member.display_name} ·
@@ -258,11 +266,19 @@ export default async function AvisosPage({
                     <div className="notice-action-row">
                       {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}`}>Abrir familia</a> : null}
                       {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}/hoja-cobro`} target="_blank" rel="noreferrer">Generar hoja de cobro</a> : null}
-                      <form action={confirmFamilyBillingSheetDeliveredAction}>
-                        <input type="hidden" name="memberId" value={member.id} />
-                        <input type="hidden" name="returnPath" value="/avisos" />
-                        <SubmitButton pendingLabel="Confirmando...">Confirmar hoja entregada</SubmitButton>
-                      </form>
+                      {awaitingReturn ? (
+                        <form action={confirmFamilyBillingDataReceivedAction}>
+                          <input type="hidden" name="memberId" value={member.id} />
+                          <input type="hidden" name="returnPath" value="/avisos" />
+                          <SubmitButton pendingLabel="Confirmando...">Datos bancarios recibidos</SubmitButton>
+                        </form>
+                      ) : (
+                        <form action={confirmFamilyBillingSheetDeliveredAction}>
+                          <input type="hidden" name="memberId" value={member.id} />
+                          <input type="hidden" name="returnPath" value="/avisos" />
+                          <SubmitButton pendingLabel="Confirmando...">Confirmar hoja entregada</SubmitButton>
+                        </form>
+                      )}
                     </div>
                   </article>
                 );

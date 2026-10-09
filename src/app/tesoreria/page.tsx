@@ -1,0 +1,101 @@
+import { Banknote, Bell, CheckCircle2, FileText, LogOut, Printer, Users } from "lucide-react";
+import { SidebarNav } from "@/app/components/SidebarNav";
+import { SubmitButton } from "@/app/components/SubmitButton";
+import { logoutTreasuryAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
+import { familyLabel, getTreasuryFamilies } from "@/lib/treasury";
+import { getTreasuryActor } from "@/lib/treasury-auth";
+
+export const dynamic = "force-dynamic";
+
+export default async function TreasuryPage({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const actor = await getTreasuryActor();
+  const params = await searchParams;
+  if (!actor) {
+    return <main className="treasury-locked"><img src="/skbc-icon.png" alt="SKBC Gipuzkoa" /><h1>Tesorería SKBC</h1><p>Acceso privado exclusivo para la gestión económica del club.</p>{params.error ? <p className="form-error">El enlace de acceso no es válido o ha caducado.</p> : null}</main>;
+  }
+
+  const families = await getTreasuryFamilies();
+  const expectedCents = families.reduce((sum, family) => sum + family.billing.totalCents, 0);
+  const billableMembers = families.reduce((sum, family) => sum + family.billing.members.length, 0);
+  const exemptMembers = families.reduce((sum, family) => sum + family.members.filter((member) => member.billing_enabled === false).length, 0);
+  const today = new Date().toISOString().slice(0, 10);
+  const soon = new Date();
+  soon.setDate(soon.getDate() + 14);
+  const soonDate = soon.toISOString().slice(0, 10);
+  const alerts = families.filter((family) => {
+    const end = family.billing.newestMember?.trialEndsOn;
+    return family.task?.status === "delivered" || Boolean(end && end <= soonDate && family.task?.status !== "received" && family.task?.status !== "active");
+  });
+
+  const content = (
+    <main className="main treasury-main">
+      <div className="topbar">
+        <div><p className="eyebrow">Información económica compartida</p><h1>Tesorería SKBC</h1><p className="muted">Acceso como {actor === "alvaro" ? "Álvaro" : "Tesorero"}. Los cambios quedan registrados automáticamente.</p></div>
+        {actor === "tesorero" ? <form action={logoutTreasuryAction}><button className="icon-button" type="submit" title="Cerrar acceso" aria-label="Cerrar acceso"><LogOut size={18} /></button></form> : null}
+      </div>
+
+      {params.saved ? <p className="save-ok">Información económica actualizada correctamente.</p> : null}
+      {params.error && params.error !== "access" ? <p className="form-error">No se ha podido guardar el cambio.</p> : null}
+
+      <section className="grid stats compact treasury-stats">
+        <article className="card"><Banknote size={20} /><h2>Cuota mensual prevista</h2><div className="metric">{money(expectedCents)}</div></article>
+        <article className="card"><Users size={20} /><h2>Con cuota activa</h2><div className="metric">{billableMembers}</div></article>
+        <article className="card"><CheckCircle2 size={20} /><h2>Exentos</h2><div className="metric">{exemptMembers}</div></article>
+        <article className={alerts.length ? "card attention-card" : "card"}><Bell size={20} /><h2>Avisos</h2><div className="metric">{alerts.length}</div></article>
+      </section>
+
+      <section className={alerts.length ? "card attention-card" : "card"}>
+        <div className="section-heading-row"><div><p className="eyebrow">Seguimiento</p><h2>Avisos de tesorería</h2><p className="muted">Meses gratuitos próximos a terminar y hojas entregadas pendientes de devolución.</p></div>{alerts.some((family) => family.billing.newestMember?.trialEndsOn && family.billing.newestMember!.trialEndsOn! <= today) ? <a className="secondary-button" href="/avisos/hojas-cobro" target="_blank"><Printer size={17} /> Imprimir hojas vencidas</a> : null}</div>
+        {alerts.length ? <div className="treasury-alert-list">{alerts.map((family) => <a key={family.key} href={`#family-${family.key}`}><strong>{familyLabel(family)}</strong><span>{family.task?.status === "delivered" ? "Hoja entregada: faltan los datos bancarios" : `Fin del mes gratuito: ${date(family.billing.newestMember?.trialEndsOn)}`}</span></a>)}</div> : <p className="muted">No hay gestiones urgentes.</p>}
+      </section>
+
+      <section className="card treasury-directory">
+        <div className="section-heading-row"><div><p className="eyebrow">Situación actual</p><h2>Familias y cuotas</h2><p className="muted">La cuota se activa o desactiva por persona. Los descuentos se calculan solo con quienes tienen cuota activa.</p></div><span className="state-badge state-completada">{families.length} unidades</span></div>
+        <div className="treasury-family-list">
+          {families.map((family) => {
+            const subject = family.billing.newestMember;
+            const status = family.task?.status ?? "pending";
+            return <details id={`family-${family.key}`} className={`treasury-family treasury-status-${status}`} key={family.key} open={status === "delivered"}>
+              <summary><span><strong>{familyLabel(family)}</strong><small>{family.members.length} miembros · {family.billing.members.length} con cuota</small></span><b>{money(family.billing.totalCents)}</b><span className={`state-badge treasury-badge-${status}`}>{statusLabel(status)}</span></summary>
+              <div className="treasury-family-body">
+                <div className="treasury-members">
+                  {family.members.map((member) => <form action={updateMemberBillingAction} key={member.id} className={member.billing_enabled === false ? "treasury-member exempt" : "treasury-member"}>
+                    <input type="hidden" name="memberId" value={member.id} />
+                    <span><strong>{member.display_name}</strong><small>{member.class === "kids" ? "Niños" : "Adultos"}{member.free_trial_enabled ? ` · Mes gratis hasta ${date(member.free_trial_ends_on)}` : ""}</small></span>
+                    <label>Cuota<select name="billingEnabled" defaultValue={member.billing_enabled === false ? "false" : "true"}><option value="true">Activa</option><option value="false">Exento</option></select></label>
+                    <label>Nota<input name="billingNote" defaultValue={member.billing_note ?? ""} placeholder="Motivo opcional" /></label>
+                    <SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton>
+                  </form>)}
+                </div>
+                {subject ? <div className="treasury-workflow">
+                  <div><h3>Hoja y alta de cobro</h3><p className="muted">Nueva incorporación: {subject.display_name} · Primer cobro: {date(family.billing.billingOn)}</p></div>
+                  <div className="notice-action-row">
+                    {subject.legacy_id ? <a className="secondary-button" href={`/kenshis/${subject.legacy_id}/hoja-cobro`} target="_blank"><FileText size={17} /> Abrir hoja</a> : null}
+                    {status === "pending" || status === "generated" ? <WorkflowButton memberId={subject.id} status="delivered" label="Marcar hoja entregada" /> : null}
+                    {status === "delivered" ? <WorkflowButton memberId={subject.id} status="received" label="Datos bancarios recibidos" /> : null}
+                    {status === "received" ? <WorkflowButton memberId={subject.id} status="active" label="Activar cobro" /> : null}
+                  </div>
+                  {family.task?.last_actor ? <p className="treasury-last-action">Último cambio por {actorLabel(family.task.last_actor)} · {dateTime(family.task.updated_at)}{family.task.note ? ` · ${family.task.note}` : ""}</p> : null}
+                </div> : <p className="muted">Esta unidad no tiene ninguna cuota activa.</p>}
+                {family.events.length ? <details className="treasury-history"><summary>Ver historial</summary><ul>{family.events.map((event) => <li key={event.id}><span>{eventLabel(event.action)}{event.note ? ` · ${event.note}` : ""}</span><small>{actorLabel(event.actor)} · {dateTime(event.created_at)}</small></li>)}</ul></details> : null}
+              </div>
+            </details>;
+          })}
+        </div>
+      </section>
+    </main>
+  );
+
+  return actor === "alvaro" ? <div className="shell"><SidebarNav current="/tesoreria" />{content}</div> : <div className="treasury-shell">{content}</div>;
+}
+
+function WorkflowButton({ memberId, status, label }: { memberId: string; status: string; label: string }) {
+  return <form action={updateTreasuryWorkflowAction}><input type="hidden" name="memberId" value={memberId} /><input type="hidden" name="status" value={status} /><SubmitButton pendingLabel="Guardando...">{label}</SubmitButton></form>;
+}
+
+function money(cents: number) { return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100); }
+function date(value?: string | null) { return value ? new Intl.DateTimeFormat("es-ES").format(new Date(`${value}T12:00:00`)) : "-"; }
+function dateTime(value: string) { return new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)); }
+function actorLabel(actor: string) { return actor === "tesorero" ? "Tesorero" : "Álvaro"; }
+function statusLabel(status: string) { return ({ pending: "Pendiente", generated: "Hoja generada", delivered: "Esperando devolución", received: "Datos recibidos", active: "Cobro activo" } as Record<string, string>)[status] ?? status; }
+function eventLabel(action: string) { return ({ generated: "Hoja generada", delivered: "Hoja entregada", received: "Datos bancarios recibidos", active: "Cobro activado", billing_enabled: "Cuota activada", billing_disabled: "Cuota desactivada" } as Record<string, string>)[action] ?? action; }

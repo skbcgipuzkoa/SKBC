@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasInternalAccess } from "@/lib/auth";
 import { renderFamilyBillingPdf } from "@/lib/family-billing-pdf";
 import { getPendingFamilyBillingContexts, upsertFamilyBillingTask } from "@/lib/family-units";
+import { getTreasuryActor } from "@/lib/treasury-auth";
 
 export async function GET(request: NextRequest) {
-  if (!(await hasInternalAccess())) return NextResponse.redirect(new URL("/skbc-interno", request.url));
+  const actor = await getTreasuryActor();
+  if (!actor && !(await hasInternalAccess())) return NextResponse.redirect(new URL("/skbc-interno", request.url));
 
   const today = new Date().toISOString().slice(0, 10);
   const contexts = (await getPendingFamilyBillingContexts())
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
     const source = await PDFDocument.load(await renderFamilyBillingPdf(context));
     const pages = await combined.copyPages(source, source.getPageIndices());
     pages.forEach((page) => combined.addPage(page));
-    await upsertFamilyBillingTask(context, "generated");
+    await upsertFamilyBillingTask(context, "generated", actor ?? "alvaro");
   }
 
   const pdf = await combined.save();

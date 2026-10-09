@@ -1439,7 +1439,7 @@ export async function confirmFamilyBillingSheetDeliveredAction(formData: FormDat
   const returnPath = safeReturnPath(String(formData.get("returnPath") ?? "")) || "/avisos";
   if (!memberId) redirect(`${returnPath}?error=trial`);
   try {
-    await upsertFamilyBillingTask(await getFamilyUnitContext(memberId), "delivered");
+    await upsertFamilyBillingTask(await getFamilyUnitContext(memberId), "delivered", "alvaro");
   } catch (error) {
     console.error("Error confirming family billing sheet delivery", error);
     redirect(`${returnPath}?error=trial`);
@@ -1448,6 +1448,23 @@ export async function confirmFamilyBillingSheetDeliveredAction(formData: FormDat
   revalidatePath("/sistema");
   revalidatePath("/kenshis");
   redirect(`${returnPath}?saved=trial`);
+}
+
+export async function confirmFamilyBillingDataReceivedAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const returnPath = safeReturnPath(String(formData.get("returnPath") ?? "")) || "/avisos";
+  if (!memberId) redirect(`${returnPath}?error=trial`);
+  try {
+    await upsertFamilyBillingTask(await getFamilyUnitContext(memberId), "received", "alvaro");
+  } catch (error) {
+    console.error("Error confirming bank details received", error);
+    redirect(`${returnPath}?error=trial`);
+  }
+  revalidatePath("/avisos");
+  revalidatePath("/tesoreria");
+  revalidatePath("/sistema");
+  redirect(`${returnPath}?saved=bank-data`);
 }
 
 function revalidateFamilyPaths(legacyId: string) {
