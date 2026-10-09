@@ -11699,7 +11699,10 @@ tbody tr:hover {
 }
 
 .treasury-shell { background: var(--page); min-height: 100vh; }
-.treasury-shell .treasury-main { margin: 0 auto; max-width: 1500px; }
+.treasury-shell .treasury-main { margin: 0 auto; max-width: 1500px; min-width: 0; overflow-x: clip; }
+.treasury-main > *, .treasury-main .card, .treasury-main .topbar > div, .treasury-main label, .treasury-main input, .treasury-main select { min-width: 0; }
+.treasury-main button, .treasury-main a, .treasury-main input, .treasury-main select { max-width: 100%; }
+.treasury-main .notice-action-row { flex-wrap: wrap; }
 .treasury-locked { align-items: center; display: flex; flex-direction: column; gap: 14px; justify-content: center; min-height: 100vh; padding: 24px; text-align: center; }
 .treasury-locked img { height: 88px; width: 88px; }
 .treasury-locked h1, .treasury-locked p { margin: 0; }
@@ -11779,4 +11782,68 @@ tbody tr:hover {
   .treasury-alert-list a { grid-template-columns: 1fr; }
   .treasury-history li { align-items: flex-start; flex-direction: column; }
   .treasury-alert-list span { text-align: left; }
+}
+
+@media (max-width: 1180px) {
+  .treasury-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .treasury-alert-list a { gap: 8px 14px; grid-template-columns: minmax(0, 1fr) auto; }
+  .treasury-alert-list .treasury-sheet-state { grid-column: 1; }
+  .treasury-alert-list a > span:last-child { grid-column: 2; grid-row: 1 / span 2; text-align: right; }
+  .treasury-member { grid-template-columns: minmax(210px, 1fr) minmax(180px, .7fr) auto; }
+  .treasury-member label:nth-of-type(2) { grid-column: 1 / 3; }
+  .treasury-member > button { grid-column: 3; grid-row: 2; }
+  .treasury-correction-form { grid-template-columns: minmax(190px, .8fr) minmax(0, 1fr); }
+  .treasury-correction-form > button { grid-column: 1 / -1; width: 100%; }
+}
+
+@media (max-width: 900px) {
+  .treasury-main { padding: 16px; }
+  .treasury-main .section-heading-row { align-items: stretch; flex-direction: column; gap: 12px; }
+  .treasury-main .section-heading-row > button, .treasury-main .section-heading-row > a { justify-content: center; width: 100%; }
+  .treasury-alert-list a { grid-template-columns: minmax(0, 1fr); }
+  .treasury-alert-list .treasury-sheet-state, .treasury-alert-list a > span:last-child { grid-column: 1; grid-row: auto; text-align: left; }
+  .treasury-family > summary { grid-template-columns: minmax(0, 1fr) auto; }
+  .treasury-family > summary .state-badge { grid-column: 1 / -1; justify-self: start; }
+  .treasury-member { grid-template-columns: minmax(0, 1fr) minmax(170px, .65fr); }
+  .treasury-member label:nth-of-type(2), .treasury-member > button { grid-column: 1 / -1; grid-row: auto; }
+  .treasury-member > button { width: 100%; }
+  .treasury-workflow { align-items: stretch; flex-direction: column; }
+  .treasury-workflow .notice-action-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .treasury-workflow .notice-action-row > * { justify-content: center; width: 100%; }
+}
+
+@media (max-width: 680px) {
+  .treasury-main { padding: 12px; }
+  .treasury-main .topbar, .treasury-main > .card { padding: 16px; }
+  .treasury-main .topbar { align-items: flex-start; gap: 10px; }
+  .treasury-main .topbar h1 { font-size: 28px; }
+  .treasury-main .topbar .icon-button { flex: 0 0 auto; }
+  .treasury-stats { gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .treasury-stats .card { min-height: 126px; padding: 14px; }
+  .treasury-stats h2 { font-size: 14px; line-height: 1.25; }
+  .treasury-stats .metric { font-size: 25px; }
+  .treasury-priority-alert { align-items: flex-start; flex-direction: column; padding: 14px; }
+  .treasury-priority-alert strong { width: 100%; }
+  .treasury-link-row, .treasury-correction-form { grid-template-columns: minmax(0, 1fr); }
+  .treasury-link-row button, .treasury-correction-form > button { grid-column: auto; width: 100%; }
+  .treasury-family-group > summary { align-items: flex-start; gap: 12px; padding: 14px; }
+  .treasury-family-group > summary > span:first-child { min-width: 0; }
+  .treasury-family-group > summary strong, .treasury-family-group > summary small { overflow-wrap: anywhere; }
+  .treasury-family > summary { gap: 8px 12px; padding: 14px; }
+  .treasury-family > summary > span:first-child { grid-column: 1 / -1; }
+  .treasury-family > summary b { justify-self: start; }
+  .treasury-family-body { padding: 12px; }
+  .treasury-member { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .treasury-member label, .treasury-member label:nth-of-type(2), .treasury-member > button { grid-column: auto; }
+  .treasury-workflow .notice-action-row { grid-template-columns: minmax(0, 1fr); }
+  .treasury-history li { align-items: flex-start; flex-direction: column; }
+  .treasury-main button, .treasury-main .button, .treasury-main .secondary-button { white-space: normal; }
+}
+
+@media (max-width: 420px) {
+  .treasury-main { padding: 8px; }
+  .treasury-main .topbar, .treasury-main > .card { padding: 14px; }
+  .treasury-stats .card { min-height: 116px; padding: 12px; }
+  .treasury-stats .metric { font-size: 23px; }
+  .treasury-sheet-state, .treasury-family .state-badge { line-height: 1.25; white-space: normal; }
 }
