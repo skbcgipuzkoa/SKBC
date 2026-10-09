@@ -31,6 +31,11 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
     if (!end) return false;
     return family.task?.status === "delivered" || Boolean(end <= soonDate && family.task?.status !== "received" && family.task?.status !== "active");
   });
+  const groupedFamilies = [
+    { id: "exempt", title: "Exentos de pago", description: "Unidades sin ninguna cuota incluida.", families: families.filter((family) => familyCategory(family) === "exempt") },
+    { id: "trial", title: "Mes de prueba", description: "Altas que todavía no tienen el cobro activado.", families: families.filter((family) => familyCategory(family) === "trial") },
+    { id: "active", title: "Pago activo", description: "Unidades con cuota ordinaria o cobro confirmado.", families: families.filter((family) => familyCategory(family) === "active") }
+  ];
 
   const content = (
     <main className="main treasury-main">
@@ -69,43 +74,48 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
 
       <section className="card treasury-directory">
         <div className="section-heading-row"><div><p className="eyebrow">Situación actual</p><h2>Familias y cuotas</h2><p className="muted">Aquí se indica quién se incluirá en la cuota. En las nuevas altas, el cobro no queda activo hasta completar la entrega de la hoja, recibir los datos bancarios y pulsar Activar cobro.</p></div><span className="state-badge state-completada">{families.length} unidades</span></div>
-        <div className="treasury-family-list">
-          {families.map((family) => {
-            const subject = family.billing.newestMember;
-            const hasOnboardingWorkflow = Boolean(subject?.trialEndsOn);
-            const status = hasOnboardingWorkflow ? family.task?.status ?? "pending" : family.billing.members.length ? "active" : "exempt";
-            return <details id={`family-${family.key}`} className={`treasury-family treasury-status-${status}`} key={family.key} open={status === "delivered"}>
-              <summary><span><strong>{familyLabel(family)}</strong><small>{family.members.length} miembros · {family.billing.members.length} incluidos al cobrar</small></span><b>{money(family.billing.totalCents)}</b><span className={`state-badge treasury-badge-${status}`}>{statusLabel(status)}</span></summary>
-              <div className="treasury-family-body">
-                <div className="treasury-members">
-                  {family.members.map((member) => <form action={updateMemberBillingAction} key={member.id} className={member.billing_enabled === false ? "treasury-member exempt" : "treasury-member"}>
-                    <input type="hidden" name="memberId" value={member.id} />
-                    <span><strong>{member.display_name}</strong><small>{member.class === "kids" ? "Niños" : "Adultos"}{member.free_trial_enabled ? ` · Mes gratis hasta ${date(member.free_trial_ends_on)}` : ""}</small></span>
-                    <label>Al iniciar el cobro<select name="billingEnabled" defaultValue={member.billing_enabled === false ? "false" : "true"}><option value="true">Incluir en la cuota</option><option value="false">Exento de cuota</option></select></label>
-                    <label>Nota<input name="billingNote" defaultValue={member.billing_note ?? ""} placeholder="Motivo opcional" /></label>
-                    <SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton>
-                  </form>)}
-                </div>
-                {subject && hasOnboardingWorkflow ? <div className="treasury-workflow">
-                  <div><h3>Hoja y alta de cobro</h3><p className="muted">Nueva incorporación: {subject.display_name} · Primer cobro: {date(family.billing.billingOn)}</p></div>
-                  <div className="notice-action-row">
-                    {subject.legacy_id ? <a className="secondary-button" href={`/kenshis/${subject.legacy_id}/hoja-cobro`} target="_blank"><FileText size={17} /> Abrir hoja</a> : null}
-                    {status === "pending" || status === "generated" ? <WorkflowButton memberId={subject.id} status="delivered" label="Marcar hoja entregada" /> : null}
-                    {status === "delivered" ? <WorkflowButton memberId={subject.id} status="received" label="Datos bancarios recibidos" /> : null}
-                    {status === "received" ? <WorkflowButton memberId={subject.id} status="active" label="Activar cobro" /> : null}
+        <div className="treasury-family-groups">
+          {groupedFamilies.map((group) => <details className={`treasury-family-group treasury-family-group-${group.id}`} key={group.id}>
+            <summary><span><strong>{group.title}</strong><small>{group.description}</small></span><b>{group.families.length}</b></summary>
+            <div className="treasury-family-list">
+              {group.families.map((family) => {
+                const subject = family.billing.newestMember;
+                const hasOnboardingWorkflow = Boolean(subject?.trialEndsOn);
+                const status = familyStatus(family);
+                return <details id={`family-${family.key}`} className={`treasury-family treasury-status-${status}`} key={family.key}>
+                  <summary><span><strong>{familyLabel(family)}</strong><small>{family.members.length} miembros · {family.billing.members.length} incluidos al cobrar</small></span><b>{money(family.billing.totalCents)}</b><span className={`state-badge treasury-badge-${status}`}>{statusLabel(status)}</span></summary>
+                  <div className="treasury-family-body">
+                    <div className="treasury-members">
+                      {family.members.map((member) => <form action={updateMemberBillingAction} key={member.id} className={member.billing_enabled === false ? "treasury-member exempt" : "treasury-member"}>
+                        <input type="hidden" name="memberId" value={member.id} />
+                        <span><strong>{member.display_name}</strong><small>{member.class === "kids" ? "Niños" : "Adultos"}{member.free_trial_enabled ? ` · Mes gratis hasta ${date(member.free_trial_ends_on)}` : ""}</small></span>
+                        <label>Al iniciar el cobro<select name="billingEnabled" defaultValue={member.billing_enabled === false ? "false" : "true"}><option value="true">Incluir en la cuota</option><option value="false">Exento de cuota</option></select></label>
+                        <label>Nota<input name="billingNote" defaultValue={member.billing_note ?? ""} placeholder="Motivo opcional" /></label>
+                        <SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton>
+                      </form>)}
+                    </div>
+                    {subject && hasOnboardingWorkflow ? <div className="treasury-workflow">
+                      <div><h3>Hoja y alta de cobro</h3><p className="muted">Nueva incorporación: {subject.display_name} · Primer cobro: {date(family.billing.billingOn)}</p></div>
+                      <div className="notice-action-row">
+                        {subject.legacy_id ? <a className="secondary-button" href={`/kenshis/${subject.legacy_id}/hoja-cobro`} target="_blank"><FileText size={17} /> Abrir hoja</a> : null}
+                        {status === "pending" || status === "generated" ? <WorkflowButton memberId={subject.id} status="delivered" label="Marcar hoja entregada" /> : null}
+                        {status === "delivered" ? <WorkflowButton memberId={subject.id} status="received" label="Datos bancarios recibidos" /> : null}
+                        {status === "received" ? <WorkflowButton memberId={subject.id} status="active" label="Activar cobro" /> : null}
+                      </div>
+                      {actor === "alvaro" ? <form action={correctTreasuryWorkflowAction} className="treasury-correction-form">
+                        <input type="hidden" name="memberId" value={subject.id} />
+                        <label>Corregir estado<select name="status" defaultValue={status}><option value="pending">Pendiente de preparar</option><option value="generated">Hoja preparada</option><option value="delivered">Hoja entregada</option><option value="received">Datos bancarios recibidos</option><option value="active">Cobro activo</option></select></label>
+                        <label>Motivo<input name="note" placeholder="Motivo de la corrección" /></label>
+                        <SubmitButton pendingLabel="Corrigiendo...">Aplicar corrección</SubmitButton>
+                      </form> : null}
+                      {family.task?.last_actor ? <p className="treasury-last-action">Último cambio por {actorLabel(family.task.last_actor)} · {dateTime(family.task.updated_at)}{family.task.note ? ` · ${family.task.note}` : ""}</p> : null}
+                    </div> : family.billing.members.length ? <p className="treasury-current-note">Cuota ordinaria actual. No requiere seguimiento de hoja de alta.</p> : <p className="muted">Esta unidad no tiene ninguna cuota activa.</p>}
+                    {family.events.length ? <details className="treasury-history"><summary>Ver historial</summary><ul>{family.events.map((event) => <li key={event.id}><span>{eventLabel(event.action)}{event.note ? ` · ${event.note}` : ""}</span><small>{actorLabel(event.actor)} · {dateTime(event.created_at)}</small></li>)}</ul></details> : null}
                   </div>
-                  {actor === "alvaro" ? <form action={correctTreasuryWorkflowAction} className="treasury-correction-form">
-                    <input type="hidden" name="memberId" value={subject.id} />
-                    <label>Corregir estado<select name="status" defaultValue={status}><option value="pending">Pendiente de preparar</option><option value="generated">Hoja preparada</option><option value="delivered">Hoja entregada</option><option value="received">Datos bancarios recibidos</option><option value="active">Cobro activo</option></select></label>
-                    <label>Motivo<input name="note" placeholder="Motivo de la corrección" /></label>
-                    <SubmitButton pendingLabel="Corrigiendo...">Aplicar corrección</SubmitButton>
-                  </form> : null}
-                  {family.task?.last_actor ? <p className="treasury-last-action">Último cambio por {actorLabel(family.task.last_actor)} · {dateTime(family.task.updated_at)}{family.task.note ? ` · ${family.task.note}` : ""}</p> : null}
-                </div> : family.billing.members.length ? <p className="treasury-current-note">Cuota ordinaria actual. No requiere seguimiento de hoja de alta.</p> : <p className="muted">Esta unidad no tiene ninguna cuota activa.</p>}
-                {family.events.length ? <details className="treasury-history"><summary>Ver historial</summary><ul>{family.events.map((event) => <li key={event.id}><span>{eventLabel(event.action)}{event.note ? ` · ${event.note}` : ""}</span><small>{actorLabel(event.actor)} · {dateTime(event.created_at)}</small></li>)}</ul></details> : null}
-              </div>
-            </details>;
-          })}
+                </details>;
+              })}
+            </div>
+          </details>)}
         </div>
       </section>
     </main>
@@ -122,5 +132,13 @@ function money(cents: number) { return new Intl.NumberFormat("es-ES", { style: "
 function date(value?: string | null) { return value ? new Intl.DateTimeFormat("es-ES").format(new Date(`${value}T12:00:00`)) : "-"; }
 function dateTime(value: string) { return new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)); }
 function actorLabel(actor: string) { return actor === "tesorero" ? "Tesorero" : "Álvaro"; }
+function familyStatus(family: Awaited<ReturnType<typeof getTreasuryFamilies>>[number]) {
+  const subject = family.billing.newestMember;
+  return subject?.trialEndsOn ? family.task?.status ?? "pending" : family.billing.members.length ? "active" : "exempt";
+}
+function familyCategory(family: Awaited<ReturnType<typeof getTreasuryFamilies>>[number]) {
+  if (!family.billing.members.length) return "exempt";
+  return family.billing.newestMember?.trialEndsOn && family.task?.status !== "active" ? "trial" : "active";
+}
 function statusLabel(status: string) { return ({ pending: "Pendiente de preparar", generated: "Hoja preparada", delivered: "Esperando devolución", received: "Datos recibidos", active: "Cobro activo", exempt: "Sin cuota" } as Record<string, string>)[status] ?? status; }
 function eventLabel(action: string) { return ({ pending: "Devuelto a pendiente", generated: "Hoja preparada", delivered: "Hoja entregada", received: "Datos bancarios recibidos", active: "Cobro activado", billing_enabled: "Incluido en cuota", billing_disabled: "Exento de cuota" } as Record<string, string>)[action] ?? action; }

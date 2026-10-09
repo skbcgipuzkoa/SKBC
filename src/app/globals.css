@@ -11714,8 +11714,20 @@ tbody tr:hover {
 .treasury-alert-list a { align-items: center; background: #fff8e6; border: 1px solid #edcf7e; border-radius: 7px; color: var(--ink); display: flex; gap: 14px; justify-content: space-between; padding: 12px 14px; text-decoration: none; }
 .treasury-alert-list a:hover { border-color: #ba7d00; }
 .treasury-alert-list span { color: var(--muted); text-align: right; }
-.treasury-family-list { border-top: 1px solid var(--line); margin: 18px -24px -24px; }
+.treasury-family-groups { display: grid; gap: 12px; margin-top: 18px; }
+.treasury-family-group { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.treasury-family-group > summary { align-items: center; cursor: pointer; display: flex; gap: 16px; justify-content: space-between; list-style: none; padding: 16px 18px; }
+.treasury-family-group > summary::-webkit-details-marker { display: none; }
+.treasury-family-group > summary span { min-width: 0; }
+.treasury-family-group > summary strong { display: block; font-size: 18px; }
+.treasury-family-group > summary small { color: var(--muted); display: block; margin-top: 3px; }
+.treasury-family-group > summary b { align-items: center; background: rgba(255,255,255,.72); border-radius: 999px; display: inline-flex; justify-content: center; min-height: 34px; min-width: 38px; padding: 5px 10px; }
+.treasury-family-group-exempt > summary { background: #f3f1ed; }
+.treasury-family-group-trial > summary { background: #fff5d8; }
+.treasury-family-group-active > summary { background: #e8f6ee; }
+.treasury-family-list { border-top: 1px solid var(--line); }
 .treasury-family { border-bottom: 1px solid var(--line); }
+.treasury-family:last-child { border-bottom: 0; }
 .treasury-family > summary { align-items: center; cursor: pointer; display: grid; gap: 14px; grid-template-columns: minmax(220px, 1fr) auto minmax(150px, auto); list-style: none; padding: 16px 24px; }
 .treasury-family > summary::-webkit-details-marker { display: none; }
 .treasury-family > summary span:first-child { min-width: 0; }
