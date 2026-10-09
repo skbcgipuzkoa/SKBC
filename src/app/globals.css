@@ -11712,9 +11712,14 @@ tbody tr:hover {
 .treasury-stats .metric { font-size: 30px; }
 .treasury-priority-alert { margin-bottom: 18px; }
 .treasury-alert-list { display: grid; gap: 8px; margin-top: 16px; }
-.treasury-alert-list a { align-items: center; background: #fff8e6; border: 1px solid #edcf7e; border-radius: 7px; color: var(--ink); display: flex; gap: 14px; justify-content: space-between; padding: 12px 14px; text-decoration: none; }
+.treasury-alert-list a { align-items: center; background: #fff8e6; border: 1px solid #edcf7e; border-radius: 7px; color: var(--ink); display: grid; gap: 14px; grid-template-columns: minmax(240px, 1.2fr) minmax(190px, .8fr) minmax(210px, auto); padding: 12px 14px; text-decoration: none; }
 .treasury-alert-list a:hover { border-color: #ba7d00; }
 .treasury-alert-list span { color: var(--muted); text-align: right; }
+.treasury-sheet-state { border-radius: 999px; font-size: 12px; font-style: normal; font-weight: 900; justify-self: start; padding: 6px 10px; }
+.treasury-sheet-state-pending { background: #fde7e7; color: #9e2424; }
+.treasury-sheet-state-generated { background: #fff0bd; color: #765000; }
+.treasury-sheet-state-delivered { background: #dceefa; color: #105182; }
+.treasury-sheet-state-received, .treasury-sheet-state-active { background: #dff3e8; color: #17613c; }
 .treasury-family-groups { display: grid; gap: 12px; margin-top: 18px; }
 .treasury-family-group { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
 .treasury-family-group > summary { align-items: center; cursor: pointer; display: flex; gap: 16px; justify-content: space-between; list-style: none; padding: 16px 18px; }
@@ -11771,6 +11776,7 @@ tbody tr:hover {
   .treasury-member { grid-template-columns: 1fr; }
   .treasury-member label:nth-of-type(2) { grid-column: auto; }
   .treasury-member button { width: 100%; }
-  .treasury-alert-list a, .treasury-history li { align-items: flex-start; flex-direction: column; }
+  .treasury-alert-list a { grid-template-columns: 1fr; }
+  .treasury-history li { align-items: flex-start; flex-direction: column; }
   .treasury-alert-list span { text-align: left; }
 }

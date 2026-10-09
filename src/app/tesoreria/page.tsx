@@ -26,11 +26,16 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
   const soon = new Date();
   soon.setDate(soon.getDate() + 14);
   const soonDate = soon.toISOString().slice(0, 10);
-  const alerts = families.filter((family) => {
-    const end = family.billing.newestMember?.trialEndsOn;
-    if (!end) return false;
-    return family.task?.status === "delivered" || Boolean(end <= soonDate && family.task?.status !== "received" && family.task?.status !== "active");
-  });
+  const alerts = families
+    .filter((family) => {
+      const end = family.billing.newestMember?.trialEndsOn;
+      if (!end) return false;
+      return family.task?.status === "delivered" || Boolean(end <= soonDate && family.task?.status !== "received" && family.task?.status !== "active");
+    })
+    .sort((a, b) => {
+      const dateOrder = (a.billing.newestMember?.trialEndsOn ?? "9999-12-31").localeCompare(b.billing.newestMember?.trialEndsOn ?? "9999-12-31");
+      return dateOrder || familyLabel(a).localeCompare(familyLabel(b), "es");
+    });
   const groupedFamilies = [
     { id: "exempt", title: "Exentos de pago", description: "Unidades sin ninguna cuota incluida.", families: families.filter((family) => familyCategory(family) === "exempt") },
     { id: "trial", title: "Mes de prueba", description: "Altas que todavía no tienen el cobro activado.", families: families.filter((family) => familyCategory(family) === "trial") },
@@ -71,7 +76,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
 
       <section id="avisos-tesoreria" className={alerts.length ? "card attention-card" : "card"}>
         <div className="section-heading-row"><div><p className="eyebrow">Seguimiento</p><h2>Avisos de tesorería</h2><p className="muted">Meses gratuitos próximos a terminar y hojas entregadas pendientes de devolución.</p></div>{alerts.some((family) => family.billing.newestMember?.trialEndsOn && family.billing.newestMember!.trialEndsOn! <= today) ? <a className="secondary-button" href="/avisos/hojas-cobro" target="_blank"><Printer size={17} /> Imprimir hojas vencidas</a> : null}</div>
-        {alerts.length ? <div className="treasury-alert-list">{alerts.map((family) => <a key={family.key} href={`#family-${family.key}`}><strong>{familyLabel(family)}</strong><span>{family.task?.status === "delivered" ? "Hoja entregada: faltan los datos bancarios" : `Fin del mes gratuito: ${date(family.billing.newestMember?.trialEndsOn)}`}</span></a>)}</div> : <p className="muted">No hay gestiones urgentes.</p>}
+        {alerts.length ? <div className="treasury-alert-list">{alerts.map((family) => <a key={family.key} href={`#family-${family.key}`}><strong>{familyLabel(family)}</strong><em className={`treasury-sheet-state treasury-sheet-state-${family.task?.status ?? "pending"}`}>{sheetStatusLabel(family.task?.status)}</em><span>Fin del mes gratuito: {date(family.billing.newestMember?.trialEndsOn)}</span></a>)}</div> : <p className="muted">No hay gestiones urgentes.</p>}
       </section>
 
       <section className="card treasury-directory">
@@ -142,5 +147,6 @@ function familyCategory(family: Awaited<ReturnType<typeof getTreasuryFamilies>>[
   if (!family.billing.members.length) return "exempt";
   return family.billing.newestMember?.trialEndsOn && family.task?.status !== "active" ? "trial" : "active";
 }
+function sheetStatusLabel(status?: string) { return ({ generated: "Impresa y lista para entregar", delivered: "Hoja entregada", received: "Datos recibidos", active: "Cobro activo" } as Record<string, string>)[status ?? ""] ?? "Hoja pendiente"; }
 function statusLabel(status: string) { return ({ pending: "Pendiente de preparar", generated: "Hoja preparada", delivered: "Esperando devolución", received: "Datos recibidos", active: "Cobro activo", exempt: "Sin cuota" } as Record<string, string>)[status] ?? status; }
 function eventLabel(action: string) { return ({ pending: "Devuelto a pendiente", generated: "Hoja preparada", delivered: "Hoja entregada", received: "Datos bancarios recibidos", active: "Cobro activado", billing_enabled: "Incluido en cuota", billing_disabled: "Exento de cuota" } as Record<string, string>)[action] ?? action; }
