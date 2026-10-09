@@ -1,10 +1,11 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getFamilyUnitContext, upsertFamilyBillingTask, type FamilyBillingStatus } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getTreasuryActor, revokeTreasuryAccess } from "@/lib/treasury-auth";
+import { getTreasuryAccessSettings, getTreasuryActor, revokeTreasuryAccess } from "@/lib/treasury-auth";
 
 export async function updateTreasuryWorkflowAction(formData: FormData) {
   const actor = await getTreasuryActor();
@@ -39,6 +40,30 @@ export async function correctTreasuryWorkflowAction(formData: FormData) {
   }
   revalidateTreasury();
   redirect("/tesoreria?saved=workflow-correction");
+}
+
+export async function manageTreasuryAccessAction(formData: FormData) {
+  const actor = await getTreasuryActor();
+  if (actor !== "alvaro") redirect("/tesoreria?error=access");
+  const operation = String(formData.get("operation") ?? "");
+  if (!['activate', 'deactivate', 'regenerate'].includes(operation)) redirect("/tesoreria?error=access-settings");
+
+  const current = await getTreasuryAccessSettings();
+  const token = operation === "regenerate" || !current.token ? randomBytes(32).toString("hex") : current.token;
+  const enabled = operation !== "deactivate";
+  const { error } = await createAdminClient().from("treasury_access_settings").upsert({
+    id: "treasurer",
+    access_token: token,
+    enabled,
+    updated_by: "alvaro",
+    updated_at: new Date().toISOString()
+  });
+  if (error) {
+    console.error("Error updating treasury access", error);
+    redirect("/tesoreria?error=access-settings");
+  }
+  revalidateTreasury();
+  redirect(`/tesoreria?saved=${operation === "regenerate" ? "access-regenerated" : enabled ? "access-enabled" : "access-disabled"}`);
 }
 
 export async function updateMemberBillingAction(formData: FormData) {

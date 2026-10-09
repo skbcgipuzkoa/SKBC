@@ -1,9 +1,10 @@
 import { Banknote, Bell, CheckCircle2, FileText, LogOut, Printer, Users } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
-import { correctTreasuryWorkflowAction, logoutTreasuryAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
+import { correctTreasuryWorkflowAction, logoutTreasuryAction, manageTreasuryAccessAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { familyLabel, getTreasuryFamilies } from "@/lib/treasury";
-import { getTreasuryActor } from "@/lib/treasury-auth";
+import { getTreasuryAccessSettings, getTreasuryActor } from "@/lib/treasury-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,10 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
     return <main className="treasury-locked"><img src="/skbc-icon.png" alt="SKBC Gipuzkoa" /><h1>Tesorería SKBC</h1><p>Acceso privado exclusivo para la gestión económica del club.</p>{params.error ? <p className="form-error">El enlace de acceso no es válido o ha caducado.</p> : null}<a className="primary-button" href="/tesoreria/admin">Acceder como Álvaro</a></main>;
   }
 
-  const families = await getTreasuryFamilies();
+  const [families, accessSettings] = await Promise.all([
+    getTreasuryFamilies(),
+    actor === "alvaro" ? getTreasuryAccessSettings() : Promise.resolve(null)
+  ]);
   const expectedCents = families.reduce((sum, family) => sum + family.billing.totalCents, 0);
   const includedMembers = families.reduce((sum, family) => sum + family.billing.members.length, 0);
   const exemptMembers = families.reduce((sum, family) => sum + family.members.filter((member) => member.billing_enabled === false).length, 0);
@@ -37,6 +41,19 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
 
       {params.saved ? <p className="save-ok">Información económica actualizada correctamente.</p> : null}
       {params.error && params.error !== "access" ? <p className="form-error">No se ha podido guardar el cambio.</p> : null}
+
+      {actor === "alvaro" && accessSettings ? <section className="card treasury-access-manager">
+        <div className="section-heading-row"><div><p className="eyebrow">Acceso compartido</p><h2>Enlace privado del tesorero</h2><p className="muted">Solo permite consultar y gestionar Tesorería. Al generar uno nuevo, el enlace anterior deja de funcionar.</p></div><span className={`state-badge ${accessSettings.enabled ? "state-completada" : "state-pendiente"}`}>{accessSettings.enabled ? "Activo" : "Desactivado"}</span></div>
+        <div className="treasury-link-row">
+          <input aria-label="Enlace privado del tesorero" readOnly value={`https://skbc.vercel.app/tesoreria/acceso?token=${accessSettings.token}`} />
+          <CopyLinkButton value={`https://skbc.vercel.app/tesoreria/acceso?token=${accessSettings.token}`} />
+        </div>
+        <div className="notice-action-row">
+          <form action={manageTreasuryAccessAction}><input type="hidden" name="operation" value={accessSettings.enabled ? "deactivate" : "activate"} /><SubmitButton pendingLabel="Guardando...">{accessSettings.enabled ? "Desactivar enlace" : "Activar enlace"}</SubmitButton></form>
+          <form action={manageTreasuryAccessAction}><input type="hidden" name="operation" value="regenerate" /><SubmitButton pendingLabel="Generando...">Generar enlace nuevo</SubmitButton></form>
+        </div>
+        {accessSettings.updatedAt ? <p className="treasury-last-action">Último cambio por Álvaro · {dateTime(accessSettings.updatedAt)}</p> : <p className="treasury-last-action">Enlace original incorporado al sistema. Se guardará en Supabase al modificarlo.</p>}
+      </section> : null}
 
       <section className="grid stats compact treasury-stats">
         <article className="card"><Banknote size={20} /><h2>Cuota mensual prevista</h2><div className="metric">{money(expectedCents)}</div></article>
