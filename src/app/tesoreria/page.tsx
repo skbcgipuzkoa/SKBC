@@ -24,7 +24,8 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
   const soonDate = soon.toISOString().slice(0, 10);
   const alerts = families.filter((family) => {
     const end = family.billing.newestMember?.trialEndsOn;
-    return family.task?.status === "delivered" || Boolean(end && end <= soonDate && family.task?.status !== "received" && family.task?.status !== "active");
+    if (!end) return false;
+    return family.task?.status === "delivered" || Boolean(end <= soonDate && family.task?.status !== "received" && family.task?.status !== "active");
   });
 
   const content = (
@@ -54,7 +55,8 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
         <div className="treasury-family-list">
           {families.map((family) => {
             const subject = family.billing.newestMember;
-            const status = family.task?.status ?? "pending";
+            const hasOnboardingWorkflow = Boolean(subject?.trialEndsOn);
+            const status = hasOnboardingWorkflow ? family.task?.status ?? "pending" : family.billing.members.length ? "active" : "exempt";
             return <details id={`family-${family.key}`} className={`treasury-family treasury-status-${status}`} key={family.key} open={status === "delivered"}>
               <summary><span><strong>{familyLabel(family)}</strong><small>{family.members.length} miembros · {family.billing.members.length} con cuota</small></span><b>{money(family.billing.totalCents)}</b><span className={`state-badge treasury-badge-${status}`}>{statusLabel(status)}</span></summary>
               <div className="treasury-family-body">
@@ -67,7 +69,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
                     <SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton>
                   </form>)}
                 </div>
-                {subject ? <div className="treasury-workflow">
+                {subject && hasOnboardingWorkflow ? <div className="treasury-workflow">
                   <div><h3>Hoja y alta de cobro</h3><p className="muted">Nueva incorporación: {subject.display_name} · Primer cobro: {date(family.billing.billingOn)}</p></div>
                   <div className="notice-action-row">
                     {subject.legacy_id ? <a className="secondary-button" href={`/kenshis/${subject.legacy_id}/hoja-cobro`} target="_blank"><FileText size={17} /> Abrir hoja</a> : null}
@@ -76,7 +78,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
                     {status === "received" ? <WorkflowButton memberId={subject.id} status="active" label="Activar cobro" /> : null}
                   </div>
                   {family.task?.last_actor ? <p className="treasury-last-action">Último cambio por {actorLabel(family.task.last_actor)} · {dateTime(family.task.updated_at)}{family.task.note ? ` · ${family.task.note}` : ""}</p> : null}
-                </div> : <p className="muted">Esta unidad no tiene ninguna cuota activa.</p>}
+                </div> : family.billing.members.length ? <p className="treasury-current-note">Cuota ordinaria actual. No requiere seguimiento de hoja de alta.</p> : <p className="muted">Esta unidad no tiene ninguna cuota activa.</p>}
                 {family.events.length ? <details className="treasury-history"><summary>Ver historial</summary><ul>{family.events.map((event) => <li key={event.id}><span>{eventLabel(event.action)}{event.note ? ` · ${event.note}` : ""}</span><small>{actorLabel(event.actor)} · {dateTime(event.created_at)}</small></li>)}</ul></details> : null}
               </div>
             </details>;
@@ -97,5 +99,5 @@ function money(cents: number) { return new Intl.NumberFormat("es-ES", { style: "
 function date(value?: string | null) { return value ? new Intl.DateTimeFormat("es-ES").format(new Date(`${value}T12:00:00`)) : "-"; }
 function dateTime(value: string) { return new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)); }
 function actorLabel(actor: string) { return actor === "tesorero" ? "Tesorero" : "Álvaro"; }
-function statusLabel(status: string) { return ({ pending: "Pendiente", generated: "Hoja generada", delivered: "Esperando devolución", received: "Datos recibidos", active: "Cobro activo" } as Record<string, string>)[status] ?? status; }
+function statusLabel(status: string) { return ({ pending: "Pendiente", generated: "Hoja generada", delivered: "Esperando devolución", received: "Datos recibidos", active: "Cuota activa", exempt: "Sin cuota" } as Record<string, string>)[status] ?? status; }
 function eventLabel(action: string) { return ({ generated: "Hoja generada", delivered: "Hoja entregada", received: "Datos bancarios recibidos", active: "Cobro activado", billing_enabled: "Cuota activada", billing_disabled: "Cuota desactivada" } as Record<string, string>)[action] ?? action; }

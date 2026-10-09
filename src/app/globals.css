@@ -11729,6 +11729,7 @@ tbody tr:hover {
 .treasury-workflow { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 18px; justify-content: space-between; margin-top: 14px; padding-top: 14px; }
 .treasury-workflow h3, .treasury-workflow p { margin: 0; }
 .treasury-last-action { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+.treasury-current-note { border-top: 1px solid var(--line); color: var(--muted); margin: 14px 0 0; padding-top: 14px; }
 .treasury-history { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
 .treasury-history > summary { color: var(--brand-strong); cursor: pointer; font-weight: 800; }
 .treasury-history ul { list-style: none; margin: 10px 0 0; padding: 0; }
