@@ -11,7 +11,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
   const actor = await getTreasuryActor();
   const params = await searchParams;
   if (!actor) {
-    return <main className="treasury-locked"><img src="/skbc-icon.png" alt="SKBC Gipuzkoa" /><h1>Tesorería SKBC</h1><p>Acceso privado exclusivo para la gestión económica del club.</p>{params.error ? <p className="form-error">El enlace de acceso no es válido o ha caducado.</p> : null}</main>;
+    return <main className="treasury-locked"><img src="/skbc-icon.png" alt="SKBC Gipuzkoa" /><h1>Tesorería SKBC</h1><p>Acceso privado exclusivo para la gestión económica del club.</p>{params.error ? <p className="form-error">El enlace de acceso no es válido o ha caducado.</p> : null}<a className="primary-button" href="/tesoreria/admin">Acceder como Álvaro</a></main>;
   }
 
   const families = await getTreasuryFamilies();
@@ -88,7 +88,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
     </main>
   );
 
-  return actor === "alvaro" ? <div className="shell"><SidebarNav current="/tesoreria" />{content}</div> : <div className="treasury-shell">{content}</div>;
+  return actor === "alvaro" ? <div className="shell"><SidebarNav current="/tesoreria/admin" />{content}</div> : <div className="treasury-shell">{content}</div>;
 }
 
 function WorkflowButton({ memberId, status, label }: { memberId: string; status: string; label: string }) {

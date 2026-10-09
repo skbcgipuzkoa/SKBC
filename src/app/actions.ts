@@ -28,14 +28,20 @@ import { beltColorForGrade, isPendingBeltSize, pendingBeltSize } from "@/lib/exa
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
+  const returnTo = safeLoginReturn(String(formData.get("returnTo") ?? ""));
   const validCodes = [process.env.SKBC_INTERNAL_ACCESS_CODE, "SKBC2026"].filter(Boolean);
 
   if (!validCodes.includes(code)) {
-    redirect("/skbc-interno?error=1");
+    const returnQuery = returnTo === "/tesoreria" ? "&returnTo=%2Ftesoreria" : "";
+    redirect(`/skbc-interno?error=1${returnQuery}`);
   }
 
   await grantInternalAccess();
-  redirect("/kenshis");
+  redirect(returnTo);
+}
+
+function safeLoginReturn(value: string) {
+  return value === "/tesoreria" ? value : "/kenshis";
 }
 
 export async function logoutAction() {

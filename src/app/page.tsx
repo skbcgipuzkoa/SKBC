@@ -410,7 +410,7 @@ function safeStudentFichaReturn(value?: string) {
   }
 }
 
-export function LoginHome({ error }: { error?: string }) {
+export function LoginHome({ error, returnTo }: { error?: string; returnTo?: string }) {
   return (
     <div className="shell">
       <SidebarNav current="/" />
@@ -435,6 +435,7 @@ export function LoginHome({ error }: { error?: string }) {
             </p>
           </div>
           <form action={loginAction} className="login-form">
+            {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
             <label htmlFor="code">Codigo interno</label>
             <div className="login-row">
               <PasswordField id="code" name="code" autoComplete="current-password" required />
