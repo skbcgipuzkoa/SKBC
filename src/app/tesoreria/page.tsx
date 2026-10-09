@@ -105,7 +105,8 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
                       <div><h3>Hoja y alta de cobro</h3><p className="muted">Nueva incorporación: {subject.display_name} · Primer cobro: {date(family.billing.billingOn)}</p></div>
                       <div className="notice-action-row">
                         {subject.legacy_id ? <a className="secondary-button" href={`/kenshis/${subject.legacy_id}/hoja-cobro`} target="_blank"><FileText size={17} /> Abrir hoja</a> : null}
-                        {status === "pending" || status === "generated" ? <WorkflowButton memberId={subject.id} status="delivered" label="Marcar hoja entregada" /> : null}
+                        {status === "pending" ? <WorkflowButton memberId={subject.id} status="generated" label="Marcar hoja preparada" /> : null}
+                        {status === "generated" ? <WorkflowButton memberId={subject.id} status="delivered" label="Marcar hoja entregada" /> : null}
                         {status === "delivered" ? <WorkflowButton memberId={subject.id} status="received" label="Datos bancarios recibidos" /> : null}
                         {status === "received" ? <WorkflowButton memberId={subject.id} status="active" label="Activar cobro" /> : null}
                       </div>
