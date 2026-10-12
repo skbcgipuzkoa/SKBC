@@ -57,15 +57,24 @@ export async function SidebarNav({ current }: SidebarNavProps) {
     getWebsiteAdminAlertCounts()
   ]);
   const websiteAlertCount = totalWebsiteAdminAlerts(websiteAlertCounts);
+  const floatingAlertCount = Number(Boolean(noticeAlertCount)) + Number(Boolean(websiteAlertCount));
 
   return (
     <aside className="sidebar">
-      {noticeAlertCount ? (
-        <a className="global-notice-alert blink-alert" href="/avisos" aria-label={`${noticeAlertCount} avisos pendientes`}>
-          <span>Avisos pendientes</span>
-          <strong>{noticeAlertCount}</strong>
-        </a>
-      ) : null}
+      {floatingAlertCount ? <div className={`sidebar-alert-stack${floatingAlertCount > 1 ? " sidebar-alert-stack-double" : ""}`}>
+        {noticeAlertCount ? (
+          <a className="global-notice-alert blink-alert" href="/avisos" aria-label={`${noticeAlertCount} avisos pendientes`}>
+            <span>Avisos pendientes</span>
+            <strong>{noticeAlertCount}</strong>
+          </a>
+        ) : null}
+        {websiteAlertCount ? (
+          <a className="global-notice-alert blink-alert" href="/alertas" aria-label={`${websiteAlertCount} alertas web pendientes`}>
+            <span>Alertas web pendientes</span>
+            <strong>{websiteAlertCount}</strong>
+          </a>
+        ) : null}
+      </div> : null}
       <div className="brand">
         <strong>SKBC Gipuzkoa</strong>
         <span>Admin privado</span>

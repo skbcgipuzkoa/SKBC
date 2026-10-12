@@ -239,6 +239,21 @@ textarea {
   padding: 3px 7px;
 }
 
+.sidebar-alert-stack {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: fixed;
+  right: 16px;
+  top: 14px;
+  z-index: 80;
+}
+
+.sidebar-alert-stack .global-notice-alert {
+  position: static;
+}
+
 .mobile-priority-alert {
   order: -1;
 }
@@ -7254,6 +7269,11 @@ tbody tr:hover {
 }
 
 @media (min-width: 861px) and (max-width: 1180px) {
+  .sidebar-alert-stack {
+    right: 120px;
+    top: 10px;
+  }
+
   .global-notice-alert {
     right: 120px;
     top: 10px;
@@ -7607,6 +7627,17 @@ tbody tr:hover {
 }
 
 @media (max-width: 860px) {
+  .sidebar-alert-stack {
+    align-items: stretch;
+    left: 12px;
+    right: 12px;
+    top: 10px;
+  }
+
+  .sidebar-alert-stack .global-notice-alert {
+    width: 100%;
+  }
+
   .global-notice-alert {
     border-radius: 8px;
     justify-content: center;
@@ -7637,8 +7668,12 @@ tbody tr:hover {
     z-index: 20;
   }
 
-  .sidebar:has(.global-notice-alert) {
+  .sidebar:has(.sidebar-alert-stack) {
     padding-top: 58px;
+  }
+
+  .sidebar:has(.sidebar-alert-stack-double) {
+    padding-top: 108px;
   }
 
   .brand {
