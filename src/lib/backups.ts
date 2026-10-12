@@ -3,6 +3,7 @@ import { deleteDriveFiles, getGoogleDriveAccessToken, uploadJsonToDrive } from "
 
 const BACKUP_BUCKET = "skbc-backups";
 const COMPLETED_BACKUPS_TO_KEEP = 1;
+const BACKUP_RUNS_TO_KEEP = 10;
 const BACKUP_TABLES = [
   "members",
   "classes",
@@ -147,6 +148,7 @@ export async function runSkbcBackup(triggerSource: "manual" | "cron" = "manual",
     if (updateError) throw updateError;
     if (status === "completed") {
       await pruneOldCompletedBackups(supabase);
+      await pruneOldBackupRuns(supabase);
     }
     return { id: run.id, status, path, tableCounts, tableErrors };
   } catch (error) {
@@ -161,6 +163,23 @@ export async function runSkbcBackup(triggerSource: "manual" | "cron" = "manual",
       .eq("id", run.id);
     return { id: run.id, status: "failed" as const, error: message };
   }
+}
+
+async function pruneOldBackupRuns(supabase: ReturnType<typeof createAdminClient>) {
+  const { data, error } = await supabase
+    .from("backup_runs")
+    .select("id")
+    .neq("status", "running")
+    .order("started_at", { ascending: false })
+    .range(BACKUP_RUNS_TO_KEEP, 1000)
+    .returns<Array<{ id: string }>>();
+
+  if (error || !data?.length) return;
+
+  await supabase
+    .from("backup_runs")
+    .delete()
+    .in("id", data.map((run) => run.id));
 }
 
 async function pruneOldCompletedBackups(supabase: ReturnType<typeof createAdminClient>) {

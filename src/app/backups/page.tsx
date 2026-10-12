@@ -48,7 +48,7 @@ export default async function BackupsPage({
     .from("backup_runs")
     .select("id,status,trigger_source,storage_bucket,storage_path,storage_provider,drive_url,table_counts,table_errors,file_size_bytes,started_at,completed_at,error_message,created_by")
     .order("started_at", { ascending: false })
-    .limit(40)
+    .limit(10)
     .returns<BackupRun[]>();
 
   if (error) throw error;
@@ -143,7 +143,7 @@ export default async function BackupsPage({
           </article>
           <article className="card">
             <DatabaseBackup aria-hidden="true" size={20} />
-            <h2>Copias registradas</h2>
+            <h2>Registros recientes</h2>
             <div className="metric">{runs.length}</div>
           </article>
           <article className="card">
@@ -157,7 +157,7 @@ export default async function BackupsPage({
           <div className="section-heading-row">
             <div>
               <h2>Historial de copias</h2>
-              <p className="muted">Cada fila es una foto de seguridad del sistema nuevo en ese momento.</p>
+              <p className="muted">Se muestran y conservan los 10 registros mas recientes. Solo la ultima copia correcta mantiene su archivo descargable.</p>
             </div>
           </div>
           <div className="backup-run-list">
