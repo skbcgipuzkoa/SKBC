@@ -32,6 +32,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
   const activeCents = currentBilling.reduce((sum, family) => sum + family.totalCents, 0);
   const activeMembers = currentBilling.reduce((sum, family) => sum + family.members, 0);
   const exemptMembers = families.reduce((sum, family) => sum + family.members.filter((member) => member.billing_enabled === false).length, 0);
+  const familiesWithExemptMembers = families.filter((family) => family.members.some((member) => member.billing_enabled === false)).length;
   const today = todayInMadrid();
   const alerts = families
     .filter((family) => {
@@ -77,7 +78,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
         <article className="card"><Banknote size={20} /><h2>Cuota mensual activa</h2><div className="metric">{money(activeCents)}</div></article>
         <article className="card"><Users size={20} /><h2>Incluidos actualmente</h2><div className="metric">{activeMembers}</div></article>
         <article className="card"><Calculator size={20} /><h2>Total teórico</h2><div className="metric">{money(expectedCents)}</div><p className="muted">Si continúan quienes están en prueba.</p></article>
-        <article className="card"><CheckCircle2 size={20} /><h2>Exentos</h2><div className="metric">{exemptMembers}</div></article>
+        <article className="card"><CheckCircle2 size={20} /><h2>Personas exentas</h2><div className="metric">{exemptMembers}</div><p className="muted">En {familiesWithExemptMembers} {familiesWithExemptMembers === 1 ? "unidad familiar" : "unidades familiares"}.</p></article>
         <article className={alerts.length ? "card attention-card" : "card"}><Bell size={20} /><h2>Avisos</h2><div className="metric">{alerts.length}</div></article>
       </section>
 
@@ -96,8 +97,9 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
                 const subject = family.billing.newestMember;
                 const hasOnboardingWorkflow = Boolean(subject?.trialEndsOn);
                 const status = familyStatus(family);
+                const familyExemptMembers = family.members.filter((member) => member.billing_enabled === false).length;
                 return <details id={`family-${family.key}`} className={`treasury-family treasury-status-${status}`} key={family.key}>
-                  <summary><span><strong>{familyLabel(family)}</strong><small>{family.members.length} miembros · {family.billing.members.length} incluidos al cobrar</small></span><b>{money(family.billing.totalCents)}</b><span className={`state-badge treasury-badge-${status}`}>{statusLabel(status)}</span></summary>
+                  <summary><span><strong>{familyLabel(family)}</strong><small>{family.members.length} miembros · {family.billing.members.length} incluidos al cobrar{familyExemptMembers ? ` · ${familyExemptMembers} ${familyExemptMembers === 1 ? "exento" : "exentos"}` : ""}</small></span><b>{money(family.billing.totalCents)}</b><span className={`state-badge treasury-badge-${status}`}>{statusLabel(status)}</span></summary>
                   <div className="treasury-family-body">
                     <div className="treasury-members">
                       {family.members.map((member) => <form action={updateMemberBillingAction} key={member.id} className={member.billing_enabled === false ? "treasury-member exempt" : "treasury-member"}>
