@@ -8,7 +8,7 @@ function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function madridIsoDate(date = new Date()) {
+export function todayInMadrid(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "2-digit",
@@ -53,7 +53,7 @@ export function firstBillingDateAfterFreeMonth(startedOn: string | null | undefi
   )));
 }
 
-export function nextAvailableBillingDate(value: string | null | undefined, today = madridIsoDate()) {
+export function nextAvailableBillingDate(value: string | null | undefined, today = todayInMadrid()) {
   if (!value || value >= today) return value ?? null;
   const current = parseIsoDate(today);
   if (!current) return value;

@@ -4,6 +4,7 @@ import { SubmitButton } from "@/app/components/SubmitButton";
 import { correctTreasuryWorkflowAction, logoutTreasuryAction, manageTreasuryAccessAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { familyDiscountCents } from "@/lib/family-billing";
+import { todayInMadrid } from "@/lib/free-trial";
 import { familyLabel, getTreasuryFamilies } from "@/lib/treasury";
 import { getTreasuryAccessSettings, getTreasuryActor } from "@/lib/treasury-auth";
 
@@ -31,15 +32,11 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
   const activeCents = currentBilling.reduce((sum, family) => sum + family.totalCents, 0);
   const activeMembers = currentBilling.reduce((sum, family) => sum + family.members, 0);
   const exemptMembers = families.reduce((sum, family) => sum + family.members.filter((member) => member.billing_enabled === false).length, 0);
-  const today = new Date().toISOString().slice(0, 10);
-  const soon = new Date();
-  soon.setDate(soon.getDate() + 14);
-  const soonDate = soon.toISOString().slice(0, 10);
+  const today = todayInMadrid();
   const alerts = families
     .filter((family) => {
       const end = family.billing.newestMember?.trialEndsOn;
-      if (!end) return false;
-      return family.task?.status === "delivered" || Boolean(end <= soonDate && family.task?.status !== "received" && family.task?.status !== "active");
+      return Boolean(end && end <= today && family.task?.status !== "received" && family.task?.status !== "active");
     })
     .sort((a, b) => {
       const dateOrder = (a.billing.newestMember?.trialEndsOn ?? "9999-12-31").localeCompare(b.billing.newestMember?.trialEndsOn ?? "9999-12-31");
@@ -85,7 +82,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section id="avisos-tesoreria" className={alerts.length ? "card attention-card" : "card"}>
-        <div className="section-heading-row"><div><p className="eyebrow">Seguimiento</p><h2>Avisos de tesorería</h2><p className="muted">Meses gratuitos próximos a terminar y hojas entregadas pendientes de devolución.</p></div>{alerts.some((family) => family.billing.newestMember?.trialEndsOn && family.billing.newestMember!.trialEndsOn! <= today) ? <a className="secondary-button" href="/avisos/hojas-cobro" target="_blank"><Printer size={17} /> Imprimir hojas vencidas</a> : null}</div>
+        <div className="section-heading-row"><div><p className="eyebrow">Seguimiento</p><h2>Avisos de tesorería</h2><p className="muted">Meses gratuitos ya finalizados y hojas entregadas pendientes de devolución.</p></div>{alerts.length ? <a className="secondary-button" href="/avisos/hojas-cobro" target="_blank"><Printer size={17} /> Imprimir hojas vencidas</a> : null}</div>
         {alerts.length ? <div className="treasury-alert-list">{alerts.map((family) => <a key={family.key} href={`#family-${family.key}`}><strong>{familyLabel(family)}</strong><em className={`treasury-sheet-state treasury-sheet-state-${family.task?.status ?? "pending"}`}>{sheetStatusLabel(family.task?.status)}</em><span>Fin del mes gratuito: {date(family.billing.newestMember?.trialEndsOn)}</span></a>)}</div> : <p className="muted">No hay gestiones urgentes.</p>}
       </section>
 
