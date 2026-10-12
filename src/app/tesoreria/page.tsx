@@ -31,7 +31,10 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
   });
   const activeCents = currentBilling.reduce((sum, family) => sum + family.totalCents, 0);
   const activeMembers = currentBilling.reduce((sum, family) => sum + family.members, 0);
-  const exemptMembers = families.reduce((sum, family) => sum + family.members.filter((member) => member.billing_enabled === false).length, 0);
+  const exemptEntries = families.flatMap((family) => family.members
+    .filter((member) => member.billing_enabled === false)
+    .map((member) => ({ member, familyName: familyLabel(family) })));
+  const exemptMembers = exemptEntries.length;
   const familiesWithExemptMembers = families.filter((family) => family.members.some((member) => member.billing_enabled === false)).length;
   const today = todayInMadrid();
   const alerts = families
@@ -44,7 +47,6 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
       return dateOrder || familyLabel(a).localeCompare(familyLabel(b), "es");
     });
   const groupedFamilies = [
-    { id: "exempt", title: "Exentos de pago", description: "Unidades sin ninguna cuota incluida.", families: families.filter((family) => familyCategory(family) === "exempt") },
     { id: "trial", title: "Mes de prueba", description: "Altas que todavía no tienen el cobro activado.", families: families.filter((family) => familyCategory(family) === "trial") },
     { id: "active", title: "Pago activo", description: "Unidades con cuota ordinaria o cobro confirmado.", families: families.filter((family) => familyCategory(family) === "active") }
   ];
@@ -90,6 +92,18 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
       <section className="card treasury-directory">
         <div className="section-heading-row"><div><p className="eyebrow">Situación actual</p><h2>Familias y cuotas</h2><p className="muted">Aquí se indica quién se incluirá en la cuota. En las nuevas altas, el cobro no queda activo hasta completar la entrega de la hoja, recibir los datos bancarios y pulsar Activar cobro.</p></div><span className="state-badge state-completada">{families.length} unidades</span></div>
         <div className="treasury-family-groups">
+          <details className="treasury-family-group treasury-family-group-exempt">
+            <summary><span><strong>Personas exentas</strong><small>Todas las personas sin cuota, aunque otros miembros de su familia sí paguen.</small></span><b>{exemptMembers}</b></summary>
+            <div className="treasury-exempt-list">
+              {exemptEntries.map(({ member, familyName }) => <form action={updateMemberBillingAction} key={member.id} className="treasury-member exempt">
+                <input type="hidden" name="memberId" value={member.id} />
+                <span><strong>{member.display_name}</strong><small>{member.class === "kids" ? "Niños" : "Adultos"}{familyName !== member.display_name ? ` · ${familyName}` : ""}</small></span>
+                <label>Estado<select name="billingEnabled" defaultValue="false"><option value="true">Incluir en la cuota</option><option value="false">Exento de cuota</option></select></label>
+                <label>Nota<input name="billingNote" defaultValue={member.billing_note ?? ""} placeholder="Motivo opcional" /></label>
+                <SubmitButton pendingLabel="Guardando...">Guardar</SubmitButton>
+              </form>)}
+            </div>
+          </details>
           {groupedFamilies.map((group) => <details className={`treasury-family-group treasury-family-group-${group.id}`} key={group.id}>
             <summary><span><strong>{group.title}</strong><small>{group.description}</small></span><b>{group.families.length}</b></summary>
             <div className="treasury-family-list">

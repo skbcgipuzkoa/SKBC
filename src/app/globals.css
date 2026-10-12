@@ -11736,6 +11736,7 @@ tbody tr:hover {
 .treasury-family-group-exempt > summary { background: #f3f1ed; }
 .treasury-family-group-trial > summary { background: #fff5d8; }
 .treasury-family-group-active > summary { background: #e8f6ee; }
+.treasury-exempt-list { border-top: 1px solid var(--line); display: grid; gap: 8px; padding: 12px; }
 .treasury-family-list { border-top: 1px solid var(--line); }
 .treasury-family { border-bottom: 1px solid var(--line); }
 .treasury-family:last-child { border-bottom: 0; }
