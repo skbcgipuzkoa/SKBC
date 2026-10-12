@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { ArrowLeft, CheckCircle2, ExternalLink, Filter, Pencil, Play, RefreshCw, Save, Search, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronDown, ExternalLink, Filter, Pencil, Play, RefreshCw, Save, Search, X } from "lucide-react";
 import { adultGrades } from "@/lib/grades";
 import { detectVariants, filterConsultationTechniques, type ConsultationTechniqueView } from "@/lib/technical-consultation-core";
 
@@ -44,6 +44,11 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
 
   const visible = useMemo(() => filterConsultationTechniques(techniques, filters), [techniques, filters]);
   const activeFilters = Object.values(filters).filter(Boolean).length;
+  const studentGradeGroups = useMemo(() => options.grades.map((grade) => ({
+    grade,
+    techniques: visible.filter((technique) => technique.grade.trim().toUpperCase() === grade.trim().toUpperCase())
+  })).filter((group) => group.techniques.length), [options.grades, visible]);
+  const showGroupedStudentProgram = !canEdit && Boolean(maxGrade) && activeFilters === 0;
 
   function updateFilter(key: keyof Filters, value: string) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -161,7 +166,7 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
         </div>
       </details>
 
-      <div className="consult-count"><strong>{visible.length}</strong> tecnicas visibles</div>
+      <div className="consult-count"><strong>{visible.length}</strong> tecnicas visibles{showGroupedStudentProgram ? ` en ${studentGradeGroups.length} grados` : ""}</div>
 
       <section className="consult-card-list">
         {!canEdit && !maxGrade ? (
@@ -170,10 +175,51 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
             <p className="consult-summary">Para ver la consulta tecnica de alumno, abre el boton CONSULTAR TECNICAS desde tu ficha. Asi el sistema limita automaticamente el programa a tu grado objetivo y todos los anteriores.</p>
           </article>
         ) : null}
-        {visible.map((technique) => (
-          <article className="consult-card" key={technique.id}>
-            {editingId === technique.id && canEdit ? (
-              <form action={saveTechnique} className="consult-edit-form">
+        {showGroupedStudentProgram ? (
+          <div className="consult-grade-list">
+            {studentGradeGroups.map((group) => (
+              <details className="consult-grade-group" key={group.grade}>
+                <summary>
+                  <span>{group.grade}</span>
+                  <span className="consult-grade-total">{group.techniques.length} tecnicas</span>
+                  <ChevronDown className="consult-grade-chevron" aria-hidden="true" size={20} />
+                </summary>
+                <div className="consult-grade-techniques">
+                  {group.techniques.map((technique) => <TechniqueCard key={technique.id} technique={technique} />)}
+                </div>
+              </details>
+            ))}
+          </div>
+        ) : visible.map((technique) => (
+          <TechniqueCard
+            key={technique.id}
+            technique={technique}
+            canEdit={canEdit}
+            editing={editingId === technique.id}
+            isPending={isPending}
+            onEdit={() => setEditingId(technique.id)}
+            onCancel={() => setEditingId(null)}
+            onSave={saveTechnique}
+          />
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function TechniqueCard({ technique, canEdit = false, editing = false, isPending = false, onEdit, onCancel, onSave }: {
+  technique: ConsultationTechniqueView;
+  canEdit?: boolean;
+  editing?: boolean;
+  isPending?: boolean;
+  onEdit?: () => void;
+  onCancel?: () => void;
+  onSave?: (formData: FormData) => void;
+}) {
+  return (
+    <article className="consult-card">
+            {editing && canEdit && onSave ? (
+              <form action={onSave} className="consult-edit-form">
                 <input type="hidden" name="id" value={technique.id} />
                 <label>Nombre<input name="name" defaultValue={technique.name} required /></label>
                 <label>Grado<SelectControl name="grade" defaultValue={technique.grade} options={adultGrades} /></label>
@@ -188,7 +234,7 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
                 <label className="checkbox-field"><input name="activeInPlanning" type="checkbox" defaultChecked={technique.active_in_planning} />Entra en plan tecnico</label>
                 <div className="consult-actions">
                   <button type="submit" disabled={isPending}><Save aria-hidden="true" size={16} />Guardar</button>
-                  <button type="button" className="secondary-link button-reset" onClick={() => setEditingId(null)}>Cancelar</button>
+                  <button type="button" className="secondary-link button-reset" onClick={onCancel}>Cancelar</button>
                 </div>
               </form>
             ) : (
@@ -198,7 +244,7 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
                     <h2>{technique.name}</h2>
                     <p>{technique.grade} · {technique.category}</p>
                   </div>
-                  {canEdit ? <button type="button" className="icon-button" onClick={() => setEditingId(technique.id)} title="Editar tecnica" aria-label="Editar tecnica"><Pencil aria-hidden="true" size={17} /></button> : null}
+                  {canEdit ? <button type="button" className="icon-button" onClick={onEdit} title="Editar tecnica" aria-label="Editar tecnica"><Pencil aria-hidden="true" size={17} /></button> : null}
                 </div>
                 <div className="consult-chip-row">
                   {technique.base_name ? <span>Base: {technique.base_name}</span> : null}
@@ -221,10 +267,7 @@ export function TechnicalConsultationClient({ initialTechniques, options, canEdi
                 </div>
               </>
             )}
-          </article>
-        ))}
-      </section>
-    </div>
+    </article>
   );
 }
 

@@ -835,6 +835,67 @@ h1 {
   gap: 12px;
 }
 
+.consult-grade-list {
+  display: grid;
+  gap: 10px;
+}
+
+.consult-grade-group {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 27, 45, 0.035);
+  overflow: hidden;
+}
+
+.consult-grade-group > summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  font-size: 18px;
+  font-weight: 900;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  list-style: none;
+  min-height: 64px;
+  padding: 14px 18px;
+}
+
+.consult-grade-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.consult-grade-total {
+  background: #eef4fb;
+  border: 1px solid #d6e6f7;
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 13px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.consult-grade-chevron {
+  color: var(--brand-strong);
+  transition: transform 160ms ease;
+}
+
+.consult-grade-group[open] .consult-grade-chevron {
+  transform: rotate(180deg);
+}
+
+.consult-grade-techniques {
+  background: #f6f9fc;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.consult-grade-techniques .consult-card {
+  box-shadow: none;
+}
+
 .consult-card {
   background: #fff;
   border: 1px solid var(--line);
@@ -1027,6 +1088,20 @@ h1 {
   .consult-filter-grid,
   .consult-edit-form {
     grid-template-columns: 1fr;
+  }
+
+  .consult-grade-group > summary {
+    font-size: 16px;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .consult-grade-total {
+    font-size: 12px;
+  }
+
+  .consult-grade-techniques {
+    padding: 8px;
   }
 }
 
