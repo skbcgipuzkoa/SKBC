@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { calculateFamilyBilling, familyDiscountCents } from "../src/lib/family-billing.ts";
-import { firstBillingDateAfterFreeMonth } from "../src/lib/free-trial.ts";
+import { firstBillingDateAfterFreeMonth, nextAvailableBillingDate, resolveFreeTrialBillingDate } from "../src/lib/free-trial.ts";
 
 const member = (id, memberClass, start, status = "active") => ({
   id,
@@ -26,6 +26,11 @@ assert.equal(firstBillingDateAfterFreeMonth("2026-09-16"), "2026-11-15");
 assert.equal(firstBillingDateAfterFreeMonth("2026-09-18"), "2026-11-15");
 assert.equal(firstBillingDateAfterFreeMonth("2026-09-19"), "2026-12-15");
 assert.equal(firstBillingDateAfterFreeMonth("2026-01-31"), "2026-04-15");
+assert.equal(nextAvailableBillingDate("2026-07-15", "2026-10-12"), "2026-10-15");
+assert.equal(nextAvailableBillingDate("2026-08-15", "2026-10-15"), "2026-10-15");
+assert.equal(nextAvailableBillingDate("2026-08-15", "2026-10-16"), "2026-11-15");
+assert.equal(nextAvailableBillingDate("2026-11-15", "2026-10-12"), "2026-11-15");
+assert.equal(resolveFreeTrialBillingDate("2026-04-30", null, "2026-10-12"), "2026-10-15");
 
 const mixed = calculateFamilyBilling([
   member("adult", "adults", "2026-01-01"),

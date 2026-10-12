@@ -8,6 +8,17 @@ function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function madridIsoDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Europe/Madrid"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function lastDayOfMonth(year: number, monthIndex: number) {
   return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
 }
@@ -42,9 +53,17 @@ export function firstBillingDateAfterFreeMonth(startedOn: string | null | undefi
   )));
 }
 
-export function resolveFreeTrialBillingDate(startedOn: string | null | undefined, storedBillingOn?: string | null) {
+export function nextAvailableBillingDate(value: string | null | undefined, today = madridIsoDate()) {
+  if (!value || value >= today) return value ?? null;
+  const current = parseIsoDate(today);
+  if (!current) return value;
+  const monthOffset = current.getUTCDate() <= 15 ? 0 : 1;
+  return isoDate(new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + monthOffset, 15)));
+}
+
+export function resolveFreeTrialBillingDate(startedOn: string | null | undefined, storedBillingOn?: string | null, today?: string) {
   const calculated = firstBillingDateAfterFreeMonth(startedOn);
-  if (!calculated) return storedBillingOn ?? null;
-  if (!storedBillingOn) return calculated;
-  return storedBillingOn > calculated ? storedBillingOn : calculated;
+  if (!calculated) return nextAvailableBillingDate(storedBillingOn, today);
+  const initialBillingOn = storedBillingOn && storedBillingOn > calculated ? storedBillingOn : calculated;
+  return nextAvailableBillingDate(initialBillingOn, today);
 }
