@@ -11712,7 +11712,9 @@ tbody tr:hover {
 .treasury-link-row input { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; min-width: 0; }
 @media (max-width: 760px) { .treasury-correction-form { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .treasury-link-row { grid-template-columns: 1fr; } .treasury-link-row button { width: 100%; } }
+.treasury-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .treasury-stats .metric { font-size: 30px; }
+.treasury-stats .muted { font-size: 12px; margin: 7px 0 0; }
 .treasury-priority-alert { margin-bottom: 18px; }
 .treasury-alert-list { display: grid; gap: 8px; margin-top: 16px; }
 .treasury-alert-list a { align-items: center; background: #fff8e6; border: 1px solid #edcf7e; border-radius: 7px; color: var(--ink); display: grid; gap: 14px; grid-template-columns: minmax(240px, 1.2fr) minmax(190px, .8fr) minmax(210px, auto); padding: 12px 14px; text-decoration: none; }

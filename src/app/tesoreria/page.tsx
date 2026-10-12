@@ -1,8 +1,9 @@
-import { Banknote, Bell, CheckCircle2, FileText, LogOut, Printer, Users } from "lucide-react";
+import { Banknote, Bell, Calculator, CheckCircle2, FileText, LogOut, Printer, Users } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
 import { correctTreasuryWorkflowAction, logoutTreasuryAction, manageTreasuryAccessAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { familyDiscountCents } from "@/lib/family-billing";
 import { familyLabel, getTreasuryFamilies } from "@/lib/treasury";
 import { getTreasuryAccessSettings, getTreasuryActor } from "@/lib/treasury-auth";
 
@@ -20,7 +21,15 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
     actor === "alvaro" ? getTreasuryAccessSettings() : Promise.resolve(null)
   ]);
   const expectedCents = families.reduce((sum, family) => sum + family.billing.totalCents, 0);
-  const includedMembers = families.reduce((sum, family) => sum + family.billing.members.length, 0);
+  const currentBilling = families.map((family) => {
+    const members = familyCategory(family) === "trial"
+      ? family.billing.members.filter((member) => member.id !== family.billing.newestMember?.id)
+      : family.billing.members;
+    const baseCents = members.reduce((sum, member) => sum + member.baseFeeCents, 0);
+    return { members: members.length, totalCents: Math.max(0, baseCents - familyDiscountCents(members.length)) };
+  });
+  const activeCents = currentBilling.reduce((sum, family) => sum + family.totalCents, 0);
+  const activeMembers = currentBilling.reduce((sum, family) => sum + family.members, 0);
   const exemptMembers = families.reduce((sum, family) => sum + family.members.filter((member) => member.billing_enabled === false).length, 0);
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date();
@@ -68,8 +77,9 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
       </section> : null}
 
       <section className="grid stats compact treasury-stats">
-        <article className="card"><Banknote size={20} /><h2>Cuota mensual prevista</h2><div className="metric">{money(expectedCents)}</div></article>
-        <article className="card"><Users size={20} /><h2>Incluidos en cuota</h2><div className="metric">{includedMembers}</div></article>
+        <article className="card"><Banknote size={20} /><h2>Cuota mensual activa</h2><div className="metric">{money(activeCents)}</div></article>
+        <article className="card"><Users size={20} /><h2>Incluidos actualmente</h2><div className="metric">{activeMembers}</div></article>
+        <article className="card"><Calculator size={20} /><h2>Total teórico</h2><div className="metric">{money(expectedCents)}</div><p className="muted">Si continúan quienes están en prueba.</p></article>
         <article className="card"><CheckCircle2 size={20} /><h2>Exentos</h2><div className="metric">{exemptMembers}</div></article>
         <article className={alerts.length ? "card attention-card" : "card"}><Bell size={20} /><h2>Avisos</h2><div className="metric">{alerts.length}</div></article>
       </section>
