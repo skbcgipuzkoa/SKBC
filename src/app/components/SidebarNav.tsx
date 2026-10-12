@@ -11,8 +11,9 @@ type NavItem = {
   external?: boolean;
 };
 
-const navItems: NavItem[] = [
-  { label: "Inicio", href: "/skbc-interno" },
+const homeItem: NavItem = { label: "Inicio", href: "/skbc-interno" };
+
+const sectionItems: NavItem[] = [
   { label: "Dojo", href: "/skbc-interno/dojo" },
   { label: "Control dia", href: "/control-dia" },
   { label: "Sustituto", href: "/clases/nueva?delegado=1" },
@@ -42,6 +43,11 @@ const navItems: NavItem[] = [
   { label: "Salud Supabase", href: "/salud-supabase" },
   { label: "Notificaciones", href: "/notificaciones" },
   { label: "Sistema", href: "/sistema" }
+];
+
+const navItems = [
+  homeItem,
+  ...sectionItems.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }))
 ];
 
 export async function SidebarNav({ current }: SidebarNavProps) {
