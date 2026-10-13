@@ -125,6 +125,7 @@ export default async function RankingsPage({
       supabase
         .from("attendance_logs")
         .select("member_id,attended_on")
+        .order("attended_on", { ascending: false })
         .returns<Attendance[]>(),
       supabase
         .from("member_technical_history")
@@ -800,8 +801,6 @@ function latestAttendanceByMember(rows: Attendance[]) {
 
 function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[]) {
   const summaries = new Map<string, {
-    attendance_30d: number;
-    attendance_90d: number;
     last_attendance_on: string;
     days_without_attendance: number;
   }>();
@@ -816,8 +815,6 @@ function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[
     dates.sort((a, b) => b.localeCompare(a));
     const lastAttendanceOn = dates[0];
     summaries.set(memberId, {
-      attendance_30d: dates.filter((date) => date >= date30).length,
-      attendance_90d: dates.filter((date) => date >= date90).length,
       last_attendance_on: lastAttendanceOn,
       days_without_attendance: trainingDaysBetween(lastAttendanceOn, currentDate, closures, "kids")
     });
