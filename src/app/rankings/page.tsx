@@ -202,13 +202,10 @@ export default async function RankingsPage({
   const allAdults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, blackBeltEligibleIds, shakujoRows, closures);
   const adults = allAdults.slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
-  const childDaysWithoutAttendance = latestAttendanceByMember(attendance ?? []);
+  const childAttendance = summarizeChildAttendance(attendance ?? [], closures);
   const allKids = (childRankings ?? [])
     .filter((row) => row.members?.status === "active")
-    .map((row) => ({
-      ...row,
-      days_without_attendance: displayDaysWithout(row.member_id, row.days_without_attendance, childDaysWithoutAttendance, closures, "kids")
-    }));
+    .map((row) => ({ ...row, ...(childAttendance.get(row.member_id) ?? {}) }));
   const kids = allKids.slice(0, 10);
   const selectedView = params.view === "kids" ? "kids" : "adults";
   const compareA = params.compareA ?? "";
@@ -357,7 +354,7 @@ export default async function RankingsPage({
                       <span className="ranking-chip-grid">
                         <span className="ranking-chip">30/90: {row.attendance_30d}/{row.attendance_90d}</span>
                         <span className="ranking-chip">Ultima {row.last_attendance_on ?? "-"}</span>
-                        <span className="ranking-chip">{formatDaysWithout(displayDaysWithout(row.member_id, row.days_without_attendance, childDaysWithoutAttendance, closures, "kids"))}</span>
+                        <span className="ranking-chip">{formatDaysWithout(row.days_without_attendance)}</span>
                         <span className="ranking-chip">Nivel {row.level ?? "-"}</span>
                       </span>
                     </span>
@@ -366,7 +363,7 @@ export default async function RankingsPage({
                     <AuditMetric label="Asistencias 30 dias" value={`${row.attendance_30d}`} detail={`${row.attendance_30d} x 3 puntos`} />
                     <AuditMetric label="Asistencias 90 dias" value={`${row.attendance_90d}`} detail={`${row.attendance_90d} x 1 punto`} />
                     <AuditMetric label="Score infantil" value={`${row.score}`} detail={`${row.attendance_30d * 3} + ${row.attendance_90d}`} />
-                    <AuditMetric label="Ultima asistencia" value={row.last_attendance_on ?? "-"} detail={formatDaysWithout(displayDaysWithout(row.member_id, row.days_without_attendance, childDaysWithoutAttendance, closures, "kids"))} />
+                    <AuditMetric label="Ultima asistencia" value={row.last_attendance_on ?? "-"} detail={formatDaysWithout(row.days_without_attendance)} />
                   </div>
                   {row.members?.legacy_id ? <a className="mini-action" href={`/kenshis/${row.members.legacy_id}`}>Abrir kenshi</a> : null}
                 </details>
@@ -495,7 +492,7 @@ export default async function RankingsPage({
                       </td>
                       <td data-label="Grado">{row.members?.grade ?? "-"}</td>
                       <td data-label="Asist. 30/90">{row.attendance_30d}/{row.attendance_90d}</td>
-                      <td data-label="Ultima">{row.last_attendance_on ?? "-"}{formatInlineDaysWithout(displayDaysWithout(row.member_id, row.days_without_attendance, childDaysWithoutAttendance, closures, "kids"))}</td>
+                      <td data-label="Ultima">{row.last_attendance_on ?? "-"}{formatInlineDaysWithout(row.days_without_attendance)}</td>
                       <td data-label="Nivel">{row.level ?? "-"}</td>
                       <td data-label="Score"><strong>{row.score}</strong></td>
                     </tr>
@@ -799,6 +796,33 @@ function latestAttendanceByMember(rows: Attendance[]) {
     if (!current || row.attended_on > current) latest.set(row.member_id, row.attended_on);
   });
   return latest;
+}
+
+function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[]) {
+  const summaries = new Map<string, {
+    attendance_30d: number;
+    attendance_90d: number;
+    last_attendance_on: string;
+    days_without_attendance: number;
+  }>();
+  const grouped = new Map<string, string[]>();
+  for (const row of rows) {
+    const dates = grouped.get(row.member_id) ?? [];
+    dates.push(row.attended_on);
+    grouped.set(row.member_id, dates);
+  }
+  const currentDate = new Date().toISOString().slice(0, 10);
+  for (const [memberId, dates] of grouped) {
+    dates.sort((a, b) => b.localeCompare(a));
+    const lastAttendanceOn = dates[0];
+    summaries.set(memberId, {
+      attendance_30d: dates.filter((date) => date >= date30).length,
+      attendance_90d: dates.filter((date) => date >= date90).length,
+      last_attendance_on: lastAttendanceOn,
+      days_without_attendance: trainingDaysBetween(lastAttendanceOn, currentDate, closures, "kids")
+    });
+  }
+  return summaries;
 }
 
 function daysBetween(from: string, to: string) {

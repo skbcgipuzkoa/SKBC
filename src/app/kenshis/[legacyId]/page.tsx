@@ -203,7 +203,6 @@ export default async function KenshiDetailPage({
       .select("attended_on,official_grade,trained_grade,technical_role,classes(name)")
       .eq("member_id", member.id)
       .order("attended_on", { ascending: false })
-      .limit(12)
       .returns<Attendance[]>(),
     supabase
       .from("exams")
@@ -300,6 +299,7 @@ export default async function KenshiDetailPage({
   const blackBeltSpecial = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
   const shakujoAttendance = shakujoResult.error ? [] : shakujoResult.data ?? [];
   const latestAttendance = attendance?.[0] ?? null;
+  const liveChildAttendance = buildLiveChildAttendance(attendance ?? [], today);
   const technicalHistory = technicalHistoryResult.error ? [] : technicalHistoryResult.data ?? [];
   const latestTechnique = technicalHistory[0] ?? null;
   const latestExam = exams?.[0] ?? null;
@@ -548,13 +548,13 @@ export default async function KenshiDetailPage({
               </article>
               <article className="card">
                 <h2>Asistencia 30/90</h2>
-                <div className="metric small">{childRanking ? `${childRanking.attendance_30d}/${childRanking.attendance_90d}` : "-"}</div>
+                <div className="metric small">{`${liveChildAttendance.attendance30d}/${liveChildAttendance.attendance90d}`}</div>
                 <p className="muted">{childRanking?.constancy_status ?? "-"}</p>
               </article>
               <article className="card">
                 <h2>Ultima asistencia</h2>
-                <div className="metric small">{childRanking?.last_attendance_on ?? "-"}</div>
-                <p className="muted">{childRanking?.days_without_attendance ?? 0} dias sin venir</p>
+                <div className="metric small">{liveChildAttendance.lastAttendanceOn ?? "-"}</div>
+                <p className="muted">{liveChildAttendance.daysWithoutAttendance ?? 0} dias sin venir</p>
               </article>
               <article className="card">
                 <h2>Mensaje</h2>
@@ -711,7 +711,7 @@ export default async function KenshiDetailPage({
               <tr><th>Fecha</th><th>Clase</th><th>Grado oficial</th><th>Grado entrenado</th><th>Rol</th></tr>
             </thead>
             <tbody>
-              {(attendance ?? []).map((item) => (
+              {(attendance ?? []).slice(0, 12).map((item) => (
                 <tr key={`${item.attended_on}-${item.classes?.name}`}>
                   <td data-label="Fecha">{item.attended_on}</td>
                   <td data-label="Clase">{item.classes?.name ?? "-"}</td>
@@ -879,6 +879,25 @@ function AuditCard({ title, value, body }: { title: string; value: string; body:
       <p>{body}</p>
     </article>
   );
+}
+
+function buildLiveChildAttendance(attendance: Attendance[], today: string) {
+  const cutoff = (days: number) => {
+    const date = new Date(`${today}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - days);
+    return date.toISOString().slice(0, 10);
+  };
+  const lastAttendanceOn = attendance[0]?.attended_on ?? null;
+  const lastTime = lastAttendanceOn ? new Date(`${lastAttendanceOn}T00:00:00Z`).getTime() : NaN;
+  const todayTime = new Date(`${today}T00:00:00Z`).getTime();
+  return {
+    attendance30d: attendance.filter((row) => row.attended_on >= cutoff(30)).length,
+    attendance90d: attendance.filter((row) => row.attended_on >= cutoff(90)).length,
+    lastAttendanceOn,
+    daysWithoutAttendance: Number.isFinite(lastTime) && Number.isFinite(todayTime)
+      ? Math.max(0, Math.floor((todayTime - lastTime) / 86400000))
+      : null
+  };
 }
 
 function roleLabel(value: string) {
