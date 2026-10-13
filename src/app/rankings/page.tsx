@@ -115,18 +115,13 @@ export default async function RankingsPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data: members, error: membersError }, { data: attendance, error: attendanceError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, blackBeltEligibilityResult, shakujoResult, closuresResult] =
+  const [{ data: members, error: membersError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, blackBeltEligibilityResult, shakujoResult, closuresResult] =
     await Promise.all([
       supabase
         .from("members")
         .select("id,legacy_id,ika_id,display_name,class,grade,status,joined_on")
         .eq("status", "active")
         .returns<Member[]>(),
-      supabase
-        .from("attendance_logs")
-        .select("member_id,attended_on")
-        .order("attended_on", { ascending: false })
-        .returns<Attendance[]>(),
       supabase
         .from("member_technical_history")
         .select("member_id,class_date")
@@ -171,19 +166,14 @@ export default async function RankingsPage({
     ]);
 
   if (membersError) throw membersError;
-  if (attendanceError) throw attendanceError;
   if (technicalError) throw technicalError;
   if (coursesError) throw coursesError;
   if (childError) throw childError;
 
-  const { data: recentChildAttendance, error: recentChildAttendanceError } = await supabase
-    .from("attendance_logs")
-    .select("member_id,attended_on,members!inner(class)")
-    .eq("members.class", "kids")
-    .gte("attended_on", date90)
-    .order("attended_on", { ascending: false })
-    .returns<Attendance[]>();
-  if (recentChildAttendanceError) throw recentChildAttendanceError;
+  const [recentChildAttendance, recentAdultAttendance] = await Promise.all([
+    loadAttendanceByClass(supabase, "kids", date90),
+    loadAttendanceByClass(supabase, "adults", date180)
+  ]);
 
   const [bonusResult, recentBonusResult] = await Promise.all([
     supabase
@@ -209,10 +199,10 @@ export default async function RankingsPage({
   const blackBeltEligibleIds = new Set((blackBeltEligibilityResult.error ? [] : blackBeltEligibilityResult.data ?? []).map((row) => row.member_id));
   const shakujoRows = shakujoResult.error ? [] : shakujoResult.data ?? [];
   const closures = closuresResult.error ? [] : closuresResult.data ?? [];
-  const allAdults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, blackBeltEligibleIds, shakujoRows, closures);
+  const allAdults = buildAdultRanking(members ?? [], recentAdultAttendance, technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, blackBeltEligibleIds, shakujoRows, closures);
   const adults = allAdults.slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
-  const childAttendance = summarizeChildAttendance(recentChildAttendance ?? [], closures);
+  const childAttendance = summarizeChildAttendance(recentChildAttendance, closures);
   const allKids = (childRankings ?? [])
     .filter((row) => row.members?.status === "active")
     .map((row) => ({ ...row, ...(childAttendance.get(row.member_id) ?? {}) }));
@@ -797,6 +787,30 @@ function possibleClubDays(clubDates: string[], since: string, _joinedOn: string 
 function attendanceRate(attendanceCount: number, possibleDays: number) {
   if (possibleDays <= 0) return 0;
   return Math.min(1, attendanceCount / possibleDays);
+}
+
+async function loadAttendanceByClass(
+  supabase: ReturnType<typeof createAdminClient>,
+  memberClass: Member["class"],
+  since: string
+) {
+  const pageSize = 1000;
+  const rows: Attendance[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("attendance_logs")
+      .select("member_id,attended_on,members!inner(class)")
+      .eq("members.class", memberClass)
+      .gte("attended_on", since)
+      .order("attended_on", { ascending: false })
+      .range(offset, offset + pageSize - 1)
+      .returns<Attendance[]>();
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
 }
 
 function latestAttendanceByMember(rows: Attendance[]) {
