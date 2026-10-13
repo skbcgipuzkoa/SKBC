@@ -205,7 +205,25 @@ export default async function RankingsPage({
   const childAttendance = summarizeChildAttendance(recentChildAttendance, closures);
   const allKids = (childRankings ?? [])
     .filter((row) => row.members?.status === "active")
-    .map((row) => ({ ...row, ...(childAttendance.get(row.member_id) ?? {}) }));
+    .map((row) => {
+      const liveAttendance = childAttendance.get(row.member_id);
+      if (!liveAttendance) return row;
+      return {
+        ...row,
+        ...liveAttendance,
+        score: liveAttendance.attendance_30d * 3 + liveAttendance.attendance_90d
+      };
+    })
+    .sort((a, b) =>
+      b.score - a.score ||
+      (a.days_without_attendance ?? 9999) - (b.days_without_attendance ?? 9999) ||
+      (a.members?.display_name ?? "").localeCompare(b.members?.display_name ?? "")
+    )
+    .map((row, index) => ({
+      ...row,
+      position: index + 1,
+      level: childRankingLevel(index + 1, row.score)
+    }));
   const kids = allKids.slice(0, 10);
   const selectedView = params.view === "kids" ? "kids" : "adults";
   const compareA = params.compareA ?? "";
@@ -847,6 +865,13 @@ function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[
     });
   }
   return summaries;
+}
+
+function childRankingLevel(position: number, score: number) {
+  if (position <= 3) return "TOP";
+  if (score >= 25) return "ALTA";
+  if (score >= 10) return "MEDIA";
+  return "INICIO";
 }
 
 function daysBetween(from: string, to: string) {
