@@ -1,5 +1,6 @@
 import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadAllPages } from "@/lib/load-all-pages";
 
 type NotificationType = "daily_ranking" | "monthly_stats" | "semester_stats" | "yearly_stats" | "test";
 
@@ -288,8 +289,6 @@ async function buildDailyDigest() {
   const supabase = createAdminClient();
   const [
     membersResult,
-    attendanceResult,
-    technicalResult,
     coursesResult,
     bonusesResult,
     childRankingResult,
@@ -303,21 +302,11 @@ async function buildDailyDigest() {
       .select("id,legacy_id,display_name,class,grade,status,birth_date,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at")
       .eq("status", "active")
       .returns<Member[]>(),
-    supabase.from("attendance_logs").select("member_id,attended_on").returns<Attendance[]>(),
-    supabase
-      .from("member_technical_history")
-      .select("member_id,class_date")
-      .gte("class_date", date90)
-      .eq("completed", true)
-      .returns<TechnicalHistory[]>(),
     supabase.from("courses").select("member_id,course_date,kind").gte("course_date", date60).returns<Course[]>(),
     supabase.from("adult_ranking_bonuses").select("member_id,bonus_date,points,active,permanent").returns<AdultBonus[]>(),
     supabase
       .from("child_rankings")
       .select("member_id,score,position,attendance_30d,attendance_90d,members(display_name,legacy_id,grade,status)")
-      .order("position", { ascending: true, nullsFirst: false })
-      .order("score", { ascending: false })
-      .limit(10)
       .returns<ChildRanking[]>(),
     supabase.from("black_belt_special_attendance").select("member_id,status,black_belt_special_classes(class_date)").returns<any[]>(),
     supabase.from("shakujo_attendance").select("member_id,shakujo_classes(class_date)").returns<any[]>(),
@@ -337,16 +326,32 @@ async function buildDailyDigest() {
       .returns<Array<{ name: string; class_group: "kids" | "adults"; closed: boolean; plan_generated: boolean }>>()
   ]);
 
+  const [attendance, technical] = await Promise.all([
+    loadAllPages<Attendance>((from, to) => supabase
+      .from("attendance_logs")
+      .select("member_id,attended_on")
+      .gte("attended_on", date180)
+      .order("attended_on", { ascending: false })
+      .range(from, to)
+      .returns<Attendance[]>()),
+    loadAllPages<TechnicalHistory>((from, to) => supabase
+      .from("member_technical_history")
+      .select("member_id,class_date")
+      .gte("class_date", date90)
+      .eq("completed", true)
+      .order("class_date", { ascending: false })
+      .range(from, to)
+      .returns<TechnicalHistory[]>())
+  ]);
+
   if (membersResult.error) throw membersResult.error;
-  if (attendanceResult.error) throw attendanceResult.error;
-  if (technicalResult.error) throw technicalResult.error;
   if (coursesResult.error) throw coursesResult.error;
 
   const members = membersResult.data ?? [];
   const adults = buildAdultRanking(
     members,
-    attendanceResult.data ?? [],
-    technicalResult.data ?? [],
+    attendance,
+    technical,
     coursesResult.data ?? [],
     bonusesResult.error ? [] : bonusesResult.data ?? [],
     blackBeltResult.error ? [] : blackBeltResult.data ?? [],
@@ -354,15 +359,29 @@ async function buildDailyDigest() {
     closuresResult.error ? [] : closuresResult.data ?? []
   ).slice(0, 10);
 
+  const attendanceByKid = new Map<string, { attendance30: number; attendance90: number }>();
+  for (const row of attendance) {
+    if (row.attended_on < date90) continue;
+    const current = attendanceByKid.get(row.member_id) ?? { attendance30: 0, attendance90: 0 };
+    current.attendance90 += 1;
+    if (row.attended_on >= date30) current.attendance30 += 1;
+    attendanceByKid.set(row.member_id, current);
+  }
+
   const kids = (childRankingResult.error ? [] : childRankingResult.data ?? [])
     .filter((row) => row.members?.status === "active")
+    .map((row) => {
+      const live = attendanceByKid.get(row.member_id) ?? { attendance30: 0, attendance90: 0 };
+      return { ...row, attendance_30d: live.attendance30, attendance_90d: live.attendance90, score: live.attendance30 * 3 + live.attendance90 };
+    })
+    .sort((a, b) => b.score - a.score || (a.members?.display_name ?? "").localeCompare(b.members?.display_name ?? "", "es"))
     .slice(0, 10)
     .map((row, index) => ({
       name: row.members?.display_name ?? "Kenshi",
       grade: row.members?.grade ?? "-",
       score: row.score,
       detail: `30/90: ${row.attendance_30d}/${row.attendance_90d}`,
-      position: row.position ?? index + 1
+      position: index + 1
     }));
 
   return {
@@ -380,8 +399,6 @@ async function buildPeriodStats(period: { start: string; end: string }) {
   const supabase = createAdminClient();
   const [
     classesResult,
-    attendanceResult,
-    techniquesResult,
     examsResult,
     coursesResult,
     membersResult
@@ -392,19 +409,6 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       .gte("class_date", period.start)
       .lte("class_date", period.end)
       .returns<PeriodClass[]>(),
-    supabase
-      .from("attendance_logs")
-      .select("member_id,attended_on,members(display_name,legacy_id,class)")
-      .gte("attended_on", period.start)
-      .lte("attended_on", period.end)
-      .returns<PeriodAttendance[]>(),
-    supabase
-      .from("member_technical_history")
-      .select("member_id,class_date,technique_name,technique_grade,category,members(display_name,legacy_id)")
-      .gte("class_date", period.start)
-      .lte("class_date", period.end)
-      .eq("completed", true)
-      .returns<PeriodTechnique[]>(),
     supabase
       .from("exams")
       .select("exam_date,grade,members(display_name,class)")
@@ -424,16 +428,32 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       .returns<Member[]>()
   ]);
 
+  const [attendance, techniques] = await Promise.all([
+    loadAllPages<PeriodAttendance>((from, to) => supabase
+      .from("attendance_logs")
+      .select("member_id,attended_on,members(display_name,legacy_id,class)")
+      .gte("attended_on", period.start)
+      .lte("attended_on", period.end)
+      .order("attended_on", { ascending: false })
+      .range(from, to)
+      .returns<PeriodAttendance[]>()),
+    loadAllPages<PeriodTechnique>((from, to) => supabase
+      .from("member_technical_history")
+      .select("member_id,class_date,technique_name,technique_grade,category,members(display_name,legacy_id)")
+      .gte("class_date", period.start)
+      .lte("class_date", period.end)
+      .eq("completed", true)
+      .order("class_date", { ascending: false })
+      .range(from, to)
+      .returns<PeriodTechnique[]>())
+  ]);
+
   if (classesResult.error) throw classesResult.error;
-  if (attendanceResult.error) throw attendanceResult.error;
-  if (techniquesResult.error) throw techniquesResult.error;
   if (examsResult.error) throw examsResult.error;
   if (coursesResult.error) throw coursesResult.error;
   if (membersResult.error) throw membersResult.error;
 
-  const attendance = attendanceResult.data ?? [];
   const classes = classesResult.data ?? [];
-  const techniques = techniquesResult.data ?? [];
   const exams = examsResult.data ?? [];
   const courses = coursesResult.data ?? [];
   const members = membersResult.data ?? [];

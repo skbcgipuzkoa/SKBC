@@ -17,6 +17,7 @@ import { retryLegacySheetSyncJob, syncLegacyAttendance, syncLegacyChildBehavior,
 import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadAllPages } from "@/lib/load-all-pages";
 import { joinContactValues } from "@/lib/member-contacts";
 import { getFamilyUnitContext, upsertFamilyBillingTask } from "@/lib/family-units";
 import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/telegram-notifications";
@@ -4774,25 +4775,26 @@ async function recalculateActiveExamStatuses() {
 
 async function recalculateChildRankings() {
   const supabase = createAdminClient();
-  const [{ data: kids, error: kidsError }, { data: attendance, error: attendanceError }] = await Promise.all([
+  const [{ data: kids, error: kidsError }, attendance] = await Promise.all([
     supabase
       .from("members")
       .select("id,legacy_id")
       .eq("class", "kids")
       .eq("status", "active")
       .returns<Array<{ id: string; legacy_id: string | null }>>(),
-    supabase
+    loadAllPages<{ member_id: string; attended_on: string }>((from, to) => supabase
       .from("attendance_logs")
       .select("member_id,attended_on")
-      .returns<Array<{ member_id: string; attended_on: string }>>()
+      .order("attended_on", { ascending: false })
+      .range(from, to)
+      .returns<Array<{ member_id: string; attended_on: string }>>())
   ]);
 
   if (kidsError) throw kidsError;
-  if (attendanceError) throw attendanceError;
 
   const today = startOfLocalDay(new Date());
   const byMember = new Map<string, string[]>();
-  for (const row of attendance ?? []) {
+  for (const row of attendance) {
     const current = byMember.get(row.member_id) ?? [];
     current.push(row.attended_on);
     byMember.set(row.member_id, current);

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadAllPages } from "@/lib/load-all-pages";
 
 const ADULT_GRADES = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
 
@@ -351,28 +352,29 @@ async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: 
 
   const supabase = createAdminClient();
   const targetGrade = member.class === "adults" ? nextAdultGrade(member.grade) : member.grade;
-  const [{ data: techniques, error: techniquesError }, { data: progress, error: progressError }] = await Promise.all([
+  const [{ data: techniques, error: techniquesError }, progress] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,name")
       .eq("grade", targetGrade)
       .returns<TechniqueRow[]>(),
-    supabase
+    loadAllPages<TechniqueProgressRow>((from, to) => supabase
       .from("member_technical_history")
       .select("technique_id,technique_name")
       .eq("member_id", member.id)
       .eq("completed", true)
-      .returns<TechniqueProgressRow[]>()
+      .order("class_date", { ascending: true })
+      .range(from, to)
+      .returns<TechniqueProgressRow[]>())
   ]);
 
   if (techniquesError) throw techniquesError;
-  if (progressError) throw progressError;
   if (!techniques?.length) {
     return { ok: true, notice: "Tecnico: sin programa tecnico activo para este grado.", missingFirst: 0, missingRequired: 0, requiredRepetitions };
   }
 
   const repetitions = new Map<string, number>();
-  for (const row of progress ?? []) {
+  for (const row of progress) {
     const key = row.technique_id ?? row.technique_name.trim().toUpperCase();
     repetitions.set(key, (repetitions.get(key) ?? 0) + 1);
   }

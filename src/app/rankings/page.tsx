@@ -3,6 +3,7 @@ import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
 import { addAdultRankingBonusAction, deactivateAdultRankingBonusAction, logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
+import { loadAllPages } from "@/lib/load-all-pages";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Member = {
@@ -115,19 +116,13 @@ export default async function RankingsPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const [{ data: members, error: membersError }, { data: technical, error: technicalError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, blackBeltEligibilityResult, shakujoResult, closuresResult] =
+  const [{ data: members, error: membersError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, blackBeltEligibilityResult, shakujoResult, closuresResult] =
     await Promise.all([
       supabase
         .from("members")
         .select("id,legacy_id,ika_id,display_name,class,grade,status,joined_on")
         .eq("status", "active")
         .returns<Member[]>(),
-      supabase
-        .from("member_technical_history")
-        .select("member_id,class_date")
-        .gte("class_date", date90)
-        .eq("completed", true)
-        .returns<TechnicalHistory[]>(),
       supabase
         .from("courses")
         .select("member_id,course_date,kind")
@@ -166,13 +161,20 @@ export default async function RankingsPage({
     ]);
 
   if (membersError) throw membersError;
-  if (technicalError) throw technicalError;
   if (coursesError) throw coursesError;
   if (childError) throw childError;
 
-  const [recentChildAttendance, recentAdultAttendance] = await Promise.all([
+  const [recentChildAttendance, recentAdultAttendance, technical] = await Promise.all([
     loadAttendanceByClass(supabase, "kids", date90),
-    loadAttendanceByClass(supabase, "adults", date180)
+    loadAttendanceByClass(supabase, "adults", date180),
+    loadAllPages<TechnicalHistory>((from, to) => supabase
+      .from("member_technical_history")
+      .select("member_id,class_date")
+      .gte("class_date", date90)
+      .eq("completed", true)
+      .order("class_date", { ascending: false })
+      .range(from, to)
+      .returns<TechnicalHistory[]>())
   ]);
 
   const [bonusResult, recentBonusResult] = await Promise.all([
@@ -812,23 +814,14 @@ async function loadAttendanceByClass(
   memberClass: Member["class"],
   since: string
 ) {
-  const pageSize = 1000;
-  const rows: Attendance[] = [];
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
+  return loadAllPages<Attendance>((from, to) => supabase
       .from("attendance_logs")
       .select("member_id,attended_on,members!inner(class)")
       .eq("members.class", memberClass)
       .gte("attended_on", since)
       .order("attended_on", { ascending: false })
-      .range(offset, offset + pageSize - 1)
-      .returns<Attendance[]>();
-    if (error) throw error;
-    const page = data ?? [];
-    rows.push(...page);
-    if (page.length < pageSize) break;
-  }
-  return rows;
+      .range(from, to)
+      .returns<Attendance[]>());
 }
 
 function latestAttendanceByMember(rows: Attendance[]) {

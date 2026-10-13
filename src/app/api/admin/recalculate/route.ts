@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { closeAdultClass } from "@/lib/adult-class-close";
 import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadAllPages } from "@/lib/load-all-pages";
 
 export async function POST(request: NextRequest) {
   const accessCode = process.env.SKBC_INTERNAL_ACCESS_CODE ?? "SKBC2026";
@@ -60,25 +61,26 @@ export async function POST(request: NextRequest) {
 
 async function recalculateChildRankings() {
   const supabase = createAdminClient();
-  const [{ data: kids, error: kidsError }, { data: attendance, error: attendanceError }] = await Promise.all([
+  const [{ data: kids, error: kidsError }, attendance] = await Promise.all([
     supabase
       .from("members")
       .select("id,legacy_id")
       .eq("class", "kids")
       .eq("status", "active")
       .returns<Array<{ id: string; legacy_id: string | null }>>(),
-    supabase
+    loadAllPages<{ member_id: string; attended_on: string }>((from, to) => supabase
       .from("attendance_logs")
       .select("member_id,attended_on")
-      .returns<Array<{ member_id: string; attended_on: string }>>()
+      .order("attended_on", { ascending: false })
+      .range(from, to)
+      .returns<Array<{ member_id: string; attended_on: string }>>())
   ]);
 
   if (kidsError) throw kidsError;
-  if (attendanceError) throw attendanceError;
 
   const today = startOfLocalDay(new Date());
   const byMember = new Map<string, string[]>();
-  for (const row of attendance ?? []) {
+  for (const row of attendance) {
     const current = byMember.get(row.member_id) ?? [];
     current.push(row.attended_on);
     byMember.set(row.member_id, current);

@@ -8,6 +8,7 @@ import { driveImageUrl } from "@/lib/drive";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadAllPages } from "@/lib/load-all-pages";
 
 const LOGO_IKA_URL = "https://lh3.googleusercontent.com/d/1F1VTa2ygk4PRG4wEukoeRWkBAt_vKORy=w300";
 const LOGO_SKBC_URL = "https://lh3.googleusercontent.com/d/1HL7qwSkhxFsHdwg6lpidBe5EjGE-W1GI=w300";
@@ -294,13 +295,14 @@ export default async function PublicFichaPage({
   const configuredTechnicalArea = (technicalAreaLink ?? []).find((link) => sameGrade(link.grade, member.grade ?? "MINARAI")) ?? null;
   const technicalArea = resolveTechnicalArea(member, configuredTechnicalArea);
 
-  const [{ data: attendance }, { data: exams }, { data: courses }, { data: fichaClosures }] = await Promise.all([
-    supabase
+  const [attendance, { data: exams }, { data: courses }, { data: fichaClosures }] = await Promise.all([
+    loadAllPages<Attendance>((from, to) => supabase
       .from("attendance_logs")
       .select("class_id,attended_on,official_grade,trained_grade,classes(name)")
       .eq("member_id", member.id)
       .order("attended_on", { ascending: false })
-      .returns<Attendance[]>(),
+      .range(from, to)
+      .returns<Attendance[]>()),
     supabase
       .from("exams")
       .select("exam_date,grade,cycle_attendance,examiner,registered_by,diploma_url,report_url")
@@ -329,7 +331,7 @@ export default async function PublicFichaPage({
   const fichaExams = mergeExams(exams ?? [], legacyExams);
 
   if (member.class === "kids") {
-    const [{ data: childRanking }, { data: childNotices }, { data: childNote }, { data: behavior }, { data: childSyllabusHistory }] = await Promise.all([
+    const [{ data: childRanking }, { data: childNotices }, { data: childNote }, { data: behavior }, childSyllabusHistory] = await Promise.all([
       supabase
         .from("child_rankings")
         .select("attendance_30d,attendance_90d,last_attendance_on,days_without_attendance,score,position,level,constancy_status,motivational_message")
@@ -357,22 +359,23 @@ export default async function PublicFichaPage({
         .order("report_date", { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle<ChildBehavior>(),
-      supabase
+      loadAllPages<ChildSyllabusHistoryRow>((from, to) => supabase
         .from("child_syllabus_history")
         .select("practiced_on,child_syllabus_items(title,grade,category,description)")
         .eq("member_id", member.id)
         .order("practiced_on", { ascending: false })
-        .returns<ChildSyllabusHistoryRow[]>()
+        .range(from, to)
+        .returns<ChildSyllabusHistoryRow[]>())
     ]);
 
-    const childProgramHistoryRows = await loadChildProgramHistoryRows(supabase, member.id, attendance ?? [], childSyllabusHistory ?? []);
-    const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance ?? [], closures, member.joined_on);
+    const childProgramHistoryRows = await loadChildProgramHistoryRows(supabase, member.id, attendance, childSyllabusHistory);
+    const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance, closures, member.joined_on);
     const automaticNotices = buildAutomaticChildNotices(visibleChildRanking, member.joined_on);
     const familyNotices = filterChildFamilyNotices(childNotices ?? []);
     return (
       <>
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-        <KidsFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
+        <KidsFicha member={member} attendance={attendance} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
     );
   }
@@ -380,29 +383,33 @@ export default async function PublicFichaPage({
   const targetGrade = nextAdultGrade(member.grade);
   const date60 = daysAgo(60);
   const date180 = daysAgo(180);
-  const [{ data: techniques }, { data: technicalHistory }, { data: allAdults }, { data: allAttendance }, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
+  const [{ data: techniques }, technicalHistory, { data: allAdults }, allAttendance, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
     supabase
       .from("techniques")
       .select("id,grade,base_name,name,category,content_type,active,active_in_planning")
       .eq("grade", targetGrade)
       .eq("active", true)
       .returns<Technique[]>(),
-    supabase
+    loadAllPages<TechnicalHistory>((from, to) => supabase
       .from("member_technical_history")
       .select("technique_id,technique_name,technique_grade,category,content_type,class_date,proposal_type,completed,counts_as_progression")
       .eq("member_id", member.id)
       .eq("completed", true)
-      .returns<TechnicalHistory[]>(),
+      .order("class_date", { ascending: false })
+      .range(from, to)
+      .returns<TechnicalHistory[]>()),
     supabase
       .from("members")
       .select("id,legacy_id,display_name,class,status,joined_on")
       .eq("class", "adults")
       .eq("status", "active")
       .returns<Array<Pick<Member, "id" | "legacy_id" | "display_name" | "class" | "status" | "joined_on">>>(),
-    supabase
+    loadAllPages<{ member_id: string; attended_on: string }>((from, to) => supabase
       .from("attendance_logs")
       .select("member_id,attended_on")
-      .returns<Array<{ member_id: string; attended_on: string }>>(),
+      .order("attended_on", { ascending: false })
+      .range(from, to)
+      .returns<Array<{ member_id: string; attended_on: string }>>()),
     supabase
       .from("courses")
       .select("member_id,course_date,kind")
@@ -453,10 +460,10 @@ export default async function PublicFichaPage({
       .maybeSingle<BlackBeltEligibility>()
   ]);
 
-  const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory ?? []);
-  const fullTechnicalHistory = buildFullTechnicalHistory(technicalHistory ?? []);
+  const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory);
+  const fullTechnicalHistory = buildFullTechnicalHistory(technicalHistory);
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures, member.joined_on);
-  const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance ?? [], recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
+  const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance, recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
 
   return (
     <>
@@ -1549,7 +1556,7 @@ function buildVisibleChildRanking(ranking: ChildRanking | null, attendance: Atte
     attendance_90d: attendance90,
     last_attendance_on: last ? formatDateObject(last) : ranking?.last_attendance_on ?? null,
     days_without_attendance: daysWithoutAttendance,
-    score: ranking?.score ?? attendance30 + attendance90,
+    score: attendance30 * 3 + attendance90,
     position: ranking?.position ?? null,
     level: ranking?.level ?? null,
     constancy_status: onboarding?.shortLabel ?? ranking?.constancy_status ?? null,

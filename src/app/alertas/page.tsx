@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { isRelevantAbsence, operationalAlertKey } from "@/lib/operational-follow-up";
 import { getWebsiteAdminAlertCounts, WEBSITE_ADMIN_URL } from "@/lib/website-admin-alerts";
+import { loadAllPages } from "@/lib/load-all-pages";
 
 type AlertLevel = "danger" | "warn" | "info";
 
@@ -64,7 +65,6 @@ export default async function AlertasPage() {
     { data: dismissedAlerts },
     { data: provisionalMembers },
     { data: importantNotes },
-    { data: recentAttendance },
     websiteAlerts
   ] = await Promise.all([
     supabase
@@ -109,9 +109,15 @@ export default async function AlertasPage() {
       .select("alert_key"),
     supabase.from("provisional_members").select("id,display_name,class,created_at").eq("status", "pending"),
     supabase.from("member_notes").select("id,note,created_at,members(display_name,legacy_id)").eq("important", true).is("resolved_at", null),
-    supabase.from("attendance_logs").select("member_id,attended_on").order("attended_on", { ascending: false }),
     getWebsiteAdminAlertCounts()
   ]);
+
+  const recentAttendance = await loadAllPages<{ member_id: string; attended_on: string }>((from, to) => supabase
+    .from("attendance_logs")
+    .select("member_id,attended_on")
+    .order("attended_on", { ascending: false })
+    .range(from, to)
+    .returns<Array<{ member_id: string; attended_on: string }>>());
 
   const alerts: SystemAlert[] = [];
 
@@ -144,7 +150,7 @@ export default async function AlertasPage() {
   }
 
   const lastAttendance = new Map<string, string>();
-  for (const item of recentAttendance ?? []) if (!lastAttendance.has(item.member_id)) lastAttendance.set(item.member_id, item.attended_on);
+  for (const item of recentAttendance) if (!lastAttendance.has(item.member_id)) lastAttendance.set(item.member_id, item.attended_on);
   for (const member of activeMembers ?? []) if (isRelevantAbsence({ group: member.class, joinedOn: member.joined_on, lastAttendanceOn: lastAttendance.get(member.id), today })) alerts.push({
     id: operationalAlertKey("absence", member.id, lastAttendance.get(member.id) ?? member.joined_on), level: "info", title: `Sin asistencia reciente: ${member.display_name}`,
     detail: `Ultima asistencia: ${lastAttendance.get(member.id) ?? "sin asistencia registrada"}.`, href: member.legacy_id ? `/kenshis/${member.legacy_id}` : "/kenshis"

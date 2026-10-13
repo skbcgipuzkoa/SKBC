@@ -2,6 +2,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadAllPages } from "@/lib/load-all-pages";
 
 type MemberRow = {
   id: string;
@@ -188,10 +189,10 @@ async function buildReviewData(memberId: string, from?: string | null, to?: stri
   const requestedFrom = parseDateParam(from) ?? member.joined_on ?? `${requestedTo.slice(0, 4)}-01-01`;
   const analysisFrom = maxIso(requestedFrom, member.joined_on ?? requestedFrom);
 
-  const [classesResult, attendanceResult, techniquesResult, coursesResult, examsResult, behaviorResult, busenResult, shakujoResult, closuresResult] = await Promise.all([
-    supabase.from("classes").select("class_date,class_group,closed").eq("class_group", member.class).eq("closed", true).gte("class_date", analysisFrom).lte("class_date", requestedTo).returns<ClassRow[]>(),
-    supabase.from("attendance_logs").select("id,class_id,attended_on,official_grade,trained_grade,technical_role,use_for_history").eq("member_id", member.id).gte("attended_on", analysisFrom).lte("attended_on", requestedTo).order("attended_on", { ascending: true }).returns<AttendanceRow[]>(),
-    supabase.from("member_technical_history").select("class_date,technique_id,technique_name,category,grade,trained_grade,counts_as_progression,completed").eq("member_id", member.id).eq("completed", true).gte("class_date", analysisFrom).lte("class_date", requestedTo).order("class_date", { ascending: true }).returns<TechnicalRow[]>(),
+  const [classes, attendance, techniques, coursesResult, examsResult, behaviorResult, busenResult, shakujoResult, closuresResult] = await Promise.all([
+    loadAllPages<ClassRow>((fromIndex, toIndex) => supabase.from("classes").select("class_date,class_group,closed").eq("class_group", member.class).eq("closed", true).gte("class_date", analysisFrom).lte("class_date", requestedTo).order("class_date", { ascending: true }).range(fromIndex, toIndex).returns<ClassRow[]>()),
+    loadAllPages<AttendanceRow>((fromIndex, toIndex) => supabase.from("attendance_logs").select("id,class_id,attended_on,official_grade,trained_grade,technical_role,use_for_history").eq("member_id", member.id).gte("attended_on", analysisFrom).lte("attended_on", requestedTo).order("attended_on", { ascending: true }).range(fromIndex, toIndex).returns<AttendanceRow[]>()),
+    loadAllPages<TechnicalRow>((fromIndex, toIndex) => supabase.from("member_technical_history").select("class_date,technique_id,technique_name,category,grade,trained_grade,counts_as_progression,completed").eq("member_id", member.id).eq("completed", true).gte("class_date", analysisFrom).lte("class_date", requestedTo).order("class_date", { ascending: true }).range(fromIndex, toIndex).returns<TechnicalRow[]>()),
     supabase.from("courses").select("kind,course_date,title,location,sensei,competition_category,competition_result,competition_medal,competition_notes").eq("member_id", member.id).gte("course_date", analysisFrom).lte("course_date", requestedTo).order("course_date", { ascending: true }).returns<CourseRow[]>(),
     supabase.from("exams").select("exam_date,grade,cycle_attendance,examiner,registered_by,result,report_url,diploma_url").eq("member_id", member.id).gte("exam_date", analysisFrom).lte("exam_date", requestedTo).order("exam_date", { ascending: true }).returns<ExamRow[]>(),
     supabase.from("child_behavior_reports").select("report_date,attitude,attention,respect,effort,companionship,observation").eq("member_id", member.id).order("report_date", { ascending: false }).limit(8).returns<BehaviorRow[]>(),
@@ -207,24 +208,24 @@ async function buildReviewData(memberId: string, from?: string | null, to?: stri
       .returns<CalendarClosure[]>()
   ]);
 
-  const attendedDates = unique((attendanceResult.data ?? []).map((item) => item.attended_on)).sort();
+  const attendedDates = unique(attendance.map((item) => item.attended_on)).sort();
   const closures = closuresResult.data ?? [];
   const classDates = buildPossibleClassDates(
     analysisFrom,
     requestedTo,
     member.class,
     closures,
-    (classesResult.data ?? []).map((item) => item.class_date)
+    classes.map((item) => item.class_date)
   );
   const classCoverageReliable = classDates.length >= attendedDates.length;
   const attendanceRate = classDates.length && classCoverageReliable ? Math.round((attendedDates.length / classDates.length) * 100) : null;
 
   const legacyExams = await loadLegacyExams(supabase, member.legacy_id, analysisFrom, requestedTo);
   const mergedExams = mergeExams(examsResult.data ?? [], legacyExams);
-  const attendanceRows = attendanceResult.data ?? [];
+  const attendanceRows = attendance;
   const technicalRows = await mergeTechnicalRowsWithClosedClassPlanFallback(
     supabase,
-    techniquesResult.data ?? [],
+    techniques,
     member.class === "adults" ? attendanceRows : []
   );
 
