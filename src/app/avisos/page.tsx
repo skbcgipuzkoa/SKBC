@@ -2,8 +2,9 @@ import { AlertTriangle, Bell, CheckCircle2, LogOut, Pin, Printer } from "lucide-
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
 import { SeasonReviewSelector } from "@/app/avisos/SeasonReviewSelector";
-import { confirmFamilyBillingDataReceivedAction, confirmFamilyBillingSheetDeliveredAction, createInternalNoticeAction, logoutAction, updateInternalNoticeStatusAction } from "@/app/actions";
+import { confirmFamilyBillingDataReceivedAction, confirmFamilyBillingSheetDeliveredAction, createInternalNoticeAction, dismissChildNotesReminderAction, logoutAction, updateInternalNoticeStatusAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
+import { getChildNotesReminder } from "@/lib/child-notes-reminder";
 import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -103,7 +104,8 @@ export default async function AvisosPage({
     busenEligibilityResult,
     busenAttendanceResult,
     shakujoAttendanceResult,
-    reviewMembersResult
+    reviewMembersResult,
+    childNotesReminder
   ] = await Promise.all([
     supabase
       .from("internal_notices")
@@ -140,7 +142,8 @@ export default async function AvisosPage({
       .eq("status", "active")
       .order("class", { ascending: false })
       .order("display_name", { ascending: true })
-      .returns<ReviewMember[]>()
+      .returns<ReviewMember[]>(),
+    getChildNotesReminder()
   ]);
 
   if (error) throw error;
@@ -166,6 +169,8 @@ export default async function AvisosPage({
   const shakujoNotices = buildShakujoNotices(examMembers, shakujoAttendanceResult.data ?? []);
   const active = notices.filter((notice) => ["open", "in_progress"].includes(notice.status));
   const overdue = active.filter((notice) => notice.due_on && notice.due_on < today());
+  const activeCount = active.length + Number(Boolean(childNotesReminder));
+  const overdueCount = overdue.length + Number(Boolean(childNotesReminder && childNotesReminder.dueOn < today()));
   const visible = selectedStatus === "done"
     ? notices.filter((notice) => notice.status === "done")
     : selectedStatus === "archived"
@@ -191,20 +196,22 @@ export default async function AvisosPage({
         {params.saved === "notice" ? <p className="save-ok">Aviso actualizado correctamente.</p> : null}
         {params.saved === "trial" ? <p className="save-ok">Hoja de cobro marcada como entregada.</p> : null}
         {params.saved === "bank-data" ? <p className="save-ok">Datos bancarios marcados como recibidos.</p> : null}
+        {params.saved === "child-notes" ? <p className="save-ok">Recordatorio de notas marcado como revisado. Volvera a aparecer dentro de dos meses.</p> : null}
         {params.error === "notice" ? <p className="form-error">No se ha podido guardar el aviso.</p> : null}
         {params.error === "trial" ? <p className="form-error">No se ha podido actualizar el aviso de mes gratis.</p> : null}
+        {params.error === "child-notes" ? <p className="form-error">No se ha podido cerrar el recordatorio de notas.</p> : null}
 
         <section className="grid stats compact">
-          <article className={active.length ? "card attention-card" : "card"}>
+          <article className={activeCount ? "card attention-card" : "card"}>
             <Bell aria-hidden="true" size={20} />
             <h2>Activos</h2>
-            <div className="metric">{active.length}</div>
+            <div className="metric">{activeCount}</div>
             <p className="muted">Avisos abiertos o en curso.</p>
           </article>
-          <article className={overdue.length ? "card attention-card" : "card"}>
+          <article className={overdueCount ? "card attention-card" : "card"}>
             <AlertTriangle aria-hidden="true" size={20} />
             <h2>Vencidos</h2>
-            <div className="metric">{overdue.length}</div>
+            <div className="metric">{overdueCount}</div>
             <p className="muted">Tienen fecha anterior a hoy.</p>
           </article>
           <article className="card">
@@ -222,6 +229,28 @@ export default async function AvisosPage({
         </section>
 
         <SeasonReviewSelector members={reviewMembersResult.data ?? []} />
+
+        {childNotesReminder ? (
+          <section className="card attention-card child-notes-reminder">
+            <div className="section-heading-row">
+              <div>
+                <p className="eyebrow">Seguimiento infantil</p>
+                <h2>Revisar y actualizar las notas de los ninos</h2>
+                <p className="muted">
+                  Recordatorio pendiente desde {formatShortDate(childNotesReminder.dueOn)}.
+                  {childNotesReminder.periodsPending > 1 ? ` Lleva ${childNotesReminder.periodsPending} periodos de revision pendiente.` : ""}
+                </p>
+              </div>
+              <span className="state-badge state-pendiente">Cada 2 meses</span>
+            </div>
+            <div className="notice-action-row">
+              <a className="secondary-button" href="/kenshis?class=kids&status=active">Abrir alumnos infantiles</a>
+              <form action={dismissChildNotesReminderAction}>
+                <SubmitButton pendingLabel="Guardando...">Marcar como revisado</SubmitButton>
+              </form>
+            </div>
+          </section>
+        ) : null}
 
         <section className={trialNotices.length ? "card attention-card blink-alert" : "card"}>
           <div className="section-heading-row">

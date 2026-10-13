@@ -25,6 +25,7 @@ import { kidsGrades } from "@/lib/grades";
 import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
 import { convertProvisionalMember } from "@/lib/provisional-members";
 import { beltColorForGrade, isPendingBeltSize, pendingBeltSize } from "@/lib/exam-belt-orders";
+import { CHILD_NOTES_REMINDER_KEY } from "@/lib/child-notes-reminder";
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -1370,6 +1371,30 @@ export async function toggleDistributionDeliveryAction(formData: FormData) {
 
   revalidatePath("/entregas");
   redirect(`/entregas?campaign=${campaignId}&saved=delivery${returnQuery}`);
+}
+
+export async function dismissChildNotesReminderAction() {
+  if (!(await hasInternalAccess())) {
+    redirect("/skbc-interno");
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("admin_alert_dismissals")
+    .upsert({
+      alert_key: CHILD_NOTES_REMINDER_KEY,
+      dismissed_by: "Alvaro",
+      dismissed_at: new Date().toISOString()
+    }, { onConflict: "alert_key" });
+
+  if (error) {
+    console.error("Error dismissing child notes reminder", error);
+    redirect("/avisos?error=child-notes");
+  }
+
+  revalidatePath("/avisos");
+  revalidatePath("/sistema");
+  redirect("/avisos?saved=child-notes");
 }
 
 export async function updateBillingSettingsAction(formData: FormData) {

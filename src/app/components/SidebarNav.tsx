@@ -1,5 +1,6 @@
 import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { getWebsiteAdminAlertCounts, totalWebsiteAdminAlerts } from "@/lib/website-admin-alerts";
+import { getChildNotesReminder } from "@/lib/child-notes-reminder";
 
 type SidebarNavProps = {
   current?: string;
@@ -133,10 +134,15 @@ export async function SidebarNav({ current }: SidebarNavProps) {
 async function getUnreadTrialNoticeCount() {
   try {
     const today = new Date().toISOString().slice(0, 10);
-    return (await getPendingFamilyBillingContexts()).filter((context) => {
+    const [billingContexts, childNotesReminder] = await Promise.all([
+      getPendingFamilyBillingContexts(),
+      getChildNotesReminder()
+    ]);
+    const trialCount = billingContexts.filter((context) => {
       const noticeOn = context.billing.newestMember?.trialEndsOn;
       return Boolean(noticeOn) && noticeOn! <= today;
     }).length;
+    return trialCount + Number(Boolean(childNotesReminder));
   } catch {
     return 0;
   }
