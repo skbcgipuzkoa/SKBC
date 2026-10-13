@@ -176,6 +176,15 @@ export default async function RankingsPage({
   if (coursesError) throw coursesError;
   if (childError) throw childError;
 
+  const { data: recentChildAttendance, error: recentChildAttendanceError } = await supabase
+    .from("attendance_logs")
+    .select("member_id,attended_on,members!inner(class)")
+    .eq("members.class", "kids")
+    .gte("attended_on", date90)
+    .order("attended_on", { ascending: false })
+    .returns<Attendance[]>();
+  if (recentChildAttendanceError) throw recentChildAttendanceError;
+
   const [bonusResult, recentBonusResult] = await Promise.all([
     supabase
       .from("adult_ranking_bonuses")
@@ -203,7 +212,7 @@ export default async function RankingsPage({
   const allAdults = buildAdultRanking(members ?? [], attendance ?? [], technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, blackBeltEligibleIds, shakujoRows, closures);
   const adults = allAdults.slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
-  const childAttendance = summarizeChildAttendance(attendance ?? [], closures);
+  const childAttendance = summarizeChildAttendance(recentChildAttendance ?? [], closures);
   const allKids = (childRankings ?? [])
     .filter((row) => row.members?.status === "active")
     .map((row) => ({ ...row, ...(childAttendance.get(row.member_id) ?? {}) }));
@@ -801,6 +810,8 @@ function latestAttendanceByMember(rows: Attendance[]) {
 
 function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[]) {
   const summaries = new Map<string, {
+    attendance_30d: number;
+    attendance_90d: number;
     last_attendance_on: string;
     days_without_attendance: number;
   }>();
@@ -815,6 +826,8 @@ function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[
     dates.sort((a, b) => b.localeCompare(a));
     const lastAttendanceOn = dates[0];
     summaries.set(memberId, {
+      attendance_30d: dates.filter((date) => date >= date30).length,
+      attendance_90d: dates.length,
       last_attendance_on: lastAttendanceOn,
       days_without_attendance: trainingDaysBetween(lastAttendanceOn, currentDate, closures, "kids")
     });
