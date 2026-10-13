@@ -196,7 +196,7 @@ export default async function AvisosPage({
         {params.saved === "notice" ? <p className="save-ok">Aviso actualizado correctamente.</p> : null}
         {params.saved === "trial" ? <p className="save-ok">Hoja de cobro marcada como entregada.</p> : null}
         {params.saved === "bank-data" ? <p className="save-ok">Datos bancarios marcados como recibidos.</p> : null}
-        {params.saved === "child-notes" ? <p className="save-ok">Recordatorio de notas marcado como revisado. Volvera a aparecer dentro de dos meses.</p> : null}
+        {params.saved === "child-notes" ? <p className="save-ok">Campana de notas marcada como revisada. El siguiente aviso aparecera en Navidad o en junio.</p> : null}
         {params.error === "notice" ? <p className="form-error">No se ha podido guardar el aviso.</p> : null}
         {params.error === "trial" ? <p className="form-error">No se ha podido actualizar el aviso de mes gratis.</p> : null}
         {params.error === "child-notes" ? <p className="form-error">No se ha podido cerrar el recordatorio de notas.</p> : null}
@@ -235,13 +235,13 @@ export default async function AvisosPage({
             <div className="section-heading-row">
               <div>
                 <p className="eyebrow">Seguimiento infantil</p>
-                <h2>Revisar y actualizar las notas de los ninos</h2>
+                <h2>Preparar {childNotesReminder.seasonLabel.toLowerCase()}</h2>
                 <p className="muted">
-                  Recordatorio pendiente desde {formatShortDate(childNotesReminder.dueOn)}.
-                  {childNotesReminder.periodsPending > 1 ? ` Lleva ${childNotesReminder.periodsPending} periodos de revision pendiente.` : ""}
+                  Revisa y actualiza las notas de los ninos para su entrega. Campana abierta desde {formatShortDate(childNotesReminder.dueOn)}.
+                  {childNotesReminder.periodsPending > 1 ? ` Hay ${childNotesReminder.periodsPending} campanas de evaluacion sin revisar.` : ""}
                 </p>
               </div>
-              <span className="state-badge state-pendiente">Cada 2 meses</span>
+              <span className="state-badge state-pendiente">{childNotesReminder.season === "christmas" ? "Navidad" : "Junio"}</span>
             </div>
             <div className="notice-action-row">
               <a className="secondary-button" href="/kenshis?class=kids&status=active">Abrir alumnos infantiles</a>

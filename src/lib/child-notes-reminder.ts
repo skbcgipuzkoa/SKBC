@@ -1,8 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const CHILD_NOTES_REMINDER_KEY = "child-notes-review";
-const REMINDER_START = "2026-10-01";
-const REMINDER_INTERVAL_MONTHS = 2;
+const REMINDER_START_YEAR = 2026;
 
 type ReminderDismissal = {
   dismissed_at: string;
@@ -12,6 +11,8 @@ export type ChildNotesReminder = {
   alertKey: string;
   dueOn: string;
   periodsPending: number;
+  season: "christmas" | "summer";
+  seasonLabel: string;
 };
 
 export async function getChildNotesReminder(today = new Date()): Promise<ChildNotesReminder | null> {
@@ -24,31 +25,29 @@ export async function getChildNotesReminder(today = new Date()): Promise<ChildNo
 
   if (error) throw error;
 
-  const dueOn = data?.dismissed_at
-    ? addMonths(toDateOnly(data.dismissed_at), REMINDER_INTERVAL_MONTHS)
-    : REMINDER_START;
   const todayValue = formatDateOnly(today);
-  if (todayValue < dueOn) return null;
+  const dismissedOn = data?.dismissed_at ? toDateOnly(data.dismissed_at) : null;
+  const pendingCampaigns = scheduledCampaignsUntil(today.getUTCFullYear())
+    .filter((campaign) => campaign.dueOn <= todayValue && (!dismissedOn || campaign.dueOn > dismissedOn));
+  const current = pendingCampaigns.at(-1);
+  if (!current) return null;
 
   return {
     alertKey: CHILD_NOTES_REMINDER_KEY,
-    dueOn,
-    periodsPending: Math.floor(monthDifference(dueOn, todayValue) / REMINDER_INTERVAL_MONTHS) + 1
+    dueOn: current.dueOn,
+    periodsPending: pendingCampaigns.length,
+    season: current.season,
+    seasonLabel: current.season === "christmas" ? "Notas de Navidad" : "Notas de final de curso"
   };
 }
 
-function addMonths(value: string, months: number) {
-  const [year, month, day] = value.split("-").map(Number);
-  const target = new Date(Date.UTC(year, month - 1 + months, 1));
-  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-  target.setUTCDate(Math.min(day, lastDay));
-  return formatDateOnly(target);
-}
-
-function monthDifference(from: string, to: string) {
-  const [fromYear, fromMonth] = from.split("-").map(Number);
-  const [toYear, toMonth] = to.split("-").map(Number);
-  return Math.max(0, (toYear - fromYear) * 12 + toMonth - fromMonth);
+function scheduledCampaignsUntil(lastYear: number) {
+  const campaigns: Array<{ dueOn: string; season: "christmas" | "summer" }> = [];
+  for (let year = REMINDER_START_YEAR; year <= lastYear; year += 1) {
+    if (year > REMINDER_START_YEAR) campaigns.push({ dueOn: `${year}-06-01`, season: "summer" });
+    campaigns.push({ dueOn: `${year}-12-01`, season: "christmas" });
+  }
+  return campaigns;
 }
 
 function toDateOnly(value: string) {
