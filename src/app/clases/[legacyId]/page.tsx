@@ -110,6 +110,7 @@ type AttendanceClassOption = {
 };
 
 type DelegateLinkRow = {
+  class_id: string;
   token: string;
   expires_at: string;
   created_at: string;
@@ -215,13 +216,12 @@ export default async function ClaseDetailPage({
       .returns<MemberOption[]>(),
     supabase
       .from("class_delegate_links")
-      .select("token,expires_at,created_at,created_by")
-      .eq("class_id", clase.id)
+      .select("class_id,token,expires_at,created_at,created_by")
+      .in("class_id", (await supabase.from("classes").select("id").eq("class_date", clase.class_date).in("class_group", ["adults", "kids"]).returns<Array<{ id: string }>>()).data?.map((item) => item.id) ?? [clase.id])
       .is("revoked_at", null)
       .is("closed_at", null)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
-      .limit(1)
       .returns<DelegateLinkRow[]>(),
     supabase
       .from("classes")
@@ -261,9 +261,10 @@ export default async function ClaseDetailPage({
   const hasPlan = Boolean((plan ?? []).length);
   const readyToClose = clase.class_group === "adults" && clase.plan_generated && !clase.closed;
   const readyToCloseKids = clase.class_group === "kids" && !clase.closed;
-  const delegateLink = delegateLinks?.[0] ?? null;
-  const delegateMode = delegateModeFromCreatedBy(delegateLink?.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
-  const delegateUrl = delegateLink ? `https://skbc.vercel.app/delegado/${delegateLink.token}?mode=${delegateMode}` : null;
+  const activeDelegateLinks = (delegateLinks ?? []).filter((link, index, links) => {
+    const mode = delegateModeFromCreatedBy(link.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
+    return links.findIndex((candidate) => (delegateModeFromCreatedBy(candidate.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults")) === mode) === index;
+  });
   const isCorrectionMode = (clase.closed && clase.status === "pending")
     || (dayClasses ?? []).some((item) => item.closed && item.status === "pending");
   const canEditClosedClass = !clase.closed || isCorrectionMode;
@@ -979,16 +980,20 @@ export default async function ClaseDetailPage({
               </a>
             ) : null}
           </div>
-          {delegateUrl ? (
-            <div className="copy-box delegate-copy-row">
-              <div>
-                <strong>Enlace activo {delegateMode === "combined" ? "combinado" : delegateMode === "kids" ? "ninos" : "adultos"}</strong>
-                <a className="text-link" href={delegateUrl}>{delegateUrl}</a>
-                <small className="muted">Caduca: {new Date(delegateLink?.expires_at ?? "").toLocaleString("es-ES")}</small>
+          {activeDelegateLinks.map((delegateLink) => {
+            const delegateMode = delegateModeFromCreatedBy(delegateLink.created_by) ?? (clase.class_group === "kids" ? "kids" : "adults");
+            const delegateUrl = `https://skbc.vercel.app/delegado/${delegateLink.token}?mode=${delegateMode}`;
+            return (
+              <div className="copy-box delegate-copy-row" key={delegateLink.token}>
+                <div>
+                  <strong>Enlace activo {delegateMode === "combined" ? "combinado" : delegateMode === "kids" ? "ninos" : "adultos"}</strong>
+                  <a className="text-link" href={delegateUrl}>{delegateUrl}</a>
+                  <small className="muted">Caduca: {new Date(delegateLink.expires_at).toLocaleString("es-ES")}</small>
+                </div>
+                <CopyLinkButton value={delegateUrl} />
               </div>
-              <CopyLinkButton value={delegateUrl} />
-            </div>
-          ) : null}
+            );
+          })}
           {!clase.closed ? (
             <div className="delegate-mode-grid">
               {(["adults", "kids", "combined"] as const).map((mode) => (

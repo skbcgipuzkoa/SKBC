@@ -1771,28 +1771,62 @@ export async function createClassDelegateLinkAction(formData: FormData) {
   const supabase = createAdminClient();
   const { data: clase, error: classError } = await supabase
     .from("classes")
-    .select("id,class_date,class_group,closed")
+    .select("id,class_date,class_group,class_type,responsible,notes,closed")
     .eq("id", classId)
-    .single<{ id: string; class_date: string; class_group: "kids" | "adults"; closed: boolean }>();
+    .single<{
+      id: string;
+      class_date: string;
+      class_group: "kids" | "adults";
+      class_type: string | null;
+      responsible: string | null;
+      notes: string | null;
+      closed: boolean;
+    }>();
 
   if (classError || !clase || clase.closed) {
     redirect(`/clases/${legacyId}?error=delegate`);
   }
 
   let primaryClassId = clase.id;
-  if (mode === "adults" && clase.class_group !== "adults") {
-    primaryClassId = await findOpenClassIdForDelegate(supabase, clase.class_date, "adults", legacyId);
-  }
-  if (mode === "kids" && clase.class_group !== "kids") {
-    primaryClassId = await findOpenClassIdForDelegate(supabase, clase.class_date, "kids", legacyId);
-  }
-  if (mode === "combined") {
-    primaryClassId = await findOpenClassIdForDelegate(supabase, clase.class_date, "adults", legacyId);
-    await findOpenClassIdForDelegate(supabase, clase.class_date, "kids", legacyId);
+  try {
+    if (mode === "adults" && clase.class_group !== "adults") {
+      primaryClassId = await findOrCreateOpenClassIdForDelegate(supabase, clase, "adults");
+    }
+    if (mode === "kids" && clase.class_group !== "kids") {
+      primaryClassId = await findOrCreateOpenClassIdForDelegate(supabase, clase, "kids");
+    }
+    if (mode === "combined") {
+      primaryClassId = await findOrCreateOpenClassIdForDelegate(supabase, clase, "adults");
+      await findOrCreateOpenClassIdForDelegate(supabase, clase, "kids");
+    }
+  } catch (error) {
+    console.error("Error preparing delegate classes", error);
+    redirect(`/clases/${legacyId}?error=delegate&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
   const token = createDelegateToken();
-  const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  const requestedExpiry = Date.now() + hours * 60 * 60 * 1000;
+  const classDayExpiry = Date.parse(`${clase.class_date}T23:59:59Z`) + 24 * 60 * 60 * 1000;
+  const expiresAt = new Date(Math.max(requestedExpiry, classDayExpiry)).toISOString();
+
+  const { data: activeLinks } = await supabase
+    .from("class_delegate_links")
+    .select("id,created_by")
+    .eq("class_id", primaryClassId)
+    .is("revoked_at", null)
+    .is("closed_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .returns<Array<{ id: string; created_by: string | null }>>();
+  const replacedLinkIds = (activeLinks ?? [])
+    .filter((link) => delegateModeFromCreatedBy(link.created_by) === mode)
+    .map((link) => link.id);
+  if (replacedLinkIds.length) {
+    await supabase
+      .from("class_delegate_links")
+      .update({ revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .in("id", replacedLinkIds);
+  }
+
   const { error } = await supabase.from("class_delegate_links").insert({
     class_id: primaryClassId,
     token,
@@ -5192,27 +5226,47 @@ async function getValidDelegateContext(token: string, requestedMode: DelegateMod
   return { link, classes: openClasses, mode };
 }
 
-async function findOpenClassIdForDelegate(
+async function findOrCreateOpenClassIdForDelegate(
   supabase: ReturnType<typeof createAdminClient>,
-  classDate: string,
-  classGroup: "kids" | "adults",
-  legacyId: string
+  sourceClass: {
+    class_date: string;
+    class_type: string | null;
+    responsible: string | null;
+    notes: string | null;
+  },
+  classGroup: "kids" | "adults"
 ) {
   const { data, error } = await supabase
     .from("classes")
     .select("id")
-    .eq("class_date", classDate)
+    .eq("class_date", sourceClass.class_date)
     .eq("class_group", classGroup)
     .eq("closed", false)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ id: string }>();
 
-  if (error || !data?.id) {
-    redirect(`/clases/${legacyId}?error=delegate`);
-  }
+  if (error) throw error;
+  if (data?.id) return data.id;
 
-  return data.id;
+  const groupLabel = classGroup === "kids" ? "NINOS" : "ADULTOS";
+  const { data: created, error: createError } = await supabase
+    .from("classes")
+    .insert({
+      legacy_id: `AUTO-DELEGATE-${groupLabel}-${sourceClass.class_date}-${Date.now()}`,
+      class_date: sourceClass.class_date,
+      name: `${groupLabel} ${sourceClass.class_date}`,
+      class_group: classGroup,
+      class_type: sourceClass.class_type ?? "NORMAL",
+      responsible: sourceClass.responsible,
+      notes: sourceClass.notes,
+      status: "pending"
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (createError || !created?.id) throw createError ?? new Error("No se ha podido crear la clase paralela.");
+  return created.id;
 }
 
 function normalizeDelegateMode(value: string | null | undefined): DelegateMode {
