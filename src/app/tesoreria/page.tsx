@@ -86,7 +86,18 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
 
       <section id="avisos-tesoreria" className={alerts.length ? "card attention-card" : "card"}>
         <div className="section-heading-row"><div><p className="eyebrow">Seguimiento</p><h2>Avisos de tesorería</h2><p className="muted">Meses gratuitos ya finalizados y hojas entregadas pendientes de devolución.</p></div>{alerts.length ? <a className="secondary-button" href="/avisos/hojas-cobro" target="_blank"><Printer size={17} /> Imprimir hojas vencidas</a> : null}</div>
-        {alerts.length ? <div className="treasury-alert-list">{alerts.map((family) => <a key={family.key} href={`#family-${family.key}`}><strong>{familyLabel(family)}</strong><em className={`treasury-sheet-state treasury-sheet-state-${family.task?.status ?? "pending"}`}>{sheetStatusLabel(family.task?.status)}</em><span>Fin del mes gratuito: {date(family.billing.newestMember?.trialEndsOn)}</span></a>)}</div> : <p className="muted">No hay gestiones urgentes.</p>}
+        {alerts.length ? <div className="treasury-alert-list">{alerts.map((family) => {
+          const subject = family.billing.newestMember;
+          const status = family.task?.status ?? "pending";
+          return <div className="treasury-alert-item" key={family.key}>
+            <a className="treasury-alert-link" href={`#family-${family.key}`}>
+              <strong>{familyLabel(family)}</strong>
+              <em className={`treasury-sheet-state treasury-sheet-state-${status}`}>{sheetStatusLabel(status)}</em>
+              <span>Fin del mes gratuito: {date(subject?.trialEndsOn)}</span>
+            </a>
+            {subject && status === "generated" ? <WorkflowButton memberId={subject.id} status="delivered" label="Marcar hoja entregada" className="treasury-alert-action" /> : null}
+          </div>;
+        })}</div> : <p className="muted">No hay gestiones urgentes.</p>}
       </section>
 
       <section className="card treasury-directory">
@@ -155,8 +166,8 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
   return actor === "alvaro" ? <div className="shell"><SidebarNav current="/tesoreria/admin" />{content}</div> : <div className="treasury-shell">{content}</div>;
 }
 
-function WorkflowButton({ memberId, status, label }: { memberId: string; status: string; label: string }) {
-  return <form action={updateTreasuryWorkflowAction}><input type="hidden" name="memberId" value={memberId} /><input type="hidden" name="status" value={status} /><SubmitButton pendingLabel="Guardando...">{label}</SubmitButton></form>;
+function WorkflowButton({ memberId, status, label, className }: { memberId: string; status: string; label: string; className?: string }) {
+  return <form action={updateTreasuryWorkflowAction} className={className}><input type="hidden" name="memberId" value={memberId} /><input type="hidden" name="status" value={status} /><SubmitButton pendingLabel="Guardando...">{label}</SubmitButton></form>;
 }
 
 function money(cents: number) { return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100); }
