@@ -707,6 +707,7 @@ async function freeTrialAlerts() {
       name: context.unitName || context.billing.members.map((member) => member.display_name).join(", "),
       grade: `${context.billing.members.length} personas`,
       className: "unidad familiar",
+      taskStatus: context.taskStatus,
       joinedOn: context.billing.newestMember?.trialStartedOn ?? null,
       noticeOn: context.billing.newestMember?.trialEndsOn ?? null,
       billingOn: context.billing.billingOn,
@@ -741,16 +742,35 @@ function formatBirthdayAlerts(rows: ReturnType<typeof birthdayAlerts>) {
 }
 
 function formatFreeTrialAlerts(rows: Awaited<ReturnType<typeof freeTrialAlerts>>) {
-  if (!rows.length) return "<b>Hojas de cobro</b>\nSin entregas pendientes.";
+  if (!rows.length) return "<b>Seguimiento de hojas de cobro</b>\nSin acciones pendientes.";
   const today = todayIso();
-  return [
-    "<b>Hojas de cobro por entregar</b>",
-    ...rows.slice(0, 12).map((row) => {
-      const state = row.noticeOn && row.noticeOn < today ? "mes gratis finalizado" : row.noticeOn === today ? "mes gratis finaliza hoy" : "mes gratis finaliza";
-      return `- <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${state}${row.noticeOn ? ` ${formatHumanDate(row.noticeOn)}` : ""}${row.billingOn ? ` - primer cobro ${formatHumanDate(row.billingOn)}` : ""}${row.joinedOn ? ` - ingreso ${formatHumanDate(row.joinedOn)}` : ""}`;
-    }),
-    rows.length > 12 ? `Y ${rows.length - 12} mas.` : ""
-  ].filter(Boolean).join("\n");
+  const toDeliver = rows.filter((row) => row.taskStatus !== "delivered");
+  const awaitingReturn = rows.filter((row) => row.taskStatus === "delivered");
+  const formatDeliveryRow = (row: (typeof rows)[number]) => {
+    const state = row.noticeOn && row.noticeOn < today ? "mes gratis finalizado" : row.noticeOn === today ? "mes gratis finaliza hoy" : "mes gratis finaliza";
+    const action = row.taskStatus === "generated" ? "entregar hoja preparada" : "preparar y entregar hoja";
+    return `- <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${action} - ${state}${row.noticeOn ? ` ${formatHumanDate(row.noticeOn)}` : ""}${row.billingOn ? ` - primer cobro ${formatHumanDate(row.billingOn)}` : ""}${row.joinedOn ? ` - ingreso ${formatHumanDate(row.joinedOn)}` : ""}`;
+  };
+  const formatReturnRow = (row: (typeof rows)[number]) =>
+    `- <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - hoja entregada; pendiente de recibir los datos bancarios${row.billingOn ? ` - primer cobro ${formatHumanDate(row.billingOn)}` : ""}`;
+
+  const sections = [
+    toDeliver.length
+      ? [
+        "<b>Hojas que debes entregar</b>",
+        ...toDeliver.slice(0, 12).map(formatDeliveryRow),
+        toDeliver.length > 12 ? `Y ${toDeliver.length - 12} mas por entregar.` : ""
+      ].filter(Boolean).join("\n")
+      : "",
+    awaitingReturn.length
+      ? [
+        "<b>Hojas entregadas pendientes de devolución</b>",
+        ...awaitingReturn.slice(0, 12).map(formatReturnRow),
+        awaitingReturn.length > 12 ? `Y ${awaitingReturn.length - 12} mas pendientes de devolución.` : ""
+      ].filter(Boolean).join("\n")
+      : ""
+  ].filter(Boolean);
+  return sections.join("\n\n");
 }
 
 function studentFriendlyExamReason(member: Member) {

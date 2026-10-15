@@ -8,6 +8,10 @@ export type FamilyUnitContext = {
   billing: ReturnType<typeof calculateFamilyBilling>;
 };
 
+export type PendingFamilyBillingContext = FamilyUnitContext & {
+  taskStatus: FamilyBillingStatus;
+};
+
 const memberSelect = "id,legacy_id,display_name,class,status,joined_on,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at,billing_enabled,billing_note";
 
 export type FamilyBillingStatus = "pending" | "generated" | "delivered" | "received" | "active";
@@ -50,16 +54,17 @@ export async function getEligibleFamilyMembers(unitId: string | null) {
   return (members ?? []).filter((member) => !occupied.has(member.id) || occupied.get(member.id) === unitId);
 }
 
-export async function getPendingFamilyBillingContexts() {
+export async function getPendingFamilyBillingContexts(): Promise<PendingFamilyBillingContext[]> {
   const supabase = createAdminClient();
   const rates = await getBillingRates();
-  const [{ data: members, error }, { data: memberships }, { data: units }, { data: completed }] = await Promise.all([
+  const [{ data: members, error }, { data: memberships }, { data: units }, { data: tasks, error: taskError }] = await Promise.all([
     supabase.from("members").select(memberSelect).eq("status", "active").returns<FamilyBillingMember[]>(),
     supabase.from("family_unit_members").select("member_id,family_unit_id").returns<Array<{ member_id: string; family_unit_id: string }>>(),
     supabase.from("family_units").select("id,name").returns<Array<{ id: string; name: string | null }>>(),
-    supabase.from("family_billing_sheet_tasks").select("subject_member_id,composition_signature,status").in("status", ["received", "active"]).returns<Array<{ subject_member_id: string; composition_signature: string; status: string }>>()
+    supabase.from("family_billing_sheet_tasks").select("subject_member_id,composition_signature,status").returns<Array<{ subject_member_id: string; composition_signature: string; status: FamilyBillingStatus }>>()
   ]);
   if (error) throw error;
+  if (taskError) throw taskError;
   const memberById = new Map((members ?? []).map((member) => [member.id, member]));
   const unitNames = new Map((units ?? []).map((unit) => [unit.id, unit.name]));
   const groups = new Map<string, FamilyBillingMember[]>();
@@ -73,12 +78,19 @@ export async function getPendingFamilyBillingContexts() {
   for (const member of members ?? []) {
     if (!groupedIds.has(member.id)) groups.set(`member:${member.id}`, [member]);
   }
-  const completedKeys = new Set((completed ?? []).map((task) => `${task.subject_member_id}:${task.composition_signature}`));
+  const taskByKey = new Map((tasks ?? []).map((task) => [`${task.subject_member_id}:${task.composition_signature}`, task]));
   return [...groups.entries()].flatMap(([key, familyMembers]) => {
     const billing = calculateFamilyBilling(familyMembers, rates);
     const legacyStandaloneDelivered = key.startsWith("member:") && Boolean(billing.newestMember?.free_trial_notice_read_at);
-    if (!billing.newestMember || legacyStandaloneDelivered || completedKeys.has(`${billing.newestMember.id}:${billing.compositionSignature}`)) return [];
-    return [{ unitId: key.startsWith("member:") ? null : key, unitName: unitNames.get(key) ?? null, billing }];
+    if (!billing.newestMember || legacyStandaloneDelivered) return [];
+    const task = taskByKey.get(`${billing.newestMember.id}:${billing.compositionSignature}`);
+    if (task?.status === "received" || task?.status === "active") return [];
+    return [{
+      unitId: key.startsWith("member:") ? null : key,
+      unitName: unitNames.get(key) ?? null,
+      billing,
+      taskStatus: task?.status ?? "pending"
+    }];
   });
 }
 
