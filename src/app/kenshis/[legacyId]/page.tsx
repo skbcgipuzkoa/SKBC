@@ -87,6 +87,24 @@ type TechnicalHistory = {
   created_at: string;
 };
 
+type ChildTechnicalHistory = {
+  practiced_on: string;
+  created_at: string;
+  child_syllabus_items: {
+    title: string;
+    grade: string | null;
+    category: string | null;
+  } | null;
+};
+
+type AuditTechniqueRow = {
+  key: string;
+  date: string;
+  name: string;
+  group: string;
+  countsAs: string;
+};
+
 type ChildRanking = {
   attendance_30d: number;
   attendance_90d: number;
@@ -197,7 +215,7 @@ export default async function KenshiDetailPage({
   if (error || !member) notFound();
   const photoSrc = driveImageUrl(member.photo_url);
 
-  const [{ data: attendance }, { data: exams }, { data: courses }, technicalHistoryResult, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult, technicalAreaResult, internalNotesResult] = await Promise.all([
+  const [{ data: attendance }, { data: exams }, { data: courses }, technicalHistoryResult, childTechnicalHistoryResult, childRankingResult, childNotesResult, childNoticesResult, childBehaviorResult, childTransitionResult, blackBeltResult, shakujoResult, technicalAreaResult, internalNotesResult] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("attended_on,official_grade,trained_grade,technical_role,classes(name)")
@@ -224,6 +242,16 @@ export default async function KenshiDetailPage({
       .order("created_at", { ascending: false })
       .limit(10)
       .returns<TechnicalHistory[]>(),
+    member.class === "kids"
+      ? supabase
+          .from("child_syllabus_history")
+          .select("practiced_on,created_at,child_syllabus_items(title,grade,category)")
+          .eq("member_id", member.id)
+          .order("practiced_on", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(10)
+          .returns<ChildTechnicalHistory[]>()
+      : Promise.resolve({ data: [], error: null }),
     member.class === "kids"
       ? supabase
           .from("child_rankings")
@@ -301,7 +329,9 @@ export default async function KenshiDetailPage({
   const latestAttendance = attendance?.[0] ?? null;
   const liveChildAttendance = buildLiveChildAttendance(attendance ?? [], today);
   const technicalHistory = technicalHistoryResult.error ? [] : technicalHistoryResult.data ?? [];
-  const latestTechnique = technicalHistory[0] ?? null;
+  const childTechnicalHistory = childTechnicalHistoryResult.error ? [] : childTechnicalHistoryResult.data ?? [];
+  const auditTechniques = buildAuditTechniqueRows(member.class, technicalHistory, childTechnicalHistory);
+  const latestTechnique = auditTechniques[0] ?? null;
   const latestExam = exams?.[0] ?? null;
   const latestCourse = courses?.[0] ?? null;
   const hasConfiguredTechnicalArea = hasTechnicalAreaForGrade(technicalAreaResult.data ?? [], member.grade);
@@ -498,8 +528,8 @@ export default async function KenshiDetailPage({
             />
             <AuditCard
               title="Tecnica"
-              value={latestTechnique?.technique_name ?? "-"}
-              body={latestTechnique ? `${latestTechnique.class_date} · ${latestTechnique.group_grade ?? "-"} para ${latestTechnique.target_grade ?? "-"} · ${technicalHistoryLabel(latestTechnique)}` : "Sin tecnicas en historial."}
+              value={latestTechnique?.name ?? "-"}
+              body={latestTechnique ? `${latestTechnique.date} · ${latestTechnique.group} · ${latestTechnique.countsAs}` : "Sin tecnicas en historial."}
             />
             <AuditCard
               title="Examen"
@@ -523,12 +553,12 @@ export default async function KenshiDetailPage({
               <table>
                 <thead><tr><th>Fecha</th><th>Tecnica</th><th>Grupo</th><th>Cuenta como</th></tr></thead>
                 <tbody>
-                  {technicalHistory.length ? technicalHistory.map((item) => (
-                    <tr key={`${item.created_at}-${item.technique_name}`}>
-                      <td data-label="Fecha">{item.class_date}</td>
-                      <td data-label="Tecnica">{item.technique_name}</td>
-                      <td data-label="Grupo">{item.group_grade ?? "-"} para {item.target_grade ?? "-"}</td>
-                      <td data-label="Cuenta como">{technicalHistoryLabel(item)}</td>
+                  {auditTechniques.length ? auditTechniques.map((item) => (
+                    <tr key={item.key}>
+                      <td data-label="Fecha">{item.date}</td>
+                      <td data-label="Tecnica">{item.name}</td>
+                      <td data-label="Grupo">{item.group}</td>
+                      <td data-label="Cuenta como">{item.countsAs}</td>
                     </tr>
                   )) : <tr><td colSpan={4} className="muted">Sin tecnicas guardadas todavia.</td></tr>}
                 </tbody>
@@ -912,6 +942,32 @@ function technicalHistoryLabel(item: TechnicalHistory) {
   if (item.counts_as_review) parts.push("repaso");
   if (item.counts_for_stats) parts.push("historial");
   return parts.length ? parts.join(" + ") : "solo registro";
+}
+
+function buildAuditTechniqueRows(
+  memberClass: Member["class"],
+  adultHistory: TechnicalHistory[],
+  childHistory: ChildTechnicalHistory[]
+): AuditTechniqueRow[] {
+  if (memberClass === "kids") {
+    return childHistory
+      .filter((item) => item.child_syllabus_items?.title)
+      .map((item) => ({
+        key: `${item.created_at}-${item.child_syllabus_items?.title ?? "tecnica"}`,
+        date: item.practiced_on,
+        name: item.child_syllabus_items?.title ?? "Tecnica infantil",
+        group: item.child_syllabus_items?.grade ?? "Programa infantil",
+        countsAs: item.child_syllabus_items?.category ?? "practica infantil"
+      }));
+  }
+
+  return adultHistory.map((item) => ({
+    key: `${item.created_at}-${item.technique_name}`,
+    date: item.class_date,
+    name: item.technique_name,
+    group: `${item.group_grade ?? "-"} para ${item.target_grade ?? "-"}`,
+    countsAs: technicalHistoryLabel(item)
+  }));
 }
 
 function formatDateTime(value: string | null | undefined) {
