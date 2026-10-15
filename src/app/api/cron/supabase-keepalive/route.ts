@@ -3,6 +3,7 @@ import { externalExamAuth } from "@/lib/exams";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramMessage } from "@/lib/telegram-notifications";
 import { createWebOrdersClient } from "@/lib/web-orders/client";
+import { websiteSupabaseConfig } from "@/lib/website-admin-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -25,13 +26,29 @@ export async function GET(request: NextRequest) {
       const { error } = await createWebOrdersClient().from("skbc_order_campaigns").select("id").limit(1);
       if (error) throw error;
     }),
+    checkDatabase("web-avisos", async () => {
+      const { url, anonKey } = websiteSupabaseConfig();
+      const response = await fetch(`${url}/rest/v1/rpc/skbc_public_admin_alert_counts`, {
+        method: "POST",
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          "Content-Type": "application/json"
+        },
+        body: "{}",
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    }),
     checkDatabase("examenes-externos", async () => {
       const response = await fetch(`${externalExamAuth.supabaseUrl}/auth/v1/settings`, {
         headers: {
           apikey: externalExamAuth.supabaseAnonKey,
           Authorization: `Bearer ${externalExamAuth.supabaseAnonKey}`
         },
-        cache: "no-store"
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000)
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
     })

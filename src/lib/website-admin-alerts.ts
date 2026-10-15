@@ -15,9 +15,15 @@ const emptyCounts: WebsiteAdminAlertCounts = {
   pendingKenshiRegistrations: 0
 };
 
+export function websiteSupabaseConfig() {
+  return {
+    url: process.env.WEBSITE_SUPABASE_URL || DEFAULT_WEBSITE_SUPABASE_URL,
+    anonKey: process.env.WEBSITE_SUPABASE_ANON_KEY || DEFAULT_WEBSITE_SUPABASE_ANON_KEY
+  };
+}
+
 export const getWebsiteAdminAlertCounts = unstable_cache(async (): Promise<WebsiteAdminAlertCounts> => {
-  const url = process.env.WEBSITE_SUPABASE_URL || DEFAULT_WEBSITE_SUPABASE_URL;
-  const anonKey = process.env.WEBSITE_SUPABASE_ANON_KEY || DEFAULT_WEBSITE_SUPABASE_ANON_KEY;
+  const { url, anonKey } = websiteSupabaseConfig();
 
   try {
     const response = await fetch(`${url}/rest/v1/rpc/skbc_public_admin_alert_counts`, {
@@ -47,8 +53,7 @@ export function totalWebsiteAdminAlerts(counts: WebsiteAdminAlertCounts) {
 }
 
 export async function isPendingWebsiteAdminItem(type: "testimonial" | "kenshi", id: string) {
-  const url = process.env.WEBSITE_SUPABASE_URL || DEFAULT_WEBSITE_SUPABASE_URL;
-  const anonKey = process.env.WEBSITE_SUPABASE_ANON_KEY || DEFAULT_WEBSITE_SUPABASE_ANON_KEY;
+  const { url, anonKey } = websiteSupabaseConfig();
   try {
     const response = await fetch(`${url}/rest/v1/rpc/skbc_is_pending_admin_item`, {
       method: "POST",
