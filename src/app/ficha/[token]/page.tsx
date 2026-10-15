@@ -991,22 +991,18 @@ async function loadChildProgramHistoryRows(
 
   const plans = [...(directPlans ?? [])];
   const groupWork = [...(directGroupWork ?? [])];
-  const classesWithWork = new Set([
-    ...plans.map((plan) => plan.class_id),
-    ...groupWork.map((work) => work.class_id)
-  ]);
-  const missingDates = [...new Set(
-    [...classDates.entries()]
-      .filter(([classId]) => !classesWithWork.has(classId))
-      .map(([, classDate]) => classDate)
-  )];
+  const attendedDates = [...new Set(classDates.values())];
 
-  if (missingDates.length) {
+  // Dojo and combined flows can create more than one child class for the same
+  // date. Attendance may belong to one class while the plan was saved on its
+  // sibling. Always inspect every child class on an attended date: a blank plan
+  // row on the attendance class must not hide the real plan from the ficha.
+  if (attendedDates.length) {
     const { data: siblingClasses, error: siblingClassError } = await supabase
       .from("classes")
       .select("id,class_date")
       .eq("class_group", "kids")
-      .in("class_date", missingDates)
+      .in("class_date", attendedDates)
       .returns<ChildClassDateLookup[]>();
 
     if (siblingClassError) {
