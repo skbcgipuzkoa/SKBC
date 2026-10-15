@@ -22,6 +22,10 @@
       "schedule": "30 2 * * *"
     },
     {
+      "path": "/api/cron/supabase-keepalive",
+      "schedule": "15 4 * * *"
+    },
+    {
       "path": "/api/cron/telegram/weekly-summary",
       "schedule": "0 6 * * 1"
     }
