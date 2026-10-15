@@ -776,6 +776,10 @@ function KidsFicha({
   const childCourses = courses.filter((course) => course.kind !== "taikai");
   const taikai = courses.filter((course) => course.kind === "taikai");
   const childProgramHistory = buildChildProgramHistory(childSyllabusHistory);
+  const lastChildPracticeDate = latestDate(
+    childProgramHistory.lastDate,
+    attendance[0]?.attended_on ?? null
+  );
   return (
     <main className="legacy-ficha kids-ficha">
       <AdminBackLink href={adminBackUrl} />
@@ -810,7 +814,7 @@ function KidsFicha({
             <p>contenidos diferentes</p>
           </div>
           <Field label="Veces trabajadas" value={childProgramHistory.totalRepetitions} />
-          <Field label="Ultima practica" value={childProgramHistory.lastDate ? formatDate(childProgramHistory.lastDate) : null} />
+          <Field label="Ultima practica" value={lastChildPracticeDate ? formatDate(lastChildPracticeDate) : null} />
         </div>
         {childProgramHistory.groups.length ? (
           <div className="global-technical-grades">
@@ -1172,6 +1176,13 @@ function buildChildProgramHistory(history: ChildSyllabusHistoryRow[]) {
     totalRepetitions: items.reduce((sum, item) => sum + item.repetitions, 0),
     lastDate: items.reduce<string | null>((latest, item) => !latest || item.lastDate > latest ? item.lastDate : latest, null)
   };
+}
+
+function latestDate(...values: Array<string | null | undefined>) {
+  return values.filter((value): value is string => Boolean(value)).reduce<string | null>(
+    (latest, value) => !latest || value > latest ? value : latest,
+    null
+  );
 }
 
 function childGradeIndex(grade: string | null | undefined) {
