@@ -1,0 +1,51 @@
+insert into public.techniques (
+  legacy_id,
+  grade,
+  base_name,
+  name,
+  category,
+  content_type,
+  program_order,
+  curriculum_order,
+  active,
+  active_in_planning,
+  force_next,
+  score,
+  summary_es,
+  summary_updated_at,
+  summary_updated_by,
+  updated_at
+)
+values (
+  'UKEMI_1DAN_IPPON_SE_NAGE',
+  '1 DAN',
+  'Ippon se nage',
+  'Ippon se nage',
+  'ukemi'::public.technique_category,
+  'UKEMI',
+  801,
+  7,
+  true,
+  false,
+  false,
+  0,
+  'Ukemi de 1 DAN recogido en el programa oficial BSKF 2024. Se anade solo para registrar manualmente el trabajo conjunto de clase.',
+  now(),
+  'Programa BSKF 2024',
+  now()
+)
+on conflict (legacy_id) do update
+set
+  grade = excluded.grade,
+  base_name = excluded.base_name,
+  name = excluded.name,
+  category = excluded.category,
+  content_type = excluded.content_type,
+  program_order = excluded.program_order,
+  curriculum_order = excluded.curriculum_order,
+  active = true,
+  active_in_planning = false,
+  summary_es = excluded.summary_es,
+  summary_updated_at = excluded.summary_updated_at,
+  summary_updated_by = excluded.summary_updated_by,
+  updated_at = now();

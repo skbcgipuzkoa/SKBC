@@ -119,7 +119,12 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
 }
 
 function normalize(value: string) {
-  return value.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return value
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bUKEMIS\b/g, "UKEMI");
 }
 
 function slugGrade(grade: string | null | undefined) {
