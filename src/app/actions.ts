@@ -1482,6 +1482,23 @@ export async function confirmFamilyBillingSheetDeliveredAction(formData: FormDat
   redirect(`${returnPath}?saved=trial`);
 }
 
+export async function confirmFamilyBillingSheetGeneratedAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  const returnPath = safeReturnPath(String(formData.get("returnPath") ?? "")) || "/avisos";
+  if (!memberId) redirect(`${returnPath}?error=trial`);
+  try {
+    await upsertFamilyBillingTask(await getFamilyUnitContext(memberId), "generated", "alvaro");
+  } catch (error) {
+    console.error("Error confirming family billing sheet printing", error);
+    redirect(`${returnPath}?error=trial`);
+  }
+  revalidatePath("/avisos");
+  revalidatePath("/tesoreria");
+  revalidatePath("/sistema");
+  redirect(`${returnPath}?saved=sheet-printed`);
+}
+
 export async function confirmFamilyBillingDataReceivedAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
   const memberId = String(formData.get("memberId") ?? "").trim();

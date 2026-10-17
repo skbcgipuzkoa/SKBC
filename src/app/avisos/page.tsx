@@ -2,7 +2,7 @@ import { AlertTriangle, Bell, CheckCircle2, LogOut, Pin, Printer } from "lucide-
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
 import { SeasonReviewSelector } from "@/app/avisos/SeasonReviewSelector";
-import { confirmFamilyBillingDataReceivedAction, confirmFamilyBillingSheetDeliveredAction, createInternalNoticeAction, dismissChildNotesReminderAction, logoutAction, updateInternalNoticeStatusAction } from "@/app/actions";
+import { confirmFamilyBillingDataReceivedAction, confirmFamilyBillingSheetDeliveredAction, confirmFamilyBillingSheetGeneratedAction, createInternalNoticeAction, dismissChildNotesReminderAction, logoutAction, updateInternalNoticeStatusAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { getChildNotesReminder } from "@/lib/child-notes-reminder";
 import { getPendingFamilyBillingContexts } from "@/lib/family-units";
@@ -195,6 +195,7 @@ export default async function AvisosPage({
 
         {params.saved === "notice" ? <p className="save-ok">Aviso actualizado correctamente.</p> : null}
         {params.saved === "trial" ? <p className="save-ok">Hoja de cobro marcada como entregada.</p> : null}
+        {params.saved === "sheet-printed" ? <p className="save-ok">Hoja marcada como impresa y lista para entregar.</p> : null}
         {params.saved === "bank-data" ? <p className="save-ok">Datos bancarios marcados como recibidos.</p> : null}
         {params.saved === "child-notes" ? <p className="save-ok">Campana de notas marcada como revisada. El siguiente aviso aparecera en Navidad o en junio.</p> : null}
         {params.error === "notice" ? <p className="form-error">No se ha podido guardar el aviso.</p> : null}
@@ -257,7 +258,7 @@ export default async function AvisosPage({
             <div>
               <p className="eyebrow">Promocion primer mes</p>
               <h2>Hojas de cobro por entregar</h2>
-              <p className="muted">Cuando termine el mes gratuito, entrega la hoja de cobro al kenshi y confírmalo aquí. También entra en el parte diario de Telegram.</p>
+              <p className="muted">Cuando termine el mes gratuito, prepara e imprime la hoja, márcala como impresa y después confirma su entrega al kenshi. También entra en el parte diario de Telegram.</p>
             </div>
             <div className="notice-action-row">
               {trialNotices.length ? (
@@ -277,6 +278,7 @@ export default async function AvisosPage({
                 const member = context.billing.newestMember!;
                 const state = trialState(member.trialEndsOn);
                 const task = trialTaskByKey.get(`${member.id}:${context.billing.compositionSignature}`);
+                const printed = task?.status === "generated";
                 const awaitingReturn = task?.status === "delivered";
                 return (
                   <article className={`notice-admin-card ${state.className}`} key={`${member.id}-${context.billing.compositionSignature}`}>
@@ -285,7 +287,9 @@ export default async function AvisosPage({
                         <span className="notice-admin-meta">{context.billing.members.length} {context.billing.members.length === 1 ? "persona" : "personas"} · Cuota {formatEuro(context.billing.totalCents)}</span>
                         <h2>{context.unitName || context.billing.members.map((item) => item.display_name).join(", ")}</h2>
                       </div>
-                      <span className={`state-badge ${awaitingReturn ? "state-en-progreso" : state.badge}`}>{awaitingReturn ? "Pendiente de devolución" : state.label}</span>
+                      <span className={`state-badge ${awaitingReturn || printed ? "state-en-progreso" : state.badge}`}>
+                        {awaitingReturn ? "Pendiente de devolución" : printed ? "Impresa y lista para entregar" : "Pendiente de imprimir"}
+                      </span>
                     </div>
                     <p>
                       Nueva incorporación: {member.display_name} ·
@@ -294,18 +298,24 @@ export default async function AvisosPage({
                     </p>
                     <div className="notice-action-row">
                       {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}`}>Abrir familia</a> : null}
-                      {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}/hoja-cobro`} target="_blank" rel="noreferrer">Generar hoja de cobro</a> : null}
+                      {member.legacy_id ? <a className="secondary-button" href={`/kenshis/${member.legacy_id}/hoja-cobro`} target="_blank" rel="noreferrer">Abrir hoja de cobro</a> : null}
                       {awaitingReturn ? (
                         <form action={confirmFamilyBillingDataReceivedAction}>
                           <input type="hidden" name="memberId" value={member.id} />
                           <input type="hidden" name="returnPath" value="/avisos" />
                           <SubmitButton pendingLabel="Confirmando...">Datos bancarios recibidos</SubmitButton>
                         </form>
-                      ) : (
+                      ) : printed ? (
                         <form action={confirmFamilyBillingSheetDeliveredAction}>
                           <input type="hidden" name="memberId" value={member.id} />
                           <input type="hidden" name="returnPath" value="/avisos" />
                           <SubmitButton pendingLabel="Confirmando...">Confirmar hoja entregada</SubmitButton>
+                        </form>
+                      ) : (
+                        <form action={confirmFamilyBillingSheetGeneratedAction}>
+                          <input type="hidden" name="memberId" value={member.id} />
+                          <input type="hidden" name="returnPath" value="/avisos" />
+                          <SubmitButton pendingLabel="Guardando...">Marcar como impresa</SubmitButton>
                         </form>
                       )}
                     </div>
