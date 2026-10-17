@@ -1,7 +1,7 @@
 import { Banknote, Bell, Calculator, CheckCircle2, FileText, LogOut, Printer, Users } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
-import { correctTreasuryWorkflowAction, logoutTreasuryAction, manageTreasuryAccessAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
+import { correctTreasuryWorkflowAction, logoutTreasuryAction, manageTreasuryAccessAction, undoTreasuryDataReceivedAction, updateMemberBillingAction, updateTreasuryWorkflowAction } from "@/app/tesoreria/actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { familyDiscountCents } from "@/lib/family-billing";
 import { todayInMadrid } from "@/lib/free-trial";
@@ -143,6 +143,7 @@ export default async function TreasuryPage({ searchParams }: { searchParams: Pro
                         {status === "generated" ? <WorkflowButton memberId={subject.id} status="delivered" label="Marcar hoja entregada" /> : null}
                         {status === "delivered" ? <WorkflowButton memberId={subject.id} status="received" label="Datos bancarios recibidos" /> : null}
                         {status === "received" ? <WorkflowButton memberId={subject.id} status="active" label="Activar cobro" /> : null}
+                        {status === "received" ? <form action={undoTreasuryDataReceivedAction}><input type="hidden" name="memberId" value={subject.id} /><SubmitButton pendingLabel="Corrigiendo...">Deshacer recepción</SubmitButton></form> : null}
                       </div>
                       {actor === "alvaro" ? <form action={correctTreasuryWorkflowAction} className="treasury-correction-form">
                         <input type="hidden" name="memberId" value={subject.id} />

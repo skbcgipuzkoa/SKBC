@@ -42,6 +42,26 @@ export async function correctTreasuryWorkflowAction(formData: FormData) {
   redirect("/tesoreria?saved=workflow-correction");
 }
 
+export async function undoTreasuryDataReceivedAction(formData: FormData) {
+  const actor = await getTreasuryActor();
+  if (!actor) redirect("/tesoreria?error=access");
+  const memberId = String(formData.get("memberId") ?? "").trim();
+  if (!memberId) redirect("/tesoreria?error=workflow");
+  try {
+    await upsertFamilyBillingTask(
+      await getFamilyUnitContext(memberId),
+      "delivered",
+      actor,
+      "Corrección: datos bancarios marcados como recibidos por error"
+    );
+  } catch (error) {
+    console.error("Error undoing treasury bank data reception", error);
+    redirect("/tesoreria?error=workflow");
+  }
+  revalidateTreasury();
+  redirect("/tesoreria?saved=workflow-correction");
+}
+
 export async function manageTreasuryAccessAction(formData: FormData) {
   const actor = await getTreasuryActor();
   if (actor !== "alvaro") redirect("/tesoreria?error=access");
