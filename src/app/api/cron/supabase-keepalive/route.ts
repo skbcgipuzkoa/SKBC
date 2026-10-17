@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { externalExamAuth } from "@/lib/exams";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramMessage } from "@/lib/telegram-notifications";
 import { createWebOrdersClient } from "@/lib/web-orders/client";
@@ -40,17 +39,6 @@ export async function GET(request: NextRequest) {
         signal: AbortSignal.timeout(10_000)
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    }),
-    checkDatabase("examenes-externos", async () => {
-      const response = await fetch(`${externalExamAuth.supabaseUrl}/auth/v1/settings`, {
-        headers: {
-          apikey: externalExamAuth.supabaseAnonKey,
-          Authorization: `Bearer ${externalExamAuth.supabaseAnonKey}`
-        },
-        cache: "no-store",
-        signal: AbortSignal.timeout(10_000)
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     })
   ]);
 
@@ -75,17 +63,27 @@ export async function GET(request: NextRequest) {
 }
 
 async function checkDatabase(project: string, check: () => Promise<void>): Promise<KeepaliveResult> {
-  try {
-    await check();
-    return { project, ok: true, detail: "active" };
-  } catch (error) {
-    console.error(`Supabase keepalive failed for ${project}`, error);
-    return {
-      project,
-      ok: false,
-      detail: error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)
-    };
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await check();
+      return { project, ok: true, detail: attempt === 1 ? "active" : `active after ${attempt} attempts` };
+    } catch (error) {
+      lastError = error;
+      console.error(`Supabase keepalive failed for ${project} (attempt ${attempt}/3)`, error);
+      if (attempt < 3) await delay(attempt * 1_500);
+    }
   }
+
+  return {
+    project,
+    ok: false,
+    detail: lastError instanceof Error ? lastError.message.slice(0, 200) : String(lastError).slice(0, 200)
+  };
+}
+
+function delay(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function requireCronSecret(request: NextRequest) {
