@@ -41,6 +41,8 @@ type ExamEventItem = {
   id: string;
   exam_event_id: string;
   source: "technique" | "child_syllabus" | "manual" | "cut";
+  technique_id?: string | null;
+  child_syllabus_item_id?: string | null;
   section: string | null;
   name: string;
   summary: string | null;
@@ -147,6 +149,7 @@ export async function createIntegratedExamEvent(input: {
   memberIds: string[];
   examinerNames: string[];
   notes?: string | null;
+  templateEventId?: string | null;
 }) {
   const supabase = createAdminClient();
   const memberIds = [...new Set(input.memberIds.filter(Boolean))];
@@ -201,7 +204,15 @@ export async function createIntegratedExamEvent(input: {
 
   if (studentsError) throw studentsError;
 
-  const items = await buildExamItems(event.id, input.programType, students.map((student) => student.target_grade).filter(Boolean) as string[]);
+  let items;
+  try {
+    items = input.templateEventId
+      ? await copyExamItems(input.templateEventId, event.id, input.programType)
+      : await buildExamItems(event.id, input.programType, students.map((student) => student.target_grade).filter(Boolean) as string[]);
+  } catch (error) {
+    await supabase.from("exam_events").delete().eq("id", event.id);
+    throw error;
+  }
   if (!items.length) {
     await supabase.from("exam_events").delete().eq("id", event.id);
     throw new Error(
@@ -228,6 +239,61 @@ export async function createIntegratedExamEvent(input: {
 
   await refreshIntegratedExamReview(event.id);
   return { eventId: event.id, studentCount: insertedStudents?.length ?? students.length, itemCount: items.length };
+}
+
+async function copyExamItems(templateEventId: string, eventId: string, programType: IntegratedExamProgram) {
+  const supabase = createAdminClient();
+  const { data: template, error: templateError } = await supabase
+    .from("exam_events")
+    .select("id,program_type")
+    .eq("id", templateEventId)
+    .maybeSingle<{ id: string; program_type: IntegratedExamProgram }>();
+
+  if (templateError) throw templateError;
+  if (!template) throw new Error("El examen usado como plantilla ya no existe.");
+  if (template.program_type !== programType) throw new Error("El tipo de examen no coincide con la plantilla seleccionada.");
+
+  const { data: templateItems, error: itemsError } = await supabase
+    .from("exam_event_items")
+    .select("source,technique_id,child_syllabus_item_id,section,name,summary,grade,category,weight,order_index,cut_grade,active")
+    .eq("exam_event_id", templateEventId)
+    .order("order_index");
+
+  if (itemsError) throw itemsError;
+  return (templateItems ?? []).map((item) => ({ ...item, exam_event_id: eventId }));
+}
+
+export async function getIntegratedExamDuplicationTemplate(eventId: string) {
+  const supabase = createAdminClient();
+  const { data: event, error: eventError } = await supabase
+    .from("exam_events")
+    .select("id,title,program_type,pass_percentage,notes")
+    .eq("id", eventId)
+    .maybeSingle<Pick<ExamEvent, "id" | "title" | "program_type" | "pass_percentage" | "notes">>();
+
+  if (eventError || !event) return null;
+
+  const [{ data: students, error: studentsError }, { data: examiners, error: examinersError }] = await Promise.all([
+    supabase
+      .from("exam_event_students")
+      .select("member_id")
+      .eq("exam_event_id", eventId)
+      .order("display_order")
+      .returns<Array<{ member_id: string }>>(),
+    supabase
+      .from("exam_event_examiners")
+      .select("name")
+      .eq("exam_event_id", eventId)
+      .order("created_at")
+      .returns<Array<{ name: string }>>()
+  ]);
+
+  if (studentsError || examinersError) throw studentsError ?? examinersError;
+  return {
+    ...event,
+    memberIds: (students ?? []).map((student) => student.member_id),
+    examinerNames: (examiners ?? []).map((examiner) => examiner.name)
+  };
 }
 
 export async function getIntegratedExamAdmin(eventId: string) {

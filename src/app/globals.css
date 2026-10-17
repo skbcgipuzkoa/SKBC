@@ -3513,6 +3513,23 @@ tbody tr:hover {
   grid-column: 1 / -1;
 }
 
+.info-banner {
+  align-items: center;
+  background: #eef6ff;
+  border: 1px solid #b8d7f5;
+  border-radius: 8px;
+  color: var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+.info-banner .text-link {
+  margin-left: auto;
+}
+
 .guardian-contacts {
   border: 1px solid var(--line);
   border-radius: 8px;

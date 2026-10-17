@@ -3181,6 +3181,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
     .split(/\r?\n|,/)
     .map((value) => value.trim())
     .filter(Boolean);
+  const templateEventId = String(formData.get("templateEventId") ?? "").trim() || null;
 
   if (!memberIds.length || !examDate) {
     redirect("/examenes?error=integrated");
@@ -3195,7 +3196,8 @@ export async function createIntegratedExamEventAction(formData: FormData) {
       passPercentage: Number.isFinite(passPercentage) ? passPercentage : 70,
       memberIds,
       examinerNames,
-      notes: notes || null
+      notes: notes || null,
+      templateEventId
     });
     eventId = result.eventId;
   } catch (error) {

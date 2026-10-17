@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createIntegratedExamEventAction, deleteExamAction, deleteIntegratedExamEventAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades, kidsGrades } from "@/lib/grades";
-import { getRecentIntegratedExamEvents } from "@/lib/integrated-exams";
+import { getIntegratedExamDuplicationTemplate, getRecentIntegratedExamEvents } from "@/lib/integrated-exams";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type MemberOption = {
@@ -32,7 +32,7 @@ type ExamRow = {
 export default async function ExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; detail?: string; class?: string; status?: string; q?: string; member?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; detail?: string; class?: string; status?: string; q?: string; member?: string; from?: string; to?: string; duplicate?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -46,7 +46,7 @@ export default async function ExamenesPage({
     .order("exam_date", { ascending: false })
     .limit(200);
 
-  const [{ data: members }, { data: rawExams }, integratedEvents] = await Promise.all([
+  const [{ data: members }, { data: rawExams }, integratedEvents, duplicationTemplate] = await Promise.all([
     supabase
       .from("members")
       .select("id,display_name,class,grade")
@@ -55,7 +55,8 @@ export default async function ExamenesPage({
       .order("display_name")
       .returns<MemberOption[]>(),
     examsQuery.returns<ExamRow[]>(),
-    getRecentIntegratedExamEvents()
+    getRecentIntegratedExamEvents(),
+    params.duplicate ? getIntegratedExamDuplicationTemplate(params.duplicate) : Promise.resolve(null)
   ]);
 
   const exams = filterExams(rawExams ?? [], params);
@@ -66,6 +67,7 @@ export default async function ExamenesPage({
   const adultMembers = (members ?? []).filter((member) => member.class === "adults");
   const kidMembers = (members ?? []).filter((member) => member.class === "kids");
   const hasHistoryFilters = Boolean(params.q || params.class || params.status || params.member || params.from || params.to);
+  const duplicatedMemberIds = new Set(duplicationTemplate?.memberIds ?? []);
 
   return (
     <div className="shell">
@@ -94,7 +96,7 @@ export default async function ExamenesPage({
         {params.error === "diploma" ? <p className="form-error">No se pudo generar el diploma{params.detail ? `: ${params.detail}` : "."}</p> : null}
         {params.error === "delete" ? <p className="form-error">No se pudo eliminar el examen{params.detail ? `: ${params.detail}` : "."}</p> : null}
 
-        <section className="card">
+        <section className="card" id="crear-examen">
           <div className="section-heading-row">
             <div>
               <p className="eyebrow">Nuevo sistema</p>
@@ -105,27 +107,36 @@ export default async function ExamenesPage({
             </div>
           </div>
           <form action={createIntegratedExamEventAction} className="edit-form">
+            {duplicationTemplate ? (
+              <div className="info-banner wide">
+                <strong>Duplicando: {duplicationTemplate.title}</strong>
+                <span> Revisa la fecha, los kenshis y los examinadores antes de crear la nueva convocatoria.</span>
+                <a className="text-link" href="/examenes">Cancelar copia</a>
+              </div>
+            ) : null}
+            {duplicationTemplate ? <input type="hidden" name="templateEventId" value={duplicationTemplate.id} /> : null}
             <div className="form-grid">
               <label>
                 Tipo de examen
-                <select name="programType" required>
+                {duplicationTemplate ? <input type="hidden" name="programType" value={duplicationTemplate.program_type} /> : null}
+                <select name={duplicationTemplate ? undefined : "programType"} required={!duplicationTemplate} disabled={Boolean(duplicationTemplate)} defaultValue={duplicationTemplate?.program_type ?? "adults"}>
                   <option value="adults">Adultos - programa tecnico</option>
                   <option value="kids_progressive">Ninos - progresivo</option>
                 </select>
               </label>
               <label>Fecha<input name="examDate" type="date" required /></label>
-              <label>Aprobado desde %<input name="passPercentage" type="number" min="0" max="100" step="1" defaultValue="70" /></label>
-              <label className="wide">Titulo<input name="title" placeholder="Examen junio, examen infantil..." /></label>
+              <label>Aprobado desde %<input name="passPercentage" type="number" min="0" max="100" step="1" defaultValue={duplicationTemplate?.pass_percentage ?? 70} /></label>
+              <label className="wide">Titulo<input name="title" placeholder="Examen junio, examen infantil..." defaultValue={duplicationTemplate ? `${duplicationTemplate.title} - copia` : ""} /></label>
               <label className="wide">
                 Examinadores
-                <textarea name="examinerNames" rows={3} placeholder="Un examinador por linea. Si lo dejas vacio se crea con Alvaro Calvo." />
+                <textarea name="examinerNames" rows={3} placeholder="Un examinador por linea. Si lo dejas vacio se crea con Alvaro Calvo." defaultValue={duplicationTemplate?.examinerNames.join("\n") ?? ""} />
               </label>
               <details className="exam-member-picker">
                 <summary>Adultos <span>{adultMembers.length}</span></summary>
                 <div className="attendance-checklist compact-picker">
                   {adultMembers.map((member) => (
                     <label className="check-row" key={`integrated-adult-${member.id}`}>
-                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <input name="memberIds" type="checkbox" value={member.id} defaultChecked={duplicatedMemberIds.has(member.id)} />
                       <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
                     </label>
                   ))}
@@ -136,13 +147,13 @@ export default async function ExamenesPage({
                 <div className="attendance-checklist compact-picker">
                   {kidMembers.map((member) => (
                     <label className="check-row" key={`integrated-kid-${member.id}`}>
-                      <input name="memberIds" type="checkbox" value={member.id} />
+                      <input name="memberIds" type="checkbox" value={member.id} defaultChecked={duplicatedMemberIds.has(member.id)} />
                       <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
                     </label>
                   ))}
                 </div>
               </details>
-              <label className="wide">Notas internas<textarea name="notes" rows={2} placeholder="Opcional" /></label>
+              <label className="wide">Notas internas<textarea name="notes" rows={2} placeholder="Opcional" defaultValue={duplicationTemplate?.notes ?? ""} /></label>
             </div>
             <div className="form-actions">
               <button type="submit">Crear examen integrado</button>
@@ -176,6 +187,7 @@ export default async function ExamenesPage({
                     <td data-label="Accion">
                       <div className="inline-actions">
                         <a className="text-link" href={`/examenes/${event.id}`}>Abrir</a>
+                        <a className="mini-action" href={`/examenes?duplicate=${event.id}#crear-examen`}>Duplicar</a>
                         <form action={deleteIntegratedExamEventAction}>
                           <input type="hidden" name="eventId" value={event.id} />
                           <button className="mini-action danger" type="submit">Eliminar</button>
