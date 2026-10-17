@@ -169,8 +169,12 @@ export default async function AvisosPage({
   const shakujoNotices = buildShakujoNotices(examMembers, shakujoAttendanceResult.data ?? []);
   const active = notices.filter((notice) => ["open", "in_progress"].includes(notice.status));
   const overdue = active.filter((notice) => notice.due_on && notice.due_on < today());
-  const activeCount = active.length + Number(Boolean(childNotesReminder));
-  const overdueCount = overdue.length + Number(Boolean(childNotesReminder && childNotesReminder.dueOn < today()));
+  const overdueTrialCount = trialNotices.filter((context) => {
+    const trialEndsOn = context.billing.newestMember?.trialEndsOn;
+    return Boolean(trialEndsOn && trialEndsOn < trialEnd);
+  }).length;
+  const activeCount = active.length + trialNotices.length + Number(Boolean(childNotesReminder));
+  const overdueCount = overdue.length + overdueTrialCount + Number(Boolean(childNotesReminder && childNotesReminder.dueOn < today()));
   const visible = selectedStatus === "done"
     ? notices.filter((notice) => notice.status === "done")
     : selectedStatus === "archived"
@@ -207,13 +211,13 @@ export default async function AvisosPage({
             <Bell aria-hidden="true" size={20} />
             <h2>Activos</h2>
             <div className="metric">{activeCount}</div>
-            <p className="muted">Avisos abiertos o en curso.</p>
+            <p className="muted">Avisos y tareas pendientes.</p>
           </article>
           <article className={overdueCount ? "card attention-card" : "card"}>
             <AlertTriangle aria-hidden="true" size={20} />
             <h2>Vencidos</h2>
             <div className="metric">{overdueCount}</div>
-            <p className="muted">Tienen fecha anterior a hoy.</p>
+            <p className="muted">Avisos y tareas con fecha anterior a hoy.</p>
           </article>
           <article className="card">
             <Pin aria-hidden="true" size={20} />
