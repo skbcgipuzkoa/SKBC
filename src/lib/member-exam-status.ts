@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
+import { evaluateExamTechnicalReadiness, type ExamCurriculumItem } from "@/lib/exam-technical-readiness";
 
 const ADULT_GRADES = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
 
@@ -26,10 +27,7 @@ type TechniqueProgressRow = {
   technique_name: string;
 };
 
-type TechniqueRow = {
-  id: string;
-  name: string;
-};
+type TechniqueRow = ExamCurriculumItem;
 
 type CalendarClosure = {
   starts_on: string;
@@ -57,6 +55,7 @@ type TechnicalStatus = {
   missingFirst: number;
   missingRequired: number;
   requiredRepetitions: number;
+  specialReviewPending: string[];
 };
 
 type EngagementStatus = {
@@ -167,13 +166,14 @@ async function calculateExamStatus(member: MemberRow) {
   const reactivated = recent.total60 >= 6 && recent.total21 >= 1;
   const technicalStatus = member.class === "adults"
     ? await calculateTechnicalStatus(member, requirement.adult_required_repetitions)
-    : { ok: true, notice: "", missingFirst: 0, missingRequired: 0, requiredRepetitions: 0 };
+    : { ok: true, notice: "", missingFirst: 0, missingRequired: 0, requiredRepetitions: 0, specialReviewPending: [] };
 
   let semaphore = "AMARILLO";
   if (!eligibleByTime) semaphore = "AZUL";
   else if (!inWarningWindow) semaphore = "AMARILLO";
   else if (!hasMinimumAttendance) semaphore = "ROJO";
   else if (requirement.technical_blocks_exam && !technicalStatus.ok) semaphore = "ROJO";
+  else if (technicalStatus.specialReviewPending.length > 0) semaphore = "AMARILLO";
   else if ((linkedOut && (examCallExpired || hasMinimumAttendance)) || (examCallExpired && !reactivated)) semaphore = "GRIS";
   else semaphore = "VERDE";
 
@@ -356,7 +356,7 @@ async function calculateEngagementStatus(member: MemberRow, cycleStart: string):
 
 async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: number): Promise<TechnicalStatus> {
   if (!member.grade || requiredRepetitions <= 0) {
-    return { ok: true, notice: "", missingFirst: 0, missingRequired: 0, requiredRepetitions };
+    return { ok: true, notice: "", missingFirst: 0, missingRequired: 0, requiredRepetitions, specialReviewPending: [] };
   }
 
   const supabase = createAdminClient();
@@ -364,7 +364,7 @@ async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: 
   const [{ data: techniques, error: techniquesError }, progress] = await Promise.all([
     supabase
       .from("techniques")
-      .select("id,name")
+      .select("id,name,category,content_type")
       .eq("grade", targetGrade)
       .returns<TechniqueRow[]>(),
     loadAllPages<TechniqueProgressRow>((from, to) => supabase
@@ -379,7 +379,7 @@ async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: 
 
   if (techniquesError) throw techniquesError;
   if (!techniques?.length) {
-    return { ok: true, notice: "Tecnico: sin programa tecnico activo para este grado.", missingFirst: 0, missingRequired: 0, requiredRepetitions };
+    return { ok: true, notice: "Tecnico: sin programa tecnico activo para este grado.", missingFirst: 0, missingRequired: 0, requiredRepetitions, specialReviewPending: [] };
   }
 
   const repetitions = new Map<string, number>();
@@ -388,24 +388,34 @@ async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: 
     repetitions.set(key, (repetitions.get(key) ?? 0) + 1);
   }
 
-  const counts = techniques.map((technique) => repetitions.get(technique.id) ?? repetitions.get(technique.name.trim().toUpperCase()) ?? 0);
-  const missingRequired = counts.filter((count) => count < requiredRepetitions).length;
-  const missingFirst = counts.filter((count) => count === 0).length;
-  const allOnce = counts.every((count) => count >= 1);
+  const readiness = evaluateExamTechnicalReadiness(techniques, repetitions, requiredRepetitions);
+  const missingRequired = readiness.fundamentalMissingRequired;
+  const missingFirst = readiness.fundamentalMissingFirst;
+  const allOnce = missingFirst === 0;
+  const specialReviewPending = readiness.specialReviewPending;
+  const reviewNotice = formatSpecialReviewNotice(specialReviewPending);
 
   if (missingRequired === 0) {
-    return { ok: true, notice: `Tecnico: todas las tecnicas del grado con ${requiredRepetitions}+ reps.`, missingFirst, missingRequired, requiredRepetitions };
+    return { ok: true, notice: [`Tecnico fundamental: Goho/Juho completos con ${requiredRepetitions}+ reps.`, reviewNotice].filter(Boolean).join(" | "), missingFirst, missingRequired, requiredRepetitions, specialReviewPending };
   }
   if (allOnce) {
-    return { ok: false, notice: `Tecnico: no convocar todavia, ${missingRequired} tecnicas pendientes de ${requiredRepetitions} repeticiones.`, missingFirst, missingRequired, requiredRepetitions };
+    return { ok: false, notice: [`Tecnico fundamental: no convocar todavia, ${missingRequired} tecnicas Goho/Juho pendientes de ${requiredRepetitions} repeticiones.`, reviewNotice].filter(Boolean).join(" | "), missingFirst, missingRequired, requiredRepetitions, specialReviewPending };
   }
   return {
     ok: false,
-    notice: `Tecnico: no convocar todavia, ${missingFirst} tecnicas aun sin registrar y ${missingRequired} por debajo de ${requiredRepetitions} reps.`,
+    notice: [`Tecnico fundamental: no convocar todavia, ${missingFirst} tecnicas Goho/Juho sin registrar y ${missingRequired} por debajo de ${requiredRepetitions} reps.`, reviewNotice].filter(Boolean).join(" | "),
     missingFirst,
     missingRequired,
-    requiredRepetitions
+    requiredRepetitions,
+    specialReviewPending
   };
+}
+
+function formatSpecialReviewNotice(pending: string[]) {
+  if (!pending.length) return "Revision especial: Umpo Ho, katas, ukemis y otros bloques revisados.";
+  const visible = pending.slice(0, 5).join(", ");
+  const remaining = pending.length > 5 ? ` y ${pending.length - 5} mas` : "";
+  return `Revision del profesor pendiente: ${visible}${remaining}. Programar una o varias clases de repaso.`;
 }
 
 function buildNotice({
@@ -448,7 +458,9 @@ function buildNotice({
   if (semaphore === "AZUL") {
     notice = `AZUL: por tiempo no puede hasta ${formatDate(eligibilityDate)}. Convocatoria objetivo ${formatDate(nextExam)}.`;
   } else if (semaphore === "AMARILLO") {
-    notice = `AMARILLO: proxima convocatoria ${formatDate(nextExam)}. Aviso desde ${formatDate(warningDate)}. (${effectiveAttendancePercentage}% - min ${ratioLabel}: ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}${engagement.attendanceCredit ? ` + ${engagement.attendanceCredit} implicacion` : ""}).`;
+    notice = technicalStatus.specialReviewPending.length > 0
+      ? `AMARILLO: cumple tiempo, asistencia y tecnica fundamental; necesita revision del profesor antes de la convocatoria ${formatDate(nextExam)}.`
+      : `AMARILLO: proxima convocatoria ${formatDate(nextExam)}. Aviso desde ${formatDate(warningDate)}. (${effectiveAttendancePercentage}% - min ${ratioLabel}: ${minimumAttendance}/${totalCycleSessions}, lleva ${cycleAttendance}${engagement.attendanceCredit ? ` + ${engagement.attendanceCredit} implicacion` : ""}).`;
   } else if (semaphore === "ROJO") {
     notice = missingAttendance > 0
       ? `ROJO: no convocar por asistencia. Convocatoria ${formatDate(nextExam)}. Faltan ${missingAttendance} para el minimo ${minimumAttendance}/${totalCycleSessions}.`
