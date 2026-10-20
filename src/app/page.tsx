@@ -55,10 +55,10 @@ const moduleGroups: Array<{ title: string; items: ModuleLink[] }> = [
     title: "Trabajo diario",
     items: [
       { label: "Modo dojo", href: "/skbc-interno/dojo", icon: ClipboardCheck, tone: "primary" },
-      { label: "Nueva clase", href: "/clases/nueva", icon: CalendarCheck, tone: "primary" },
-      { label: "Sustituto", href: "/clases/nueva?delegado=1", icon: ShieldCheck, tone: "primary" },
-      { label: "Dia especial", href: "/clases/nueva?especial=1", icon: Sparkles, tone: "primary" },
-      { label: "Control del dia", href: "/control-dia", icon: ClipboardCheck, tone: "primary" },
+      { label: "Control del dia", href: "/control-dia", icon: ClipboardCheck },
+      { label: "Nueva clase", href: "/clases/nueva", icon: CalendarCheck },
+      { label: "Sustituto", href: "/clases/nueva?delegado=1", icon: ShieldCheck },
+      { label: "Dia especial", href: "/clases/nueva?especial=1", icon: Sparkles },
       { label: "Calendario", href: "/clases", icon: NotebookTabs },
       { label: "Clases Busen", href: "/clases-negras", icon: ShieldCheck },
       { label: "Shakujo", href: "/shakujo", icon: Sparkles },
@@ -298,8 +298,11 @@ export async function AdminDashboard() {
         <section className="home-modules" aria-label="Accesos por tarea">
           {moduleGroups.map((group) => (
             <article className="home-module-group" key={group.title}>
-              <h2>{group.title}</h2>
-              <div>
+              <header>
+                <h2>{group.title}</h2>
+                <span>{group.items.length} accesos</span>
+              </header>
+              <div className="home-module-links">
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   return (
