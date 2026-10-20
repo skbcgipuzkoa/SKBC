@@ -11982,3 +11982,81 @@ tbody tr:hover {
   .treasury-stats .metric { font-size: 23px; }
   .treasury-sheet-state, .treasury-family .state-badge { line-height: 1.25; white-space: normal; }
 }
+.class-closing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 72%);
+  backdrop-filter: blur(4px);
+}
+
+.class-closing-dialog {
+  width: min(520px, 100%);
+  padding: 32px 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  text-align: center;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 30%);
+}
+
+.class-closing-dialog h2 {
+  margin: 18px 0 10px;
+  font-size: 1.75rem;
+}
+
+.class-closing-dialog p {
+  margin: 6px 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.class-closing-spinner {
+  display: inline-block;
+  width: 56px;
+  height: 56px;
+  border: 6px solid #dbeafe;
+  border-top-color: #0b63c7;
+  border-radius: 50%;
+  animation: class-closing-spin 0.8s linear infinite;
+}
+
+@keyframes class-closing-spin {
+  to { transform: rotate(360deg); }
+}
+
+.class-closure-success {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0;
+  padding: 22px 24px;
+  border: 2px solid #15803d;
+  border-radius: 8px;
+  background: #dcfce7;
+  color: #14532d;
+  box-shadow: 0 10px 30px rgb(21 128 61 / 14%);
+}
+
+.class-closure-success strong,
+.class-closure-success h2 {
+  display: block;
+  margin: 0;
+  color: #14532d;
+  font-size: 1.35rem;
+}
+
+.class-closure-success p {
+  margin: 4px 0 0;
+  color: #166534;
+}
+
+@media (max-width: 640px) {
+  .class-closing-dialog { padding: 28px 20px; }
+  .class-closing-dialog h2 { font-size: 1.45rem; }
+  .class-closure-success { align-items: flex-start; padding: 18px; }
+}

@@ -1,5 +1,6 @@
 import { ArrowLeft, Check, FileText, LogOut, RefreshCcw, Wand2 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
+import { ClosingClassButton } from "@/app/components/ClosingClassButton";
 import { notFound, redirect } from "next/navigation";
 import {
   closeAdultClassAction,
@@ -548,10 +549,10 @@ export default async function ClaseDetailPage({
         </p>
         <button type="submit">{clase.closed ? "Guardar correcciones" : "Guardar sin cerrar"}</button>
         {!clase.closed ? (
-          <button className="primary-link button-reset" type="submit" name="closeAfter" value="true">
+          <ClosingClassButton className="primary-link button-reset" name="closeAfter" value="true">
             <Check aria-hidden="true" size={16} />
             Guardar y cerrar todo
-          </button>
+          </ClosingClassButton>
         ) : null}
       </div>
     </AttendanceDayForm>
@@ -620,10 +621,10 @@ export default async function ClaseDetailPage({
         </div>
         <div className="attendance-day-actions">
           <button type="submit">Guardar revision</button>
-          <button className="primary-link button-reset" type="submit" name="closeAfter" value="true">
+          <ClosingClassButton className="primary-link button-reset" name="closeAfter" value="true">
             <Check aria-hidden="true" size={16} />
             Guardar revision y cerrar clase
-          </button>
+          </ClosingClassButton>
         </div>
       </form>
       )}
@@ -724,9 +725,9 @@ export default async function ClaseDetailPage({
                 {clase.closed ? "Guardar correcciones" : "Anadir seleccionados"}
               </button>
               {!clase.closed ? (
-                <button className="secondary-button" type="submit" name="closeAfter" value="true" disabled={!pendingClassMembers.length}>
+                <ClosingClassButton className="secondary-button" name="closeAfter" value="true" disabled={!pendingClassMembers.length}>
                   Guardar asistencia y cerrar clase
-                </button>
+                </ClosingClassButton>
               ) : null}
             </div>
           </form>
@@ -839,10 +840,10 @@ export default async function ClaseDetailPage({
               <form action={closeKidsClassAction}>
                 <input type="hidden" name="classId" value={clase.id} />
                 <input type="hidden" name="legacyId" value={legacyId} />
-                <button className="primary-link button-reset" type="submit">
+                <ClosingClassButton className="primary-link button-reset">
                   <Check aria-hidden="true" size={16} />
                   Cerrar clase
-                </button>
+                </ClosingClassButton>
               </form>
             ) : null}
             <form action={logoutAction}>
@@ -868,9 +869,9 @@ export default async function ClaseDetailPage({
         {query.saved === "manual-technique-remove" ? <p className="save-ok">Tecnica comun quitada de la clase.</p> : null}
         {query.saved === "kids-plan" ? <p className="save-ok">Plan infantil opcional guardado.</p> : null}
         {query.saved === "kids-plan-delete" ? <p className="save-ok">Trabajo infantil por grupo quitado.</p> : null}
-        {query.saved === "close" ? <p className="save-ok">Clase cerrada y registros tecnicos generados.</p> : null}
+        {query.saved === "close" ? <section className="class-closure-success" role="status"><Check aria-hidden="true" size={30} /><div><strong>Se ha cerrado correctamente la clase</strong><p>Todos los datos han quedado guardados. Ya puedes salir de esta ventana.</p></div></section> : null}
         {query.saved === "correction-opened" ? <p className="save-ok">Clase reabierta para correccion. Elige que quieres modificar.</p> : null}
-        {query.saved === "correction-closed" ? <p className="save-ok">Correcciones guardadas y clase cerrada de nuevo.</p> : null}
+        {query.saved === "correction-closed" ? <section className="class-closure-success" role="status"><Check aria-hidden="true" size={30} /><div><strong>Se ha cerrado correctamente la clase</strong><p>Las correcciones han quedado guardadas. Ya puedes salir de esta ventana.</p></div></section> : null}
         {query.saved === "delegate" ? <p className="save-ok">Enlace de sustituto generado.</p> : null}
         {query.error === "plan" ? (
           <p className="form-error">No se ha podido generar el plan tecnico{query.detail ? `: ${query.detail}` : " para esta clase."}</p>
@@ -942,10 +943,10 @@ export default async function ClaseDetailPage({
               <form action={finishClassCorrectionAction}>
                 <input type="hidden" name="classId" value={clase.id} />
                 <input type="hidden" name="legacyId" value={legacyId} />
-                <button className="primary-link button-reset" type="submit">
+                <ClosingClassButton className="primary-link button-reset">
                   <Check aria-hidden="true" size={16} />
                   Guardar cambios y cerrar todo
-                </button>
+                </ClosingClassButton>
               </form>
             </div>
             <nav className="class-correction-options" aria-label="Opciones de correccion">
@@ -1362,19 +1363,19 @@ export default async function ClaseDetailPage({
                 {attendanceClasses.map((dayClass) => (
                   <input key={dayClass.id} type="hidden" name="groupClassIds" value={dayClass.id} />
                 ))}
-                <button className="primary-link button-reset" type="submit">
+                <ClosingClassButton className="primary-link button-reset">
                   <Check aria-hidden="true" size={16} />
                   Cerrar todo
-                </button>
+                </ClosingClassButton>
               </form>
             ) : (
               <form action={closeAdultClassAction}>
                 <input type="hidden" name="classId" value={clase.id} />
                 <input type="hidden" name="legacyId" value={legacyId} />
-                <button className="primary-link button-reset" type="submit">
+                <ClosingClassButton className="primary-link button-reset">
                   <Check aria-hidden="true" size={16} />
                   Cerrar clase ya guardada
-                </button>
+                </ClosingClassButton>
               </form>
             )}
           </section>
@@ -1389,10 +1390,10 @@ export default async function ClaseDetailPage({
             <form action={closeKidsClassAction}>
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
-              <button className="primary-link button-reset" type="submit">
+              <ClosingClassButton className="primary-link button-reset">
                 <Check aria-hidden="true" size={16} />
                 Cerrar clase
-              </button>
+              </ClosingClassButton>
             </form>
           </section>
         ) : null}

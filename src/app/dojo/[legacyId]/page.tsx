@@ -12,6 +12,7 @@ import {
 } from "@/app/actions";
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
+import { ClosingClassButton } from "@/app/components/ClosingClassButton";
 import { ClassSectionNav, type ClassSectionLink } from "@/components/class-section-nav";
 import { ProvisionalAttendanceForm } from "@/components/provisional-attendance-form";
 import { PersistentAttendanceForm } from "@/components/persistent-attendance-form";
@@ -254,7 +255,7 @@ export default async function DojoClassPage({
       ) : null}
 
       {query.error ? <p className="dojo-error">No se ha podido guardar. Revisa la clase completa si necesitas corregir algo.</p> : null}
-      {query.saved ? <p className="dojo-ok">{savedMessage(query.saved)}</p> : null}
+      {query.saved === "close" ? <section className="class-closure-success" role="status"><Check aria-hidden="true" size={30} /><div><strong>Se ha cerrado correctamente la clase</strong><p>Todos los datos han quedado guardados. Ya puedes salir de esta ventana.</p></div></section> : query.saved ? <p className="dojo-ok">{savedMessage(query.saved)}</p> : null}
 
       {step === "kids" ? (
         <section className="dojo-task-card">
@@ -432,12 +433,12 @@ export default async function DojoClassPage({
             <input type="hidden" name="closeAfter" value="true" />
             {adultClass ? <input type="hidden" name="groupClassIds" value={adultClass.id} /> : null}
             {kidsClass ? <input type="hidden" name="groupClassIds" value={kidsClass.id} /> : null}
-            <DojoSubmitButton
-              pendingLabel="Cerrando clase..."
+            <ClosingClassButton
+              className="dojo-primary-button"
               confirmMessage={adultClass && planRows.length > 0 && completedPlan === 0 ? "No hay ninguna tecnica adulta marcada. ¿Quieres cerrar la clase igualmente?" : undefined}
             >
               Cerrar clase completa
-            </DojoSubmitButton>
+            </ClosingClassButton>
           </form>
           <a className="dojo-secondary-button" href={`/clases/${mainClass.legacy_id ?? legacyId}`}>Abrir clase completa</a>
         </section>
