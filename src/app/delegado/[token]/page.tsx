@@ -1,7 +1,8 @@
-import { Check, ClipboardCheck, Play, Send } from "lucide-react";
+import { ClipboardCheck, Play, Send } from "lucide-react";
 import { notFound } from "next/navigation";
 import { saveDelegateTechnicalStepAction, startDelegateClassAction, submitDelegateClassAction } from "@/app/actions";
 import { ClosingClassButton } from "@/app/components/ClosingClassButton";
+import { ClassClosureSuccess } from "@/app/components/ClassClosureSuccess";
 import { adultGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { driveImageUrl } from "@/lib/drive";
@@ -146,11 +147,7 @@ export default async function DelegateClassPage({
       </section>
 
       {query.saved === "sent" ? (
-        <section className="delegate-card delegate-success class-closure-success" role="status">
-          <Check aria-hidden="true" size={28} />
-          <h2>Se ha cerrado correctamente la clase</h2>
-          <p>La asistencia y el trabajo han quedado guardados. Ya puedes salir de esta ventana.</p>
-        </section>
+        <ClassClosureSuccess detail="La asistencia y el trabajo de clase han quedado guardados en SKBC." />
       ) : isClassClosed ? (
         <section className="delegate-card">
           <h2>Clase cerrada</h2>

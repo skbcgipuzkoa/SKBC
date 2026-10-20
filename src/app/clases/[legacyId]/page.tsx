@@ -1,6 +1,7 @@
 import { ArrowLeft, Check, FileText, LogOut, RefreshCcw, Wand2 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { ClosingClassButton } from "@/app/components/ClosingClassButton";
+import { ClassClosureSuccess } from "@/app/components/ClassClosureSuccess";
 import { notFound, redirect } from "next/navigation";
 import {
   closeAdultClassAction,
@@ -869,9 +870,9 @@ export default async function ClaseDetailPage({
         {query.saved === "manual-technique-remove" ? <p className="save-ok">Tecnica comun quitada de la clase.</p> : null}
         {query.saved === "kids-plan" ? <p className="save-ok">Plan infantil opcional guardado.</p> : null}
         {query.saved === "kids-plan-delete" ? <p className="save-ok">Trabajo infantil por grupo quitado.</p> : null}
-        {query.saved === "close" ? <section className="class-closure-success" role="status"><Check aria-hidden="true" size={30} /><div><strong>Se ha cerrado correctamente la clase</strong><p>Todos los datos han quedado guardados. Ya puedes salir de esta ventana.</p></div></section> : null}
+        {query.saved === "close" ? <ClassClosureSuccess /> : null}
         {query.saved === "correction-opened" ? <p className="save-ok">Clase reabierta para correccion. Elige que quieres modificar.</p> : null}
-        {query.saved === "correction-closed" ? <section className="class-closure-success" role="status"><Check aria-hidden="true" size={30} /><div><strong>Se ha cerrado correctamente la clase</strong><p>Las correcciones han quedado guardadas. Ya puedes salir de esta ventana.</p></div></section> : null}
+        {query.saved === "correction-closed" ? <ClassClosureSuccess detail="Las correcciones han quedado guardadas." /> : null}
         {query.saved === "delegate" ? <p className="save-ok">Enlace de sustituto generado.</p> : null}
         {query.error === "plan" ? (
           <p className="form-error">No se ha podido generar el plan tecnico{query.detail ? `: ${query.detail}` : " para esta clase."}</p>

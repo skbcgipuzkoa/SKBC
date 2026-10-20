@@ -12112,6 +12112,49 @@ tbody tr:hover {
   color: #166534;
 }
 
+.class-closing-success-overlay {
+  background: rgb(20 83 45 / 72%);
+}
+
+.class-closing-success-dialog {
+  border: 2px solid #16a34a;
+  background: #f0fdf4;
+}
+
+.class-closing-success-dialog h2,
+.class-closing-success-dialog p {
+  color: #14532d;
+}
+
+.class-closing-success-icon {
+  display: inline-grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #fff;
+}
+
+.class-closing-success-dialog .class-closing-success-exit {
+  margin-top: 16px;
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+.class-closing-success-dialog button {
+  width: 100%;
+  margin-top: 22px;
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 6px;
+  background: #15803d;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 @media (max-width: 640px) {
   .class-closing-dialog { padding: 28px 20px; }
   .class-closing-dialog h2 { font-size: 1.45rem; }

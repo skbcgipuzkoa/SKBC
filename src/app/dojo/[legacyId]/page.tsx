@@ -13,6 +13,7 @@ import {
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { ClosingClassButton } from "@/app/components/ClosingClassButton";
+import { ClassClosureSuccess } from "@/app/components/ClassClosureSuccess";
 import { ClassSectionNav, type ClassSectionLink } from "@/components/class-section-nav";
 import { ProvisionalAttendanceForm } from "@/components/provisional-attendance-form";
 import { PersistentAttendanceForm } from "@/components/persistent-attendance-form";
@@ -255,7 +256,7 @@ export default async function DojoClassPage({
       ) : null}
 
       {query.error ? <p className="dojo-error">No se ha podido guardar. Revisa la clase completa si necesitas corregir algo.</p> : null}
-      {query.saved === "close" ? <section className="class-closure-success" role="status"><Check aria-hidden="true" size={30} /><div><strong>Se ha cerrado correctamente la clase</strong><p>Todos los datos han quedado guardados. Ya puedes salir de esta ventana.</p></div></section> : query.saved ? <p className="dojo-ok">{savedMessage(query.saved)}</p> : null}
+      {query.saved === "close" ? <ClassClosureSuccess /> : query.saved ? <p className="dojo-ok">{savedMessage(query.saved)}</p> : null}
 
       {step === "kids" ? (
         <section className="dojo-task-card">
