@@ -97,6 +97,11 @@ export default async function DelegateClassPage({
   const adultClasses = usableClasses.filter((clase) => clase.class_group === "adults");
   const kidsClasses = usableClasses.filter((clase) => clase.class_group === "kids");
   const isExpired = new Date(link.expires_at).getTime() < Date.now();
+  const isClassClosed = Boolean(
+    link.closed_at
+    || primaryClass.closed
+    || (mode === "combined" && (!adultClasses.length || !kidsClasses.length) && (classes ?? []).some((clase) => clase.closed))
+  );
   const isUnavailable = Boolean(link.revoked_at || link.closed_at || isExpired || !usableClasses.length);
   const hasStarted = Boolean(link.started_at || query.started);
   const step = normalizeDelegateStep(query.step, mode, hasStarted, kidsClasses.length > 0, adultClasses.length > 0);
@@ -144,6 +149,12 @@ export default async function DelegateClassPage({
           <Check aria-hidden="true" size={28} />
           <h2>Clase enviada</h2>
           <p>Gracias. La asistencia y el trabajo de clase han quedado guardados en SKBC.</p>
+        </section>
+      ) : isClassClosed ? (
+        <section className="delegate-card">
+          <h2>Clase cerrada</h2>
+          <p className="muted">Otra persona ya ha cerrado esta clase. No se pueden guardar mas cambios desde los enlaces de sustituto.</p>
+          <p className="muted">Si hace falta corregir algun dato, Alvaro debe reabrir la clase desde administracion.</p>
         </section>
       ) : isUnavailable ? (
         <section className="delegate-card">
