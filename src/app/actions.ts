@@ -3927,6 +3927,29 @@ export async function deactivateAdultRankingBonusAction(formData: FormData) {
   redirect("/rankings?saved=bonus");
 }
 
+export async function promoteAdultRankingBonusAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+
+  const bonusId = String(formData.get("bonusId") ?? "").trim();
+  if (!bonusId) redirect("/rankings?error=bonus");
+
+  const supabase = createAdminClient();
+  const { data: bonus, error } = await supabase
+    .from("adult_ranking_bonuses")
+    .update({ permanent: true, active: true, ended_at: null })
+    .eq("id", bonusId)
+    .select("member_id")
+    .single<{ member_id: string }>();
+
+  if (error || !bonus) {
+    console.error("Error promoting adult ranking bonus", error);
+    redirect("/rankings?error=bonus");
+  }
+
+  await recalculateMemberExamStatus(bonus.member_id);
+  redirect("/rankings?saved=bonus");
+}
+
 export async function createClubClosureAction(formData: FormData) {
   if (!(await hasInternalAccess())) {
     redirect("/");

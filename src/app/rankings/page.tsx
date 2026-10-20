@@ -1,7 +1,7 @@
 ﻿import { Award, LogOut, Medal } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { addAdultRankingBonusAction, deactivateAdultRankingBonusAction, logoutAction } from "@/app/actions";
+import { addAdultRankingBonusAction, deactivateAdultRankingBonusAction, logoutAction, promoteAdultRankingBonusAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { loadAllPages } from "@/lib/load-all-pages";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -194,7 +194,7 @@ export default async function RankingsPage({
   const bonusTableReady = !bonusResult.error && !recentBonusResult.error;
   const bonuses = bonusTableReady ? bonusResult.data ?? [] : [];
   const recentBonuses = bonusTableReady ? recentBonusResult.data ?? [] : [];
-  const fixedBonuses = recentBonuses.filter((bonus) => bonus.permanent);
+  const fixedBonuses = bonuses.filter((bonus) => bonus.active && bonus.permanent);
   const oneTimeBonuses = recentBonuses.filter((bonus) => !bonus.permanent);
 
   const blackBeltRows = blackBeltResult.error ? [] : blackBeltResult.data ?? [];
@@ -352,7 +352,7 @@ export default async function RankingsPage({
                     <AuditMetric label="Volumen asistencia" value={`+${row.attendanceVolume}`} detail="maximo 12" />
                     <AuditMetric label="Cursos 60 dias" value={`+${row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}`} detail={`N ${row.nationalCoursePoints} Ã‚· I ${row.internationalCoursePoints} Ã‚· T ${row.taikaiCoursePoints}`} />
                     <AuditMetric label="Bonus fijo" value={`+${row.fixedBonusScore}`} detail={`${row.fixedBonus} x 8`} />
-                    <AuditMetric label="Bonus puntual" value={`+${row.oneTimeBonusScore}`} detail={`${row.oneTimeBonus} x 4 ultimos 180 dias`} />
+                    <AuditMetric label="Bonus puntual" value={`+${row.oneTimeBonusScore}`} detail={`${row.oneTimeBonus} x 4 solo clase actual`} />
                     <AuditMetric label="Busen / Shakujo" value={`${row.isBlackBeltEligible ? signed(row.blackBeltPoints) : "-"} / ${signed(row.shakujoPoints)}`} detail="ultimos 180 dias" />
                     <AuditMetric label="Inactividad" value={`-${row.inactivityPenalty}`} detail={formatDaysWithout(row.daysWithoutAttendance)} />
                     <AuditMetric label="Tecnicas" value={`${row.technical90}`} detail="solo informativo" />
@@ -432,6 +432,10 @@ export default async function RankingsPage({
                   <strong>{bonus.points > 0 ? `+${bonus.points}` : bonus.points}</strong>
                   <span>{bonus.members?.display_name ?? "-"} Ã‚· {bonus.bonus_date}</span>
                   <p>{bonus.reason}</p>
+                  {bonus.active ? <form action={promoteAdultRankingBonusAction}>
+                    <input type="hidden" name="bonusId" value={bonus.id} />
+                    <button className="mini-action" type="submit">Dejar fijo</button>
+                  </form> : null}
                   <form action={deactivateAdultRankingBonusAction}>
                     <input type="hidden" name="bonusId" value={bonus.id} />
                     <button className="mini-action danger" type="submit">Quitar</button>
@@ -535,6 +539,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
   const attendance180 = countByMember(attendance.filter((row) => row.attended_on >= date180));
   const clubTrainingDates = uniqueSorted(attendance.map((row) => row.attended_on));
+  const currentClassDate = clubTrainingDates.at(-1) ?? null;
   const technical90 = countByMember(technical);
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national").map((row) => ({ member_id: row.member_id, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international").map((row) => ({ member_id: row.member_id, points: 3 })));
@@ -546,7 +551,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   );
   const oneTimeBonus = sumByMember(
     bonuses
-      .filter((row) => row.active && !row.permanent && row.bonus_date >= date180)
+      .filter((row) => row.active && !row.permanent && row.bonus_date === currentClassDate)
       .map((row) => ({ member_id: row.member_id, points: row.points }))
   );
   const blackBeltPoints = sumByMember(

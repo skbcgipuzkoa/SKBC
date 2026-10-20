@@ -1761,10 +1761,11 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
   const attendance180 = countByMember(attendance.filter((row) => row.attended_on >= date180));
   const clubTrainingDates = uniqueSorted(attendance.map((row) => row.attended_on));
+  const currentClassDate = clubTrainingDates.at(-1) ?? null;
   const lastAttendance = latestByMember(attendance);
   const coursePoints = countCoursePoints(courses);
   const fixedBonusPoints = sumByMember(bonuses.filter((row) => row.active && row.permanent));
-  const oneTimeBonusPoints = sumByMember(bonuses.filter((row) => row.active && !row.permanent && row.bonus_date >= date180));
+  const oneTimeBonusPoints = sumByMember(bonuses.filter((row) => row.active && !row.permanent && row.bonus_date === currentClassDate));
   const ranked = members
     .filter((member) => member.legacy_id !== "13")
     .map((member) => {

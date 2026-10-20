@@ -295,7 +295,7 @@ async function calculateEngagementStatus(member: MemberRow, cycleStart: string):
 
   const supabase = createAdminClient();
   const date180 = formatDate(addDays(startOfDay(new Date()), -180));
-  const [{ data: courses }, bonusResult, blackBeltResult, shakujoResult] = await Promise.all([
+  const [{ data: courses }, bonusResult, blackBeltResult, shakujoResult, latestClassResult] = await Promise.all([
     supabase
       .from("courses")
       .select("kind,course_date")
@@ -315,13 +315,22 @@ async function calculateEngagementStatus(member: MemberRow, cycleStart: string):
       .from("shakujo_attendance")
       .select("shakujo_classes(class_date)")
       .eq("member_id", member.id)
-      .returns<Array<{ shakujo_classes: { class_date: string } | null }>>()
+      .returns<Array<{ shakujo_classes: { class_date: string } | null }>>(),
+    supabase
+      .from("classes")
+      .select("class_date")
+      .eq("class_group", "adults")
+      .eq("closed", true)
+      .order("class_date", { ascending: false })
+      .limit(1)
+      .returns<Array<{ class_date: string }>>()
   ]);
 
   const recentCourses = (courses ?? []).filter((row) => row.course_date >= date180);
   const coursePoints = recentCourses.reduce((sum, row) => sum + courseKindPoints(row.kind), 0);
+  const currentClassDate = latestClassResult.data?.[0]?.class_date ?? null;
   const bonusPoints = bonusResult.error ? 0 : (bonusResult.data ?? [])
-    .filter((row) => row.active && (row.permanent || row.bonus_date >= date180))
+    .filter((row) => row.active && (row.permanent || row.bonus_date === currentClassDate))
     .reduce((sum, row) => sum + row.points, 0);
   const busenPoints = blackBeltResult.error ? 0 : (blackBeltResult.data ?? [])
     .filter((row) => row.black_belt_special_classes?.class_date && row.black_belt_special_classes.class_date >= date180)

@@ -595,6 +595,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
   const attendance180 = countByMember(attendance.filter((row) => row.attended_on >= date180));
   const clubTrainingDates = uniqueSorted(attendance.map((row) => row.attended_on));
+  const currentClassDate = clubTrainingDates.at(-1) ?? null;
   const technical90 = countByMember(technical);
   const nationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "national" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 1 })));
   const internationalCoursePoints = sumByMember(courses.filter((row) => row.kind === "international" && row.member_id).map((row) => ({ member_id: row.member_id as string, points: 3 })));
@@ -606,7 +607,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
   );
   const oneTimeBonus = sumByMember(
     bonuses
-      .filter((row) => row.active && !row.permanent && row.bonus_date >= date180)
+      .filter((row) => row.active && !row.permanent && row.bonus_date === currentClassDate)
       .map((row) => ({ member_id: row.member_id, points: row.points }))
   );
   const blackBeltPoints = sumByMember(
