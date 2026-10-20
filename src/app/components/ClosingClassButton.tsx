@@ -24,7 +24,7 @@ const DEFAULT_STEPS = [
 export function ClosingClassButton({ children, className, confirmMessage, name, value, disabled = false, steps = DEFAULT_STEPS }: Props) {
   const { pending } = useFormStatus();
   const [requestedClose, setRequestedClose] = useState(false);
-  const closing = pending && requestedClose;
+  const closing = requestedClose;
 
   return (
     <>
