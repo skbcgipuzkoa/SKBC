@@ -288,24 +288,14 @@ export async function recalculateAllExamStatusesAction() {
     redirect("/proximos-examenes?error=recalculate");
   }
 
-  const { data: closedAdultClasses, error: classError } = await supabase
-    .from("classes")
-    .select("id")
-    .eq("class_group", "adults")
-    .eq("closed", true)
-    .returns<Array<{ id: string }>>();
-
-  if (classError) {
-    console.error("Error loading closed adult classes for technical history repair", classError);
-    redirect("/proximos-examenes?error=recalculate");
-  }
-
-  for (const clase of closedAdultClasses ?? []) {
-    await closeAdultClass(clase.id);
-  }
-
-  for (const member of data ?? []) {
-    await recalculateMemberExamStatus(member.id);
+  const members = data ?? [];
+  const batchSize = 8;
+  for (let index = 0; index < members.length; index += batchSize) {
+    await Promise.all(
+      members
+        .slice(index, index + batchSize)
+        .map((member) => recalculateMemberExamStatus(member.id))
+    );
   }
   await recalculateChildRankings();
 
