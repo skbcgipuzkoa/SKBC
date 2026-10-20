@@ -12015,6 +12015,63 @@ tbody tr:hover {
   line-height: 1.5;
 }
 
+.class-closing-progress {
+  display: grid;
+  gap: 10px;
+  margin: 24px 0 0;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  list-style: none;
+  text-align: left;
+}
+
+.class-closing-progress li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: #94a3b8;
+}
+
+.class-closing-progress li > span {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.class-closing-progress li strong {
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+}
+
+.class-closing-progress li small {
+  color: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.class-closing-progress li.active {
+  color: #075eb5;
+}
+
+.class-closing-progress li.active > span {
+  border-top-color: transparent;
+  animation: class-closing-spin 0.8s linear infinite;
+}
+
+.class-closing-progress li.done {
+  color: #15803d;
+}
+
+.class-closing-progress li.done > span {
+  border-color: #15803d;
+  background: #15803d;
+  box-shadow: inset 0 0 0 3px #f8fafc;
+}
+
 .class-closing-spinner {
   display: inline-block;
   width: 56px;
@@ -12058,5 +12115,8 @@ tbody tr:hover {
 @media (max-width: 640px) {
   .class-closing-dialog { padding: 28px 20px; }
   .class-closing-dialog h2 { font-size: 1.45rem; }
+  .class-closing-progress { padding: 14px; }
+  .class-closing-progress li { grid-template-columns: 16px minmax(0, 1fr); }
+  .class-closing-progress li small { grid-column: 2; }
   .class-closure-success { align-items: flex-start; padding: 18px; }
 }
