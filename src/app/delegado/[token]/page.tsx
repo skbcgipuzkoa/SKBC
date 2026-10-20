@@ -98,7 +98,7 @@ export default async function DelegateClassPage({
   const kidsClasses = usableClasses.filter((clase) => clase.class_group === "kids");
   const isExpired = new Date(link.expires_at).getTime() < Date.now();
   const isUnavailable = Boolean(link.revoked_at || link.closed_at || isExpired || !usableClasses.length);
-  const hasStarted = Boolean(link.started_at || query.started || mode === "kids");
+  const hasStarted = Boolean(link.started_at || query.started);
   const step = normalizeDelegateStep(query.step, mode, hasStarted, kidsClasses.length > 0, adultClasses.length > 0);
 
   const classIds = usableClasses.map((clase) => clase.id);
