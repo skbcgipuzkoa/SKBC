@@ -27,6 +27,23 @@ import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
 import { convertProvisionalMember } from "@/lib/provisional-members";
 import { beltColorForGrade, isPendingBeltSize, pendingBeltSize } from "@/lib/exam-belt-orders";
 import { CHILD_NOTES_REMINDER_KEY } from "@/lib/child-notes-reminder";
+import { advanceClassClosureProgress, beginClassClosureProgress, failClassClosureProgress, finishClassClosureProgress, type ClosureStep } from "@/lib/class-closure-progress";
+
+const CLOSURE_ATTENDANCE: ClosureStep[] = ["attendance"];
+const CLOSURE_TECHNICAL: ClosureStep[] = ["attendance", "technical"];
+const CLOSURE_PROFILES: ClosureStep[] = ["attendance", "technical", "profiles"];
+const CLOSURE_RANKINGS: ClosureStep[] = ["attendance", "technical", "profiles", "rankings"];
+
+function closureProgressId(formData: FormData) {
+  return String(formData.get("closureProgressId") ?? "").trim();
+}
+
+function adultClosureProgress(id: string) {
+  return async (phase: "technical" | "profiles" | "finalizing") => {
+    if (phase === "technical") await advanceClassClosureProgress(id, "technical", CLOSURE_ATTENDANCE);
+    if (phase === "profiles") await advanceClassClosureProgress(id, "profiles", CLOSURE_TECHNICAL);
+  };
+}
 
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
@@ -1924,6 +1941,7 @@ export async function submitDelegateClassAction(formData: FormData) {
   const memberIdsByClass = getDelegateMemberIdsByClass(formData);
   const totalMembers = [...memberIdsByClass.values()].reduce((count, ids) => count + ids.length, 0);
   const isPartialCombinedStep = mode === "combined" && nextStep === "technical";
+  const progressId = closureProgressId(formData);
 
   if (!token || !totalMembers) {
     redirect(`/delegado/${token || "error"}?mode=${mode}&step=${isPartialCombinedStep ? "kids-attendance" : "attendance"}&error=attendance`);
@@ -1934,15 +1952,21 @@ export async function submitDelegateClassAction(formData: FormData) {
     const classesToProcess = isPartialCombinedStep
       ? classes.filter((clase) => clase.class_group === "kids")
       : classes;
+    await beginClassClosureProgress(progressId, classesToProcess[0]?.id);
     for (const clase of classesToProcess) {
       const memberIds = memberIdsByClass.get(clase.id) ?? [];
       if (memberIds.length) {
         await addAttendanceRows(clase.id, memberIds, "REGISTRADO POR SUSTITUTO", formData);
       }
+    }
+    await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
+
+    for (const clase of classesToProcess) {
       if (clase.class_group === "adults") {
-        await closeAdultClass(clase.id);
+        await closeAdultClass(clase.id, adultClosureProgress(progressId));
       } else {
         const supabase = createAdminClient();
+        await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
         const { error } = await supabase
           .from("classes")
           .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
@@ -1950,13 +1974,15 @@ export async function submitDelegateClassAction(formData: FormData) {
           .eq("class_group", "kids");
         if (error) throw error;
       }
-      await recalculateClassExamStatus(clase.id);
     }
 
+    await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
+    for (const clase of classesToProcess) await recalculateClassExamStatus(clase.id);
     if (classesToProcess.some((clase) => clase.class_group === "kids")) {
       await recalculateChildRankings();
     }
 
+    await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
     const supabase = createAdminClient();
     if (isPartialCombinedStep) {
       await supabase
@@ -1969,8 +1995,10 @@ export async function submitDelegateClassAction(formData: FormData) {
         .update({ delegate_name: delegateName, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("id", link.id);
     }
+    await finishClassClosureProgress(progressId);
   } catch (error) {
     console.error("Error submitting delegate class", error);
+    await failClassClosureProgress(progressId, errorMessage(error));
     redirect(`/delegado/${token}?mode=${mode}&step=${isPartialCombinedStep ? "kids-attendance" : "attendance"}&error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
@@ -2397,6 +2425,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
   const groupedClassIds = formData.getAll("groupClassIds").map((value) => String(value)).filter(Boolean);
   const memberIds = formData.getAll("memberIds").map((value) => String(value)).filter(Boolean);
   const closeAfter = String(formData.get("closeAfter") ?? "") === "true";
+  const progressId = closureProgressId(formData);
 
   if (!classId || !legacyId || (!memberIds.length && !hasGroupedMembers && !(closeAfter && groupedClassIds.length))) {
     redirect(`/clases/${returnLegacyId || legacyId || ""}?error=attendance${returnStepQuery}`);
@@ -2416,16 +2445,19 @@ export async function addBulkAttendanceAction(formData: FormData) {
     }
 
     try {
+      if (closeAfter) await beginClassClosureProgress(progressId, classIds[0]);
       for (const dayClass of classes) {
         const ids = memberIdsByClass.get(dayClass.id) ?? [];
         if (ids.length) await addAttendanceRows(dayClass.id, ids, "WEB SKBC", formData);
       }
 
       if (closeAfter) {
+        await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
         for (const dayClass of classes) {
           if (dayClass.class_group === "adults") {
-            await closeAdultClass(dayClass.id);
+            await closeAdultClass(dayClass.id, adultClosureProgress(progressId));
           } else {
+            await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
             const { error: closeError } = await supabase
               .from("classes")
               .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
@@ -2433,8 +2465,9 @@ export async function addBulkAttendanceAction(formData: FormData) {
               .eq("class_group", "kids");
             if (closeError) throw closeError;
           }
-          await recalculateClassExamStatus(dayClass.id);
         }
+        await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
+        for (const dayClass of classes) await recalculateClassExamStatus(dayClass.id);
       } else {
         for (const dayClass of classes) {
           if (dayClass.class_group === "adults" && dayClass.closed) {
@@ -2446,8 +2479,13 @@ export async function addBulkAttendanceAction(formData: FormData) {
       if (classes.some((dayClass) => dayClass.class_group === "kids")) {
         await recalculateChildRankings();
       }
+      if (closeAfter) {
+        await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
+        await finishClassClosureProgress(progressId);
+      }
     } catch (error) {
       console.error("Error saving grouped attendance", error);
+      if (closeAfter) await failClassClosureProgress(progressId, errorMessage(error));
       redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
     }
 
@@ -2520,9 +2558,12 @@ export async function addBulkAttendanceAction(formData: FormData) {
 
   if (closeAfter) {
     try {
+      await beginClassClosureProgress(progressId, classId);
+      await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
       if (clase.class_group === "adults") {
-        await closeAdultClass(classId);
+        await closeAdultClass(classId, adultClosureProgress(progressId));
       } else {
+        await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
         const { error: closeError } = await supabase
           .from("classes")
           .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
@@ -2530,13 +2571,17 @@ export async function addBulkAttendanceAction(formData: FormData) {
           .eq("class_group", "kids");
         if (closeError) throw closeError;
       }
+      await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
       await recalculateClassExamStatus(classId);
       if (clase.class_group === "kids") {
         await syncChildSyllabusHistoryForClass(supabase, classId);
         await recalculateChildRankings();
       }
+      await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
+      await finishClassClosureProgress(progressId);
     } catch (closeError) {
       console.error("Error closing class after bulk attendance", closeError);
+      await failClassClosureProgress(progressId, errorMessage(closeError));
       redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
     }
 
@@ -2699,6 +2744,7 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
   const returnStep = String(formData.get("returnStep") ?? "asistencia");
   const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
   const attendanceIds = formData.getAll("attendanceIds").map((value) => String(value)).filter(Boolean);
+  const progressId = closureProgressId(formData);
 
   if (!classId || !legacyId || !attendanceIds.length) {
     redirect(`/clases/${legacyId || ""}?error=technical-review${returnStepQuery}`);
@@ -2707,6 +2753,10 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
   const supabase = createAdminClient();
 
   try {
+    if (closeAfter) {
+      await beginClassClosureProgress(progressId, classId);
+      await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
+    }
     const { data: attendanceRows, error: attendanceError } = await supabase
       .from("attendance_logs")
       .select("id,member_id")
@@ -2746,11 +2796,15 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
     }
 
     if (closeAfter) {
-      await closeAdultClass(classId);
+      await closeAdultClass(classId, adultClosureProgress(progressId));
+      await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
       await recalculateClassExamStatus(classId);
+      await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
+      await finishClassClosureProgress(progressId);
     }
   } catch (error) {
     console.error("Error saving attendance technical review", error);
+    if (closeAfter) await failClassClosureProgress(progressId, errorMessage(error));
     redirect(`/clases/${legacyId}?error=technical-review${returnStepQuery}`);
   }
 
@@ -2849,16 +2903,23 @@ export async function closeAdultClassAction(formData: FormData) {
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
   const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
+  const progressId = closureProgressId(formData);
 
   if (!classId || !legacyId) {
     redirect("/clases");
   }
 
   try {
-    await closeAdultClass(classId);
+    await beginClassClosureProgress(progressId, classId);
+    await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
+    await closeAdultClass(classId, adultClosureProgress(progressId));
+    await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
     await recalculateClassExamStatus(classId);
+    await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
+    await finishClassClosureProgress(progressId);
   } catch (error) {
     console.error("Error closing adult class", error);
+    await failClassClosureProgress(progressId, errorMessage(error));
     redirect(returnTo || `/clases/${legacyId}?error=close`);
   }
 
@@ -2907,6 +2968,7 @@ export async function finishClassCorrectionAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
+  const progressId = closureProgressId(formData);
   if (!classId || !legacyId) redirect("/clases");
 
   const supabase = createAdminClient();
@@ -2933,28 +2995,35 @@ export async function finishClassCorrectionAction(formData: FormData) {
   const correctionClassIds = correctionClasses.map((dayClass) => dayClass.id);
 
   try {
+    await beginClassClosureProgress(progressId, correctionClassIds[0]);
+    await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
     for (const dayClass of correctionClasses) {
       if (dayClass.class_group === "adults") {
         // Keeping closed=true makes this a replacement rebuild and avoids
         // incrementing global technique counters a second time.
-        await closeAdultClass(dayClass.id);
+        await closeAdultClass(dayClass.id, adultClosureProgress(progressId));
       } else {
+        await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
         await syncChildSyllabusHistoryForClass(supabase, dayClass.id);
       }
-      await recalculateClassExamStatus(dayClass.id);
     }
 
+    await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
+    for (const dayClass of correctionClasses) await recalculateClassExamStatus(dayClass.id);
     if (correctionClasses.some((dayClass) => dayClass.class_group === "kids")) {
       await recalculateChildRankings();
     }
 
+    await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
     const { error: finishError } = await supabase
       .from("classes")
       .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
       .in("id", correctionClassIds);
     if (finishError) throw finishError;
+    await finishClassClosureProgress(progressId);
   } catch (error) {
     console.error("Error finishing class correction", error);
+    await failClassClosureProgress(progressId, errorMessage(error));
     await supabase
       .from("classes")
       .update({ closed: true, status: "pending", updated_at: new Date().toISOString() })
@@ -2977,28 +3046,33 @@ export async function closeKidsClassAction(formData: FormData) {
   const returnStep = String(formData.get("returnStep") ?? "");
   const returnStepQuery = returnStep ? `&step=${encodeURIComponent(returnStep)}` : "";
   const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
+  const progressId = closureProgressId(formData);
 
   if (!classId || !legacyId) {
     redirect("/clases");
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("classes")
-    .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
-    .eq("id", classId)
-    .eq("class_group", "kids");
-
-  if (error) {
-    redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
-  }
-
   try {
+    await beginClassClosureProgress(progressId, classId);
+    await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
     await syncChildSyllabusHistoryForClass(supabase, classId);
+    await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
+    await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
     await recalculateClassExamStatus(classId);
     await recalculateChildRankings();
+    await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
+    const { error } = await supabase
+      .from("classes")
+      .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+      .eq("id", classId)
+      .eq("class_group", "kids");
+    if (error) throw error;
+    await finishClassClosureProgress(progressId);
   } catch (error) {
     console.error("Error recalculating kids class exam status", error);
+    await failClassClosureProgress(progressId, errorMessage(error));
+    redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
   }
 
   redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=kids-skipped${returnStepQuery}`);

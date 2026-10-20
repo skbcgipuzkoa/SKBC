@@ -62,7 +62,9 @@ export async function setPlanTechniqueCompleted(planId: string, completed: boole
   if (error) throw error;
 }
 
-export async function closeAdultClass(classId: string) {
+type AdultClassClosePhase = "technical" | "profiles" | "finalizing";
+
+export async function closeAdultClass(classId: string, onPhase?: (phase: AdultClassClosePhase) => Promise<void>) {
   const supabase = createAdminClient();
   const { data: clase, error: classError } = await supabase
     .from("classes")
@@ -96,6 +98,8 @@ export async function closeAdultClass(classId: string) {
     await clearGeneratedClassTechnicalHistory(supabase, clase.id);
   }
 
+  await onPhase?.("technical");
+
   const validAttendance = (attendance ?? []).filter((row) => row.members?.class === "adults");
   const completedPlan = (plan ?? []).filter((row) => row.completed && row.technique_id);
   const progressionPlan = completedPlan.filter((row) => row.used_for_history);
@@ -109,9 +113,14 @@ export async function closeAdultClass(classId: string) {
     const insertedAssignments = await generateAssignments(clase, validAttendance, completedPlan, overrides);
     assignmentCount = insertedAssignments;
     dojoHistoryCount = await generateDojoHistory(clase, validAttendance, progressionPlan);
+    await onPhase?.("profiles");
     memberHistoryCount = await generateMemberHistory(clase);
     if (!wasClosed) await updateTechniqueMetrics(completedPlan);
+  } else {
+    await onPhase?.("profiles");
   }
+
+  await onPhase?.("finalizing");
 
   const { error: updateError } = await supabase
     .from("classes")
