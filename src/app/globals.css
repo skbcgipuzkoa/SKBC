@@ -12029,10 +12029,12 @@ tbody tr:hover {
 
 .class-closing-progress li {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   color: #94a3b8;
+  animation: class-closing-step-progress 1.8s linear forwards;
+  animation-delay: var(--closing-step-delay);
 }
 
 .class-closing-progress li > span {
@@ -12047,29 +12049,15 @@ tbody tr:hover {
   font-size: 0.95rem;
 }
 
-.class-closing-progress li small {
-  color: inherit;
-  font-size: 0.78rem;
-  font-weight: 700;
+@keyframes class-closing-step-progress {
+  0% { color: #075eb5; transform: translateX(0); }
+  45% { color: #075eb5; transform: translateX(4px); }
+  99% { color: #075eb5; transform: translateX(0); }
+  100% { color: #15803d; }
 }
 
-.class-closing-progress li.active {
-  color: #075eb5;
-}
-
-.class-closing-progress li.active > span {
-  border-top-color: transparent;
-  animation: class-closing-spin 0.8s linear infinite;
-}
-
-.class-closing-progress li.done {
-  color: #15803d;
-}
-
-.class-closing-progress li.done > span {
-  border-color: #15803d;
-  background: #15803d;
-  box-shadow: inset 0 0 0 3px #f8fafc;
+.class-closing-progress li.final-step {
+  animation-duration: 3.6s;
 }
 
 .class-closing-spinner {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
 type Props = {
@@ -24,20 +24,7 @@ const DEFAULT_STEPS = [
 export function ClosingClassButton({ children, className, confirmMessage, name, value, disabled = false, steps = DEFAULT_STEPS }: Props) {
   const { pending } = useFormStatus();
   const [requestedClose, setRequestedClose] = useState(false);
-  const [activeStep, setActiveStep] = useState(0);
   const closing = pending && requestedClose;
-
-  useEffect(() => {
-    if (!closing) {
-      setActiveStep(0);
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setActiveStep((current) => Math.min(current + 1, steps.length - 1));
-    }, 1800);
-    return () => window.clearInterval(timer);
-  }, [closing, steps.length]);
 
   return (
     <>
@@ -67,10 +54,13 @@ export function ClosingClassButton({ children, className, confirmMessage, name, 
             <p>Confirmare cuando este cerrada en esta misma ventana. Por favor, ten paciencia.</p>
             <ol className="class-closing-progress" aria-label="Progreso del cierre">
               {steps.map((step, index) => (
-                <li className={index < activeStep ? "done" : index === activeStep ? "active" : "waiting"} key={step}>
+                <li
+                  className={index === steps.length - 1 ? "final-step" : undefined}
+                  key={step}
+                  style={{ "--closing-step-delay": `${index * 1.8}s` } as CSSProperties}
+                >
                   <span aria-hidden="true" />
                   <strong>{step}</strong>
-                  <small>{index < activeStep ? "Completado" : index === activeStep ? "Procesando..." : "Pendiente"}</small>
                 </li>
               ))}
             </ol>
