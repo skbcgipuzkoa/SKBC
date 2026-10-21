@@ -25,6 +25,8 @@ export type AdultExamStatusPanel = {
 export type AdultExamStatusPanelInput = {
   semaphore: string | null | undefined;
   nextExamOn: string | null | undefined;
+  cycleStartOn?: string | null | undefined;
+  currentOn?: string | null | undefined;
   examNotice: string | null | undefined;
   attendanceCount: number | null | undefined;
   minimumAttendance: number | null | undefined;
@@ -94,6 +96,13 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
   const inactive = semaphore === "INACTIVO";
   const timePending = semaphore === "AZUL";
   const timeKnown = hasExamStatus && !inactive;
+  const timeProgress = buildTimeProgress({
+    cycleStartOn: input.cycleStartOn,
+    eligibilityOn: eligibilityDateFromNotice(input.examNotice),
+    currentOn: input.currentOn,
+    timeKnown,
+    timePending
+  });
   const activityProgress = Math.min(
     percentage(input.recentAttendance60, 6),
     percentage(input.recentAttendance21, 1)
@@ -110,13 +119,9 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       {
         id: "time",
         label: "Tiempo",
-        value: !timeKnown ? "Sin datos" : timePending ? "En curso" : "Cumplido",
-        detail: !timeKnown
-          ? "Estado temporal pendiente de calcular."
-          : timePending
-            ? "Aun se esta completando el tiempo minimo."
-            : "Tiempo minimo alcanzado.",
-        progress: !timeKnown || timePending ? null : 100,
+        value: timeProgress.value,
+        detail: timeProgress.detail,
+        progress: timeProgress.progress,
         tone: !timeKnown ? "neutral" : timePending ? "waiting" : "complete"
       },
       {
@@ -162,6 +167,75 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       }
     ]
   };
+}
+
+function buildTimeProgress({
+  cycleStartOn,
+  eligibilityOn,
+  currentOn,
+  timeKnown,
+  timePending
+}: {
+  cycleStartOn: string | null | undefined;
+  eligibilityOn: string | null;
+  currentOn: string | null | undefined;
+  timeKnown: boolean;
+  timePending: boolean;
+}) {
+  if (!timeKnown) {
+    return { value: "Sin datos", detail: "Estado temporal pendiente de calcular.", progress: null };
+  }
+
+  const cycleStart = parseIsoDate(cycleStartOn);
+  const eligibility = parseIsoDate(eligibilityOn);
+  const current = parseIsoDate(currentOn) ?? startOfToday();
+
+  if (timePending && cycleStart && eligibility) {
+    const totalDays = Math.max(1, daysBetween(cycleStart, eligibility));
+    const elapsedDays = Math.min(totalDays, Math.max(0, daysBetween(cycleStart, current)));
+    const remainingDays = Math.max(0, daysBetween(current, eligibility));
+    return {
+      value: `${elapsedDays} de ${totalDays} dias`,
+      detail: `Desde ${formatDate(cycleStartOn!)}. Cumple el ${formatDate(eligibilityOn!)}; faltan ${remainingDays} dias.`,
+      progress: percentage(elapsedDays, totalDays)
+    };
+  }
+
+  return {
+    value: timePending ? "En curso" : "Cumplido",
+    detail: timePending
+      ? "Aun se esta completando el tiempo minimo."
+      : cycleStartOn
+        ? `Ciclo iniciado el ${formatDate(cycleStartOn)}. Tiempo minimo alcanzado.`
+        : "Tiempo minimo alcanzado.",
+    progress: timePending ? null : 100
+  };
+}
+
+function eligibilityDateFromNotice(notice: string | null | undefined) {
+  const value = String(notice ?? "");
+  const iso = value.match(/no puede hasta\s+(\d{4}-\d{2}-\d{2})/i)?.[1];
+  if (iso) return iso;
+  const local = value.match(/no puede hasta\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+  return local
+    ? `${local[3]}-${local[2].padStart(2, "0")}-${local[1].padStart(2, "0")}`
+    : null;
+}
+
+function parseIsoDate(value: string | null | undefined) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+}
+
+function daysBetween(start: Date, end: Date) {
+  return Math.floor((end.getTime() - start.getTime()) / 86_400_000);
 }
 
 function examRepetitionMinimum(notice: string | null | undefined) {

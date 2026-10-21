@@ -3,6 +3,8 @@ import { buildAdultExamStatusPanel } from "../src/lib/adult-exam-status-panel.ts
 
 const base = {
   nextExamOn: "2026-12-05",
+  cycleStartOn: "2026-01-10",
+  currentOn: "2026-10-21",
   attendanceCount: 42,
   minimumAttendance: 38,
   totalCycleSessions: 94,
@@ -19,7 +21,12 @@ const blue = buildAdultExamStatusPanel({
 });
 assert.equal(blue.semaphore, "AZUL");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.tone, "waiting");
-assert.equal(blue.criteria.find((item) => item.id === "time")?.progress, null);
+assert.equal(blue.criteria.find((item) => item.id === "time")?.value, "284 de 329 dias");
+assert.equal(blue.criteria.find((item) => item.id === "time")?.progress, 86);
+assert.equal(
+  blue.criteria.find((item) => item.id === "time")?.detail,
+  "Desde 10/01/2026. Cumple el 05/12/2026; faltan 45 dias."
+);
 
 const red = buildAdultExamStatusPanel({
   ...base,

@@ -518,6 +518,7 @@ function AdultFicha({
   const examPanel = buildAdultExamStatusPanel({
     semaphore: member.semaphore,
     nextExamOn: member.next_exam_on,
+    cycleStartOn: member.last_exam_on ?? member.joined_on,
     examNotice: member.exam_notice,
     attendanceCount: member.attendance_count,
     minimumAttendance: member.minimum_attendance,
