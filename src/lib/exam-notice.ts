@@ -15,6 +15,7 @@ export function parseExamNotice(notice: string | null | undefined): ExamNoticeDe
   ]);
   const fundamentalMissingRequired = numberFrom(raw, [
     /(\d+)\s+por debajo de\s+\d+\s+reps?/i,
+    /(\d+)\s+tecnicas?\s+Goho\/Juho\s+pendientes de\s+\d+\s+repeticiones/i,
     /(\d+)\s+tecnicas?\s+pendientes/i
   ]);
   const specialMatch = raw.match(/Revision del profesor pendiente:\s*(.+?)\.\s*Programar/i);
@@ -23,7 +24,7 @@ export function parseExamNotice(notice: string | null | undefined): ExamNoticeDe
     segments,
     fundamentalMissingFirst,
     fundamentalMissingRequired,
-    fundamentalComplete: /Tecnico fundamental:\s*todas las tecnicas/i.test(raw),
+    fundamentalComplete: /Tecnico fundamental:.*(?:todas las tecnicas|Goho\/Juho completos)/i.test(raw),
     specialReviewPending: specialMatch
       ? specialMatch[1].split(",").map((name) => name.trim()).filter(Boolean)
       : []

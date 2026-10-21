@@ -47,4 +47,15 @@ assert.equal(notice.fundamentalMissingRequired, 7);
 assert.deepEqual(notice.specialReviewPending, ["Tenchi ken dai san", "Mae ukemi"]);
 assert.equal(notice.segments.length, 3);
 
+const reinforcement = parseExamNotice(
+  "Tecnico fundamental: no convocar todavia, 4 tecnicas Goho/Juho pendientes de 2 repeticiones. | Revision especial: Umpo Ho, katas, ukemis y otros bloques revisados."
+);
+assert.equal(reinforcement.fundamentalMissingFirst, 0);
+assert.equal(reinforcement.fundamentalMissingRequired, 4);
+
+const complete = parseExamNotice(
+  "Tecnico fundamental: Goho/Juho completos con 2+ reps. | Revision especial: Umpo Ho, katas, ukemis y otros bloques revisados."
+);
+assert.equal(complete.fundamentalComplete, true);
+
 console.log("Exam technical readiness checks passed.");
