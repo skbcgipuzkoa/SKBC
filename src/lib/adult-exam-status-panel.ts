@@ -87,6 +87,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
   const attendanceCount = nonNegative(input.attendanceCount);
   const minimumAttendance = nonNegative(input.minimumAttendance);
   const attendanceReady = minimumAttendance > 0 && attendanceCount >= minimumAttendance;
+  const missingAttendance = Math.max(0, minimumAttendance - attendanceCount);
   const fundamentalsReady = fundamentalTotal > 0
     ? preparedFundamentals === fundamentalTotal
     : parsedNotice.fundamentalComplete;
@@ -128,11 +129,14 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
         id: "attendance",
         label: "Asistencia",
         value: minimumAttendance > 0
-          ? `${attendanceCount} de ${minimumAttendance} necesarias`
+          ? `${attendanceCount} de ${minimumAttendance} asistencias`
           : `${attendanceCount} registradas`,
-        detail: input.totalCycleSessions
-          ? `${nonNegative(input.totalCycleSessions)} sesiones en el ciclo actual.`
-          : "Seguimiento del ciclo actual.",
+        detail: attendanceDetail({
+          attendanceCount,
+          minimumAttendance,
+          missingAttendance,
+          totalCycleSessions: nonNegative(input.totalCycleSessions)
+        }),
         progress: minimumAttendance > 0 ? percentage(attendanceCount, minimumAttendance) : null,
         tone: minimumAttendance === 0 ? "neutral" : attendanceReady ? "complete" : "blocked"
       },
@@ -167,6 +171,26 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       }
     ]
   };
+}
+
+function attendanceDetail({
+  attendanceCount,
+  minimumAttendance,
+  missingAttendance,
+  totalCycleSessions
+}: {
+  attendanceCount: number;
+  minimumAttendance: number;
+  missingAttendance: number;
+  totalCycleSessions: number;
+}) {
+  const cycleText = totalCycleSessions > 0
+    ? `Ha asistido a ${attendanceCount} de las ${totalCycleSessions} sesiones previstas en el ciclo.`
+    : `Ha asistido a ${attendanceCount} sesiones en el ciclo actual.`;
+  if (minimumAttendance <= 0) return cycleText;
+  return missingAttendance > 0
+    ? `${cycleText} Le faltan ${missingAttendance} asistencias para alcanzar el minimo.`
+    : `${cycleText} Ya ha alcanzado el minimo de asistencia.`;
 }
 
 function buildTimeProgress({

@@ -27,6 +27,25 @@ assert.equal(
   blue.criteria.find((item) => item.id === "time")?.detail,
   "Desde 10/01/2026. Cumple el 05/12/2026; faltan 45 dias."
 );
+assert.equal(blue.criteria.find((item) => item.id === "attendance")?.value, "42 de 38 asistencias");
+assert.equal(
+  blue.criteria.find((item) => item.id === "attendance")?.detail,
+  "Ha asistido a 42 de las 94 sesiones previstas en el ciclo. Ya ha alcanzado el minimo de asistencia."
+);
+
+const attendancePending = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "ROJO",
+  attendanceCount: 22,
+  minimumAttendance: 32,
+  totalCycleSessions: 79,
+  examNotice: "ROJO: no convocar por asistencia."
+});
+assert.equal(attendancePending.criteria.find((item) => item.id === "attendance")?.value, "22 de 32 asistencias");
+assert.equal(
+  attendancePending.criteria.find((item) => item.id === "attendance")?.detail,
+  "Ha asistido a 22 de las 79 sesiones previstas en el ciclo. Le faltan 10 asistencias para alcanzar el minimo."
+);
 
 const red = buildAdultExamStatusPanel({
   ...base,
@@ -134,6 +153,10 @@ const unknownAttendance = unknownAttendanceMinimum.criteria.find((item) => item.
 assert.equal(unknownAttendance?.value, "42 registradas");
 assert.equal(unknownAttendance?.progress, null);
 assert.equal(unknownAttendance?.tone, "neutral");
+assert.equal(
+  unknownAttendance?.detail,
+  "Ha asistido a 42 de las 94 sesiones previstas en el ciclo."
+);
 
 const unknownFundamentals = buildAdultExamStatusPanel({
   ...base,
