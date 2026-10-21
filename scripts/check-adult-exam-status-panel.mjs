@@ -1,0 +1,63 @@
+import assert from "node:assert/strict";
+import { buildAdultExamStatusPanel } from "../src/lib/adult-exam-status-panel.ts";
+
+const base = {
+  nextExamOn: "2026-12-05",
+  attendanceCount: 42,
+  minimumAttendance: 38,
+  totalCycleSessions: 94,
+  fundamentalRepetitions: [2, 2, 1, 0],
+  recentAttendance60: 8,
+  recentAttendance21: 2
+};
+
+const blue = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "AZUL",
+  examNotice: "AZUL: por tiempo no puede hasta 05/12/2026. Convocatoria objetivo 05/12/2026."
+});
+assert.equal(blue.semaphore, "AZUL");
+assert.equal(blue.criteria.find((item) => item.id === "time")?.tone, "waiting");
+
+const red = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "ROJO",
+  attendanceCount: 48,
+  minimumAttendance: 38,
+  examNotice: "ROJO: no convocar por progreso tecnico. | BLOQUEO Tecnico fundamental: no convocar todavia, 2 tecnicas Goho/Juho sin registrar y 4 por debajo de 2 reps. | Revision del profesor pendiente: Mae ukemi. Programar una o varias clases de repaso."
+});
+assert.equal(red.criteria.find((item) => item.id === "attendance")?.tone, "complete");
+assert.equal(red.criteria.find((item) => item.id === "attendance")?.progress, 100);
+assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.value, "2 de 4 preparadas");
+assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.progress, 50);
+assert.equal(JSON.stringify(red).includes("Mae ukemi"), false);
+
+const yellow = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "AMARILLO",
+  examNotice: "AMARILLO: proxima convocatoria 05/12/2026. | Tecnico fundamental: Goho/Juho completos con 2 repeticiones. | Revision del profesor pendiente: Daisharin. Programar una o varias clases de repaso.",
+  fundamentalRepetitions: [2, 2, 2, 2]
+});
+assert.equal(yellow.criteria.find((item) => item.id === "fundamentals")?.tone, "complete");
+assert.equal(JSON.stringify(yellow).includes("Daisharin"), false);
+
+const green = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "VERDE",
+  examNotice: "VERDE: apto para valoracion. | Tecnico fundamental: Goho/Juho completos con 2+ reps.",
+  fundamentalRepetitions: [2, 2, 2, 3]
+});
+assert.equal(green.title, "Preparado para valorar");
+assert.equal(green.criteria.every((item) => item.tone === "complete"), true);
+
+const grey = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "GRIS",
+  examNotice: "GRIS: revisar reactivacion reciente (2/6 en 60 dias y 0/1 en 21 dias).",
+  recentAttendance60: 2,
+  recentAttendance21: 0
+});
+assert.equal(grey.criteria.find((item) => item.id === "activity")?.tone, "blocked");
+assert.equal(grey.criteria.find((item) => item.id === "activity")?.progress, 33);
+
+console.log("Adult exam status panel checks passed.");
