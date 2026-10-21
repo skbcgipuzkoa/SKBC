@@ -1343,10 +1343,6 @@ function publicTechniqueProgress(notice: string) {
     }
   }
 
-  if (details.specialReviewPending.length > 0) {
-    pieces.push(`el profesor debe revisar ${joinSpanish(details.specialReviewPending)}`);
-  }
-
   return pieces.join(" y ");
 }
 
