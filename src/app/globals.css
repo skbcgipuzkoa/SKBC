@@ -4525,6 +4525,130 @@ tbody tr:hover {
   font-weight: 700;
 }
 
+.ficha-activity-search {
+  align-items: end;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+}
+
+.input-with-icon {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+
+.input-with-icon svg {
+  color: var(--muted);
+  left: 11px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.input-with-icon input {
+  padding-left: 36px;
+  width: 100%;
+}
+
+.ficha-activity-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ficha-activity-row {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-left: 5px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ficha-activity-row.has-access {
+  border-left-color: var(--brand);
+}
+
+.ficha-activity-row > summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(68px, 0.35fr)) minmax(145px, 0.7fr);
+  list-style: none;
+  padding: 14px 16px;
+}
+
+.ficha-activity-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ficha-activity-row > summary > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ficha-activity-row > summary > span:not(:first-child) {
+  text-align: right;
+}
+
+.ficha-activity-row > summary strong,
+.ficha-activity-row > summary small {
+  overflow-wrap: anywhere;
+}
+
+.ficha-activity-row > summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ficha-activity-history {
+  background: #f8fbff;
+  border-top: 1px solid var(--line);
+  padding: 16px;
+}
+
+.ficha-activity-history h3 {
+  margin: 0 0 4px;
+}
+
+@media (max-width: 900px) {
+  .ficha-activity-row > summary {
+    grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(54px, auto));
+  }
+
+  .ficha-activity-row > summary > span:last-child {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .ficha-activity-search {
+    grid-template-columns: 1fr;
+  }
+
+  .ficha-activity-search button {
+    width: 100%;
+  }
+
+  .ficha-activity-row > summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 13px;
+  }
+
+  .ficha-activity-row > summary > span:first-child,
+  .ficha-activity-row > summary > span:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .ficha-activity-row > summary > span:not(:first-child) {
+    text-align: left;
+  }
+
+  .ficha-activity-history .section-heading-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .maintenance-panel {
   margin: 18px 0;
 }

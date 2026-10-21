@@ -194,7 +194,7 @@ export default async function KenshiDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; returnTo?: string; ika?: string; conflict?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; returnTo?: string; ika?: string; conflict?: string; access?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -584,7 +584,7 @@ export default async function KenshiDetailPage({
               </table>
             </div>
           </details>
-          <details className="advanced-details">
+          <details className="advanced-details" id="consultas-ficha" open={notices.access === "1"}>
             <summary>Ver consultas de la ficha personal</summary>
             {fichaAccessAvailable ? (
               <>
