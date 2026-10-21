@@ -112,7 +112,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
         detail: input.totalCycleSessions
           ? `${nonNegative(input.totalCycleSessions)} sesiones en el ciclo actual.`
           : "Seguimiento del ciclo actual.",
-        progress: minimumAttendance > 0 ? percentage(attendanceCount, minimumAttendance) : 0,
+        progress: minimumAttendance > 0 ? percentage(attendanceCount, minimumAttendance) : null,
         tone: minimumAttendance === 0 ? "neutral" : attendanceReady ? "complete" : "blocked"
       },
       {
@@ -120,7 +120,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
         label: "Goho y Juho",
         value: `${preparedFundamentals} de ${fundamentalTotal} preparadas`,
         detail: fundamentalDetail(parsedNotice, fundamentalTotal, requiredRepetitions, fundamentalsReady),
-        progress: fundamentalTotal > 0 ? percentage(preparedFundamentals, fundamentalTotal) : 0,
+        progress: fundamentalTotal > 0 ? percentage(preparedFundamentals, fundamentalTotal) : null,
         tone: fundamentalTotal === 0 ? "neutral" : fundamentalsReady ? "complete" : "blocked"
       },
       {

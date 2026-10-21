@@ -101,6 +101,28 @@ for (const semaphore of [null, "DESCONOCIDO"]) {
   assert.equal(time?.tone, "neutral");
 }
 
+const unknownAttendanceMinimum = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "ROJO",
+  minimumAttendance: null,
+  examNotice: null
+});
+const unknownAttendance = unknownAttendanceMinimum.criteria.find((item) => item.id === "attendance");
+assert.equal(unknownAttendance?.value, "42 registradas");
+assert.equal(unknownAttendance?.progress, null);
+assert.equal(unknownAttendance?.tone, "neutral");
+
+const unknownFundamentals = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "ROJO",
+  fundamentalRepetitions: [],
+  examNotice: null
+});
+const unknownFundamentalProgress = unknownFundamentals.criteria.find((item) => item.id === "fundamentals");
+assert.equal(unknownFundamentalProgress?.value, "0 de 0 preparadas");
+assert.equal(unknownFundamentalProgress?.progress, null);
+assert.equal(unknownFundamentalProgress?.tone, "neutral");
+
 assert.equal(green.criteria.find((item) => item.id === "time")?.progress, 100);
 assert.equal(typeof green.criteria.find((item) => item.id === "attendance")?.progress, "number");
 assert.equal(typeof green.criteria.find((item) => item.id === "fundamentals")?.progress, "number");
