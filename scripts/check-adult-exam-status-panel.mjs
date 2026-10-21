@@ -115,7 +115,17 @@ const incompleteRecentWindow = buildAdultExamStatusPanel({
   recentAttendance21: 0
 });
 assert.equal(incompleteRecentWindow.criteria.find((item) => item.id === "activity")?.progress, 0);
-assert.equal(incompleteRecentWindow.criteria.find((item) => item.id === "activity")?.tone, "tracking");
+assert.equal(incompleteRecentWindow.criteria.find((item) => item.id === "activity")?.tone, "blocked");
+
+const noRecentActivity = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "ROJO",
+  examNotice: null,
+  recentAttendance60: 0,
+  recentAttendance21: 0
+});
+assert.equal(noRecentActivity.criteria.find((item) => item.id === "activity")?.progress, 0);
+assert.equal(noRecentActivity.criteria.find((item) => item.id === "activity")?.tone, "blocked");
 
 const inactive = buildAdultExamStatusPanel({
   ...base,

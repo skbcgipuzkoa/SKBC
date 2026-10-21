@@ -167,7 +167,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
         value: `${nonNegative(input.recentAttendance60)} de 6 en 60 dias`,
         detail: `${nonNegative(input.recentAttendance21)} de 1 en los ultimos 21 dias.`,
         progress: activityProgress,
-        tone: activityReady ? "complete" : inactive || semaphore === "GRIS" ? "blocked" : "tracking"
+        tone: activityReady ? "complete" : "blocked"
       }
     ]
   };
