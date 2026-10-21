@@ -4,8 +4,10 @@ import { unstable_noStore as noStore } from "next/cache";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
+import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
 import { driveImageUrl } from "@/lib/drive";
 import { parseExamNotice } from "@/lib/exam-notice";
+import { AdultExamStatusPanel } from "@/app/ficha/[token]/AdultExamStatusPanel";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -513,17 +515,27 @@ function AdultFicha({
   const nacionales = courses.filter((course) => course.kind === "national");
   const internacionales = courses.filter((course) => course.kind === "international");
   const taikai = courses.filter((course) => course.kind === "taikai");
+  const recentAttendance = recentAttendanceCounts(attendance);
+  const examPanel = buildAdultExamStatusPanel({
+    semaphore: member.semaphore,
+    nextExamOn: member.next_exam_on,
+    examNotice: member.exam_notice,
+    attendanceCount: member.attendance_count,
+    minimumAttendance: member.minimum_attendance,
+    totalCycleSessions: member.total_cycle_sessions,
+    fundamentalRepetitions: technicalProgress.details
+      .filter((item) => item.category === "GOHO" || item.category === "JUHO")
+      .map((item) => item.repetitions),
+    recentAttendance60: recentAttendance.total60,
+    recentAttendance21: recentAttendance.total21
+  });
 
   return (
     <main className="legacy-ficha adult-ficha">
       <AdminBackLink href={adminBackUrl} />
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="FICHA PRO · SKBC GIPUZKOA" />
 
-      <section className={`ficha-alert ficha-${normalizeCss(member.semaphore ?? "gris")}`}>
-        <span className="ficha-alert-label">Semaforo proximo examen</span>
-        <strong>{examSemaphoreTitle(member.semaphore)}</strong>
-        <span>{publicExamNotice(member, attendance)}</span>
-      </section>
+      <AdultExamStatusPanel panel={examPanel} />
 
       <section className="ficha-actions">
         <a href={`/alumno/area-tecnica/${encodeURIComponent(fichaToken)}`} target="_blank"><NotebookTabs aria-hidden="true" size={18} />AREA TECNICA PERSONAL<ExternalLink aria-hidden="true" size={15} /></a>
