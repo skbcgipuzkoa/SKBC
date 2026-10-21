@@ -66,6 +66,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
   const parsedNotice = parseExamNotice(input.examNotice);
   const requiredRepetitions = examRepetitionMinimum(input.examNotice);
   const repetitions = input.fundamentalRepetitions.map(nonNegative);
+  const workedFundamentals = repetitions.filter((count) => count > 0).length;
   const preparedFundamentals = repetitions.filter((count) => count >= requiredRepetitions).length;
   const fundamentalTotal = repetitions.length;
   const attendanceCount = nonNegative(input.attendanceCount);
@@ -118,9 +119,9 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       {
         id: "fundamentals",
         label: "Goho y Juho",
-        value: `${preparedFundamentals} de ${fundamentalTotal} preparadas`,
+        value: `${workedFundamentals} de ${fundamentalTotal} trabajadas`,
         detail: fundamentalDetail(parsedNotice, fundamentalTotal, requiredRepetitions, fundamentalsReady),
-        progress: fundamentalTotal > 0 ? percentage(preparedFundamentals, fundamentalTotal) : null,
+        progress: fundamentalTotal > 0 ? percentage(workedFundamentals, fundamentalTotal) : null,
         tone: fundamentalTotal === 0 ? "neutral" : fundamentalsReady ? "complete" : "blocked"
       },
       {

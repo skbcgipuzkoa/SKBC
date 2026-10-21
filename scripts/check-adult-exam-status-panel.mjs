@@ -29,8 +29,8 @@ const red = buildAdultExamStatusPanel({
 });
 assert.equal(red.criteria.find((item) => item.id === "attendance")?.tone, "complete");
 assert.equal(red.criteria.find((item) => item.id === "attendance")?.progress, 100);
-assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.value, "2 de 4 preparadas");
-assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.progress, 50);
+assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.value, "3 de 4 trabajadas");
+assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.progress, 75);
 assert.equal(
   red.criteria.find((item) => item.id === "fundamentals")?.detail,
   "4 pendientes segun el progreso del examen; minimo 2 repeticiones."
@@ -119,7 +119,7 @@ const unknownFundamentals = buildAdultExamStatusPanel({
   examNotice: null
 });
 const unknownFundamentalProgress = unknownFundamentals.criteria.find((item) => item.id === "fundamentals");
-assert.equal(unknownFundamentalProgress?.value, "0 de 0 preparadas");
+assert.equal(unknownFundamentalProgress?.value, "0 de 0 trabajadas");
 assert.equal(unknownFundamentalProgress?.progress, null);
 assert.equal(unknownFundamentalProgress?.tone, "neutral");
 
