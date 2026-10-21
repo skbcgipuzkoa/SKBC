@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
 import { driveImageUrl } from "@/lib/drive";
-import { parseExamNotice } from "@/lib/exam-notice";
 import { AdultExamStatusPanel } from "@/app/ficha/[token]/AdultExamStatusPanel";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
 import { hasInternalAccess } from "@/lib/auth";
@@ -1268,114 +1267,6 @@ function AdultGradeBadge({ label, value }: { label: string; value: string }) {
   );
 }
 
-function examSemaphoreTitle(semaphore: string | null) {
-  const value = normalize(semaphore);
-  if (value === "VERDE") return "Apto para valorar en proximo examen";
-  if (value === "ROJO") return "No apto todavia para proximo examen";
-  if (value === "AZUL") return "Aun fuera de ventana de examen";
-  if (value === "AMARILLO") return "En seguimiento para proximo examen";
-  if (value === "GRIS" || value === "INACTIVO") return "Sin convocatoria activa por inactividad";
-  return "Estado de examen sin datos";
-}
-
-function publicExamNotice(member: Member, attendance: Attendance[]) {
-  const value = normalize(member.semaphore);
-  const raw = member.exam_notice ?? "";
-  const callDate = raw.match(/Convocatoria(?: objetivo)?\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
-  const callText = publicExamCallText(callDate);
-  const progressText = publicExamProgress(member, raw);
-  const hasEngagement = /Implicacion/i.test(raw);
-
-  if (value === "VERDE") {
-    return `Tiene buena situacion para que el equipo tecnico valore su proximo examen.${progressText}${callText}`;
-  }
-
-  if (value === "AZUL") {
-    const eligibleDate = raw.match(/hasta\s+(\d{4}-\d{2}-\d{2})/i)?.[1] ?? null;
-    return eligibleDate
-      ? `Aun esta fuera de la ventana minima de tiempo. Se podra valorar a partir de ${formatDate(eligibleDate)}.${progressText}${callText}`
-      : `Aun esta fuera de la ventana minima de tiempo para valorar el proximo examen.${progressText}${callText}`;
-  }
-
-  if (value === "AMARILLO") {
-    return `Esta en seguimiento para proxima convocatoria.${progressText}${callText}`;
-  }
-
-  if (value === "ROJO") {
-    const engagementText = hasEngagement ? " La implicacion y los cursos registrados tambien se tienen en cuenta." : "";
-    return `Todavia no esta listo para ser convocado al proximo examen.${progressText}${engagementText}${callText}`;
-  }
-
-  if (value === "GRIS" || value === "INACTIVO") {
-    return publicReactivationNotice(raw, attendance);
-  }
-
-  return "Sin aviso de examen registrado.";
-}
-
-function publicExamProgress(member: Member, notice: string) {
-  const parts: string[] = [];
-  const attendance = member.attendance_count ?? null;
-  const minimum = member.minimum_attendance ?? null;
-  const totalSessions = member.total_cycle_sessions ?? null;
-  if (attendance !== null && minimum !== null && minimum > 0) {
-    const sessionText = totalSessions && totalSessions > 0 ? ` en una convocatoria con ${totalSessions} clases computables` : "";
-    const missing = Math.max(0, minimum - attendance);
-    parts.push(missing > 0
-      ? `llevas ${attendance} asistencia${attendance === 1 ? "" : "s"} de ${minimum} necesarias${sessionText}; faltan ${missing} asistencia${missing === 1 ? "" : "s"}`
-      : `asistencia minima cubierta: ${attendance} de ${minimum}${sessionText}`);
-  }
-
-  const techniqueText = publicTechniqueProgress(notice);
-  if (techniqueText) parts.push(techniqueText);
-
-  if (!parts.length) {
-    return " Para llegar al semaforo verde debe mantener regularidad y completar el trabajo tecnico de su grado.";
-  }
-  return ` Para llegar al semaforo verde: ${parts.join(". ")}.`;
-}
-
-function publicTechniqueProgress(notice: string) {
-  const details = parseExamNotice(notice);
-  const missingFirst = details.fundamentalMissingFirst;
-  const missingRequired = details.fundamentalMissingRequired;
-  const pieces: string[] = [];
-
-  if (details.fundamentalComplete) {
-    pieces.push("trabajo fundamental Goho/Juho cubierto");
-  } else {
-    if (missingFirst > 0) {
-      pieces.push(`faltan ${missingFirst} tecnica${missingFirst === 1 ? "" : "s"} fundamental${missingFirst === 1 ? "" : "es"} Goho/Juho por entrenar`);
-    }
-    const reinforcement = Math.max(0, missingRequired - missingFirst);
-    if (reinforcement > 0) {
-      pieces.push(`${reinforcement} tecnica${reinforcement === 1 ? "" : "s"} fundamental${reinforcement === 1 ? "" : "es"} necesitan mas practica`);
-    } else if (missingRequired > 0 && missingFirst === 0) {
-      pieces.push(`${missingRequired} tecnica${missingRequired === 1 ? "" : "s"} fundamental${missingRequired === 1 ? "" : "es"} necesitan mas practica`);
-    }
-  }
-
-  return pieces.join(" y ");
-}
-
-function publicReactivationNotice(notice: string, attendance: Attendance[]) {
-  const match = notice.match(/\((\d+)\/6 en 60 dias y (\d+)\/1 en 21 dias\)/i);
-  const recent = recentAttendanceCounts(attendance);
-  const total60 = match ? Number(match[1] ?? 0) : recent.total60;
-  const total21 = match ? Number(match[2] ?? 0) : recent.total21;
-  const missing60 = Math.max(0, 6 - total60);
-  const missing21 = Math.max(0, 1 - total21);
-  const requirements = [];
-  if (missing60 > 0) requirements.push(`${missing60} asistencia${missing60 === 1 ? "" : "s"} mas dentro de una ventana de 60 dias`);
-  if (missing21 > 0) requirements.push(`${missing21} asistencia reciente dentro de 21 dias`);
-
-  if (!requirements.length) {
-    return "Ya ha recuperado la regularidad minima. El equipo tecnico puede revisar de nuevo su proxima convocatoria.";
-  }
-
-  return `Para reactivar la convocatoria necesita ${joinSpanish(requirements)}. Ahora lleva ${total60}/6 asistencias en 60 dias y ${total21}/1 asistencia reciente en 21 dias.`;
-}
-
 function recentAttendanceCounts(attendance: Attendance[]) {
   const today = startOfDay(new Date());
   const uniqueDates = new Set(attendance.map((item) => item.attended_on?.slice(0, 10)).filter(Boolean));
@@ -1383,36 +1274,11 @@ function recentAttendanceCounts(attendance: Attendance[]) {
     .map((value) => parseDate(value))
     .filter((date): date is Date => Boolean(date));
 
+  const differences = dates.map((date) => daysBetweenDates(date, today));
   return {
-    total60: dates.filter((date) => daysBetweenDates(date, today) <= 60).length,
-    total21: dates.filter((date) => daysBetweenDates(date, today) <= 21).length
+    total60: differences.filter((days) => days >= 0 && days <= 60).length,
+    total21: differences.filter((days) => days >= 0 && days <= 21).length
   };
-}
-
-function publicExamCallText(callDate: string | null) {
-  if (!callDate) return "";
-  const parsed = parseDate(callDate);
-  if (!parsed) return "";
-  const today = startOfDay(new Date());
-  if (parsed.getTime() < today.getTime()) {
-    return ` Convocatoria pasada: ${formatDate(callDate)}. Proxima convocatoria teorica: ${formatDate(formatDateObject(nextTheoreticalExamCall(today)))}.`;
-  }
-  const label = "Proxima convocatoria prevista";
-  return ` ${label}: ${formatDate(callDate)}.`;
-}
-
-function nextTheoreticalExamCall(date: Date) {
-  const year = date.getFullYear();
-  const summer = startOfDay(new Date(year, 5, 27));
-  const winter = startOfDay(new Date(year, 11, 7));
-  if (date.getTime() <= summer.getTime()) return summer;
-  if (date.getTime() <= winter.getTime()) return winter;
-  return startOfDay(new Date(year + 1, 5, 27));
-}
-
-function joinSpanish(items: string[]) {
-  if (items.length <= 1) return items[0] ?? "";
-  return `${items.slice(0, -1).join(", ")} y ${items.at(-1)}`;
 }
 
 function BehaviorField({ label, value }: { label: string; value: string | null | undefined }) {
