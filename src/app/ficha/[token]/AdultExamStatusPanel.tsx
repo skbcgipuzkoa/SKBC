@@ -13,6 +13,12 @@ export function AdultExamStatusPanel({ panel }: { panel: AdultExamStatusPanelMod
           <h2 id="adult-exam-status-title">{panel.title}</h2>
           <p>{panel.nextExamLabel}</p>
         </div>
+        {panel.reactivationNotice ? (
+          <aside className="adult-exam-reactivation" aria-label={panel.reactivationNotice.title}>
+            <strong>{panel.reactivationNotice.title}</strong>
+            <p>{panel.reactivationNotice.detail}</p>
+          </aside>
+        ) : null}
       </header>
 
       <div className="adult-exam-criteria">

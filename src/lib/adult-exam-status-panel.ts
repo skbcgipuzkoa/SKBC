@@ -19,6 +19,10 @@ export type AdultExamStatusPanel = {
   title: string;
   nextExamLabel: string;
   summary: string;
+  reactivationNotice: {
+    title: string;
+    detail: string;
+  } | null;
   criteria: AdultExamCriterion[];
 };
 
@@ -95,6 +99,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
     && programPreparedFundamentals === fundamentalTotal;
   const activityReady = input.recentAttendance60 >= 6 && input.recentAttendance21 >= 1;
   const inactive = semaphore === "INACTIVO";
+  const needsReactivation = inactive || semaphore === "GRIS" || input.recentAttendance60 === 0;
   const timePending = semaphore === "AZUL";
   const timeKnown = hasExamStatus && !inactive;
   const timeProgress = buildTimeProgress({
@@ -116,6 +121,9 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       ? `Proxima referencia: ${formatDate(input.nextExamOn)}`
       : "Proxima referencia pendiente",
     summary: copy.summary,
+    reactivationNotice: needsReactivation
+      ? buildReactivationNotice(input.recentAttendance60, input.recentAttendance21)
+      : null,
     criteria: [
       {
         id: "time",
@@ -170,6 +178,24 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
         tone: activityReady ? "complete" : "blocked"
       }
     ]
+  };
+}
+
+function buildReactivationNotice(recentAttendance60: number, recentAttendance21: number) {
+  const total60 = nonNegative(recentAttendance60);
+  const total21 = nonNegative(recentAttendance21);
+  const missing60 = Math.max(0, 6 - total60);
+  const missing21 = Math.max(0, 1 - total21);
+  const pending = [
+    missing60 > 0 ? `${missing60} ${missing60 === 1 ? "asistencia" : "asistencias"} dentro de 60 dias` : "",
+    missing21 > 0 ? "1 asistencia dentro de los ultimos 21 dias" : ""
+  ].filter(Boolean).join(" y ");
+
+  return {
+    title: "Reactivacion necesaria",
+    detail: pending
+      ? `Para reactivar necesita ${pending}. Ahora lleva ${total60} de 6 en 60 dias y ${total21} de 1 en 21 dias.`
+      : "Ya cumple la actividad reciente necesaria para reactivar el seguimiento."
   };
 }
 

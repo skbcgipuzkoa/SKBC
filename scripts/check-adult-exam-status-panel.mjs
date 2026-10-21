@@ -126,6 +126,10 @@ const noRecentActivity = buildAdultExamStatusPanel({
 });
 assert.equal(noRecentActivity.criteria.find((item) => item.id === "activity")?.progress, 0);
 assert.equal(noRecentActivity.criteria.find((item) => item.id === "activity")?.tone, "blocked");
+assert.deepEqual(noRecentActivity.reactivationNotice, {
+  title: "Reactivacion necesaria",
+  detail: "Para reactivar necesita 6 asistencias dentro de 60 dias y 1 asistencia dentro de los ultimos 21 dias. Ahora lleva 0 de 6 en 60 dias y 0 de 1 en 21 dias."
+});
 
 const inactive = buildAdultExamStatusPanel({
   ...base,
@@ -140,6 +144,8 @@ assert.match(inactive.summary, /recuperar la continuidad/i);
 assert.equal(inactive.criteria.find((item) => item.id === "activity")?.tone, "blocked");
 assert.equal(inactive.criteria.find((item) => item.id === "time")?.progress, null);
 assert.equal(inactive.criteria.find((item) => item.id === "time")?.tone, "neutral");
+assert.equal(inactive.reactivationNotice?.title, "Reactivacion necesaria");
+assert.equal(green.reactivationNotice, null);
 
 for (const semaphore of [null, "DESCONOCIDO"]) {
   const neutral = buildAdultExamStatusPanel({

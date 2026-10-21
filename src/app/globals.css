@@ -6783,7 +6783,7 @@ tbody tr:hover {
   align-items: center;
   display: grid;
   gap: 16px;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 76px minmax(0, 1fr) minmax(280px, 0.9fr);
   min-width: 0;
 }
 
@@ -6817,6 +6817,28 @@ tbody tr:hover {
   line-height: 1.45;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.adult-exam-reactivation {
+  background: #fff1f0;
+  border: 1px solid #efb7b2;
+  border-left: 5px solid #b42318;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 13px 14px;
+}
+
+.adult-exam-reactivation strong {
+  color: #9f1c13;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.adult-exam-reactivation p {
+  color: #6f2924;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .adult-exam-criteria {
@@ -6942,6 +6964,16 @@ tbody tr:hover {
 @media (min-width: 700px) {
   .adult-exam-criteria {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .adult-exam-panel-header {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .adult-exam-reactivation {
+    grid-column: 1 / -1;
   }
 }
 
