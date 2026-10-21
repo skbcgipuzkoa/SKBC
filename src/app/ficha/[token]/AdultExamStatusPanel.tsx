@@ -30,6 +30,22 @@ export function AdultExamStatusPanel({ panel }: { panel: AdultExamStatusPanelMod
             >
               <span style={{ width: `${criterion.progress ?? 0}%` }} />
             </div>
+            {criterion.secondaryProgress ? (
+              <div className="adult-exam-secondary-progress">
+                <div>
+                  <span>{criterion.secondaryProgress.label}</span>
+                  <strong>{criterion.secondaryProgress.value}</strong>
+                </div>
+                <div
+                  className="adult-exam-progress"
+                  role="progressbar"
+                  aria-label={criterion.secondaryProgress.label}
+                  {...progressAria(criterion.secondaryProgress.progress, criterion.secondaryProgress.value)}
+                >
+                  <span style={{ width: `${criterion.secondaryProgress.progress ?? 0}%` }} />
+                </div>
+              </div>
+            ) : null}
             <small>{criterion.detail}</small>
           </article>
         ))}

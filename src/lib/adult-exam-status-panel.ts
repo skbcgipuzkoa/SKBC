@@ -6,6 +6,11 @@ export type AdultExamCriterion = {
   value: string;
   detail: string;
   progress: number | null;
+  secondaryProgress?: {
+    label: string;
+    value: string;
+    progress: number | null;
+  };
   tone: "complete" | "tracking" | "blocked" | "waiting" | "neutral";
 };
 
@@ -69,6 +74,11 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
   const workedFundamentals = repetitions.filter((count) => count > 0).length;
   const preparedFundamentals = repetitions.filter((count) => count >= requiredRepetitions).length;
   const fundamentalTotal = repetitions.length;
+  const repetitionTarget = fundamentalTotal * requiredRepetitions;
+  const completedRepetitions = repetitions.reduce(
+    (total, count) => total + Math.min(count, requiredRepetitions),
+    0
+  );
   const attendanceCount = nonNegative(input.attendanceCount);
   const minimumAttendance = nonNegative(input.minimumAttendance);
   const attendanceReady = minimumAttendance > 0 && attendanceCount >= minimumAttendance;
@@ -122,7 +132,20 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
         value: `${workedFundamentals} de ${fundamentalTotal} trabajadas`,
         detail: fundamentalDetail(parsedNotice, fundamentalTotal, requiredRepetitions, fundamentalsReady),
         progress: fundamentalTotal > 0 ? percentage(workedFundamentals, fundamentalTotal) : null,
-        tone: fundamentalTotal === 0 ? "neutral" : fundamentalsReady ? "complete" : "blocked"
+        secondaryProgress: {
+          label: "Repeticiones minimas",
+          value: repetitionTarget > 0
+            ? `${completedRepetitions} de ${repetitionTarget}`
+            : "Sin datos",
+          progress: repetitionTarget > 0 ? percentage(completedRepetitions, repetitionTarget) : null
+        },
+        tone: fundamentalTotal === 0
+          ? "neutral"
+          : fundamentalsReady
+            ? "complete"
+            : workedFundamentals === fundamentalTotal
+              ? "waiting"
+              : "blocked"
       },
       {
         id: "activity",

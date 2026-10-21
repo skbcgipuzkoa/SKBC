@@ -6901,6 +6901,32 @@ tbody tr:hover {
   min-width: 0;
 }
 
+.adult-exam-secondary-progress {
+  display: grid;
+  gap: 5px;
+}
+
+.adult-exam-secondary-progress > div:first-child {
+  align-items: baseline;
+  color: var(--ficha-muted);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+  line-height: 1.25;
+}
+
+.adult-exam-secondary-progress strong {
+  color: var(--ficha-ink);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.adult-exam-secondary-progress .adult-exam-progress {
+  height: 7px;
+}
+
 .adult-exam-criterion small {
   color: var(--ficha-muted);
   font-size: 13px;
