@@ -18,6 +18,7 @@ const blue = buildAdultExamStatusPanel({
 });
 assert.equal(blue.semaphore, "AZUL");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.tone, "waiting");
+assert.equal(blue.criteria.find((item) => item.id === "time")?.progress, 0);
 
 const red = buildAdultExamStatusPanel({
   ...base,
@@ -62,9 +63,33 @@ const grey = buildAdultExamStatusPanel({
   recentAttendance21: 0
 });
 assert.equal(grey.criteria.find((item) => item.id === "activity")?.tone, "blocked");
-assert.equal(grey.criteria.find((item) => item.id === "activity")?.progress, 33);
+assert.equal(grey.criteria.find((item) => item.id === "activity")?.progress, 0);
 
-for (const semaphore of ["INACTIVO", null, "DESCONOCIDO"]) {
+const incompleteRecentWindow = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "ROJO",
+  examNotice: null,
+  recentAttendance60: 6,
+  recentAttendance21: 0
+});
+assert.equal(incompleteRecentWindow.criteria.find((item) => item.id === "activity")?.progress, 0);
+assert.equal(incompleteRecentWindow.criteria.find((item) => item.id === "activity")?.tone, "tracking");
+
+const inactive = buildAdultExamStatusPanel({
+  ...base,
+  semaphore: "INACTIVO",
+  examNotice: null,
+  recentAttendance60: 0,
+  recentAttendance21: 0
+});
+assert.equal(inactive.semaphore, "INACTIVO");
+assert.equal(inactive.title, "Necesita retomar la actividad");
+assert.match(inactive.summary, /recuperar la continuidad/i);
+assert.equal(inactive.criteria.find((item) => item.id === "activity")?.tone, "blocked");
+assert.equal(inactive.criteria.find((item) => item.id === "time")?.progress, 0);
+assert.equal(inactive.criteria.find((item) => item.id === "time")?.tone, "neutral");
+
+for (const semaphore of [null, "DESCONOCIDO"]) {
   const neutral = buildAdultExamStatusPanel({
     ...base,
     semaphore,

@@ -6875,7 +6875,7 @@ tbody tr:hover {
 }
 
 .adult-exam-criterion-heading span {
-  color: var(--adult-criterion-accent);
+  color: var(--ficha-ink);
   flex: 0 1 auto;
   font-size: 14px;
   font-weight: 900;

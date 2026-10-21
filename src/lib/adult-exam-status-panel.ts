@@ -49,6 +49,10 @@ const STATUS_COPY: Record<string, Pick<AdultExamStatusPanel, "title" | "summary"
   GRIS: {
     title: "Pendiente de recuperar continuidad",
     summary: "La actividad reciente necesita estabilizarse antes de continuar."
+  },
+  INACTIVO: {
+    title: "Necesita retomar la actividad",
+    summary: "Vuelve a entrenar con regularidad para recuperar la continuidad antes de valorar un examen."
   }
 };
 
@@ -71,6 +75,13 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
     ? preparedFundamentals === fundamentalTotal
     : parsedNotice.fundamentalComplete;
   const activityReady = input.recentAttendance60 >= 6 && input.recentAttendance21 >= 1;
+  const inactive = semaphore === "INACTIVO";
+  const timePending = semaphore === "AZUL";
+  const timeKnown = hasExamStatus && !inactive;
+  const activityProgress = Math.min(
+    percentage(input.recentAttendance60, 6),
+    percentage(input.recentAttendance21, 1)
+  );
 
   return {
     semaphore,
@@ -83,14 +94,14 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       {
         id: "time",
         label: "Tiempo",
-        value: !hasExamStatus ? "Sin datos" : semaphore === "AZUL" ? "En curso" : "Cumplido",
-        detail: !hasExamStatus
+        value: !timeKnown ? "Sin datos" : timePending ? "En curso" : "Cumplido",
+        detail: !timeKnown
           ? "Estado temporal pendiente de calcular."
-          : semaphore === "AZUL"
+          : timePending
             ? "Aun se esta completando el tiempo minimo."
             : "Tiempo minimo alcanzado.",
-        progress: !hasExamStatus ? 0 : semaphore === "AZUL" ? 60 : 100,
-        tone: !hasExamStatus ? "neutral" : semaphore === "AZUL" ? "waiting" : "complete"
+        progress: !timeKnown || timePending ? 0 : 100,
+        tone: !timeKnown ? "neutral" : timePending ? "waiting" : "complete"
       },
       {
         id: "attendance",
@@ -115,10 +126,10 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       {
         id: "activity",
         label: "Actividad reciente",
-        value: `${nonNegative(input.recentAttendance60)} entrenos en 60 dias`,
-        detail: `${nonNegative(input.recentAttendance21)} entrenos en los ultimos 21 dias.`,
-        progress: percentage(input.recentAttendance60, 6),
-        tone: activityReady ? "complete" : semaphore === "GRIS" ? "blocked" : "tracking"
+        value: `${nonNegative(input.recentAttendance60)} de 6 en 60 dias`,
+        detail: `${nonNegative(input.recentAttendance21)} de 1 en los ultimos 21 dias.`,
+        progress: activityProgress,
+        tone: activityReady ? "complete" : inactive || semaphore === "GRIS" ? "blocked" : "tracking"
       }
     ]
   };
