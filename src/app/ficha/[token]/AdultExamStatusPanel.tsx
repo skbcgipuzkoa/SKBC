@@ -26,11 +26,9 @@ export function AdultExamStatusPanel({ panel }: { panel: AdultExamStatusPanelMod
               className="adult-exam-progress"
               role="progressbar"
               aria-label={criterion.label}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={criterion.progress}
+              {...progressAria(criterion.progress, criterion.value)}
             >
-              <span style={{ width: `${criterion.progress}%` }} />
+              <span style={{ width: `${criterion.progress ?? 0}%` }} />
             </div>
             <small>{criterion.detail}</small>
           </article>
@@ -47,4 +45,15 @@ function normalizeTone(value: string) {
   return ["azul", "rojo", "amarillo", "verde", "gris"].includes(normalized)
     ? normalized
     : "gris";
+}
+
+function progressAria(progress: number | null, value: string) {
+  return progress === null
+    ? { "aria-valuetext": value }
+    : {
+        "aria-valuemin": 0,
+        "aria-valuemax": 100,
+        "aria-valuenow": progress,
+        "aria-valuetext": `${value}, ${progress}%`
+      };
 }

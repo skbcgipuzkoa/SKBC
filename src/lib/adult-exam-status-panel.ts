@@ -5,7 +5,7 @@ export type AdultExamCriterion = {
   label: string;
   value: string;
   detail: string;
-  progress: number;
+  progress: number | null;
   tone: "complete" | "tracking" | "blocked" | "waiting" | "neutral";
 };
 
@@ -100,7 +100,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
           : timePending
             ? "Aun se esta completando el tiempo minimo."
             : "Tiempo minimo alcanzado.",
-        progress: !timeKnown || timePending ? 0 : 100,
+        progress: !timeKnown || timePending ? null : 100,
         tone: !timeKnown ? "neutral" : timePending ? "waiting" : "complete"
       },
       {

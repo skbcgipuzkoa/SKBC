@@ -18,7 +18,7 @@ const blue = buildAdultExamStatusPanel({
 });
 assert.equal(blue.semaphore, "AZUL");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.tone, "waiting");
-assert.equal(blue.criteria.find((item) => item.id === "time")?.progress, 0);
+assert.equal(blue.criteria.find((item) => item.id === "time")?.progress, null);
 
 const red = buildAdultExamStatusPanel({
   ...base,
@@ -86,7 +86,7 @@ assert.equal(inactive.semaphore, "INACTIVO");
 assert.equal(inactive.title, "Necesita retomar la actividad");
 assert.match(inactive.summary, /recuperar la continuidad/i);
 assert.equal(inactive.criteria.find((item) => item.id === "activity")?.tone, "blocked");
-assert.equal(inactive.criteria.find((item) => item.id === "time")?.progress, 0);
+assert.equal(inactive.criteria.find((item) => item.id === "time")?.progress, null);
 assert.equal(inactive.criteria.find((item) => item.id === "time")?.tone, "neutral");
 
 for (const semaphore of [null, "DESCONOCIDO"]) {
@@ -97,8 +97,13 @@ for (const semaphore of [null, "DESCONOCIDO"]) {
   });
   const time = neutral.criteria.find((item) => item.id === "time");
   assert.equal(time?.value, "Sin datos");
-  assert.equal(time?.progress, 0);
+  assert.equal(time?.progress, null);
   assert.equal(time?.tone, "neutral");
 }
+
+assert.equal(green.criteria.find((item) => item.id === "time")?.progress, 100);
+assert.equal(typeof green.criteria.find((item) => item.id === "attendance")?.progress, "number");
+assert.equal(typeof green.criteria.find((item) => item.id === "fundamentals")?.progress, "number");
+assert.equal(typeof green.criteria.find((item) => item.id === "activity")?.progress, "number");
 
 console.log("Adult exam status panel checks passed.");
