@@ -8,6 +8,7 @@ import { FamilyUnitManager } from "@/components/family-unit-manager";
 import { hasInternalAccess } from "@/lib/auth";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
+import { parseExamNotice } from "@/lib/exam-notice";
 import { adultGrades } from "@/lib/grades";
 import { getEligibleFamilyMembers, getFamilyUnitContext } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -508,7 +509,14 @@ export default async function KenshiDetailPage({
           <article className="card"><h2>Ultimo examen</h2><div className="metric small">{member.last_exam_on ?? "-"}</div></article>
           <article className="card"><h2>Proximo examen</h2><div className="metric small">{member.next_exam_on ?? "-"}</div></article>
           <article className="card"><h2>Semaforo</h2><div className="metric small">{member.semaphore ?? "-"}</div></article>
-          <article className="card"><h2>Aviso</h2><p className="muted">{member.exam_notice ?? "-"}</p></article>
+          <article className="card">
+            <h2>Motivos del semaforo</h2>
+            {parseExamNotice(member.exam_notice).segments.length ? (
+              <ul className="exam-reason-list">
+                {parseExamNotice(member.exam_notice).segments.map((reason) => <li key={reason}>{reason}</li>)}
+              </ul>
+            ) : <p className="muted">Sin aviso calculado.</p>}
+          </article>
         </section>
 
         <h2 className="section-title">Auditoria del sistema</h2>

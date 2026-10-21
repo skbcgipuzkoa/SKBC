@@ -5429,6 +5429,18 @@ tbody tr:hover {
   color: var(--brand-strong);
 }
 
+.exam-reason-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.exam-reason-list li {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .exam-rule-grid {
   display: grid;
   gap: 8px;

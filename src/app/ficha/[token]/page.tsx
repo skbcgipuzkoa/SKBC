@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { driveImageUrl } from "@/lib/drive";
+import { parseExamNotice } from "@/lib/exam-notice";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -1323,25 +1324,27 @@ function publicExamProgress(member: Member, notice: string) {
 }
 
 function publicTechniqueProgress(notice: string) {
-  const missingFirst = Number(notice.match(/(\d+)\s+tecnicas aun sin registrar/i)?.[1] ?? 0);
-  const missingRequired = Number(
-    notice.match(/(\d+)\s+por debajo de/i)?.[1] ??
-    notice.match(/(\d+)\s+tecnicas pendientes/i)?.[1] ??
-    0
-  );
-  if (!missingFirst && !missingRequired && !/Tecnico: todas las tecnicas/i.test(notice)) return "";
+  const details = parseExamNotice(notice);
+  const missingFirst = details.fundamentalMissingFirst;
+  const missingRequired = details.fundamentalMissingRequired;
+  const pieces: string[] = [];
 
-  if (/Tecnico: todas las tecnicas/i.test(notice)) return "trabajo tecnico minimo cubierto";
-
-  const pieces = [];
-  if (missingFirst > 0) {
-    pieces.push(`faltan ${missingFirst} tecnica${missingFirst === 1 ? "" : "s"} por entrenar`);
+  if (details.fundamentalComplete) {
+    pieces.push("trabajo fundamental Goho/Juho cubierto");
+  } else {
+    if (missingFirst > 0) {
+      pieces.push(`faltan ${missingFirst} tecnica${missingFirst === 1 ? "" : "s"} fundamental${missingFirst === 1 ? "" : "es"} Goho/Juho por entrenar`);
+    }
+    const reinforcement = Math.max(0, missingRequired - missingFirst);
+    if (reinforcement > 0) {
+      pieces.push(`${reinforcement} tecnica${reinforcement === 1 ? "" : "s"} fundamental${reinforcement === 1 ? "" : "es"} necesitan mas practica`);
+    } else if (missingRequired > 0 && missingFirst === 0) {
+      pieces.push(`${missingRequired} tecnica${missingRequired === 1 ? "" : "s"} fundamental${missingRequired === 1 ? "" : "es"} necesitan mas practica`);
+    }
   }
-  const reinforcement = Math.max(0, missingRequired - missingFirst);
-  if (reinforcement > 0) {
-    pieces.push(`${reinforcement} tecnica${reinforcement === 1 ? "" : "s"} necesitan mas practica`);
-  } else if (missingRequired > 0 && missingFirst === 0) {
-    pieces.push(`${missingRequired} tecnica${missingRequired === 1 ? "" : "s"} necesitan mas practica`);
+
+  if (details.specialReviewPending.length > 0) {
+    pieces.push(`el profesor debe revisar ${joinSpanish(details.specialReviewPending)}`);
   }
 
   return pieces.join(" y ");

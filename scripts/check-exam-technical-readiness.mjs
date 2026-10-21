@@ -3,6 +3,7 @@ import {
   classifyExamCurriculumItem,
   evaluateExamTechnicalReadiness
 } from "../src/lib/exam-technical-readiness.ts";
+import { parseExamNotice } from "../src/lib/exam-notice.ts";
 
 const technique = (id, name, category, contentType = null) => ({
   id,
@@ -37,5 +38,13 @@ const reviewed = evaluateExamTechnicalReadiness(
 );
 assert.equal(reviewed.fundamentalReady, true);
 assert.deepEqual(reviewed.specialReviewPending, []);
+
+const notice = parseExamNotice(
+  "ROJO: no convocar por progreso tecnico. | BLOQUEO Tecnico fundamental: no convocar todavia, 2 tecnicas Goho/Juho sin registrar y 7 por debajo de 2 reps. | Revision del profesor pendiente: Tenchi ken dai san, Mae ukemi. Programar una o varias clases de repaso."
+);
+assert.equal(notice.fundamentalMissingFirst, 2);
+assert.equal(notice.fundamentalMissingRequired, 7);
+assert.deepEqual(notice.specialReviewPending, ["Tenchi ken dai san", "Mae ukemi"]);
+assert.equal(notice.segments.length, 3);
 
 console.log("Exam technical readiness checks passed.");
