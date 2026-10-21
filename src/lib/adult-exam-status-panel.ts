@@ -118,8 +118,8 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
     semaphore,
     title: copy.title,
     nextExamLabel: input.nextExamOn
-      ? `Proxima referencia: ${formatDate(input.nextExamOn)}`
-      : "Proxima referencia pendiente",
+      ? `Proxima convocatoria prevista: ${formatDate(input.nextExamOn)}`
+      : "Convocatoria pendiente de definir",
     summary: copy.summary,
     reactivationNotice: needsReactivation
       ? buildReactivationNotice(input.recentAttendance60, input.recentAttendance21)
