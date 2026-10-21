@@ -338,6 +338,17 @@ export default async function KenshiDetailPage({
   const hasConfiguredTechnicalArea = hasTechnicalAreaForGrade(technicalAreaResult.data ?? [], member.grade);
   const familyContext = await getFamilyUnitContext(member.id);
   const familyOptions = await getEligibleFamilyMembers(familyContext.unitId);
+  const accessNow = new Date();
+  const accessSince = (days: number) => new Date(accessNow.getTime() - days * 86_400_000).toISOString();
+  const [access7, access30, access90, accessTotal, recentAccess] = await Promise.all([
+    supabase.from("member_ficha_access_logs").select("id", { count: "exact", head: true }).eq("member_id", member.id).gte("accessed_at", accessSince(7)),
+    supabase.from("member_ficha_access_logs").select("id", { count: "exact", head: true }).eq("member_id", member.id).gte("accessed_at", accessSince(30)),
+    supabase.from("member_ficha_access_logs").select("id", { count: "exact", head: true }).eq("member_id", member.id).gte("accessed_at", accessSince(90)),
+    supabase.from("member_ficha_access_logs").select("id", { count: "exact", head: true }).eq("member_id", member.id),
+    supabase.from("member_ficha_access_logs").select("id,accessed_at").eq("member_id", member.id).order("accessed_at", { ascending: false }).limit(10).returns<Array<{ id: string; accessed_at: string }>>()
+  ]);
+  const fichaAccessAvailable = !accessTotal.error && !recentAccess.error;
+  const fichaAccessRows = fichaAccessAvailable ? recentAccess.data ?? [] : [];
 
   return (
     <div className="shell">
@@ -572,6 +583,28 @@ export default async function KenshiDetailPage({
                 </tbody>
               </table>
             </div>
+          </details>
+          <details className="advanced-details">
+            <summary>Ver consultas de la ficha personal</summary>
+            {fichaAccessAvailable ? (
+              <>
+                <div className="audit-grid">
+                  <AuditCard title="Ultima consulta" value={fichaAccessRows[0] ? formatDateTime(fichaAccessRows[0].accessed_at) : "-"} body="Apertura realizada desde la ficha publica." />
+                  <AuditCard title="Ultimos 7 dias" value={String(access7.count ?? 0)} body="Consultas registradas." />
+                  <AuditCard title="Ultimos 30 dias" value={String(access30.count ?? 0)} body="Consultas registradas." />
+                  <AuditCard title="Ultimos 90 dias" value={String(access90.count ?? 0)} body="Consultas registradas." />
+                  <AuditCard title="Total registrado" value={String(accessTotal.count ?? 0)} body="Desde la activacion de este seguimiento." />
+                </div>
+                <div className="stack-list">
+                  {fichaAccessRows.length ? fichaAccessRows.map((access) => (
+                    <div className="notice-row" key={access.id}>
+                      <strong>{formatDateTime(access.accessed_at)}</strong>
+                      <span className="muted">Consulta de ficha publica</span>
+                    </div>
+                  )) : <p className="muted">Todavia no hay consultas registradas.</p>}
+                </div>
+              </>
+            ) : <p className="muted">El seguimiento de consultas aun no esta disponible.</p>}
           </details>
         </section>
 

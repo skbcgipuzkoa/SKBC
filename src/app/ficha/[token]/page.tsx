@@ -7,6 +7,7 @@ import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
 import { driveImageUrl } from "@/lib/drive";
 import { AdultExamStatusPanel } from "@/app/ficha/[token]/AdultExamStatusPanel";
+import { FichaAccessTracker } from "@/app/ficha/[token]/FichaAccessTracker";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -376,6 +377,7 @@ export default async function PublicFichaPage({
     const familyNotices = filterChildFamilyNotices(childNotices ?? []);
     return (
       <>
+        {!isInternalAccess ? <FichaAccessTracker token={token} /> : null}
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
         <KidsFicha member={member} attendance={attendance} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
@@ -469,6 +471,7 @@ export default async function PublicFichaPage({
 
   return (
     <>
+      {!isInternalAccess ? <FichaAccessTracker token={token} /> : null}
       <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
       <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} fichaToken={token} />
     </>
