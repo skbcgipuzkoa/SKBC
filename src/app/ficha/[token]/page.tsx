@@ -525,6 +525,7 @@ function AdultFicha({
     fundamentalRepetitions: technicalProgress.details
       .filter((item) => item.category === "GOHO" || item.category === "JUHO")
       .map((item) => item.repetitions),
+    progressRepetitionGoal: REPETITION_GOAL,
     recentAttendance60: recentAttendance.total60,
     recentAttendance21: recentAttendance.total21
   });

@@ -7,6 +7,7 @@ const base = {
   minimumAttendance: 38,
   totalCycleSessions: 94,
   fundamentalRepetitions: [2, 2, 1, 0],
+  progressRepetitionGoal: 3,
   recentAttendance60: 8,
   recentAttendance21: 2
 };
@@ -31,8 +32,8 @@ assert.equal(red.criteria.find((item) => item.id === "attendance")?.tone, "compl
 assert.equal(red.criteria.find((item) => item.id === "attendance")?.progress, 100);
 assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.value, "3 de 4 trabajadas");
 assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.progress, 75);
-assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.secondaryProgress?.value, "5 de 8");
-assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.secondaryProgress?.progress, 63);
+assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.secondaryProgress?.value, "5 de 12");
+assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.secondaryProgress?.progress, 42);
 assert.equal(
   red.criteria.find((item) => item.id === "fundamentals")?.detail,
   "4 pendientes segun el progreso del examen; minimo 2 repeticiones."
@@ -45,7 +46,7 @@ const yellow = buildAdultExamStatusPanel({
   examNotice: "AMARILLO: proxima convocatoria 05/12/2026. | Tecnico fundamental: Goho/Juho completos con 2 repeticiones. | Revision del profesor pendiente: Daisharin. Programar una o varias clases de repaso.",
   fundamentalRepetitions: [2, 2, 2, 2]
 });
-assert.equal(yellow.criteria.find((item) => item.id === "fundamentals")?.tone, "complete");
+assert.equal(yellow.criteria.find((item) => item.id === "fundamentals")?.tone, "waiting");
 assert.equal(JSON.stringify(yellow).includes("Daisharin"), false);
 
 const repetitionPending = buildAdultExamStatusPanel({
@@ -57,15 +58,15 @@ const repetitionPending = buildAdultExamStatusPanel({
 const repetitionPendingFundamentals = repetitionPending.criteria.find((item) => item.id === "fundamentals");
 assert.equal(repetitionPendingFundamentals?.value, "4 de 4 trabajadas");
 assert.equal(repetitionPendingFundamentals?.progress, 100);
-assert.equal(repetitionPendingFundamentals?.secondaryProgress?.value, "5 de 8");
-assert.equal(repetitionPendingFundamentals?.secondaryProgress?.progress, 63);
+assert.equal(repetitionPendingFundamentals?.secondaryProgress?.value, "5 de 12");
+assert.equal(repetitionPendingFundamentals?.secondaryProgress?.progress, 42);
 assert.equal(repetitionPendingFundamentals?.tone, "waiting");
 
 const green = buildAdultExamStatusPanel({
   ...base,
   semaphore: "VERDE",
   examNotice: "VERDE: apto para valoracion. | Tecnico fundamental: Goho/Juho completos con 2+ reps.",
-  fundamentalRepetitions: [2, 2, 2, 3]
+  fundamentalRepetitions: [3, 3, 3, 3]
 });
 assert.equal(green.title, "Preparado para valorar");
 assert.equal(green.criteria.every((item) => item.tone === "complete"), true);

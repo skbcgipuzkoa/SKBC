@@ -30,6 +30,7 @@ export type AdultExamStatusPanelInput = {
   minimumAttendance: number | null | undefined;
   totalCycleSessions: number | null | undefined;
   fundamentalRepetitions: number[];
+  progressRepetitionGoal?: number;
   recentAttendance60: number;
   recentAttendance21: number;
 };
@@ -70,13 +71,15 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
   };
   const parsedNotice = parseExamNotice(input.examNotice);
   const requiredRepetitions = examRepetitionMinimum(input.examNotice);
+  const progressRepetitionGoal = Math.max(1, nonNegative(input.progressRepetitionGoal) || requiredRepetitions);
   const repetitions = input.fundamentalRepetitions.map(nonNegative);
   const workedFundamentals = repetitions.filter((count) => count > 0).length;
   const preparedFundamentals = repetitions.filter((count) => count >= requiredRepetitions).length;
+  const programPreparedFundamentals = repetitions.filter((count) => count >= progressRepetitionGoal).length;
   const fundamentalTotal = repetitions.length;
-  const repetitionTarget = fundamentalTotal * requiredRepetitions;
+  const repetitionTarget = fundamentalTotal * progressRepetitionGoal;
   const completedRepetitions = repetitions.reduce(
-    (total, count) => total + Math.min(count, requiredRepetitions),
+    (total, count) => total + Math.min(count, progressRepetitionGoal),
     0
   );
   const attendanceCount = nonNegative(input.attendanceCount);
@@ -85,6 +88,8 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
   const fundamentalsReady = fundamentalTotal > 0
     ? preparedFundamentals === fundamentalTotal
     : parsedNotice.fundamentalComplete;
+  const programRepetitionsReady = fundamentalTotal > 0
+    && programPreparedFundamentals === fundamentalTotal;
   const activityReady = input.recentAttendance60 >= 6 && input.recentAttendance21 >= 1;
   const inactive = semaphore === "INACTIVO";
   const timePending = semaphore === "AZUL";
@@ -133,7 +138,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
         detail: fundamentalDetail(parsedNotice, fundamentalTotal, requiredRepetitions, fundamentalsReady),
         progress: fundamentalTotal > 0 ? percentage(workedFundamentals, fundamentalTotal) : null,
         secondaryProgress: {
-          label: "Repeticiones minimas",
+          label: "Progreso de repeticiones",
           value: repetitionTarget > 0
             ? `${completedRepetitions} de ${repetitionTarget}`
             : "Sin datos",
@@ -141,7 +146,7 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
         },
         tone: fundamentalTotal === 0
           ? "neutral"
-          : fundamentalsReady
+          : programRepetitionsReady
             ? "complete"
             : workedFundamentals === fundamentalTotal
               ? "waiting"
