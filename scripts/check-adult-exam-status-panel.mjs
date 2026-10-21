@@ -30,6 +30,10 @@ assert.equal(red.criteria.find((item) => item.id === "attendance")?.tone, "compl
 assert.equal(red.criteria.find((item) => item.id === "attendance")?.progress, 100);
 assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.value, "2 de 4 preparadas");
 assert.equal(red.criteria.find((item) => item.id === "fundamentals")?.progress, 50);
+assert.equal(
+  red.criteria.find((item) => item.id === "fundamentals")?.detail,
+  "4 pendientes segun el progreso del examen; minimo 2 repeticiones."
+);
 assert.equal(JSON.stringify(red).includes("Mae ukemi"), false);
 
 const yellow = buildAdultExamStatusPanel({
@@ -59,5 +63,17 @@ const grey = buildAdultExamStatusPanel({
 });
 assert.equal(grey.criteria.find((item) => item.id === "activity")?.tone, "blocked");
 assert.equal(grey.criteria.find((item) => item.id === "activity")?.progress, 33);
+
+for (const semaphore of ["INACTIVO", null, "DESCONOCIDO"]) {
+  const neutral = buildAdultExamStatusPanel({
+    ...base,
+    semaphore,
+    examNotice: null
+  });
+  const time = neutral.criteria.find((item) => item.id === "time");
+  assert.equal(time?.value, "Sin datos");
+  assert.equal(time?.progress, 0);
+  assert.equal(time?.tone, "neutral");
+}
 
 console.log("Adult exam status panel checks passed.");

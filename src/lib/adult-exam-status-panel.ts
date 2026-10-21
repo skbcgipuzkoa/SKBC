@@ -54,6 +54,7 @@ const STATUS_COPY: Record<string, Pick<AdultExamStatusPanel, "title" | "summary"
 
 export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): AdultExamStatusPanel {
   const semaphore = normalizeSemaphore(input.semaphore);
+  const hasExamStatus = Object.hasOwn(STATUS_COPY, semaphore);
   const copy = STATUS_COPY[semaphore] ?? {
     title: "Estado pendiente",
     summary: "Aun no hay informacion suficiente para valorar el siguiente examen."
@@ -82,12 +83,14 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       {
         id: "time",
         label: "Tiempo",
-        value: semaphore === "AZUL" ? "En curso" : "Cumplido",
-        detail: semaphore === "AZUL"
-          ? "Aun se esta completando el tiempo minimo."
-          : "Tiempo minimo alcanzado.",
-        progress: semaphore === "AZUL" ? 60 : 100,
-        tone: semaphore === "AZUL" ? "waiting" : "complete"
+        value: !hasExamStatus ? "Sin datos" : semaphore === "AZUL" ? "En curso" : "Cumplido",
+        detail: !hasExamStatus
+          ? "Estado temporal pendiente de calcular."
+          : semaphore === "AZUL"
+            ? "Aun se esta completando el tiempo minimo."
+            : "Tiempo minimo alcanzado.",
+        progress: !hasExamStatus ? 0 : semaphore === "AZUL" ? 60 : 100,
+        tone: !hasExamStatus ? "neutral" : semaphore === "AZUL" ? "waiting" : "complete"
       },
       {
         id: "attendance",
@@ -134,7 +137,7 @@ function fundamentalDetail(
 ) {
   if (total === 0) return "Sin tecnicas fundamentales para mostrar.";
   if (ready) return `Minimo de examen: ${required} repeticiones por tecnica.`;
-  const pending = notice.fundamentalMissingFirst + notice.fundamentalMissingRequired;
+  const pending = notice.fundamentalMissingRequired || notice.fundamentalMissingFirst;
   return pending > 0
     ? `${pending} pendientes segun el progreso del examen; minimo ${required} repeticiones.`
     : `Minimo de examen: ${required} repeticiones por tecnica.`;
