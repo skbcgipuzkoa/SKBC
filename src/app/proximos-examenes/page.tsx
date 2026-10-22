@@ -147,7 +147,7 @@ export default async function ProximosExamenesPage({
     }));
   }
 
-  const normalizedSemaphore = normalizeSemaphore(params.semaforo);
+  const normalizedSemaphore = params.semaforo ? normalizeSemaphore(params.semaforo) : "";
   const candidatesOnly = normalizedSemaphore === "POSIBLES";
   const search = (params.q ?? "").trim().toLowerCase();
   const filtered = members
