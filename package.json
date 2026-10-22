@@ -13,6 +13,7 @@
     "check:adult-exam-status-panel": "node --experimental-strip-types scripts/check-adult-exam-status-panel.mjs",
     "check:exam-candidate": "node --experimental-strip-types scripts/check-exam-candidate.mjs",
     "check:delegate-class-flow": "node --experimental-strip-types scripts/check-delegate-class-flow.mjs",
+    "check:activity-calendar": "node --experimental-strip-types scripts/check-activity-calendar.mjs",
     "import:legacy:xlsx": "node scripts/import-legacy-xlsx.mjs",
     "normalize:members": "node scripts/normalize-members.mjs",
     "normalize:legacy": "node scripts/normalize-legacy.mjs",

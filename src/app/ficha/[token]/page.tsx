@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
 import { driveImageUrl } from "@/lib/drive";
+import { activeCalendarDaysBetween } from "@/lib/activity-calendar";
 import { AdultExamStatusPanel } from "@/app/ficha/[token]/AdultExamStatusPanel";
 import { FichaAccessTracker } from "@/app/ficha/[token]/FichaAccessTracker";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
@@ -1470,7 +1471,7 @@ function buildAdultActivity(attendance: Attendance[], courses: Course[], closure
     .filter((date): date is Date => Boolean(date))
     .sort((a, b) => b.getTime() - a.getTime());
   const last = dates[0] ?? null;
-  const weeksSinceLast = last ? Math.floor(trainingDaysBetween(formatDateObject(last), formatDateObject(today), closures) / 7) : null;
+  const weeksSinceLast = last ? Math.floor(activeCalendarDaysBetween(formatDateObject(last), formatDateObject(today), closures) / 7) : null;
   const attendance12m = countSinceEffective(dates, 365, today, closures);
   const attendance6m = countSinceEffective(dates, 180, today, closures);
   const attendance1m = countSinceEffective(dates, 30, today, closures);
