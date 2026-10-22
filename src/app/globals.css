@@ -5553,6 +5553,35 @@ tbody tr:hover {
   color: var(--brand-strong);
 }
 
+.semaphore-posibles {
+  background: #f4f0ff;
+  border-color: #c9b8ec;
+  color: #56358c;
+}
+
+.exam-candidate-summary {
+  background: #f4f0ff;
+  border-left: 4px solid #7651ad;
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 9px 11px;
+}
+
+.exam-candidate-summary strong {
+  color: #56358c;
+}
+
+.exam-candidate-summary span,
+.exam-candidate-summary small {
+  line-height: 1.4;
+}
+
+.exam-candidate-summary small {
+  color: var(--muted);
+}
+
 .exam-reason-list {
   display: grid;
   gap: 0.55rem;
