@@ -6,8 +6,7 @@ import { ClassClosureSuccess } from "@/app/components/ClassClosureSuccess";
 import { adultGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { driveImageUrl } from "@/lib/drive";
-
-type DelegateMode = "adults" | "kids" | "combined";
+import { delegateAttendanceGroups, normalizeDelegateStep, type DelegateMode } from "@/lib/delegate-class-flow";
 
 type LinkRow = {
   id: string;
@@ -107,6 +106,8 @@ export default async function DelegateClassPage({
   const isUnavailable = Boolean(link.revoked_at || link.closed_at || isExpired || !usableClasses.length);
   const hasStarted = Boolean(link.started_at || query.started);
   const step = normalizeDelegateStep(query.step, mode, hasStarted, kidsClasses.length > 0, adultClasses.length > 0);
+  const attendanceGroups = delegateAttendanceGroups(mode, step);
+  const attendanceClasses = usableClasses.filter((clase) => attendanceGroups.includes(clase.class_group));
 
   const classIds = usableClasses.map((clase) => clase.id);
   const [{ data: plan }, { data: attendance }, { data: members }] = classIds.length ? await Promise.all([
@@ -276,7 +277,7 @@ export default async function DelegateClassPage({
               <p className="form-error">No se ha podido enviar la clase{query.detail ? `: ${query.detail}` : "."}</p>
             ) : null}
           </section>
-          {(step === "attendance" ? adultClasses : [...adultClasses, ...kidsClasses]).map((clase) => (
+          {attendanceClasses.map((clase) => (
             <DelegateAttendanceSection
               key={clase.id}
               clase={clase}
@@ -376,21 +377,6 @@ function normalizeDelegateMode(value: string | null | undefined): DelegateMode |
   if (["combined", "combinado"].includes(normalized)) return "combined";
   if (["adults", "adultos"].includes(normalized)) return "adults";
   return null;
-}
-
-function normalizeDelegateStep(
-  value: string | null | undefined,
-  mode: DelegateMode,
-  hasStarted: boolean,
-  hasKidsClass: boolean,
-  hasAdultClass: boolean
-) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (["start", "kids-attendance", "technical", "attendance"].includes(normalized)) return normalized;
-  if (!hasStarted) return "start";
-  if (mode === "combined") return hasKidsClass ? "kids-attendance" : hasAdultClass ? "technical" : "attendance";
-  if (mode === "kids") return "attendance";
-  return hasAdultClass ? "technical" : "attendance";
 }
 
 function adultTrainingGradeOptions() {

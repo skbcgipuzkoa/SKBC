@@ -28,6 +28,7 @@ import { convertProvisionalMember } from "@/lib/provisional-members";
 import { beltColorForGrade, isPendingBeltSize, pendingBeltSize } from "@/lib/exam-belt-orders";
 import { CHILD_NOTES_REMINDER_KEY } from "@/lib/child-notes-reminder";
 import { advanceClassClosureProgress, beginClassClosureProgress, failClassClosureProgress, finishClassClosureProgress, type ClosureStep } from "@/lib/class-closure-progress";
+import { delegateClassesForSubmission, hasAttendanceForEveryClass, hasRequiredDelegateGroups, type DelegateMode } from "@/lib/delegate-class-flow";
 
 const CLOSURE_ATTENDANCE: ClosureStep[] = ["attendance"];
 const CLOSURE_TECHNICAL: ClosureStep[] = ["attendance", "technical"];
@@ -1933,48 +1934,64 @@ export async function submitDelegateClassAction(formData: FormData) {
   const isPartialCombinedStep = mode === "combined" && nextStep === "technical";
   const progressId = closureProgressId(formData);
 
-  if (!token || !totalMembers) {
+  if (!token) {
     redirect(`/delegado/${token || "error"}?mode=${mode}&step=${isPartialCombinedStep ? "kids-attendance" : "attendance"}&error=attendance`);
   }
 
   try {
     const { link, classes } = await getValidDelegateContext(token, mode);
-    const classesToProcess = isPartialCombinedStep
-      ? classes.filter((clase) => clase.class_group === "kids")
-      : classes;
-    await beginClassClosureProgress(progressId, classesToProcess[0]?.id);
+    const submission = delegateClassesForSubmission(classes, mode, nextStep);
+    const classesToProcess = submission.classes;
+    if (!totalMembers) {
+      const classIds = classesToProcess.map((clase) => clase.id);
+      const { data: existingAttendance, error: attendanceError } = await createAdminClient()
+        .from("attendance_logs")
+        .select("class_id")
+        .in("class_id", classIds)
+        .returns<Array<{ class_id: string }>>();
+      if (attendanceError) throw attendanceError;
+      if (!hasAttendanceForEveryClass(classIds, (existingAttendance ?? []).map((row) => row.class_id))) {
+        throw new DelegateAttendanceRequiredError();
+      }
+    }
+    if (submission.closeClasses) {
+      await beginClassClosureProgress(progressId, classesToProcess[0]?.id);
+    }
     for (const clase of classesToProcess) {
       const memberIds = memberIdsByClass.get(clase.id) ?? [];
       if (memberIds.length) {
         await addAttendanceRows(clase.id, memberIds, "REGISTRADO POR SUSTITUTO", formData);
       }
     }
-    await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
 
-    for (const clase of classesToProcess) {
-      if (clase.class_group === "adults") {
-        await closeAdultClass(clase.id, adultClosureProgress(progressId));
-      } else {
-        const supabase = createAdminClient();
-        await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
-        const { error } = await supabase
-          .from("classes")
-          .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
-          .eq("id", clase.id)
-          .eq("class_group", "kids");
-        if (error) throw error;
+    if (submission.closeClasses) {
+      await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
+      for (const clase of classesToProcess) {
+        if (clase.class_group === "adults") {
+          await closeAdultClass(clase.id, adultClosureProgress(progressId));
+        } else {
+          const supabase = createAdminClient();
+          await syncChildSyllabusHistoryForClass(supabase, clase.id);
+          await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
+          const { error } = await supabase
+            .from("classes")
+            .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+            .eq("id", clase.id)
+            .eq("class_group", "kids");
+          if (error) throw error;
+        }
       }
+
+      await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
+      for (const clase of classesToProcess) await recalculateClassExamStatus(clase.id);
+      if (classesToProcess.some((clase) => clase.class_group === "kids")) {
+        await recalculateChildRankings();
+      }
+      await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
     }
 
-    await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
-    for (const clase of classesToProcess) await recalculateClassExamStatus(clase.id);
-    if (classesToProcess.some((clase) => clase.class_group === "kids")) {
-      await recalculateChildRankings();
-    }
-
-    await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
     const supabase = createAdminClient();
-    if (isPartialCombinedStep) {
+    if (!submission.closeClasses) {
       await supabase
         .from("class_delegate_links")
         .update({ delegate_name: delegateName, started_at: link.started_at ?? new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -1984,11 +2001,14 @@ export async function submitDelegateClassAction(formData: FormData) {
         .from("class_delegate_links")
         .update({ delegate_name: delegateName, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("id", link.id);
+      await finishClassClosureProgress(progressId);
     }
-    await finishClassClosureProgress(progressId);
   } catch (error) {
     console.error("Error submitting delegate class", error);
-    await failClassClosureProgress(progressId, errorMessage(error));
+    if (error instanceof DelegateAttendanceRequiredError) {
+      redirect(`/delegado/${token}?mode=${mode}&step=${isPartialCombinedStep ? "kids-attendance" : "attendance"}&error=attendance`);
+    }
+    if (!isPartialCombinedStep) await failClassClosureProgress(progressId, errorMessage(error));
     redirect(`/delegado/${token}?mode=${mode}&step=${isPartialCombinedStep ? "kids-attendance" : "attendance"}&error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
@@ -1996,6 +2016,13 @@ export async function submitDelegateClassAction(formData: FormData) {
     redirect(`/delegado/${token}?mode=${mode}&started=1&step=technical`);
   }
   redirect(`/delegado/${token}?mode=${mode}&saved=sent`);
+}
+
+class DelegateAttendanceRequiredError extends Error {
+  constructor() {
+    super("Debes marcar al menos una asistencia por clase para continuar.");
+    this.name = "DelegateAttendanceRequiredError";
+  }
 }
 
 export async function createClassAction(formData: FormData) {
@@ -5269,8 +5296,6 @@ async function getValidDelegateClass(token: string) {
   return { link, clase };
 }
 
-type DelegateMode = "adults" | "kids" | "combined";
-
 type DelegateClassRow = {
   id: string;
   legacy_id: string | null;
@@ -5325,7 +5350,7 @@ async function getValidDelegateContext(token: string, requestedMode: DelegateMod
   if (classesError) throw classesError;
   const openClasses = (classes ?? []).filter((clase) => !clase.closed);
   if (!openClasses.length) throw new Error("No hay clases abiertas para este enlace.");
-  if (mode === "combined" && openClasses.length < 2) {
+  if (!hasRequiredDelegateGroups(mode, openClasses)) {
     throw new Error("El enlace combinado necesita una clase de adultos y otra de ninos abiertas en el mismo dia.");
   }
 
