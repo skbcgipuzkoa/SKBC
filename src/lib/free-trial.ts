@@ -43,12 +43,10 @@ export function firstBillingDateAfterFreeMonth(startedOn: string | null | undefi
   const trialEnd = parseIsoDate(freeTrialEndDate(startedOn));
   if (!trialEnd) return null;
 
-  // Charges are issued on the 15th in arrears. A trial ending by the cutoff
-  // can be included in the following month's run; later endings skip a run.
-  const monthsUntilBilling = trialEnd.getUTCDate() <= 18 ? 1 : 2;
+  // The first charge is issued on the next monthly run after the free month.
   return isoDate(new Date(Date.UTC(
     trialEnd.getUTCFullYear(),
-    trialEnd.getUTCMonth() + monthsUntilBilling,
+    trialEnd.getUTCMonth() + 1,
     15
   )));
 }
@@ -64,6 +62,5 @@ export function nextAvailableBillingDate(value: string | null | undefined, today
 export function resolveFreeTrialBillingDate(startedOn: string | null | undefined, storedBillingOn?: string | null, today?: string) {
   const calculated = firstBillingDateAfterFreeMonth(startedOn);
   if (!calculated) return nextAvailableBillingDate(storedBillingOn, today);
-  const initialBillingOn = storedBillingOn && storedBillingOn > calculated ? storedBillingOn : calculated;
-  return nextAvailableBillingDate(initialBillingOn, today);
+  return nextAvailableBillingDate(calculated, today);
 }
