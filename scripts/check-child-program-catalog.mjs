@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   defaultChildExamItemIds,
   normalizeChildGrade,
@@ -38,5 +39,13 @@ assert.deepEqual(
   defaultChildExamItemIds(assignments, [" amarillo "]),
   ["white-title", "white-1", "white-2", "yellow-1"]
 );
+
+const pureSource = readFileSync(new URL("../src/lib/child-program.ts", import.meta.url), "utf8");
+const serverSource = readFileSync(new URL("../src/lib/child-program.server.ts", import.meta.url), "utf8");
+
+assert.doesNotMatch(pureSource, /createAdminClient|server-only/);
+assert.match(serverSource, /^import "server-only";/);
+assert.match(serverSource, /\.order\("title", \{ ascending: true \}\)\s*\.order\("id", \{ ascending: true \}\)/);
+assert.equal(serverSource.match(/if \(error\) throw error;/g)?.length, 3);
 
 console.log("Child program catalog checks passed.");
