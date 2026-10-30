@@ -285,6 +285,7 @@ textarea {
 }
 
 .main {
+  min-width: 0;
   padding: 28px;
 }
 
@@ -5778,6 +5779,13 @@ tbody tr:hover {
   display: inline-flex;
   gap: 6px;
   justify-content: center;
+}
+
+.exam-filters label,
+.exam-filters input,
+.exam-filters select {
+  min-width: 0;
+  width: 100%;
 }
 
 .notice-cell {

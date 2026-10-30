@@ -55,7 +55,8 @@ export function IntegratedExamCreateForm({
 
   useEffect(() => {
     if (programType !== "kids_progressive" || duplicationTemplate) return;
-    setSelectedItemIds((current) => reconcileChildExamItemIds(catalogAssignments, current, previousTargetGrades.current, targetGrades));
+    const previousGrades = previousTargetGrades.current;
+    setSelectedItemIds((current) => reconcileChildExamItemIds(catalogAssignments, current, previousGrades, targetGrades));
     previousTargetGrades.current = targetGrades;
   }, [catalogAssignments, duplicationTemplate, programType, targetGrades]);
 
