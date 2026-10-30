@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "check:child-program-catalog": "node --experimental-strip-types scripts/check-child-program-catalog.mjs",
     "check:family-billing": "node --experimental-strip-types scripts/check-family-billing.mjs",
     "check:exam-technical-readiness": "node --experimental-strip-types scripts/check-exam-technical-readiness.mjs",
     "check:adult-exam-status-panel": "node --experimental-strip-types scripts/check-adult-exam-status-panel.mjs",
