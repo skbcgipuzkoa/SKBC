@@ -3,6 +3,7 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
 import { generateAdultTechnicalGroups, resolveTrainingGroupGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
@@ -30,6 +31,14 @@ import { CHILD_NOTES_REMINDER_KEY } from "@/lib/child-notes-reminder";
 import { advanceClassClosureProgress, beginClassClosureProgress, failClassClosureProgress, finishClassClosureProgress, type ClosureStep } from "@/lib/class-closure-progress";
 import { delegateClassesForSubmission, hasAttendanceForEveryClass, hasRequiredDelegateGroups, resolveDelegateMode, type DelegateMode } from "@/lib/delegate-class-flow";
 import { delegateChildActivityValues, delegateChildObjectives } from "@/lib/delegate-child-plan";
+import { CHILD_PROGRAM_GRADES, normalizeChildGrade } from "@/lib/child-program";
+import {
+  childProgramContentUsage,
+  deleteUnusedChildProgramContent,
+  moveChildProgramAssignment,
+  saveChildProgramContent,
+  setChildProgramContentArchived
+} from "@/lib/child-program.server";
 
 const CLOSURE_ATTENDANCE: ClosureStep[] = ["attendance"];
 const CLOSURE_TECHNICAL: ClosureStep[] = ["attendance", "technical"];
@@ -1062,6 +1071,172 @@ export async function deleteTechnicalAreaMaterialAction(formData: FormData) {
   revalidatePath("/areas-tecnicas");
   revalidatePath("/alumno/area-tecnica/[token]", "page");
   redirect(`/areas-tecnicas?saved=material-deleted&class=${memberClass === "kids" ? "kids" : "adults"}`);
+}
+
+const childProgramAssignmentInputSchema = z.object({
+  grade: z.string().trim().min(1),
+  active: z.boolean(),
+  examRelevant: z.boolean(),
+  sortOrder: z.number().int().min(0).max(100000)
+});
+
+const childProgramContentInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  category: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(4000).nullable(),
+  assignments: z.array(childProgramAssignmentInputSchema).min(1)
+});
+
+function parseChildProgramContentForm(formData: FormData) {
+  let assignments: unknown;
+  try {
+    assignments = JSON.parse(String(formData.get("assignments") ?? ""));
+  } catch {
+    throw new Error("invalid-assignments");
+  }
+
+  const parsed = childProgramContentInputSchema.safeParse({
+    title: String(formData.get("title") ?? "").replace(/\s+/g, " ").trim(),
+    category: String(formData.get("category") ?? "").replace(/\s+/g, " ").trim().toLowerCase(),
+    description: String(formData.get("description") ?? "").trim() || null,
+    assignments
+  });
+  if (!parsed.success) throw new Error("invalid-content");
+
+  const seen = new Set<string>();
+  const normalizedAssignments = parsed.data.assignments.map((assignment) => {
+    const grade = normalizeChildGrade(assignment.grade);
+    if (!grade || !CHILD_PROGRAM_GRADES.includes(grade as (typeof CHILD_PROGRAM_GRADES)[number])) {
+      throw new Error("invalid-grade");
+    }
+    if (seen.has(grade)) throw new Error("duplicate-grade");
+    seen.add(grade);
+    return { ...assignment, grade };
+  });
+
+  return { ...parsed.data, assignments: normalizedAssignments };
+}
+
+export async function createChildProgramContentAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  let input: ReturnType<typeof parseChildProgramContentForm>;
+  try {
+    input = parseChildProgramContentForm(formData);
+  } catch (error) {
+    redirect(`/programa-infantil?error=${childProgramInputError(error)}`);
+  }
+
+  try {
+    await saveChildProgramContent({ ...input, actor: "WEB SKBC" });
+  } catch (error) {
+    console.error("Error creating child program content", error);
+    redirect("/programa-infantil?error=create-failed");
+  }
+  revalidateChildProgramConsumers();
+  redirect("/programa-infantil?saved=child-program-created");
+}
+
+export async function updateChildProgramContentAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const contentId = String(formData.get("contentId") ?? "").trim();
+  if (!contentId) redirect("/programa-infantil?error=missing-content");
+  let input: ReturnType<typeof parseChildProgramContentForm>;
+  try {
+    input = parseChildProgramContentForm(formData);
+  } catch (error) {
+    redirect(`/programa-infantil?error=${childProgramInputError(error)}&edit=${encodeURIComponent(contentId)}`);
+  }
+
+  try {
+    await saveChildProgramContent({ ...input, contentId, actor: "WEB SKBC" });
+  } catch (error) {
+    console.error("Error updating child program content", error);
+    redirect(`/programa-infantil?error=update-failed&edit=${encodeURIComponent(contentId)}`);
+  }
+  revalidateChildProgramConsumers();
+  redirect("/programa-infantil?saved=child-program-updated");
+}
+
+export async function moveChildProgramAssignmentAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  const direction = String(formData.get("direction") ?? "");
+  if (!assignmentId || (direction !== "up" && direction !== "down")) redirect("/programa-infantil?error=invalid-move");
+  try {
+    await moveChildProgramAssignment(assignmentId, direction, "WEB SKBC");
+  } catch (error) {
+    console.error("Error moving child program assignment", error);
+    const code = error instanceof Error && error.message === "child-program-order-conflict" ? "order-conflict" : "move-failed";
+    redirect(`/programa-infantil?error=${code}`);
+  }
+  revalidateChildProgramConsumers();
+  redirect("/programa-infantil?saved=child-program-moved");
+}
+
+export async function archiveChildProgramContentAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const contentId = String(formData.get("contentId") ?? "").trim();
+  if (!contentId) redirect("/programa-infantil?error=missing-content");
+  try {
+    await setChildProgramContentArchived(contentId, true, "WEB SKBC");
+  } catch (error) {
+    console.error("Error archiving child program content", error);
+    redirect("/programa-infantil?error=archive-failed");
+  }
+  revalidateChildProgramConsumers();
+  redirect("/programa-infantil?saved=child-program-archived");
+}
+
+export async function restoreChildProgramContentAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const contentId = String(formData.get("contentId") ?? "").trim();
+  if (!contentId) redirect("/programa-infantil?error=missing-content");
+  try {
+    // The schema does not retain pre-archive active flags, so restore safely leaves every assignment inactive.
+    await setChildProgramContentArchived(contentId, false, "WEB SKBC");
+  } catch (error) {
+    console.error("Error restoring child program content", error);
+    redirect("/programa-infantil?error=restore-failed");
+  }
+  revalidateChildProgramConsumers();
+  redirect("/programa-infantil?saved=child-program-restored-inactive");
+}
+
+export async function deleteUnusedChildProgramContentAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const contentId = String(formData.get("contentId") ?? "").trim();
+  if (!contentId) redirect("/programa-infantil?error=missing-content");
+  let usage;
+  try {
+    usage = await childProgramContentUsage(contentId);
+  } catch (error) {
+    console.error("Error checking child program content usage", error);
+    redirect("/programa-infantil?error=usage-check-failed");
+  }
+  if (usage.historyCount + usage.classPlanCount + usage.examEventCount > 0) {
+    redirect("/programa-infantil?error=content-in-use");
+  }
+  try {
+    await deleteUnusedChildProgramContent(contentId);
+  } catch (error) {
+    console.error("Error deleting child program content", error);
+    redirect("/programa-infantil?error=delete-failed");
+  }
+  revalidateChildProgramConsumers();
+  redirect("/programa-infantil?saved=child-program-deleted");
+}
+
+function childProgramInputError(error: unknown) {
+  if (!(error instanceof Error)) return "invalid-content";
+  return ["invalid-assignments", "invalid-content", "invalid-grade", "duplicate-grade"].includes(error.message)
+    ? error.message
+    : "invalid-content";
+}
+
+function revalidateChildProgramConsumers() {
+  for (const path of ["/programa-infantil", "/areas-tecnicas", "/examenes", "/dojo", "/clases", "/delegado", "/ficha", "/kenshis"]) {
+    revalidatePath(path, "layout");
+  }
 }
 
 export async function createChildSyllabusItemAction(formData: FormData) {
