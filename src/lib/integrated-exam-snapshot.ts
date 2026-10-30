@@ -21,6 +21,10 @@ export type TemplateExamSnapshotItem = {
   active: boolean;
 };
 
+type ProgressiveExamSnapshotRow = Omit<TemplateExamSnapshotItem, "id" | "exam_event_id"> & {
+  exam_event_id: string;
+};
+
 export function validateTemplateExamItemSelection(
   templateItems: readonly TemplateExamSnapshotItem[],
   selectedIds: readonly string[]
@@ -48,30 +52,48 @@ export function buildSelectedProgressiveExamSnapshot(
 ) {
   const validIds = validateTemplateExamItemSelection(templateItems, selectedIds);
   const byId = new Map(templateItems.map((item) => [item.id, item]));
-  const rows = validIds.map((id, index) => {
+  const selectedRows = validIds.map((id) => {
     const { id: _id, exam_event_id: _templateEventId, order_index: _oldOrder, ...snapshot } = byId.get(id)!;
-    return { ...snapshot, exam_event_id: eventId, order_index: index + 1 };
+    return snapshot;
   });
 
-  let orderIndex = rows.length + 1;
+  const cutsByInsertionIndex = new Map<number, string[]>();
   const normalizedTargets = new Set(normalizeSelectedGrades(targetGrades));
   for (const grade of CHILD_PROGRAM_GRADES.filter((candidate) => normalizedTargets.has(candidate))) {
     const targetOrder = childGradeOrder(grade);
-    if (!rows.some((item) => childGradeOrder(item.grade) <= targetOrder)) continue;
-    rows.push({
-      exam_event_id: eventId,
-      source: "cut",
-      section: "CORTE",
-      name: `Corte progresivo: se sienta ${grade}`,
-      summary: `Los kenshis cuyo objetivo termina en ${grade} pueden finalizar aqui si el examen es progresivo.`,
-      grade,
-      category: "corte",
-      weight: 0,
-      order_index: orderIndex++,
-      cut_grade: grade,
-      active: true
-    });
+    let insertionIndex = -1;
+    for (let index = selectedRows.length - 1; index >= 0; index -= 1) {
+      if (childGradeOrder(selectedRows[index].grade) <= targetOrder) {
+        insertionIndex = index;
+        break;
+      }
+    }
+    if (insertionIndex < 0) continue;
+    const cuts = cutsByInsertionIndex.get(insertionIndex) ?? [];
+    cuts.push(grade);
+    cutsByInsertionIndex.set(insertionIndex, cuts);
   }
+
+  const rows: ProgressiveExamSnapshotRow[] = [];
+  let orderIndex = 1;
+  selectedRows.forEach((item, index) => {
+    rows.push({ ...item, exam_event_id: eventId, order_index: orderIndex++ });
+    for (const grade of cutsByInsertionIndex.get(index) ?? []) {
+      rows.push({
+        exam_event_id: eventId,
+        source: "cut",
+        section: "CORTE",
+        name: `Corte progresivo: se sienta ${grade}`,
+        summary: `Los kenshis cuyo objetivo termina en ${grade} pueden finalizar aqui si el examen es progresivo.`,
+        grade,
+        category: "corte",
+        weight: 0,
+        order_index: orderIndex++,
+        cut_grade: grade,
+        active: true
+      });
+    }
+  });
   return rows;
 }
 

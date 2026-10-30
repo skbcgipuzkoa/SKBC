@@ -89,13 +89,23 @@ assert.throws(() => validateTemplateExamItemSelection(templateSnapshot, ["foreig
 assert.throws(() => validateTemplateExamItemSelection(templateSnapshot, ["inactive"]), /evaluable/);
 assert.throws(() => validateTemplateExamItemSelection(templateSnapshot, ["old-cut"]), /evaluable/);
 assert.deepEqual(
-  buildSelectedProgressiveExamSnapshot(templateSnapshot, ["yellow", "white"], "new-event", ["BLANCO-AMARILLO", "AMARILLO-NARANJA"]),
+  buildSelectedProgressiveExamSnapshot(templateSnapshot, ["white", "yellow"], "new-event", ["BLANCO", "AMARILLO"]),
   [
-    { exam_event_id: "new-event", source: "child_syllabus", child_syllabus_item_id: "current-yellow", section: "JUHO", name: "Stored yellow", summary: "Old yellow summary", grade: "AMARILLO", category: "juho", weight: 2, order_index: 1, cut_grade: null, active: true },
-    { exam_event_id: "new-event", source: "child_syllabus", child_syllabus_item_id: "current-white", section: "KIHON", name: "Stored white", summary: "Old white summary", grade: "BLANCO", category: "goho", weight: 1, order_index: 2, cut_grade: null, active: true },
-    { exam_event_id: "new-event", source: "cut", section: "CORTE", name: "Corte progresivo: se sienta BLANCO-AMARILLO", summary: "Los kenshis cuyo objetivo termina en BLANCO-AMARILLO pueden finalizar aqui si el examen es progresivo.", grade: "BLANCO-AMARILLO", category: "corte", weight: 0, order_index: 3, cut_grade: "BLANCO-AMARILLO", active: true },
-    { exam_event_id: "new-event", source: "cut", section: "CORTE", name: "Corte progresivo: se sienta AMARILLO-NARANJA", summary: "Los kenshis cuyo objetivo termina en AMARILLO-NARANJA pueden finalizar aqui si el examen es progresivo.", grade: "AMARILLO-NARANJA", category: "corte", weight: 0, order_index: 4, cut_grade: "AMARILLO-NARANJA", active: true }
+    { exam_event_id: "new-event", source: "child_syllabus", child_syllabus_item_id: "current-white", section: "KIHON", name: "Stored white", summary: "Old white summary", grade: "BLANCO", category: "goho", weight: 1, order_index: 1, cut_grade: null, active: true },
+    { exam_event_id: "new-event", source: "cut", section: "CORTE", name: "Corte progresivo: se sienta BLANCO", summary: "Los kenshis cuyo objetivo termina en BLANCO pueden finalizar aqui si el examen es progresivo.", grade: "BLANCO", category: "corte", weight: 0, order_index: 2, cut_grade: "BLANCO", active: true },
+    { exam_event_id: "new-event", source: "child_syllabus", child_syllabus_item_id: "current-yellow", section: "JUHO", name: "Stored yellow", summary: "Old yellow summary", grade: "AMARILLO", category: "juho", weight: 2, order_index: 3, cut_grade: null, active: true },
+    { exam_event_id: "new-event", source: "cut", section: "CORTE", name: "Corte progresivo: se sienta AMARILLO", summary: "Los kenshis cuyo objetivo termina en AMARILLO pueden finalizar aqui si el examen es progresivo.", grade: "AMARILLO", category: "corte", weight: 0, order_index: 4, cut_grade: "AMARILLO", active: true }
   ]
+);
+assert.deepEqual(
+  buildSelectedProgressiveExamSnapshot(templateSnapshot, ["white", "yellow"], "new-event", ["BLANCO-AMARILLO"])
+    .map((item) => item.source === "cut" ? `cut:${item.cut_grade}` : `item:${item.name}`),
+  ["item:Stored white", "cut:BLANCO-AMARILLO", "item:Stored yellow"]
+);
+assert.deepEqual(
+  buildSelectedProgressiveExamSnapshot(templateSnapshot, ["white", "yellow"], "new-event", ["BLANCO-AMARILLO", "BLANCO"])
+    .map((item) => item.source === "cut" ? `cut:${item.cut_grade}` : `item:${item.name}`),
+  ["item:Stored white", "cut:BLANCO", "cut:BLANCO-AMARILLO", "item:Stored yellow"]
 );
 assert.deepEqual(
   progressiveTargetGradesWithoutScorableItems(
