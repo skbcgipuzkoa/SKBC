@@ -4,10 +4,13 @@ import { generateDiplomaForExam } from "@/lib/diplomas";
 import { generateIntegratedExamDocumentsForStudent } from "@/lib/integrated-exam-documents";
 import {
   buildChildExamSnapshot,
+  childExamTargetGradesWithoutScorableItems,
   normalizeChildGrade,
+  progressiveTargetGradesWithoutScorableItems,
   resolveChildExamGrades,
   type ChildProgramAssignment
 } from "@/lib/child-program";
+import { copyExamSnapshotItems } from "@/lib/integrated-exam-snapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type IntegratedExamProgram = "adults" | "kids_progressive" | "kids" | "dan_tribunal";
@@ -225,6 +228,20 @@ export async function createIntegratedExamEvent(input: {
     await supabase.from("exam_events").delete().eq("id", event.id);
     throw error;
   }
+  if (input.programType === "kids_progressive") {
+    const targetGrades = students.map((student) => student.target_grade).filter(Boolean) as string[];
+    const uncoveredTargetGrades = progressiveTargetGradesWithoutScorableItems(
+      items.map((item) => ({
+        grade: typeof item.grade === "string" ? item.grade : null,
+        scorable: item.source !== "cut" && (!("active" in item) || item.active !== false)
+      })),
+      targetGrades
+    );
+    if (uncoveredTargetGrades.length) {
+      await supabase.from("exam_events").delete().eq("id", event.id);
+      throw new Error(`Los grados objetivo ${uncoveredTargetGrades.join(", ")} no tienen contenido evaluable seleccionado.`);
+    }
+  }
   if (!items.length) {
     await supabase.from("exam_events").delete().eq("id", event.id);
     throw new Error(
@@ -272,7 +289,7 @@ async function copyExamItems(templateEventId: string, eventId: string, programTy
     .order("order_index");
 
   if (itemsError) throw itemsError;
-  return (templateItems ?? []).map((item) => ({ ...item, exam_event_id: eventId }));
+  return copyExamSnapshotItems(templateItems ?? [], eventId);
 }
 
 export async function getIntegratedExamDuplicationTemplate(eventId: string) {
@@ -736,9 +753,9 @@ async function buildExamItems(eventId: string, programType: IntegratedExamProgra
   if (programType === "adults" || programType === "dan_tribunal") {
     return buildAdultItems(eventId, targetGrades);
   }
-  if (programType === "kids_progressive" && childSyllabusItemIds) {
-    const assignments = await loadApprovedChildExamAssignments(childSyllabusItemIds, targetGrades);
-    return buildSelectedKidsItems(eventId, assignments);
+  if (programType === "kids_progressive") {
+    const assignments = await loadApprovedChildExamAssignments(childSyllabusItemIds ?? [], targetGrades);
+    return buildSelectedKidsItems(eventId, assignments, targetGrades);
   }
   return buildKidsItems(eventId, targetGrades);
 }
@@ -788,11 +805,7 @@ async function loadApprovedChildExamAssignments(selectedIds: string[], targetGra
   if (approved.some((row) => !allowedGrades.has(normalizeChildGrade(row?.grade)))) {
     throw new Error("Parte del temario infantil seleccionado no corresponde a los grados objetivo.");
   }
-  if (!approved.some((row) => row?.exam_relevant)) {
-    throw new Error("El temario infantil seleccionado no contiene contenido evaluable.");
-  }
-
-  return approved.map((row) => ({
+  const assignments = approved.map((row) => ({
     id: row!.id,
     contentId: row!.content_id,
     grade: normalizeChildGrade(row!.grade),
@@ -803,10 +816,15 @@ async function loadApprovedChildExamAssignments(selectedIds: string[], targetGra
     examRelevant: row!.exam_relevant,
     sortOrder: row!.sort_order
   }));
+  const uncoveredTargetGrades = childExamTargetGradesWithoutScorableItems(assignments, targetGrades);
+  if (uncoveredTargetGrades.length) {
+    throw new Error(`Los grados objetivo ${uncoveredTargetGrades.join(", ")} no tienen contenido evaluable seleccionado.`);
+  }
+  return assignments;
 }
 
-function buildSelectedKidsItems(eventId: string, assignments: ChildProgramAssignment[]) {
-  return buildChildExamSnapshot(assignments).map((row, index) => row.source === "child_syllabus" ? {
+function buildSelectedKidsItems(eventId: string, assignments: ChildProgramAssignment[], targetGrades: string[]) {
+  return buildChildExamSnapshot(assignments, targetGrades).map((row, index) => row.source === "child_syllabus" ? {
     exam_event_id: eventId,
     source: row.source,
     child_syllabus_item_id: row.childSyllabusItemId,

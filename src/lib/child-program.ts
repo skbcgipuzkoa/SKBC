@@ -143,8 +143,44 @@ export function defaultChildExamItemIds(items: readonly ChildProgramAssignment[]
     .map((item) => item.id);
 }
 
-export function buildChildExamSnapshot(items: readonly ChildProgramAssignment[]): ChildExamSnapshotRow[] {
+export function childExamTargetGradesWithoutScorableItems(
+  items: readonly ChildProgramAssignment[],
+  targetGrades: readonly string[]
+): ChildProgramGrade[] {
+  return progressiveTargetGradesWithoutScorableItems(
+    items.map((item) => ({ grade: item.grade, scorable: item.active && item.examRelevant })),
+    targetGrades
+  );
+}
+
+export function progressiveTargetGradesWithoutScorableItems(
+  items: readonly { grade: string | null; scorable: boolean }[],
+  targetGrades: readonly string[]
+): ChildProgramGrade[] {
+  return representedChildTargetGrades(targetGrades).filter((targetGrade) => {
+    const targetIndex = childGradeOrder(targetGrade);
+    return !items.some((item) => item.scorable && childGradeOrder(item.grade ?? "") <= targetIndex);
+  });
+}
+
+export function buildChildExamSnapshot(
+  items: readonly ChildProgramAssignment[],
+  targetGrades: readonly string[] = items.map((item) => item.grade)
+): ChildExamSnapshotRow[] {
   const rows: ChildExamSnapshotRow[] = [];
+  const targetsByLastRelevantGrade = new Map<number, ChildProgramGrade[]>();
+  for (const targetGrade of representedChildTargetGrades(targetGrades)) {
+    const targetIndex = childGradeOrder(targetGrade);
+    const relevantGradeIndexes = items
+      .map((item) => childGradeOrder(item.grade))
+      .filter((gradeIndex) => gradeIndex <= targetIndex);
+    if (!relevantGradeIndexes.length) continue;
+    const lastRelevantGrade = Math.max(...relevantGradeIndexes);
+    const cuts = targetsByLastRelevantGrade.get(lastRelevantGrade) ?? [];
+    cuts.push(targetGrade);
+    targetsByLastRelevantGrade.set(lastRelevantGrade, cuts);
+  }
+
   for (const grade of CHILD_PROGRAM_GRADES) {
     const gradeItems = items.filter((item) => normalizeChildGrade(item.grade) === grade);
     for (const item of gradeItems) {
@@ -157,9 +193,18 @@ export function buildChildExamSnapshot(items: readonly ChildProgramAssignment[])
         description: item.description
       });
     }
-    if (gradeItems.length) rows.push({ source: "cut", grade, cutGrade: grade });
+    for (const cutGrade of targetsByLastRelevantGrade.get(childGradeOrder(grade)) ?? []) {
+      rows.push({ source: "cut", grade: cutGrade, cutGrade });
+    }
   }
   return rows;
+}
+
+function representedChildTargetGrades(targetGrades: readonly string[]): ChildProgramGrade[] {
+  const represented = new Set(
+    normalizeSelectedGrades(targetGrades).filter((grade): grade is ChildProgramGrade => CHILD_PROGRAM_GRADES.includes(grade as ChildProgramGrade))
+  );
+  return CHILD_PROGRAM_GRADES.filter((grade) => represented.has(grade));
 }
 
 function childGradeOrder(grade: string): number {

@@ -5,6 +5,8 @@ import {
   evaluateExamTechnicalReadiness
 } from "../src/lib/exam-technical-readiness.ts";
 import { parseExamNotice } from "../src/lib/exam-notice.ts";
+import { copyExamSnapshotItems } from "../src/lib/integrated-exam-snapshot.ts";
+import { progressiveTargetGradesWithoutScorableItems } from "../src/lib/child-program.ts";
 
 const technique = (id, name, category, contentType = null) => ({
   id,
@@ -59,6 +61,26 @@ const complete = parseExamNotice(
 );
 assert.equal(complete.fundamentalComplete, true);
 
+const storedSnapshot = [{
+  source: "child_syllabus",
+  child_syllabus_item_id: "assignment-old",
+  name: "Stored title",
+  grade: "BLANCO",
+  order_index: 4
+}];
+const copiedSnapshot = copyExamSnapshotItems(storedSnapshot, "new-event");
+assert.deepEqual(copiedSnapshot, [{ ...storedSnapshot[0], exam_event_id: "new-event" }]);
+assert.notEqual(copiedSnapshot[0], storedSnapshot[0]);
+storedSnapshot[0].name = "Catalog title changed later";
+assert.equal(copiedSnapshot[0].name, "Stored title");
+assert.deepEqual(
+  progressiveTargetGradesWithoutScorableItems(
+    [{ grade: "AMARILLO", scorable: true }],
+    ["BLANCO-AMARILLO", "AMARILLO-NARANJA"]
+  ),
+  ["BLANCO-AMARILLO"]
+);
+
 const examPageSource = readFileSync(new URL("../src/app/examenes/page.tsx", import.meta.url), "utf8");
 const examFormUrl = new URL("../src/app/examenes/IntegratedExamCreateForm.tsx", import.meta.url);
 const integratedExamsSource = readFileSync(new URL("../src/lib/integrated-exams.ts", import.meta.url), "utf8");
@@ -78,8 +100,9 @@ assert.match(actionsSource, /formData\.getAll\("childSyllabusItemIds"\)/);
 assert.match(actionsSource, /childSyllabusItemIds\s*\n/);
 assert.match(integratedExamsSource, /childSyllabusItemIds\?: string\[\]/);
 assert.match(integratedExamsSource, /loadApprovedChildExamAssignments/);
+assert.match(integratedExamsSource, /loadApprovedChildExamAssignments\(childSyllabusItemIds \?\? \[\], targetGrades\)/);
 assert.match(integratedExamsSource, /buildChildExamSnapshot/);
-assert.match(integratedExamsSource, /El temario infantil seleccionado no contiene contenido evaluable/);
+assert.match(integratedExamsSource, /no tienen contenido evaluable seleccionado/);
 assert.match(integratedExamsSource, /input\.templateEventId[\s\S]*copyExamItems/);
 
 console.log("Exam technical readiness checks passed.");

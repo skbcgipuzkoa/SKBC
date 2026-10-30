@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
   buildChildExamSnapshot,
+  childExamTargetGradesWithoutScorableItems,
   defaultChildExamItemIds,
   normalizeChildGrade,
   normalizeSelectedGrades,
@@ -50,6 +51,29 @@ const snapshot = buildChildExamSnapshot(selectedAssignments);
 assert.deepEqual(snapshot.map((row) => row.source), ["child_syllabus", "child_syllabus", "cut", "child_syllabus", "cut"]);
 assert.deepEqual(snapshot.filter((row) => row.source === "child_syllabus").map((row) => row.childSyllabusItemId), ["white-2", "white-1", "yellow-1"]);
 assert.deepEqual(snapshot.filter((row) => row.source === "cut").map((row) => row.cutGrade), ["BLANCO", "AMARILLO"]);
+
+const targetDrivenSnapshot = buildChildExamSnapshot(
+  [assignments.find((item) => item.id === "white-2"), assignments.find((item) => item.id === "yellow-1")],
+  ["BLANCO-AMARILLO", "AMARILLO-NARANJA", "BLANCO-AMARILLO"]
+);
+assert.deepEqual(
+  targetDrivenSnapshot.map((row) => row.source === "cut" ? `cut:${row.cutGrade}` : row.childSyllabusItemId),
+  ["white-2", "cut:BLANCO-AMARILLO", "yellow-1", "cut:AMARILLO-NARANJA"]
+);
+assert.deepEqual(
+  childExamTargetGradesWithoutScorableItems(
+    [assignments.find((item) => item.id === "yellow-1")],
+    ["BLANCO-AMARILLO", "AMARILLO-NARANJA"]
+  ),
+  ["BLANCO-AMARILLO"]
+);
+assert.deepEqual(
+  childExamTargetGradesWithoutScorableItems(
+    [assignments.find((item) => item.id === "white-2"), assignments.find((item) => item.id === "yellow-practice")],
+    ["BLANCO-AMARILLO", "AMARILLO-NARANJA"]
+  ),
+  []
+);
 
 const pureSource = readFileSync(new URL("../src/lib/child-program.ts", import.meta.url), "utf8");
 const serverSource = readFileSync(new URL("../src/lib/child-program.server.ts", import.meta.url), "utf8");
