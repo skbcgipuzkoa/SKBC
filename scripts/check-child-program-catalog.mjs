@@ -115,6 +115,10 @@ for (const action of [
 }
 assert.match(pageSource, /content-in-use/);
 assert.match(pageSource, /histori/);
+assert.match(pageSource, /<MoveButton[^>]+category=\{category\}/);
+assert.match(pageSource, /name="category" value=\{category\}/);
+assert.match(pageSource, /function normalizeProgramCategory/);
+assert.match(pageSource, /const category = normalizeProgramCategory\(row\.content\.category\);[\s\S]*result\.get\(category\)/);
 assert.match(editorSource, /^\"use client\";/);
 assert.match(editorSource, /createChildProgramContentAction/);
 assert.match(editorSource, /updateChildProgramContentAction/);
@@ -176,8 +180,19 @@ assert.match(atomicWritesMigrationSource, /active = coalesce\(item\.active_befor
 const reorderFunctionSource = atomicWritesMigrationSource
   .split("create or replace function public.move_child_program_assignment")[1]
   .split("revoke execute on function")[0];
+assert.match(actionsSource, /const category = String\(formData\.get\("category"\)/);
+assert.match(actionsSource, /category\.replace\(\/\\s\+\/g, " "\)\.trim\(\)\.toLowerCase\(\)/);
+assert.match(actionsSource, /moveChildProgramAssignment\(assignmentId, normalizedCategory, direction\)/);
+assert.match(serverSource, /moveChildProgramAssignment\(assignmentId: string, category: string, direction: "up" \| "down"\)/);
+assert.match(serverSource, /p_category: category/);
+assert.match(atomicWritesMigrationSource, /move_child_program_assignment\(\s*p_assignment_id uuid,\s*p_category text,\s*p_direction text\s*\)/);
+assert.match(reorderFunctionSource, /v_category text/);
+assert.match(reorderFunctionSource, /CHILD_PROGRAM_INVALID_CATEGORY/);
+assert.match(reorderFunctionSource, /child-program-category:[^\n]+v_grade[^\n]+v_category/);
+assert.ok((reorderFunctionSource.match(/lower\(regexp_replace\(trim\(item\.category\), '\[\[:space:\]\]\+', ' ', 'g'\)\) = v_category/g) ?? []).length >= 5);
 assert.match(reorderFunctionSource, /set sort_order = reordered\.sort_order/);
 assert.doesNotMatch(reorderFunctionSource, /\b(?:active|exam_relevant|title|category|description|updated_by|updated_at)\s*=/);
+assert.match(atomicWritesMigrationSource, /move_child_program_assignment\(uuid, text, text\)/);
 for (const usagePath of ["child_syllabus_history", "child_class_plans", "exam_event_items"]) {
   assert.match(atomicWritesMigrationSource, new RegExp(`public\\.${usagePath}`));
 }

@@ -117,10 +117,11 @@ export async function saveChildProgramContent(input: SaveChildProgramContentInpu
   return String(data);
 }
 
-export async function moveChildProgramAssignment(assignmentId: string, direction: "up" | "down") {
+export async function moveChildProgramAssignment(assignmentId: string, category: string, direction: "up" | "down") {
   const supabase = createAdminClient();
   const { error } = await supabase.rpc("move_child_program_assignment", {
     p_assignment_id: assignmentId,
+    p_category: category,
     p_direction: direction
   });
   if (error) throw error;

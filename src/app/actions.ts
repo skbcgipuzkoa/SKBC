@@ -1160,15 +1160,22 @@ export async function updateChildProgramContentAction(formData: FormData) {
 export async function moveChildProgramAssignmentAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
   const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  const category = String(formData.get("category") ?? "");
+  const normalizedCategory = category.replace(/\s+/g, " ").trim().toLowerCase();
   const direction = String(formData.get("direction") ?? "");
-  if (!assignmentId || (direction !== "up" && direction !== "down")) redirect("/programa-infantil?error=invalid-move");
+  if (!assignmentId || !normalizedCategory || normalizedCategory.length > 80 || (direction !== "up" && direction !== "down")) {
+    redirect("/programa-infantil?error=invalid-move");
+  }
   try {
-    await moveChildProgramAssignment(assignmentId, direction);
+    await moveChildProgramAssignment(assignmentId, normalizedCategory, direction);
   } catch (error) {
     console.error("Error moving child program assignment", error);
     const code = isAtomicMutationError(error, "CHILD_PROGRAM_REORDER_TARGET_NOT_FOUND")
       ? "order-boundary"
-      : isAtomicMutationError(error, "CHILD_PROGRAM_ASSIGNMENT_NOT_FOUND") || isAtomicMutationError(error, "CHILD_PROGRAM_ASSIGNMENT_NOT_IN_GRADE")
+      : isAtomicMutationError(error, "CHILD_PROGRAM_ASSIGNMENT_NOT_FOUND") ||
+          isAtomicMutationError(error, "CHILD_PROGRAM_ASSIGNMENT_NOT_IN_GRADE") ||
+          isAtomicMutationError(error, "CHILD_PROGRAM_ASSIGNMENT_NOT_IN_CATEGORY") ||
+          isAtomicMutationError(error, "CHILD_PROGRAM_INVALID_CATEGORY")
         ? "invalid-move"
         : "move-failed";
     redirect(`/programa-infantil?error=${code}`);

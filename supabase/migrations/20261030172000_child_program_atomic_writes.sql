@@ -327,6 +327,7 @@ $$;
 
 create or replace function public.move_child_program_assignment(
   p_assignment_id uuid,
+  p_category text,
   p_direction text
 )
 returns text
@@ -336,12 +337,18 @@ set search_path = pg_catalog, public
 as $$
 declare
   v_grade text;
+  v_category text;
   v_grade_size integer;
   v_current_position integer;
   v_target_position integer;
 begin
   if p_direction not in ('up', 'down') then
     raise exception using errcode = 'P0001', message = 'CHILD_PROGRAM_INVALID_DIRECTION';
+  end if;
+
+  v_category := lower(regexp_replace(trim(coalesce(p_category, '')), '[[:space:]]+', ' ', 'g'));
+  if v_category = '' or char_length(v_category) > 80 then
+    raise exception using errcode = 'P0001', message = 'CHILD_PROGRAM_INVALID_CATEGORY';
   end if;
 
   select public.normalize_child_program_grade(item.grade)
@@ -353,11 +360,12 @@ begin
     raise exception using errcode = 'P0001', message = 'CHILD_PROGRAM_ASSIGNMENT_NOT_FOUND';
   end if;
 
-  perform pg_advisory_xact_lock(hashtextextended('child-program-grade:' || v_grade, 0));
+  perform pg_advisory_xact_lock(hashtextextended('child-program-category:' || v_grade || ':' || v_category, 0));
 
   perform 1
   from public.child_syllabus_items item
   where public.normalize_child_program_grade(item.grade) = v_grade
+    and lower(regexp_replace(trim(item.category), '[[:space:]]+', ' ', 'g')) = v_category
   order by item.sort_order, item.title, item.id
   for update;
 
@@ -365,8 +373,9 @@ begin
     select 1 from public.child_syllabus_items item
     where item.id = p_assignment_id
       and public.normalize_child_program_grade(item.grade) = v_grade
+      and lower(regexp_replace(trim(item.category), '[[:space:]]+', ' ', 'g')) = v_category
   ) then
-    raise exception using errcode = 'P0001', message = 'CHILD_PROGRAM_ASSIGNMENT_NOT_IN_GRADE';
+    raise exception using errcode = 'P0001', message = 'CHILD_PROGRAM_ASSIGNMENT_NOT_IN_CATEGORY';
   end if;
 
   select ordered.position
@@ -375,6 +384,7 @@ begin
     select item.id, row_number() over (order by item.sort_order, item.title, item.id)::integer as position
     from public.child_syllabus_items item
     where public.normalize_child_program_grade(item.grade) = v_grade
+      and lower(regexp_replace(trim(item.category), '[[:space:]]+', ' ', 'g')) = v_category
   ) ordered
   where ordered.id = p_assignment_id;
 
@@ -382,7 +392,8 @@ begin
   select count(*)::integer
   into v_grade_size
   from public.child_syllabus_items item
-  where public.normalize_child_program_grade(item.grade) = v_grade;
+  where public.normalize_child_program_grade(item.grade) = v_grade
+    and lower(regexp_replace(trim(item.category), '[[:space:]]+', ' ', 'g')) = v_category;
 
   if v_target_position < 1 or v_target_position > v_grade_size then
     raise exception using errcode = 'P0001', message = 'CHILD_PROGRAM_REORDER_TARGET_NOT_FOUND';
@@ -392,6 +403,7 @@ begin
     select item.id, row_number() over (order by item.sort_order, item.title, item.id)::integer as position
     from public.child_syllabus_items item
     where public.normalize_child_program_grade(item.grade) = v_grade
+      and lower(regexp_replace(trim(item.category), '[[:space:]]+', ' ', 'g')) = v_category
   ), shifted as (
     select
       ordered.id,
@@ -417,9 +429,9 @@ $$;
 revoke execute on function public.save_child_program_content(uuid, text, text, text, jsonb, text) from public, anon, authenticated;
 revoke execute on function public.archive_child_syllabus_content(uuid, text) from public, anon, authenticated;
 revoke execute on function public.restore_child_syllabus_content(uuid, text) from public, anon, authenticated;
-revoke execute on function public.move_child_program_assignment(uuid, text) from public, anon, authenticated;
+revoke execute on function public.move_child_program_assignment(uuid, text, text) from public, anon, authenticated;
 
 grant execute on function public.save_child_program_content(uuid, text, text, text, jsonb, text) to service_role;
 grant execute on function public.archive_child_syllabus_content(uuid, text) to service_role;
 grant execute on function public.restore_child_syllabus_content(uuid, text) to service_role;
-grant execute on function public.move_child_program_assignment(uuid, text) to service_role;
+grant execute on function public.move_child_program_assignment(uuid, text, text) to service_role;

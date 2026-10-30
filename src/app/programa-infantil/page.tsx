@@ -113,9 +113,10 @@ function GradeView({ contents, selectedGrade }: { contents: ChildProgramContent[
     .map((assignment) => ({ content, assignment })))
     .sort((left, right) => left.assignment.sortOrder - right.assignment.sortOrder || left.content.title.localeCompare(right.content.title, "es"));
   const groups = rows.reduce((result, row) => {
-    const categoryRows = result.get(row.content.category) ?? [];
+    const category = normalizeProgramCategory(row.content.category);
+    const categoryRows = result.get(category) ?? [];
     categoryRows.push(row);
-    result.set(row.content.category, categoryRows);
+    result.set(category, categoryRows);
     return result;
   }, new Map<string, typeof rows>());
   const activeCount = rows.filter(({ assignment }) => assignment.active).length;
@@ -154,8 +155,8 @@ function GradeView({ contents, selectedGrade }: { contents: ChildProgramContent[
                 <td data-label="Evaluable"><StatusMark value={assignment.examRelevant} /></td>
                 <td data-label="Orden">{assignment.sortOrder}</td>
                 <td data-label="Acciones"><div className="child-program-row-actions">
-                  <MoveButton assignmentId={assignment.id} direction="up" disabled={index === 0} />
-                  <MoveButton assignmentId={assignment.id} direction="down" disabled={index === categoryRows.length - 1} />
+                  <MoveButton assignmentId={assignment.id} category={category} direction="up" disabled={index === 0} />
+                  <MoveButton assignmentId={assignment.id} category={category} direction="down" disabled={index === categoryRows.length - 1} />
                   <a href={`/programa-infantil?view=catalog&edit=${content.id}`} title="Editar" aria-label={`Editar ${content.title}`}><Edit3 size={17} /></a>
                   <form action={archiveChildProgramContentAction}>
                     <input type="hidden" name="contentId" value={content.id} />
@@ -230,10 +231,10 @@ function ArchiveView({ contents, usageById }: { contents: ChildProgramContent[];
   </div>;
 }
 
-function MoveButton({ assignmentId, direction, disabled }: { assignmentId: string; direction: "up" | "down"; disabled: boolean }) {
+function MoveButton({ assignmentId, category, direction, disabled }: { assignmentId: string; category: string; direction: "up" | "down"; disabled: boolean }) {
   const label = direction === "up" ? "Subir" : "Bajar";
   const Icon = direction === "up" ? ArrowUp : ArrowDown;
-  return <form action={moveChildProgramAssignmentAction}><input type="hidden" name="assignmentId" value={assignmentId} /><input type="hidden" name="direction" value={direction} /><button type="submit" disabled={disabled} title={label} aria-label={label}><Icon size={17} /></button></form>;
+  return <form action={moveChildProgramAssignmentAction}><input type="hidden" name="assignmentId" value={assignmentId} /><input type="hidden" name="category" value={category} /><input type="hidden" name="direction" value={direction} /><button type="submit" disabled={disabled} title={label} aria-label={label}><Icon size={17} /></button></form>;
 }
 
 function StatusMark({ value }: { value: boolean }) {
@@ -257,4 +258,5 @@ function catalogHref(filters: { q?: string; category?: string } = {}) {
   return `/programa-infantil?${query}`;
 }
 function formatGrade(grade: string) { return normalizeChildGrade(grade).replaceAll("-", " / "); }
+function normalizeProgramCategory(category: string) { return category.replace(/\s+/g, " ").trim().toLowerCase(); }
 function formatDate(value: string) { return new Intl.DateTimeFormat("es-ES", { dateStyle: "medium" }).format(new Date(value)); }
