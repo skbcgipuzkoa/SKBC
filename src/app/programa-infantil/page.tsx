@@ -155,11 +155,13 @@ function GradeView({ contents, selectedGrade }: { contents: ChildProgramContent[
                 <td data-label="Evaluable"><StatusMark value={assignment.examRelevant} /></td>
                 <td data-label="Orden">{assignment.sortOrder}</td>
                 <td data-label="Acciones"><div className="child-program-row-actions">
-                  <MoveButton assignmentId={assignment.id} category={category} direction="up" disabled={index === 0} />
-                  <MoveButton assignmentId={assignment.id} category={category} direction="down" disabled={index === categoryRows.length - 1} />
+                  <MoveButton assignmentId={assignment.id} category={category} grade={selectedGrade} direction="up" disabled={index === 0} />
+                  <MoveButton assignmentId={assignment.id} category={category} grade={selectedGrade} direction="down" disabled={index === categoryRows.length - 1} />
                   <a href={`/programa-infantil?view=catalog&edit=${content.id}`} title="Editar" aria-label={`Editar ${content.title}`}><Edit3 size={17} /></a>
                   <form action={archiveChildProgramContentAction}>
                     <input type="hidden" name="contentId" value={content.id} />
+                    <input type="hidden" name="returnView" value="grades" />
+                    <input type="hidden" name="returnGrade" value={selectedGrade} />
                     <button type="submit" title="Archivar" aria-label={`Archivar ${content.title}`}><Archive size={17} /></button>
                   </form>
                 </div></td>
@@ -202,7 +204,7 @@ function CatalogView({ contents, params, editing, showEditor, cancelEditorHref }
         <div className="child-program-grade-list">{content.assignments.length ? content.assignments.map((assignment) => <span key={assignment.id}>{formatGrade(assignment.grade)}</span>) : <em>Sin grados</em>}</div>
         <div className="child-program-row-actions">
           <a href={`/programa-infantil?view=catalog&edit=${content.id}`} title="Editar" aria-label={`Editar ${content.title}`}><Edit3 size={17} /></a>
-          <form action={archiveChildProgramContentAction}><input type="hidden" name="contentId" value={content.id} /><button type="submit" title="Archivar" aria-label={`Archivar ${content.title}`}><Archive size={17} /></button></form>
+          <form action={archiveChildProgramContentAction}><input type="hidden" name="contentId" value={content.id} /><input type="hidden" name="returnView" value="catalog" /><button type="submit" title="Archivar" aria-label={`Archivar ${content.title}`}><Archive size={17} /></button></form>
         </div>
       </article>)}
       {!filtered.length ? <EmptyState icon={<Search size={24} />} title="Sin resultados" text="Prueba con otra busqueda o categoria." /> : null}
@@ -221,8 +223,8 @@ function ArchiveView({ contents, usageById }: { contents: ChildProgramContent[];
           <div><strong>{content.title}</strong><span>{content.category}</span><small>Archivado {formatDate(content.archivedAt!)}</small></div>
           <div className="child-program-usage">{protectedByHistory ? "Protegido por historial" : `${usage?.assignmentCount ?? 0} asignaciones sin uso historico`}</div>
           <div className="child-program-row-actions child-program-text-actions">
-            <form action={restoreChildProgramContentAction}><input type="hidden" name="contentId" value={content.id} /><button type="submit"><RotateCcw size={17} /> Restaurar</button></form>
-            {!protectedByHistory ? <form action={deleteUnusedChildProgramContentAction}><input type="hidden" name="contentId" value={content.id} /><button className="danger" type="submit"><Trash2 size={17} /> Eliminar</button></form> : null}
+            <form action={restoreChildProgramContentAction}><input type="hidden" name="contentId" value={content.id} /><input type="hidden" name="returnView" value="archived" /><button type="submit"><RotateCcw size={17} /> Restaurar</button></form>
+            {!protectedByHistory ? <form action={deleteUnusedChildProgramContentAction}><input type="hidden" name="contentId" value={content.id} /><input type="hidden" name="returnView" value="archived" /><button className="danger" type="submit"><Trash2 size={17} /> Eliminar</button></form> : null}
           </div>
         </article>;
       })}
@@ -231,10 +233,10 @@ function ArchiveView({ contents, usageById }: { contents: ChildProgramContent[];
   </div>;
 }
 
-function MoveButton({ assignmentId, category, direction, disabled }: { assignmentId: string; category: string; direction: "up" | "down"; disabled: boolean }) {
+function MoveButton({ assignmentId, category, grade, direction, disabled }: { assignmentId: string; category: string; grade: ChildProgramGrade; direction: "up" | "down"; disabled: boolean }) {
   const label = direction === "up" ? "Subir" : "Bajar";
   const Icon = direction === "up" ? ArrowUp : ArrowDown;
-  return <form action={moveChildProgramAssignmentAction}><input type="hidden" name="assignmentId" value={assignmentId} /><input type="hidden" name="category" value={category} /><input type="hidden" name="direction" value={direction} /><button type="submit" disabled={disabled} title={label} aria-label={label}><Icon size={17} /></button></form>;
+  return <form action={moveChildProgramAssignmentAction}><input type="hidden" name="assignmentId" value={assignmentId} /><input type="hidden" name="category" value={category} /><input type="hidden" name="direction" value={direction} /><input type="hidden" name="returnView" value="grades" /><input type="hidden" name="returnGrade" value={grade} /><button type="submit" disabled={disabled} title={label} aria-label={label}><Icon size={17} /></button></form>;
 }
 
 function StatusMark({ value }: { value: boolean }) {

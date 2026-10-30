@@ -12551,6 +12551,8 @@ tbody tr:hover {
 .child-program-section-heading { border-bottom: 1px solid var(--line); }
 .child-program-section-heading .eyebrow { margin-bottom: 4px; }
 .child-program-editor-form { display: grid; gap: 18px; padding: 18px; }
+.child-program-editor-error { margin: 0; }
+.child-program-field-error { color: var(--danger); font-size: 12px; font-weight: 700; margin: 0; }
 .child-program-fields { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .child-program-fields label { color: var(--muted); display: grid; font-size: 12px; font-weight: 800; gap: 6px; min-width: 0; }
 .child-program-fields label > span { font-weight: 400; }
@@ -12607,7 +12609,7 @@ tbody tr:hover {
   .child-program-filters { grid-template-columns: 1fr 1fr; }
   .child-program-filters button { grid-column: 1 / -1; }
   .child-program-table, .child-program-table tbody, .child-program-table tr, .child-program-table td { display: block; width: 100%; }
-  .child-program-table thead { display: none; }
+  .child-program-table thead { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
   .child-program-table tr { border-bottom: 1px solid var(--line); padding: 10px 13px; }
   .child-program-table tr:last-child { border-bottom: 0; }
   .child-program-table td { align-items: center; border: 0; display: grid; gap: 12px; grid-template-columns: 96px minmax(0, 1fr); padding: 6px 0; }

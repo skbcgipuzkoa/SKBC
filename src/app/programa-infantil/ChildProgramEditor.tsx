@@ -1,8 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Check, Plus, Save, X } from "lucide-react";
-import { createChildProgramContentAction, updateChildProgramContentAction } from "@/app/actions";
+import {
+  createChildProgramContentFormAction,
+  updateChildProgramContentFormAction,
+  type ChildProgramEditorFormState
+} from "@/app/actions";
 import { CHILD_PROGRAM_GRADES, type ChildProgramContent, type ChildProgramGrade } from "@/lib/child-program";
 
 type AssignmentDraft = {
@@ -24,10 +28,15 @@ export function ChildProgramEditor({ content, onCancelHref }: ChildProgramEditor
       sortOrder: assignment.sortOrder
     }]) ?? []
   ) as Partial<Record<ChildProgramGrade, AssignmentDraft>>, [content]);
+  const action = content ? updateChildProgramContentFormAction : createChildProgramContentFormAction;
+  const [state, formAction, pending] = useActionState(action, { status: "idle" } satisfies ChildProgramEditorFormState);
   const [assignments, setAssignments] = useState(initialAssignments);
   const selectedGrades = CHILD_PROGRAM_GRADES.filter((grade) => assignments[grade]);
-  const action = content ? updateChildProgramContentAction : createChildProgramContentAction;
   const serializedAssignments = selectedGrades.map((grade) => ({ grade, ...assignments[grade]! }));
+
+  useEffect(() => {
+    if (state.values?.assignments) setAssignments(parseAssignmentState(state.values.assignments, initialAssignments));
+  }, [initialAssignments, state.values?.assignments]);
 
   function toggleGrade(grade: ChildProgramGrade) {
     setAssignments((current) => {
@@ -60,26 +69,31 @@ export function ChildProgramEditor({ content, onCancelHref }: ChildProgramEditor
         </a>
       </div>
 
-      <form action={action} className="child-program-editor-form">
+      <form action={formAction} className="child-program-editor-form" noValidate>
         {content ? <input type="hidden" name="contentId" value={content.id} /> : null}
         <input type="hidden" name="assignments" value={JSON.stringify(serializedAssignments)} />
+
+        {state.globalError ? <p className="form-error child-program-editor-error" role="alert">{state.globalError}</p> : null}
 
         <div className="child-program-fields">
           <label>
             Nombre
-            <input name="title" defaultValue={content?.title ?? ""} maxLength={200} required />
+            <input name="title" defaultValue={state.values?.title ?? content?.title ?? ""} maxLength={200} required aria-invalid={Boolean(state.fieldErrors?.title)} aria-describedby={state.fieldErrors?.title ? "child-program-title-error" : undefined} />
+            {state.fieldErrors?.title ? <span className="child-program-field-error" id="child-program-title-error">{state.fieldErrors.title}</span> : null}
           </label>
           <label>
             Categoria
-            <input name="category" defaultValue={content?.category ?? ""} maxLength={80} required />
+            <input name="category" defaultValue={state.values?.category ?? content?.category ?? ""} maxLength={80} required aria-invalid={Boolean(state.fieldErrors?.category)} aria-describedby={state.fieldErrors?.category ? "child-program-category-error" : undefined} />
+            {state.fieldErrors?.category ? <span className="child-program-field-error" id="child-program-category-error">{state.fieldErrors.category}</span> : null}
           </label>
           <label className="child-program-field-wide">
             Descripcion <span>(opcional)</span>
-            <textarea name="description" defaultValue={content?.description ?? ""} maxLength={4000} rows={3} />
+            <textarea name="description" defaultValue={state.values?.description ?? content?.description ?? ""} maxLength={4000} rows={3} aria-invalid={Boolean(state.fieldErrors?.description)} aria-describedby={state.fieldErrors?.description ? "child-program-description-error" : undefined} />
+            {state.fieldErrors?.description ? <span className="child-program-field-error" id="child-program-description-error">{state.fieldErrors.description}</span> : null}
           </label>
         </div>
 
-        <fieldset className="child-program-grade-picker">
+        <fieldset className="child-program-grade-picker" aria-invalid={Boolean(state.fieldErrors?.assignments)} aria-describedby={state.fieldErrors?.assignments ? "child-program-assignments-error" : undefined}>
           <legend>Grados asignados</legend>
           <div>
             {CHILD_PROGRAM_GRADES.map((grade) => {
@@ -94,6 +108,7 @@ export function ChildProgramEditor({ content, onCancelHref }: ChildProgramEditor
             })}
           </div>
         </fieldset>
+        {state.fieldErrors?.assignments ? <p className="child-program-field-error" id="child-program-assignments-error">{state.fieldErrors.assignments}</p> : null}
 
         {selectedGrades.length ? (
           <div className="child-program-assignment-editor">
@@ -145,8 +160,8 @@ export function ChildProgramEditor({ content, onCancelHref }: ChildProgramEditor
 
         <div className="child-program-editor-actions">
           <a className="secondary-link" href={onCancelHref}>Cancelar</a>
-          <button type="submit" disabled={!selectedGrades.length}>
-            <Save aria-hidden="true" size={18} /> {content ? "Guardar cambios" : "Crear contenido"}
+          <button type="submit" disabled={!selectedGrades.length || pending}>
+            <Save aria-hidden="true" size={18} /> {pending ? "Guardando..." : content ? "Guardar cambios" : "Crear contenido"}
           </button>
         </div>
       </form>
@@ -156,4 +171,25 @@ export function ChildProgramEditor({ content, onCancelHref }: ChildProgramEditor
 
 function formatGrade(grade: string) {
   return grade.replaceAll("-", " / ");
+}
+
+function parseAssignmentState(
+  value: string,
+  fallback: Partial<Record<ChildProgramGrade, AssignmentDraft>>
+): Partial<Record<ChildProgramGrade, AssignmentDraft>> {
+  try {
+    const parsed = JSON.parse(value) as Array<Partial<AssignmentDraft> & { grade?: string }>;
+    if (!Array.isArray(parsed)) return fallback;
+    return parsed.reduce<Partial<Record<ChildProgramGrade, AssignmentDraft>>>((result, assignment) => {
+      if (!CHILD_PROGRAM_GRADES.includes(assignment.grade as ChildProgramGrade)) return result;
+      result[assignment.grade as ChildProgramGrade] = {
+        active: Boolean(assignment.active),
+        examRelevant: Boolean(assignment.examRelevant),
+        sortOrder: Number.isInteger(assignment.sortOrder) ? Number(assignment.sortOrder) : 0
+      };
+      return result;
+    }, {});
+  } catch {
+    return fallback;
+  }
 }

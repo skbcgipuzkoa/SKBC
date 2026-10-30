@@ -73,8 +73,8 @@ for (const action of [
 
 assert.match(actionsSource, /parseChildProgramContentForm/);
 assert.match(actionsSource, /normalizeChildGrade/);
-assert.match(actionsSource, /error=content-in-use/);
-assert.match(actionsSource, /saved=child-program-restored/);
+assert.match(actionsSource, /childProgramReturnUrl\(formData, "error", "content-in-use"\)/);
+assert.match(actionsSource, /childProgramReturnUrl\(formData, "saved", "child-program-restored"\)/);
 assert.doesNotMatch(actionsSource, /child-program-restored-inactive/);
 assert.doesNotMatch(actionsSource, /await childProgramContentUsage\(contentId\)/);
 for (const path of ["/programa-infantil", "/areas-tecnicas", "/examenes", "/dojo", "/clases", "/delegado", "/ficha", "/kenshis"]) {
@@ -119,9 +119,16 @@ assert.match(pageSource, /<MoveButton[^>]+category=\{category\}/);
 assert.match(pageSource, /name="category" value=\{category\}/);
 assert.match(pageSource, /function normalizeProgramCategory/);
 assert.match(pageSource, /const category = normalizeProgramCategory\(row\.content\.category\);[\s\S]*result\.get\(category\)/);
+assert.ok((pageSource.match(/name="returnView"/g)?.length ?? 0) >= 5);
+assert.ok((pageSource.match(/name="returnGrade"/g)?.length ?? 0) >= 2);
 assert.match(editorSource, /^\"use client\";/);
-assert.match(editorSource, /createChildProgramContentAction/);
-assert.match(editorSource, /updateChildProgramContentAction/);
+assert.match(editorSource, /useActionState/);
+assert.match(editorSource, /createChildProgramContentFormAction/);
+assert.match(editorSource, /updateChildProgramContentFormAction/);
+assert.match(editorSource, /state\.values/);
+assert.match(editorSource, /state\.fieldErrors/);
+assert.match(editorSource, /state\.globalError/);
+assert.match(editorSource, /parseAssignmentState/);
 assert.match(editorSource, /name="assignments"/);
 assert.match(editorSource, /JSON\.stringify/);
 for (const field of ["active", "examRelevant", "sortOrder"]) {
@@ -134,6 +141,8 @@ for (const breakpoint of ["820px", "768px", "390px"]) {
   assert.match(globalStylesSource, new RegExp(`max-width: ${breakpoint}`));
 }
 assert.match(globalStylesSource, /\.child-program-/);
+assert.doesNotMatch(globalStylesSource, /\.child-program-table thead\s*\{\s*display:\s*none/);
+assert.match(globalStylesSource, /\.child-program-table thead\s*\{[^}]*clip:/);
 
 for (const definition of [
   /create or replace function public\.remove_child_syllabus_assignment_if_unused/,
@@ -183,6 +192,17 @@ const reorderFunctionSource = atomicWritesMigrationSource
 assert.match(actionsSource, /const category = String\(formData\.get\("category"\)/);
 assert.match(actionsSource, /category\.replace\(\/\\s\+\/g, " "\)\.trim\(\)\.toLowerCase\(\)/);
 assert.match(actionsSource, /moveChildProgramAssignment\(assignmentId, normalizedCategory, direction\)/);
+assert.match(actionsSource, /function childProgramReturnUrl/);
+assert.match(actionsSource, /returnView === "grades" \|\| returnView === "catalog" \|\| returnView === "archived"/);
+assert.match(actionsSource, /CHILD_PROGRAM_GRADES\.includes/);
+assert.doesNotMatch(actionsSource, /redirect\(String\(formData\.get\("return/);
+assert.match(actionsSource, /export async function createChildProgramContentFormAction/);
+assert.match(actionsSource, /export async function updateChildProgramContentFormAction/);
+assert.match(actionsSource, /values: childProgramSubmittedValues\(formData\)/);
+assert.match(actionsSource, /fieldErrors:/);
+assert.match(actionsSource, /globalError:/);
+assert.match(actionsSource, /redirect\("\/programa-infantil\?view=catalog&saved=child-program-created"\)/);
+assert.match(actionsSource, /redirect\("\/programa-infantil\?view=catalog&saved=child-program-updated"\)/);
 assert.match(serverSource, /moveChildProgramAssignment\(assignmentId: string, category: string, direction: "up" \| "down"\)/);
 assert.match(serverSource, /p_category: category/);
 assert.match(atomicWritesMigrationSource, /move_child_program_assignment\(\s*p_assignment_id uuid,\s*p_category text,\s*p_direction text\s*\)/);
