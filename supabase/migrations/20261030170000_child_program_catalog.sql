@@ -49,13 +49,43 @@ alter table public.child_syllabus_items
   alter column content_id set not null;
 
 create unique index if not exists child_syllabus_items_content_grade_unique
-  on public.child_syllabus_items (content_id, upper(grade))
+  on public.child_syllabus_items (content_id, upper(trim(grade)))
   where content_id is not null;
+
+create or replace function public.sync_child_syllabus_assignment_content()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  select
+    content.title,
+    content.category,
+    content.description
+  into
+    new.title,
+    new.category,
+    new.description
+  from public.child_syllabus_contents content
+  where content.id = new.content_id;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_child_syllabus_assignment_content on public.child_syllabus_items;
+
+create trigger sync_child_syllabus_assignment_content
+before insert or update on public.child_syllabus_items
+for each row
+execute function public.sync_child_syllabus_assignment_content();
 
 create or replace function public.sync_child_syllabus_content_assignments()
 returns trigger
 language plpgsql
-set search_path = public
+security definer
+set search_path = pg_catalog, public
 as $$
 begin
   update public.child_syllabus_items
