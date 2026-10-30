@@ -1,11 +1,13 @@
 import { FileText, GraduationCap, LogOut, ScrollText, Trophy } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { createIntegratedExamEventAction, deleteExamAction, deleteIntegratedExamEventAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
+import { deleteExamAction, deleteIntegratedExamEventAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
+import { getChildProgramCatalog } from "@/lib/child-program.server";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { getIntegratedExamDuplicationTemplate, getRecentIntegratedExamEvents } from "@/lib/integrated-exams";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { IntegratedExamCreateForm } from "./IntegratedExamCreateForm";
 
 type MemberOption = {
   id: string;
@@ -46,7 +48,7 @@ export default async function ExamenesPage({
     .order("exam_date", { ascending: false })
     .limit(200);
 
-  const [{ data: members }, { data: rawExams }, integratedEvents, duplicationTemplate] = await Promise.all([
+  const [{ data: members }, { data: rawExams }, integratedEvents, duplicationTemplate, childProgramCatalog] = await Promise.all([
     supabase
       .from("members")
       .select("id,display_name,class,grade")
@@ -56,7 +58,8 @@ export default async function ExamenesPage({
       .returns<MemberOption[]>(),
     examsQuery.returns<ExamRow[]>(),
     getRecentIntegratedExamEvents(),
-    params.duplicate ? getIntegratedExamDuplicationTemplate(params.duplicate) : Promise.resolve(null)
+    params.duplicate ? getIntegratedExamDuplicationTemplate(params.duplicate) : Promise.resolve(null),
+    getChildProgramCatalog()
   ]);
 
   const exams = filterExams(rawExams ?? [], params);
@@ -67,7 +70,10 @@ export default async function ExamenesPage({
   const adultMembers = (members ?? []).filter((member) => member.class === "adults");
   const kidMembers = (members ?? []).filter((member) => member.class === "kids");
   const hasHistoryFilters = Boolean(params.q || params.class || params.status || params.member || params.from || params.to);
-  const duplicatedMemberIds = new Set(duplicationTemplate?.memberIds ?? []);
+  const childCatalogAssignments = childProgramCatalog
+    .filter((content) => !content.archivedAt)
+    .flatMap((content) => content.assignments)
+    .filter((assignment) => assignment.active);
 
   return (
     <div className="shell">
@@ -106,59 +112,12 @@ export default async function ExamenesPage({
               </p>
             </div>
           </div>
-          <form action={createIntegratedExamEventAction} className="edit-form">
-            {duplicationTemplate ? (
-              <div className="info-banner wide">
-                <strong>Duplicando: {duplicationTemplate.title}</strong>
-                <span> Revisa la fecha, los kenshis y los examinadores antes de crear la nueva convocatoria.</span>
-                <a className="text-link" href="/examenes">Cancelar copia</a>
-              </div>
-            ) : null}
-            {duplicationTemplate ? <input type="hidden" name="templateEventId" value={duplicationTemplate.id} /> : null}
-            <div className="form-grid">
-              <label>
-                Tipo de examen
-                {duplicationTemplate ? <input type="hidden" name="programType" value={duplicationTemplate.program_type} /> : null}
-                <select name={duplicationTemplate ? undefined : "programType"} required={!duplicationTemplate} disabled={Boolean(duplicationTemplate)} defaultValue={duplicationTemplate?.program_type ?? "adults"}>
-                  <option value="adults">Adultos - programa tecnico</option>
-                  <option value="kids_progressive">Ninos - progresivo</option>
-                </select>
-              </label>
-              <label>Fecha<input name="examDate" type="date" required /></label>
-              <label>Aprobado desde %<input name="passPercentage" type="number" min="0" max="100" step="1" defaultValue={duplicationTemplate?.pass_percentage ?? 70} /></label>
-              <label className="wide">Titulo<input name="title" placeholder="Examen junio, examen infantil..." defaultValue={duplicationTemplate ? `${duplicationTemplate.title} - copia` : ""} /></label>
-              <label className="wide">
-                Examinadores
-                <textarea name="examinerNames" rows={3} placeholder="Un examinador por linea. Si lo dejas vacio se crea con Alvaro Calvo." defaultValue={duplicationTemplate?.examinerNames.join("\n") ?? ""} />
-              </label>
-              <details className="exam-member-picker">
-                <summary>Adultos <span>{adultMembers.length}</span></summary>
-                <div className="attendance-checklist compact-picker">
-                  {adultMembers.map((member) => (
-                    <label className="check-row" key={`integrated-adult-${member.id}`}>
-                      <input name="memberIds" type="checkbox" value={member.id} defaultChecked={duplicatedMemberIds.has(member.id)} />
-                      <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
-                    </label>
-                  ))}
-                </div>
-              </details>
-              <details className="exam-member-picker">
-                <summary>Ninos <span>{kidMembers.length}</span></summary>
-                <div className="attendance-checklist compact-picker">
-                  {kidMembers.map((member) => (
-                    <label className="check-row" key={`integrated-kid-${member.id}`}>
-                      <input name="memberIds" type="checkbox" value={member.id} defaultChecked={duplicatedMemberIds.has(member.id)} />
-                      <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
-                    </label>
-                  ))}
-                </div>
-              </details>
-              <label className="wide">Notas internas<textarea name="notes" rows={2} placeholder="Opcional" defaultValue={duplicationTemplate?.notes ?? ""} /></label>
-            </div>
-            <div className="form-actions">
-              <button type="submit">Crear examen integrado</button>
-            </div>
-          </form>
+          <IntegratedExamCreateForm
+            adultMembers={adultMembers}
+            kidMembers={kidMembers}
+            catalogAssignments={childCatalogAssignments}
+            duplicationTemplate={duplicationTemplate}
+          />
         </section>
 
         <section className="card">

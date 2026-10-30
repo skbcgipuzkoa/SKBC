@@ -4608,6 +4608,75 @@ tbody tr:hover {
   max-height: 300px;
 }
 
+.progressive-exam-syllabus {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 14px;
+}
+
+.progressive-exam-syllabus legend {
+  color: var(--ink);
+  font-weight: 800;
+  padding: 0 6px;
+}
+
+.progressive-exam-grade {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+}
+
+.progressive-exam-grade h3 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.progressive-exam-item {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.progressive-exam-item > label {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  padding: 8px 10px;
+}
+
+.progressive-exam-item input {
+  min-height: auto;
+  width: auto;
+}
+
+.progressive-exam-item span,
+.progressive-exam-item small {
+  display: block;
+}
+
+.progressive-exam-order {
+  display: flex;
+  gap: 4px;
+}
+
+.progressive-exam-order button {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 34px;
+  padding: 5px;
+}
+
 .advanced-details {
   border-top: 1px solid var(--line);
   margin-top: 14px;

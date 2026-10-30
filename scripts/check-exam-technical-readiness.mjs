@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import {
   classifyExamCurriculumItem,
   evaluateExamTechnicalReadiness
@@ -57,5 +58,28 @@ const complete = parseExamNotice(
   "Tecnico fundamental: Goho/Juho completos con 2+ reps. | Revision especial: Umpo Ho, katas, ukemis y otros bloques revisados."
 );
 assert.equal(complete.fundamentalComplete, true);
+
+const examPageSource = readFileSync(new URL("../src/app/examenes/page.tsx", import.meta.url), "utf8");
+const examFormUrl = new URL("../src/app/examenes/IntegratedExamCreateForm.tsx", import.meta.url);
+const integratedExamsSource = readFileSync(new URL("../src/lib/integrated-exams.ts", import.meta.url), "utf8");
+const actionsSource = readFileSync(new URL("../src/app/actions.ts", import.meta.url), "utf8");
+
+assert.equal(existsSync(examFormUrl), true, "integrated exam creation form must be extracted");
+const examFormSource = readFileSync(examFormUrl, "utf8");
+assert.match(examFormSource, /^"use client";/);
+assert.match(examFormSource, /defaultChildExamItemIds/);
+assert.match(examFormSource, /name="childSyllabusItemIds"/);
+assert.match(examFormSource, /moveSelectedItem/);
+assert.match(examFormSource, /kids_progressive/);
+assert.match(examPageSource, /getChildProgramCatalog/);
+assert.match(examPageSource, /<IntegratedExamCreateForm/);
+assert.doesNotMatch(examPageSource, /<form action=\{createIntegratedExamEventAction\} className="edit-form">/);
+assert.match(actionsSource, /formData\.getAll\("childSyllabusItemIds"\)/);
+assert.match(actionsSource, /childSyllabusItemIds\s*\n/);
+assert.match(integratedExamsSource, /childSyllabusItemIds\?: string\[\]/);
+assert.match(integratedExamsSource, /loadApprovedChildExamAssignments/);
+assert.match(integratedExamsSource, /buildChildExamSnapshot/);
+assert.match(integratedExamsSource, /El temario infantil seleccionado no contiene contenido evaluable/);
+assert.match(integratedExamsSource, /input\.templateEventId[\s\S]*copyExamItems/);
 
 console.log("Exam technical readiness checks passed.");

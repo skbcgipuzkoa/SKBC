@@ -3659,6 +3659,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
     .map((value) => value.trim())
     .filter(Boolean);
   const templateEventId = String(formData.get("templateEventId") ?? "").trim() || null;
+  const childSyllabusItemIds = formData.getAll("childSyllabusItemIds").map((value) => String(value).trim()).filter(Boolean);
 
   if (!memberIds.length || !examDate) {
     redirect("/examenes?error=integrated");
@@ -3674,7 +3675,8 @@ export async function createIntegratedExamEventAction(formData: FormData) {
       memberIds,
       examinerNames,
       notes: notes || null,
-      templateEventId
+      templateEventId,
+      childSyllabusItemIds
     });
     eventId = result.eventId;
   } catch (error) {

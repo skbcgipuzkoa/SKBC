@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
+  buildChildExamSnapshot,
   defaultChildExamItemIds,
   normalizeChildGrade,
   normalizeSelectedGrades,
@@ -39,6 +40,16 @@ assert.deepEqual(
   defaultChildExamItemIds(assignments, [" amarillo "]),
   ["white-title", "white-1", "white-2", "yellow-1"]
 );
+
+const selectedAssignments = [
+  assignments.find((item) => item.id === "white-2"),
+  assignments.find((item) => item.id === "white-1"),
+  assignments.find((item) => item.id === "yellow-1")
+];
+const snapshot = buildChildExamSnapshot(selectedAssignments);
+assert.deepEqual(snapshot.map((row) => row.source), ["child_syllabus", "child_syllabus", "cut", "child_syllabus", "cut"]);
+assert.deepEqual(snapshot.filter((row) => row.source === "child_syllabus").map((row) => row.childSyllabusItemId), ["white-2", "white-1", "yellow-1"]);
+assert.deepEqual(snapshot.filter((row) => row.source === "cut").map((row) => row.cutGrade), ["BLANCO", "AMARILLO"]);
 
 const pureSource = readFileSync(new URL("../src/lib/child-program.ts", import.meta.url), "utf8");
 const serverSource = readFileSync(new URL("../src/lib/child-program.server.ts", import.meta.url), "utf8");

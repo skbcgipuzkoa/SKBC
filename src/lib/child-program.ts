@@ -45,6 +45,21 @@ export type ChildProgramContentUsage = {
   examEventCount: number;
 };
 
+export type ChildExamSnapshotRow =
+  | {
+      source: "child_syllabus";
+      childSyllabusItemId: string;
+      grade: string;
+      title: string;
+      category: string;
+      description: string | null;
+    }
+  | {
+      source: "cut";
+      grade: string;
+      cutGrade: string;
+    };
+
 const gradeAliases = new Map<string, ChildProgramGrade>([
   ["MINARAI", "BLANCO"],
   ...CHILD_PROGRAM_GRADES.flatMap((grade) => {
@@ -55,6 +70,22 @@ const gradeAliases = new Map<string, ChildProgramGrade>([
     return aliases;
   })
 ]);
+
+const childTargetByCurrentGrade: Record<string, ChildProgramGrade> = {
+  MINARAI: "BLANCO",
+  BLANCO: "BLANCO-AMARILLO",
+  "BLANCO-AMARILLO": "AMARILLO",
+  AMARILLO: "AMARILLO-NARANJA",
+  "AMARILLO-NARANJA": "NARANJA",
+  NARANJA: "NARANJA-VERDE",
+  "NARANJA-VERDE": "VERDE",
+  VERDE: "VERDE-AZUL",
+  "VERDE-AZUL": "AZUL",
+  AZUL: "AZUL-MARRON",
+  "AZUL-MARRON": "MARRON",
+  MARRON: "1 DAN",
+  "1 DAN": "1 DAN"
+};
 
 export function normalizeChildGrade(value: string | null | undefined): string {
   const normalized = String(value ?? "")
@@ -89,6 +120,10 @@ export function resolveChildExamGrades(targetGrades: readonly string[]): ChildPr
   return CHILD_PROGRAM_GRADES.slice(0, Math.max(...targetIndexes) + 1);
 }
 
+export function resolveChildExamTargetGrade(currentGrade: string | null | undefined): ChildProgramGrade {
+  return childTargetByCurrentGrade[normalizeChildGrade(currentGrade)] ?? "BLANCO-AMARILLO";
+}
+
 export function orderChildExamAssignments<T extends ChildProgramAssignment>(items: readonly T[]): T[] {
   return [...items].sort((left, right) => {
     const gradeDifference = childGradeOrder(left.grade) - childGradeOrder(right.grade);
@@ -106,6 +141,25 @@ export function defaultChildExamItemIds(items: readonly ChildProgramAssignment[]
   return orderChildExamAssignments(items)
     .filter((item) => item.active && item.examRelevant && allowedGrades.has(normalizeChildGrade(item.grade) as ChildProgramGrade))
     .map((item) => item.id);
+}
+
+export function buildChildExamSnapshot(items: readonly ChildProgramAssignment[]): ChildExamSnapshotRow[] {
+  const rows: ChildExamSnapshotRow[] = [];
+  for (const grade of CHILD_PROGRAM_GRADES) {
+    const gradeItems = items.filter((item) => normalizeChildGrade(item.grade) === grade);
+    for (const item of gradeItems) {
+      rows.push({
+        source: "child_syllabus",
+        childSyllabusItemId: item.id,
+        grade,
+        title: item.title,
+        category: item.category,
+        description: item.description
+      });
+    }
+    if (gradeItems.length) rows.push({ source: "cut", grade, cutGrade: grade });
+  }
+  return rows;
 }
 
 function childGradeOrder(grade: string): number {

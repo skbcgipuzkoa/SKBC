@@ -2,6 +2,12 @@ import { adultGrades } from "@/lib/grades";
 import { registerExam } from "@/lib/exams";
 import { generateDiplomaForExam } from "@/lib/diplomas";
 import { generateIntegratedExamDocumentsForStudent } from "@/lib/integrated-exam-documents";
+import {
+  buildChildExamSnapshot,
+  normalizeChildGrade,
+  resolveChildExamGrades,
+  type ChildProgramAssignment
+} from "@/lib/child-program";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type IntegratedExamProgram = "adults" | "kids_progressive" | "kids" | "dan_tribunal";
@@ -150,6 +156,7 @@ export async function createIntegratedExamEvent(input: {
   examinerNames: string[];
   notes?: string | null;
   templateEventId?: string | null;
+  childSyllabusItemIds?: string[];
 }) {
   const supabase = createAdminClient();
   const memberIds = [...new Set(input.memberIds.filter(Boolean))];
@@ -208,7 +215,12 @@ export async function createIntegratedExamEvent(input: {
   try {
     items = input.templateEventId
       ? await copyExamItems(input.templateEventId, event.id, input.programType)
-      : await buildExamItems(event.id, input.programType, students.map((student) => student.target_grade).filter(Boolean) as string[]);
+      : await buildExamItems(
+          event.id,
+          input.programType,
+          students.map((student) => student.target_grade).filter(Boolean) as string[],
+          input.childSyllabusItemIds
+        );
   } catch (error) {
     await supabase.from("exam_events").delete().eq("id", event.id);
     throw error;
@@ -720,11 +732,103 @@ function isItemRelevantForStudent(programType: IntegratedExamProgram, student: E
   return isExamItemRelevantForStudent(programType, student, item);
 }
 
-async function buildExamItems(eventId: string, programType: IntegratedExamProgram, targetGrades: string[]) {
+async function buildExamItems(eventId: string, programType: IntegratedExamProgram, targetGrades: string[], childSyllabusItemIds?: string[]) {
   if (programType === "adults" || programType === "dan_tribunal") {
     return buildAdultItems(eventId, targetGrades);
   }
+  if (programType === "kids_progressive" && childSyllabusItemIds) {
+    const assignments = await loadApprovedChildExamAssignments(childSyllabusItemIds, targetGrades);
+    return buildSelectedKidsItems(eventId, assignments);
+  }
   return buildKidsItems(eventId, targetGrades);
+}
+
+async function loadApprovedChildExamAssignments(selectedIds: string[], targetGrades: string[]): Promise<ChildProgramAssignment[]> {
+  const ids = selectedIds.map((id) => id.trim()).filter(Boolean);
+  if (!ids.length) throw new Error("Selecciona al menos un contenido del temario infantil.");
+  if (new Set(ids).size !== ids.length) throw new Error("El temario infantil seleccionado contiene elementos duplicados.");
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("child_syllabus_items")
+    .select("id,content_id,grade,title,category,description,active,exam_relevant,sort_order")
+    .in("id", ids)
+    .returns<Array<{
+      id: string;
+      content_id: string;
+      grade: string;
+      title: string;
+      category: string;
+      description: string | null;
+      active: boolean;
+      exam_relevant: boolean;
+      sort_order: number;
+    }>>();
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const approved = ids.map((id) => byId.get(id));
+  if (approved.some((row) => !row)) throw new Error("Parte del temario infantil seleccionado ya no existe.");
+
+  const contentIds = [...new Set(rows.map((row) => row.content_id))];
+  const { data: activeContents, error: contentsError } = await supabase
+    .from("child_syllabus_contents")
+    .select("id")
+    .in("id", contentIds)
+    .is("archived_at", null)
+    .returns<Array<{ id: string }>>();
+  if (contentsError) throw contentsError;
+
+  const activeContentIds = new Set((activeContents ?? []).map((content) => content.id));
+  const allowedGrades = new Set<string>(resolveChildExamGrades(targetGrades));
+  if (approved.some((row) => !row?.active || !activeContentIds.has(row.content_id))) {
+    throw new Error("Parte del temario infantil seleccionado esta inactivo o archivado.");
+  }
+  if (approved.some((row) => !allowedGrades.has(normalizeChildGrade(row?.grade)))) {
+    throw new Error("Parte del temario infantil seleccionado no corresponde a los grados objetivo.");
+  }
+  if (!approved.some((row) => row?.exam_relevant)) {
+    throw new Error("El temario infantil seleccionado no contiene contenido evaluable.");
+  }
+
+  return approved.map((row) => ({
+    id: row!.id,
+    contentId: row!.content_id,
+    grade: normalizeChildGrade(row!.grade),
+    title: row!.title,
+    category: row!.category,
+    description: row!.description,
+    active: row!.active,
+    examRelevant: row!.exam_relevant,
+    sortOrder: row!.sort_order
+  }));
+}
+
+function buildSelectedKidsItems(eventId: string, assignments: ChildProgramAssignment[]) {
+  return buildChildExamSnapshot(assignments).map((row, index) => row.source === "child_syllabus" ? {
+    exam_event_id: eventId,
+    source: row.source,
+    child_syllabus_item_id: row.childSyllabusItemId,
+    section: row.category || "INFANTIL",
+    name: row.title,
+    summary: row.description,
+    grade: row.grade,
+    category: row.category,
+    weight: 1,
+    order_index: index + 1
+  } : {
+    exam_event_id: eventId,
+    source: row.source,
+    section: "CORTE",
+    name: `Corte progresivo: se sienta ${row.grade}`,
+    summary: `Los kenshis cuyo objetivo termina en ${row.grade} pueden finalizar aqui si el examen es progresivo.`,
+    grade: row.grade,
+    category: "corte",
+    cut_grade: row.cutGrade,
+    weight: 0,
+    order_index: index + 1
+  });
 }
 
 async function buildAdultItems(eventId: string, targetGrades: string[]) {
