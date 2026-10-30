@@ -1207,46 +1207,6 @@ export async function updateChildProgramContentFormAction(
   redirect("/programa-infantil?view=catalog&saved=child-program-updated");
 }
 
-export async function createChildProgramContentAction(formData: FormData) {
-  if (!(await hasInternalAccess())) redirect("/skbc-interno");
-  let input: ReturnType<typeof parseChildProgramContentForm>;
-  try {
-    input = parseChildProgramContentForm(formData);
-  } catch (error) {
-    redirect(`/programa-infantil?error=${childProgramInputError(error)}`);
-  }
-
-  try {
-    await saveChildProgramContent({ ...input, actor: "WEB SKBC" });
-  } catch (error) {
-    console.error("Error creating child program content", error);
-    redirect("/programa-infantil?error=create-failed");
-  }
-  revalidateChildProgramConsumers();
-  redirect("/programa-infantil?saved=child-program-created");
-}
-
-export async function updateChildProgramContentAction(formData: FormData) {
-  if (!(await hasInternalAccess())) redirect("/skbc-interno");
-  const contentId = String(formData.get("contentId") ?? "").trim();
-  if (!contentId) redirect("/programa-infantil?error=missing-content");
-  let input: ReturnType<typeof parseChildProgramContentForm>;
-  try {
-    input = parseChildProgramContentForm(formData);
-  } catch (error) {
-    redirect(`/programa-infantil?error=${childProgramInputError(error)}&edit=${encodeURIComponent(contentId)}`);
-  }
-
-  try {
-    await saveChildProgramContent({ ...input, contentId, actor: "WEB SKBC" });
-  } catch (error) {
-    console.error("Error updating child program content", error);
-    redirect(`/programa-infantil?error=update-failed&edit=${encodeURIComponent(contentId)}`);
-  }
-  revalidateChildProgramConsumers();
-  redirect("/programa-infantil?saved=child-program-updated");
-}
-
 export async function moveChildProgramAssignmentAction(formData: FormData) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
   const assignmentId = String(formData.get("assignmentId") ?? "").trim();
@@ -1329,13 +1289,6 @@ function childProgramReturnUrl(formData: FormData, status: "saved" | "error", co
   }
   query.set(status, code);
   return `/programa-infantil?${query.toString()}`;
-}
-
-function childProgramInputError(error: unknown) {
-  if (!(error instanceof Error)) return "invalid-content";
-  return ["invalid-assignments", "invalid-content", "invalid-grade", "duplicate-grade"].includes(error.message)
-    ? error.message
-    : "invalid-content";
 }
 
 function revalidateChildProgramConsumers() {

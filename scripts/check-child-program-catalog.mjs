@@ -61,8 +61,8 @@ assert.match(serverSource, /\.order\("title", \{ ascending: true \}\)\s*\.order\
 assert.ok((serverSource.match(/if \(error\) throw error;/g)?.length ?? 0) >= 3);
 
 for (const action of [
-  "createChildProgramContentAction",
-  "updateChildProgramContentAction",
+  "createChildProgramContentFormAction",
+  "updateChildProgramContentFormAction",
   "moveChildProgramAssignmentAction",
   "archiveChildProgramContentAction",
   "restoreChildProgramContentAction",
@@ -70,6 +70,7 @@ for (const action of [
 ]) {
   assert.match(actionsSource, new RegExp(`export async function ${action}`));
 }
+assert.doesNotMatch(actionsSource, /export async function (?:create|update)ChildProgramContentAction/);
 
 assert.match(actionsSource, /parseChildProgramContentForm/);
 assert.match(actionsSource, /normalizeChildGrade/);
