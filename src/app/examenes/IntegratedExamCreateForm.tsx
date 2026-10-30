@@ -1,11 +1,11 @@
 "use client";
 
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createIntegratedExamEventAction } from "@/app/actions";
 import {
-  defaultChildExamItemIds,
   normalizeChildGrade,
+  reconcileChildExamItemIds,
   resolveChildExamGrades,
   resolveChildExamTargetGrade,
   type ChildProgramAssignment
@@ -51,10 +51,12 @@ export function IntegratedExamCreateForm({
     [kidMembers, selectedKidIds]
   );
   const representedGrades = useMemo(() => resolveChildExamGrades(targetGrades), [targetGrades]);
+  const previousTargetGrades = useRef<string[]>([]);
 
   useEffect(() => {
     if (programType !== "kids_progressive" || duplicationTemplate) return;
-    setSelectedItemIds(defaultChildExamItemIds(catalogAssignments, targetGrades));
+    setSelectedItemIds((current) => reconcileChildExamItemIds(catalogAssignments, current, previousTargetGrades.current, targetGrades));
+    previousTargetGrades.current = targetGrades;
   }, [catalogAssignments, duplicationTemplate, programType, targetGrades]);
 
   const availableAssignments = useMemo(() => {

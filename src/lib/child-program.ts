@@ -143,12 +143,41 @@ export function defaultChildExamItemIds(items: readonly ChildProgramAssignment[]
     .map((item) => item.id);
 }
 
+export function reconcileChildExamItemIds(
+  items: readonly ChildProgramAssignment[],
+  selectedIds: readonly string[],
+  previousTargetGrades: readonly string[],
+  nextTargetGrades: readonly string[]
+): string[] {
+  const previousScope = resolveChildExamGrades(previousTargetGrades);
+  const nextScope = resolveChildExamGrades(nextTargetGrades);
+  if (previousScope.length === nextScope.length && previousScope.every((grade, index) => grade === nextScope[index])) {
+    return [...selectedIds];
+  }
+
+  const nextAllowedGrades = new Set<string>(nextScope);
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const preserved = selectedIds.filter((id) => {
+    const item = itemById.get(id);
+    return item && nextAllowedGrades.has(normalizeChildGrade(item.grade));
+  });
+  if (nextScope.length <= previousScope.length) return preserved;
+
+  const previousAllowedGrades = new Set<string>(previousScope);
+  const newlyIntroducedGrades = new Set<string>(nextScope.filter((grade) => !previousAllowedGrades.has(grade)));
+  const selected = new Set(preserved);
+  const appendedDefaults = orderChildExamAssignments(items)
+    .filter((item) => item.active && item.examRelevant && newlyIntroducedGrades.has(normalizeChildGrade(item.grade)) && !selected.has(item.id))
+    .map((item) => item.id);
+  return [...preserved, ...appendedDefaults];
+}
+
 export function childExamTargetGradesWithoutScorableItems(
   items: readonly ChildProgramAssignment[],
   targetGrades: readonly string[]
 ): ChildProgramGrade[] {
   return progressiveTargetGradesWithoutScorableItems(
-    items.map((item) => ({ grade: item.grade, scorable: item.active && item.examRelevant })),
+    items.map((item) => ({ grade: item.grade, scorable: item.active })),
     targetGrades
   );
 }

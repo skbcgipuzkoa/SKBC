@@ -7,6 +7,8 @@ import {
   normalizeChildGrade,
   normalizeSelectedGrades,
   orderChildExamAssignments,
+  reconcileChildExamItemIds,
+  resolveChildExamTargetGrade,
   resolveChildExamGrades
 } from "../src/lib/child-program.ts";
 
@@ -41,6 +43,20 @@ assert.deepEqual(
   defaultChildExamItemIds(assignments, [" amarillo "]),
   ["white-title", "white-1", "white-2", "yellow-1"]
 );
+assert.deepEqual(
+  reconcileChildExamItemIds(assignments, ["white-2", "white-1"], ["BLANCO-AMARILLO"], ["BLANCO", "BLANCO-AMARILLO"]),
+  ["white-2", "white-1"]
+);
+assert.deepEqual(
+  reconcileChildExamItemIds(assignments, ["white-2", "white-1"], ["BLANCO"], ["AMARILLO"]),
+  ["white-2", "white-1", "yellow-1"]
+);
+assert.deepEqual(
+  reconcileChildExamItemIds(assignments, ["white-2", "yellow-practice", "yellow-1", "white-1"], ["AMARILLO"], ["BLANCO"]),
+  ["white-2", "white-1"]
+);
+assert.equal(resolveChildExamTargetGrade("blanco y amarillo"), "AMARILLO");
+assert.equal(resolveChildExamTargetGrade("azul y marrón"), "MARRON");
 
 const selectedAssignments = [
   assignments.find((item) => item.id === "white-2"),
@@ -71,6 +87,13 @@ assert.deepEqual(
   childExamTargetGradesWithoutScorableItems(
     [assignments.find((item) => item.id === "white-2"), assignments.find((item) => item.id === "yellow-practice")],
     ["BLANCO-AMARILLO", "AMARILLO-NARANJA"]
+  ),
+  []
+);
+assert.deepEqual(
+  childExamTargetGradesWithoutScorableItems(
+    [assignments.find((item) => item.id === "yellow-practice")],
+    ["AMARILLO"]
   ),
   []
 );

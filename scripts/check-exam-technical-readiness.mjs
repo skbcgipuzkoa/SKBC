@@ -89,7 +89,7 @@ const actionsSource = readFileSync(new URL("../src/app/actions.ts", import.meta.
 assert.equal(existsSync(examFormUrl), true, "integrated exam creation form must be extracted");
 const examFormSource = readFileSync(examFormUrl, "utf8");
 assert.match(examFormSource, /^"use client";/);
-assert.match(examFormSource, /defaultChildExamItemIds/);
+assert.match(examFormSource, /reconcileChildExamItemIds/);
 assert.match(examFormSource, /name="childSyllabusItemIds"/);
 assert.match(examFormSource, /moveSelectedItem/);
 assert.match(examFormSource, /kids_progressive/);
@@ -102,6 +102,8 @@ assert.match(integratedExamsSource, /childSyllabusItemIds\?: string\[\]/);
 assert.match(integratedExamsSource, /loadApprovedChildExamAssignments/);
 assert.match(integratedExamsSource, /loadApprovedChildExamAssignments\(childSyllabusItemIds \?\? \[\], targetGrades\)/);
 assert.match(integratedExamsSource, /buildChildExamSnapshot/);
+assert.match(integratedExamsSource, /resolveChildExamTargetGrade/);
+assert.doesNotMatch(integratedExamsSource, /kidsTargetByCurrentGrade/);
 assert.match(integratedExamsSource, /no tienen contenido evaluable seleccionado/);
 assert.match(integratedExamsSource, /input\.templateEventId[\s\S]*copyExamItems/);
 

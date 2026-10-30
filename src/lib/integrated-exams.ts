@@ -8,6 +8,7 @@ import {
   normalizeChildGrade,
   progressiveTargetGradesWithoutScorableItems,
   resolveChildExamGrades,
+  resolveChildExamTargetGrade,
   type ChildProgramAssignment
 } from "@/lib/child-program";
 import { copyExamSnapshotItems } from "@/lib/integrated-exam-snapshot";
@@ -101,22 +102,6 @@ const kidsExamStages = [
   "MARRON",
   "1 DAN"
 ];
-
-const kidsTargetByCurrentGrade: Record<string, string> = {
-  MINARAI: "BLANCO",
-  BLANCO: "BLANCO-AMARILLO",
-  "BLANCO-AMARILLO": "AMARILLO",
-  AMARILLO: "AMARILLO-NARANJA",
-  "AMARILLO-NARANJA": "NARANJA",
-  NARANJA: "NARANJA-VERDE",
-  "NARANJA-VERDE": "VERDE",
-  VERDE: "VERDE-AZUL",
-  "VERDE-AZUL": "AZUL",
-  AZUL: "AZUL-MARRON",
-  "AZUL-MARRON": "MARRON",
-  MARRON: "1 DAN",
-  "1 DAN": "1 DAN"
-};
 
 const kidsExamStageByGrade: Record<string, string> = {
   MINARAI: "BLANCO",
@@ -999,8 +984,8 @@ async function buildKidsItemsFromLatestTemplate(eventId: string, grades: string[
 }
 
 function resolveTargetGrade(memberClass: "kids" | "adults", currentGrade: string | null) {
+  if (memberClass === "kids") return resolveChildExamTargetGrade(currentGrade);
   const current = normalizeGrade(currentGrade);
-  if (memberClass === "kids") return kidsTargetByCurrentGrade[current] ?? "BLANCO-AMARILLO";
   if (memberClass === "adults" && current === "5 DAN") return "5 DAN";
   const grades = adultGrades;
   const index = grades.findIndex((grade) => normalizeGrade(grade) === current);
