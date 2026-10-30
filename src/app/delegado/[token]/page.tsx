@@ -1,12 +1,13 @@
 import { ClipboardCheck, Play, Send } from "lucide-react";
 import { notFound } from "next/navigation";
-import { saveDelegateTechnicalStepAction, startDelegateClassAction, submitDelegateClassAction } from "@/app/actions";
+import { saveDelegateChildPlanAction, saveDelegateTechnicalStepAction, startDelegateClassAction, submitDelegateClassAction } from "@/app/actions";
 import { ClosingClassButton } from "@/app/components/ClosingClassButton";
 import { ClassClosureSuccess } from "@/app/components/ClassClosureSuccess";
 import { adultGrades } from "@/lib/grades";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { driveImageUrl } from "@/lib/drive";
-import { delegateAttendanceGroups, normalizeDelegateStep, type DelegateMode } from "@/lib/delegate-class-flow";
+import { delegateAttendanceGroups, normalizeDelegateStep, resolveDelegateMode, type DelegateMode } from "@/lib/delegate-class-flow";
+import { delegateChildActivities, delegateChildObjectives } from "@/lib/delegate-child-plan";
 
 type LinkRow = {
   id: string;
@@ -18,6 +19,7 @@ type LinkRow = {
   closed_at: string | null;
   revoked_at: string | null;
   created_by: string | null;
+  updated_at: string;
 };
 
 type ClassRow = {
@@ -48,6 +50,21 @@ type AttendanceRow = {
   member_id: string;
 };
 
+type ChildPlanRow = {
+  objective: string | null;
+  activities: string[] | null;
+  syllabus_item_ids: string[] | null;
+  notes: string | null;
+};
+
+type ChildSyllabusItemRow = {
+  id: string;
+  grade: string | null;
+  title: string;
+  category: string | null;
+  description: string | null;
+};
+
 type MemberOption = {
   id: string;
   display_name: string;
@@ -69,7 +86,7 @@ export default async function DelegateClassPage({
 
   const { data: link, error: linkError } = await supabase
     .from("class_delegate_links")
-    .select("id,class_id,token,delegate_name,expires_at,started_at,closed_at,revoked_at,created_by")
+    .select("id,class_id,token,delegate_name,expires_at,started_at,closed_at,revoked_at,created_by,updated_at")
     .eq("token", token)
     .single<LinkRow>();
 
@@ -83,7 +100,7 @@ export default async function DelegateClassPage({
 
   if (classError || !primaryClass) notFound();
 
-  const mode = requestedMode ?? delegateModeFromCreatedBy(link.created_by) ?? primaryClass.class_group;
+  const mode = resolveDelegateMode(requestedMode, delegateModeFromCreatedBy(link.created_by), primaryClass.class_group);
   const classGroups: Array<"kids" | "adults"> = mode === "combined" ? ["adults", "kids"] : [mode === "kids" ? "kids" : "adults"];
 
   const { data: classes } = await supabase
@@ -131,6 +148,20 @@ export default async function DelegateClassPage({
       .order("display_name")
       .returns<MemberOption[]>()
   ]) : [{ data: [] }, { data: [] }, { data: [] }];
+  const kidsClassId = kidsClasses[0]?.id ?? null;
+  const [{ data: childPlan }, { data: childSyllabusItems }] = kidsClassId ? await Promise.all([
+    supabase
+      .from("child_class_plans")
+      .select("objective,activities,syllabus_item_ids,notes")
+      .eq("class_id", kidsClassId)
+      .maybeSingle<ChildPlanRow>(),
+    supabase
+      .from("child_syllabus_items")
+      .select("id,grade,title,category,description")
+      .eq("active", true)
+      .order("sort_order")
+      .returns<ChildSyllabusItemRow[]>()
+  ]) : [{ data: null as ChildPlanRow | null }, { data: [] as ChildSyllabusItemRow[] }];
 
   const attendanceKeys = new Set((attendance ?? []).map((item) => `${item.class_id}:${item.member_id}`));
   const title = mode === "combined" ? "Clase adultos + ninos" : mode === "kids" ? "Clase ninos" : "Clase adultos";
@@ -182,11 +213,11 @@ export default async function DelegateClassPage({
         <form action={submitDelegateClassAction} className="delegate-form delegate-flow">
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="mode" value={mode} />
-          <input type="hidden" name="nextStep" value="technical" />
+          <input type="hidden" name="nextStep" value={mode === "kids" ? "kids-technical" : "technical"} />
           <section className="delegate-card">
             <span className="tag">Paso 1</span>
             <h2>Asistencia ninos</h2>
-            <p className="muted">Primero registra la clase infantil. Despues el enlace pasara al plan tecnico de adultos.</p>
+            <p className="muted">Primero registra la asistencia infantil. Despues podras indicar el programa tecnico trabajado.</p>
             <label>
               Responsable
               <input name="delegateName" defaultValue={link.delegate_name ?? ""} placeholder="Nombre del sustituto" />
@@ -208,7 +239,7 @@ export default async function DelegateClassPage({
           <section className="delegate-submit-bar">
             <div>
               <strong>Guardar ninos</strong>
-              <span>Continua despues con adultos.</span>
+              <span>{mode === "kids" ? "Continua con el programa tecnico infantil." : "Continua despues con adultos."}</span>
             </div>
             <button type="submit">
               <Send aria-hidden="true" size={18} />
@@ -216,6 +247,45 @@ export default async function DelegateClassPage({
             </button>
           </section>
         </form>
+      ) : step === "kids-technical" && mode === "kids" && kidsClassId ? (
+        <div className="delegate-form delegate-flow">
+          <form action={saveDelegateChildPlanAction} className="delegate-form delegate-flow">
+            <input type="hidden" name="token" value={token} />
+            <input type="hidden" name="linkVersion" value={link.updated_at} />
+            <section className="delegate-card">
+              <span className="tag">Paso 2</span>
+              <h2>Programa tecnico infantil</h2>
+              <p className="muted">Marca lo trabajado en la clase. Puedes guardar varias veces antes de cerrar.</p>
+              <label>
+                Responsable
+                <input name="delegateName" defaultValue={link.delegate_name ?? ""} placeholder="Nombre del sustituto" />
+              </label>
+              {query.saved === "kids-plan" ? <p className="save-ok">Programa infantil guardado correctamente.</p> : null}
+              {query.error === "kids-plan" ? <p className="form-error">No se ha podido guardar el programa infantil{query.detail ? `: ${query.detail}` : "."}</p> : null}
+            </section>
+            <DelegateChildPlanSection plan={childPlan} syllabusItems={childSyllabusItems ?? []} />
+            <section className="delegate-submit-bar delegate-submit-bar-secondary">
+              <div>
+                <strong>Guardar programa</strong>
+                <span>La clase seguira abierta para poder modificarlo.</span>
+              </div>
+              <button type="submit">
+                <ClipboardCheck aria-hidden="true" size={18} />
+                Guardar programa
+              </button>
+            </section>
+            <section className="delegate-submit-bar">
+              <div>
+                <strong>Cerrar clase infantil</strong>
+                <span>Guarda el programa actual y cierra la clase en una sola accion.</span>
+              </div>
+              <ClosingClassButton name="intent" value="close">
+                <Send aria-hidden="true" size={18} />
+                Guardar y cerrar
+              </ClosingClassButton>
+            </section>
+          </form>
+        </div>
       ) : adultClasses.length && step !== "attendance" ? (
         <form action={saveDelegateTechnicalStepAction} className="delegate-form delegate-flow">
           <input type="hidden" name="token" value={token} />
@@ -299,6 +369,64 @@ export default async function DelegateClassPage({
         </form>
       )}
     </main>
+  );
+}
+
+function DelegateChildPlanSection({ plan, syllabusItems }: { plan: ChildPlanRow | null; syllabusItems: ChildSyllabusItemRow[] }) {
+  const selectedActivities = new Set(plan?.activities ?? []);
+  const selectedItems = new Set(plan?.syllabus_item_ids ?? []);
+  const byGrade = new Map<string, ChildSyllabusItemRow[]>();
+  syllabusItems.forEach((item) => {
+    const grade = item.grade ?? "General";
+    byGrade.set(grade, [...(byGrade.get(grade) ?? []), item]);
+  });
+
+  return (
+    <section className="delegate-step-card delegate-child-plan">
+      <label>
+        Objetivo del dia
+        <select name="objective" defaultValue={plan?.objective ?? ""}>
+          <option value="">Sin objetivo concreto</option>
+          {delegateChildObjectives.map((objective) => <option key={objective} value={objective}>{objective}</option>)}
+        </select>
+      </label>
+      <fieldset>
+        <legend>Actividades generales</legend>
+        <div className="delegate-child-activity-grid">
+          {delegateChildActivities.map((activity) => (
+            <label className="delegate-check" key={activity.value}>
+              <input name="activities" type="checkbox" value={activity.value} defaultChecked={selectedActivities.has(activity.value)} />
+              <span><strong>{activity.label}</strong></span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Temario trabajado</legend>
+        <p className="muted">Despliega los grados necesarios y marca solo lo practicado hoy.</p>
+        {[...byGrade.entries()].map(([grade, items], index) => (
+          <details className="delegate-child-grade" key={grade} open={index === 0 || items.some((item) => selectedItems.has(item.id))}>
+            <summary><strong>{grade}</strong><span>{items.length} contenidos</span></summary>
+            <div className="delegate-check-list">
+              {items.map((item) => (
+                <label className="delegate-check" key={item.id}>
+                  <input name="syllabusItemIds" type="checkbox" value={item.id} defaultChecked={selectedItems.has(item.id)} />
+                  <span>
+                    <strong>{item.title}</strong>
+                    <small>{item.category ?? "Contenido infantil"}</small>
+                    {item.description ? <em>{item.description}</em> : null}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </details>
+        ))}
+      </fieldset>
+      <label>
+        Nota de la clase
+        <textarea name="notes" rows={3} defaultValue={plan?.notes ?? ""} placeholder="Observaciones para Alvaro..." />
+      </label>
+    </section>
   );
 }
 

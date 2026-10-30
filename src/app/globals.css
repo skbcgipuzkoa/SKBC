@@ -6623,11 +6623,56 @@ tbody tr:hover {
 
 .delegate-form input[type="text"],
 .delegate-form input:not([type]),
-.delegate-form select {
+.delegate-form select,
+.delegate-form textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   min-height: 46px;
   padding: 10px 12px;
+}
+
+.delegate-form textarea {
+  font: inherit;
+  resize: vertical;
+}
+
+.delegate-child-plan fieldset {
+  border: 0;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.delegate-child-plan legend {
+  font-weight: 850;
+  margin-bottom: 8px;
+}
+
+.delegate-child-activity-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.delegate-child-grade {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.delegate-child-grade summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  min-height: 50px;
+  padding: 10px 12px;
+}
+
+.delegate-child-grade > .delegate-check-list {
+  border-top: 1px solid var(--line);
+  padding: 10px;
 }
 
 .delegate-form button,
@@ -6754,6 +6799,21 @@ tbody tr:hover {
 .delegate-submit-bar span {
   color: #b8c4d6;
   font-size: 12px;
+}
+
+.delegate-submit-bar-secondary {
+  background: #eef5fc;
+  color: var(--ink);
+  left: auto;
+  margin-bottom: 12px;
+  max-width: none;
+  position: static;
+  transform: none;
+  width: 100%;
+}
+
+.delegate-submit-bar-secondary span {
+  color: var(--muted);
 }
 
 .legacy-ficha {
@@ -9291,9 +9351,14 @@ tbody tr:hover {
 
   .delegate-form input[type="text"],
   .delegate-form input:not([type]),
-  .delegate-form select {
+  .delegate-form select,
+  .delegate-form textarea {
     font-size: 16px;
     min-height: 48px;
+  }
+
+  .delegate-child-activity-grid {
+    grid-template-columns: 1fr;
   }
 
   .delegate-submit-bar {

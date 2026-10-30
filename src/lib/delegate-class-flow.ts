@@ -1,6 +1,16 @@
 export type DelegateMode = "adults" | "kids" | "combined";
-export type DelegateStep = "start" | "kids-attendance" | "technical" | "attendance";
+export type DelegateStep = "start" | "kids-attendance" | "kids-technical" | "technical" | "attendance";
 export type DelegateClassGroup = "kids" | "adults";
+
+export function resolveDelegateMode(
+  requestedMode: DelegateMode | null,
+  storedMode: DelegateMode | null,
+  fallbackMode: DelegateClassGroup
+): DelegateMode {
+  if (storedMode) return storedMode;
+  if (requestedMode === fallbackMode) return requestedMode;
+  return fallbackMode;
+}
 
 export function normalizeDelegateStep(
   value: string | null | undefined,
@@ -10,10 +20,10 @@ export function normalizeDelegateStep(
   hasAdultClass: boolean
 ): DelegateStep {
   const normalized = String(value ?? "").trim().toLowerCase();
-  if (isDelegateStep(normalized)) return normalized;
+  if (isDelegateStepAllowedForMode(normalized, mode)) return normalized;
   if (!hasStarted) return "start";
   if (mode === "combined") return hasKidsClass ? "kids-attendance" : hasAdultClass ? "technical" : "attendance";
-  if (mode === "kids") return "attendance";
+  if (mode === "kids") return hasKidsClass ? "kids-attendance" : "attendance";
   return hasAdultClass ? "technical" : "attendance";
 }
 
@@ -29,6 +39,7 @@ export function delegateClassesForSubmission<T extends { class_group: DelegateCl
   nextStep: string
 ) {
   const partialCombined = mode === "combined" && nextStep === "technical";
+  const partialKids = mode === "kids" && nextStep === "kids-technical";
   const groups: DelegateClassGroup[] = mode === "kids"
     ? ["kids"]
     : mode === "adults"
@@ -39,7 +50,7 @@ export function delegateClassesForSubmission<T extends { class_group: DelegateCl
 
   return {
     classes: classes.filter((item) => groups.includes(item.class_group)),
-    closeClasses: !partialCombined
+    closeClasses: !partialCombined && !partialKids
   };
 }
 
@@ -59,5 +70,12 @@ export function hasRequiredDelegateGroups(
 }
 
 function isDelegateStep(value: string): value is DelegateStep {
-  return value === "start" || value === "kids-attendance" || value === "technical" || value === "attendance";
+  return value === "start" || value === "kids-attendance" || value === "kids-technical" || value === "technical" || value === "attendance";
+}
+
+function isDelegateStepAllowedForMode(value: string, mode: DelegateMode): value is DelegateStep {
+  if (!isDelegateStep(value)) return false;
+  if (mode === "kids") return value === "start" || value === "kids-attendance" || value === "kids-technical";
+  if (mode === "combined") return value !== "kids-technical";
+  return value === "start" || value === "technical" || value === "attendance";
 }
