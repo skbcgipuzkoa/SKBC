@@ -33,8 +33,8 @@ import { delegateClassesForSubmission, hasAttendanceForEveryClass, hasRequiredDe
 import { delegateChildActivityValues, delegateChildObjectives } from "@/lib/delegate-child-plan";
 import { CHILD_PROGRAM_GRADES, normalizeChildGrade } from "@/lib/child-program";
 import {
-  childProgramContentUsage,
   deleteUnusedChildProgramContent,
+  isAtomicMutationError,
   moveChildProgramAssignment,
   saveChildProgramContent,
   setChildProgramContentArchived
@@ -1206,19 +1206,12 @@ export async function deleteUnusedChildProgramContentAction(formData: FormData) 
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
   const contentId = String(formData.get("contentId") ?? "").trim();
   if (!contentId) redirect("/programa-infantil?error=missing-content");
-  let usage;
-  try {
-    usage = await childProgramContentUsage(contentId);
-  } catch (error) {
-    console.error("Error checking child program content usage", error);
-    redirect("/programa-infantil?error=usage-check-failed");
-  }
-  if (usage.historyCount + usage.classPlanCount + usage.examEventCount > 0) {
-    redirect("/programa-infantil?error=content-in-use");
-  }
   try {
     await deleteUnusedChildProgramContent(contentId);
   } catch (error) {
+    if (isAtomicMutationError(error, "CHILD_PROGRAM_CONTENT_IN_USE")) {
+      redirect("/programa-infantil?error=content-in-use");
+    }
     console.error("Error deleting child program content", error);
     redirect("/programa-infantil?error=delete-failed");
   }

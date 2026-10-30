@@ -166,17 +166,16 @@ export async function saveChildProgramContent(input: SaveChildProgramContentInpu
     }
 
     for (const omitted of existing.filter((row) => !requestedGrades.has(normalizeChildGrade(row.grade)))) {
-      const usage = await childProgramAssignmentUsage(omitted.id);
-      if (usage.historyCount + usage.classPlanCount + usage.examEventCount > 0) {
+      const { error: removeError } = await supabase.rpc("remove_child_syllabus_assignment_if_unused", {
+        p_syllabus_item_id: omitted.id
+      });
+      if (removeError && isAtomicMutationError(removeError, "CHILD_PROGRAM_ASSIGNMENT_IN_USE")) {
         const { error } = await supabase
           .from("child_syllabus_items")
           .update({ active: false, updated_by: input.actor, updated_at: now })
           .eq("id", omitted.id);
         if (error) throw error;
-      } else {
-        const { error } = await supabase.from("child_syllabus_items").delete().eq("id", omitted.id);
-        if (error) throw error;
-      }
+      } else if (removeError) throw removeError;
     }
 
     const { error: contentError } = await supabase
@@ -249,28 +248,12 @@ export async function setChildProgramContentArchived(contentId: string, archived
 
 export async function deleteUnusedChildProgramContent(contentId: string) {
   const supabase = createAdminClient();
-  const { data: assignments, error: readError } = await supabase.from("child_syllabus_items").select("*").eq("content_id", contentId);
-  if (readError) throw readError;
-  const { error: assignmentsError } = await supabase.from("child_syllabus_items").delete().eq("content_id", contentId);
-  if (assignmentsError) throw assignmentsError;
-  const { error: contentError } = await supabase.from("child_syllabus_contents").delete().eq("id", contentId);
-  if (contentError) {
-    if (assignments?.length) await supabase.from("child_syllabus_items").upsert(assignments, { onConflict: "id" });
-    throw contentError;
-  }
+  const { error } = await supabase.rpc("delete_unused_child_syllabus_content", { p_content_id: contentId });
+  if (error) throw error;
 }
 
-async function childProgramAssignmentUsage(assignmentId: string) {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .rpc("child_syllabus_item_usage", { p_syllabus_item_id: assignmentId })
-    .single<{ history_count: number | string; class_plan_count: number | string; exam_event_count: number | string }>();
-  if (error) throw error;
-  return {
-    historyCount: Number(data.history_count),
-    classPlanCount: Number(data.class_plan_count),
-    examEventCount: Number(data.exam_event_count)
-  };
+export function isAtomicMutationError(error: unknown, code: string) {
+  return Boolean(error && typeof error === "object" && "message" in error && String(error.message).includes(code));
 }
 
 function mapAssignment(row: AssignmentRow): ChildProgramAssignment {
