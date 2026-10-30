@@ -43,10 +43,12 @@ export function firstBillingDateAfterFreeMonth(startedOn: string | null | undefi
   const trialEnd = parseIsoDate(freeTrialEndDate(startedOn));
   if (!trialEnd) return null;
 
-  // The first charge is issued on the next monthly run after the free month.
+  // Billing is one month in arrears after the free trial. The run on the 15th
+  // accepts up to three days of margin when that month completes on days 16-18.
+  const monthsUntilBilling = trialEnd.getUTCDate() <= 18 ? 1 : 2;
   return isoDate(new Date(Date.UTC(
     trialEnd.getUTCFullYear(),
-    trialEnd.getUTCMonth() + 1,
+    trialEnd.getUTCMonth() + monthsUntilBilling,
     15
   )));
 }
