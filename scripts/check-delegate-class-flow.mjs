@@ -70,6 +70,8 @@ assert.match(delegatePageSource, /child_syllabus_items/);
 assert.match(delegatePageSource, /child_syllabus_contents!inner\(archived_at\)/);
 assert.match(delegatePageSource, /\.is\("child_syllabus_contents\.archived_at", null\)/);
 assert.match(delegatePageSource, /historicalChildSyllabusItems/);
+assert.match(delegatePageSource, /savedSyllabusItemIds=\{childPlan\?\.syllabus_item_ids \?\? \[\]\}/);
+assert.match(delegatePageSource, /const childSyllabusLoadError/);
 assert.match(actionsSource, /export async function saveDelegateChildPlanAction/);
 assert.match(actionsSource, /step=kids-technical/);
 assert.match(actionsSource, /const linkVersion = String\(formData\.get\("linkVersion"\)/);
@@ -77,6 +79,8 @@ assert.match(actionsSource, /rpc\("save_delegate_child_plan_if_open"/);
 assert.match(actionsSource, /from\("child_syllabus_items"\)[\s\S]*?eq\("active", true\)/);
 assert.match(actionsSource, /child_syllabus_contents!inner\(archived_at\)/);
 assert.match(actionsSource, /\.is\("child_syllabus_contents\.archived_at", null\)/);
+assert.match(actionsSource, /validateChildClassPlanSubmittedIds\(/);
+assert.match(actionsSource, /reconcileChildClassPlanItemIds\(/);
 assert.match(actionsSource, /const \{ data: finalAttendance[\s\S]*?hasAttendanceForEveryClass/);
 
 console.log("Delegate class flow checks passed.");

@@ -9,7 +9,9 @@ import {
   orderChildExamAssignments,
   reconcileChildExamItemIds,
   resolveChildExamTargetGrade,
-  resolveChildExamGrades
+  resolveChildExamGrades,
+  reconcileChildClassPlanItemIds,
+  validateChildClassPlanSubmittedIds
 } from "../src/lib/child-program.ts";
 
 assert.equal(normalizeChildGrade("  azul y marrón  "), "AZUL-MARRON");
@@ -89,6 +91,39 @@ assert.deepEqual(
     ["BLANCO-AMARILLO", "AMARILLO-NARANJA"]
   ),
   []
+);
+
+assert.deepEqual(
+  reconcileChildClassPlanItemIds(
+    ["active-saved", "archived-saved"],
+    ["active-new", "active-new"],
+    ["active-saved", "active-new"]
+  ),
+  ["archived-saved", "active-new"]
+);
+assert.deepEqual(
+  reconcileChildClassPlanItemIds(
+    ["archived-saved", "missing-metadata"],
+    [],
+    []
+  ),
+  ["archived-saved", "missing-metadata"]
+);
+assert.deepEqual(
+  validateChildClassPlanSubmittedIds(
+    ["archived-saved", "archived-saved", "active-new"],
+    ["active-new"],
+    ["archived-saved"]
+  ),
+  { ids: ["archived-saved", "active-new"], invalidIds: [] }
+);
+assert.deepEqual(
+  validateChildClassPlanSubmittedIds(
+    ["archived-saved", "unavailable-new"],
+    ["active-new"],
+    ["archived-saved"]
+  ),
+  { ids: ["archived-saved"], invalidIds: ["unavailable-new"] }
 );
 assert.deepEqual(
   childExamTargetGradesWithoutScorableItems(
@@ -223,6 +258,14 @@ assert.doesNotMatch(classesSource, /\.eq\("exam_relevant", true\)/);
 assert.match(dojoSource, /historicalChildSyllabusItems/);
 assert.match(classesSource, /historicalChildSyllabusItems/);
 assert.match(delegateSource, /historicalChildSyllabusItems/);
+for (const source of [dojoSource, classesSource, delegateSource]) {
+  assert.match(source, /savedSyllabusItemIds=\{child(?:ClassPlan|Plan)\?\.syllabus_item_ids \?\? \[\]\}/);
+  assert.match(source, /savedSyllabusItemIds\.map\(\(id\) => <input key=\{id\} type="hidden" name="savedSyllabusItemIds" value=\{id\} \/>\)/);
+}
+assert.ok((actionsSource.match(/reconcileChildClassPlanItemIds\(/g)?.length ?? 0) >= 2);
+assert.ok((actionsSource.match(/validateChildClassPlanSubmittedIds\(/g)?.length ?? 0) >= 2);
+assert.match(delegateSource, /const childSyllabusLoadError = childPlanError \?\? childSyllabusError \?\? historicalChildSyllabusError/);
+assert.match(delegateSource, /childSyllabusLoadError \? \([\s\S]*No se ha podido cargar el programa infantil[\s\S]*\) : \(/);
 assert.match(fichaSource, /\.from\("child_syllabus_history"\)[\s\S]*?\.select\("practiced_on,child_syllabus_items\(title,grade,category,description\)"\)/);
 assert.match(kenshisSource, /\.from\("child_syllabus_history"\)[\s\S]*?\.select\("practiced_on,created_at,child_syllabus_items\(title,grade,category\)"\)/);
 

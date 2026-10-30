@@ -359,7 +359,7 @@ export default async function ClaseDetailPage({
   const fallbackChildSyllabusGrades = childSyllabusGradeCandidates(...kidsGrades);
   const childSyllabusGradeFilter = childSyllabusGrades.length ? childSyllabusGrades : fallbackChildSyllabusGrades;
   const childSyllabusGradeKeys = new Set(childSyllabusGradeFilter.map(normalizeChildGradeKey));
-  const [{ data: childClassPlan }, { data: childClassGroupWork }] = childPlanClass?.id
+  const [{ data: childClassPlan, error: childClassPlanError }, { data: childClassGroupWork }] = childPlanClass?.id
     ? await Promise.all([
       supabase
         .from("child_class_plans")
@@ -373,8 +373,9 @@ export default async function ClaseDetailPage({
         .order("created_at", { ascending: true })
         .returns<ChildClassGroupWorkRow[]>()
     ])
-    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }];
-  const { data: childSyllabusItemsAvailable } = childPlanClass?.id
+    : [{ data: null as ChildClassPlanRow | null, error: null }, { data: [] as ChildClassGroupWorkRow[] }];
+  if (childClassPlanError) throw childClassPlanError;
+  const { data: childSyllabusItemsAvailable, error: childSyllabusError } = childPlanClass?.id
     ? await supabase
       .from("child_syllabus_items")
       .select("id,grade,title,category,description,exam_relevant,sort_order,child_syllabus_contents!inner(archived_at)")
@@ -382,17 +383,19 @@ export default async function ClaseDetailPage({
       .is("child_syllabus_contents.archived_at", null)
       .order("sort_order", { ascending: true })
       .returns<ChildSyllabusItemRow[]>()
-    : { data: [] as ChildSyllabusItemRow[] };
+    : { data: [] as ChildSyllabusItemRow[], error: null };
+  if (childSyllabusError) throw childSyllabusError;
   const childSyllabusItems = filterChildSyllabusItemsByGrade(childSyllabusItemsAvailable ?? [], childSyllabusGradeKeys);
   const availableChildSyllabusIds = new Set(childSyllabusItems.map((item) => item.id));
   const historicalChildSyllabusIds = (childClassPlan?.syllabus_item_ids ?? []).filter((id) => !availableChildSyllabusIds.has(id));
-  const { data: historicalChildSyllabusItems } = historicalChildSyllabusIds.length
+  const { data: historicalChildSyllabusItems, error: historicalChildSyllabusError } = historicalChildSyllabusIds.length
     ? await supabase
       .from("child_syllabus_items")
       .select("id,grade,title,category,description,exam_relevant,sort_order")
       .in("id", historicalChildSyllabusIds)
       .returns<ChildSyllabusItemRow[]>()
-    : { data: [] as ChildSyllabusItemRow[] };
+    : { data: [] as ChildSyllabusItemRow[], error: null };
+  if (historicalChildSyllabusError) throw historicalChildSyllabusError;
   const childAttendanceRows = childPlanClass?.id
     ? (dayAttendance ?? []).filter((item) => item.class_id === childPlanClass.id && item.members?.class === "kids")
     : [];
@@ -463,6 +466,7 @@ export default async function ClaseDetailPage({
         syllabusItems={childSyllabusItems ?? []}
         targetedSyllabusItems={childSyllabusItemsAvailable ?? []}
         historicalSyllabusItems={historicalChildSyllabusItems ?? []}
+        savedSyllabusItemIds={childClassPlan?.syllabus_item_ids ?? []}
         members={kidsDayMembers}
         compact
         open={query.section === "kids-technical"}
@@ -1181,6 +1185,7 @@ export default async function ClaseDetailPage({
               syllabusItems={childSyllabusItems ?? []}
               targetedSyllabusItems={childSyllabusItemsAvailable ?? []}
               historicalSyllabusItems={historicalChildSyllabusItems ?? []}
+              savedSyllabusItemIds={childClassPlan?.syllabus_item_ids ?? []}
               members={classMembers ?? []}
               open={requestedSection === "kids-technical"}
             />
@@ -1199,6 +1204,7 @@ export default async function ClaseDetailPage({
               syllabusItems={childSyllabusItems ?? []}
               targetedSyllabusItems={childSyllabusItemsAvailable ?? []}
               historicalSyllabusItems={historicalChildSyllabusItems ?? []}
+              savedSyllabusItemIds={childClassPlan?.syllabus_item_ids ?? []}
               members={kidsDayMembers}
             />
           </section>
@@ -1486,6 +1492,7 @@ function ChildLightPlanPanel({
   syllabusItems,
   targetedSyllabusItems,
   historicalSyllabusItems,
+  savedSyllabusItemIds,
   members,
   compact = false,
   open = false
@@ -1498,6 +1505,7 @@ function ChildLightPlanPanel({
   syllabusItems: ChildSyllabusItemRow[];
   targetedSyllabusItems: ChildSyllabusItemRow[];
   historicalSyllabusItems: ChildSyllabusItemRow[];
+  savedSyllabusItemIds: string[];
   members: MemberOption[];
   compact?: boolean;
   open?: boolean;
@@ -1551,7 +1559,7 @@ function ChildLightPlanPanel({
         <input type="hidden" name="classId" value={classId} />
         <input type="hidden" name="legacyId" value={legacyId} />
         <input type="hidden" name="returnTo" value={returnTo} />
-        {historicalSyllabusItems.map((item) => <input key={item.id} type="hidden" name="syllabusItemIds" value={item.id} />)}
+        {savedSyllabusItemIds.map((id) => <input key={id} type="hidden" name="savedSyllabusItemIds" value={id} />)}
         {historicalSyllabusItems.length ? (
           <p className="muted">Contenido historico conservado: {historicalSyllabusItems.map((item) => item.title).join(", ")}.</p>
         ) : null}

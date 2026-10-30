@@ -194,7 +194,7 @@ export default async function DojoClassPage({
   const fallbackChildSyllabusGrades = childSyllabusGradeCandidates(...kidsGrades);
   const childSyllabusGradeFilter = childSyllabusGrades.length ? childSyllabusGrades : fallbackChildSyllabusGrades;
   const childSyllabusGradeKeys = new Set(childSyllabusGradeFilter.map(normalizeChildGradeKey));
-  const [{ data: childClassPlan }, { data: childClassGroupWork }, { data: rawChildSyllabusItems }] = kidsClass?.id
+  const [{ data: childClassPlan, error: childClassPlanError }, { data: childClassGroupWork }, { data: rawChildSyllabusItems, error: childSyllabusError }] = kidsClass?.id
     ? await Promise.all([
       supabase
         .from("child_class_plans")
@@ -215,17 +215,20 @@ export default async function DojoClassPage({
         .order("sort_order", { ascending: true })
         .returns<ChildSyllabusItemRow[]>()
     ])
-    : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }, { data: [] as ChildSyllabusItemRow[] }];
+    : [{ data: null as ChildClassPlanRow | null, error: null }, { data: [] as ChildClassGroupWorkRow[] }, { data: [] as ChildSyllabusItemRow[], error: null }];
+  if (childClassPlanError) throw childClassPlanError;
+  if (childSyllabusError) throw childSyllabusError;
   const childSyllabusItems = filterChildSyllabusItemsByGrade(rawChildSyllabusItems ?? [], childSyllabusGradeKeys);
   const availableChildSyllabusIds = new Set(childSyllabusItems.map((item) => item.id));
   const historicalChildSyllabusIds = (childClassPlan?.syllabus_item_ids ?? []).filter((id) => !availableChildSyllabusIds.has(id));
-  const { data: historicalChildSyllabusItems } = historicalChildSyllabusIds.length
+  const { data: historicalChildSyllabusItems, error: historicalChildSyllabusError } = historicalChildSyllabusIds.length
     ? await supabase
       .from("child_syllabus_items")
       .select("id,grade,title,category,description,exam_relevant,sort_order")
       .in("id", historicalChildSyllabusIds)
       .returns<ChildSyllabusItemRow[]>()
-    : { data: [] as ChildSyllabusItemRow[] };
+    : { data: [] as ChildSyllabusItemRow[], error: null };
+  if (historicalChildSyllabusError) throw historicalChildSyllabusError;
   const dojoReturnTo = `/dojo/${mainClass.legacy_id ?? legacyId}?step=${step}${step === "kids" && query.section === "kids-technical" ? "&section=kids-technical" : ""}`;
 
   return (
@@ -284,6 +287,7 @@ export default async function DojoClassPage({
                 syllabusItems={childSyllabusItems}
                 targetedSyllabusItems={rawChildSyllabusItems ?? []}
                 historicalSyllabusItems={historicalChildSyllabusItems ?? []}
+                savedSyllabusItemIds={childClassPlan?.syllabus_item_ids ?? []}
                 open={query.section === "kids-technical"}
               />
               <ProvisionalAttendanceForm classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} />
@@ -504,6 +508,7 @@ function DojoChildPlanPanel({
   syllabusItems,
   targetedSyllabusItems,
   historicalSyllabusItems,
+  savedSyllabusItemIds,
   open
 }: {
   classId: string;
@@ -515,6 +520,7 @@ function DojoChildPlanPanel({
   syllabusItems: ChildSyllabusItemRow[];
   targetedSyllabusItems: ChildSyllabusItemRow[];
   historicalSyllabusItems: ChildSyllabusItemRow[];
+  savedSyllabusItemIds: string[];
   open?: boolean;
 }) {
   const activities = new Set(plan?.activities ?? []);
@@ -565,7 +571,7 @@ function DojoChildPlanPanel({
         <input type="hidden" name="classId" value={classId} />
         <input type="hidden" name="legacyId" value={legacyId} />
         <input type="hidden" name="returnTo" value={returnTo} />
-        {historicalSyllabusItems.map((item) => <input key={item.id} type="hidden" name="syllabusItemIds" value={item.id} />)}
+        {savedSyllabusItemIds.map((id) => <input key={id} type="hidden" name="savedSyllabusItemIds" value={id} />)}
         {historicalSyllabusItems.length ? (
           <p className="muted">Contenido historico conservado: {historicalSyllabusItems.map((item) => item.title).join(", ")}.</p>
         ) : null}

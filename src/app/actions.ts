@@ -31,7 +31,12 @@ import { CHILD_NOTES_REMINDER_KEY } from "@/lib/child-notes-reminder";
 import { advanceClassClosureProgress, beginClassClosureProgress, failClassClosureProgress, finishClassClosureProgress, type ClosureStep } from "@/lib/class-closure-progress";
 import { delegateClassesForSubmission, hasAttendanceForEveryClass, hasRequiredDelegateGroups, resolveDelegateMode, type DelegateMode } from "@/lib/delegate-class-flow";
 import { delegateChildActivityValues, delegateChildObjectives } from "@/lib/delegate-child-plan";
-import { CHILD_PROGRAM_GRADES, normalizeChildGrade } from "@/lib/child-program";
+import {
+  CHILD_PROGRAM_GRADES,
+  normalizeChildGrade,
+  reconcileChildClassPlanItemIds,
+  validateChildClassPlanSubmittedIds
+} from "@/lib/child-program";
 import {
   deleteUnusedChildProgramContent,
   isAtomicMutationError,
@@ -2167,7 +2172,7 @@ export async function saveDelegateChildPlanAction(formData: FormData) {
   const objective = emptyToNull(String(formData.get("objective") ?? ""));
   const notes = emptyToNull(String(formData.get("notes") ?? ""));
   const activities = Array.from(new Set(formData.getAll("activities").map((value) => String(value).trim()).filter(Boolean)));
-  const syllabusItemIds = Array.from(new Set(formData.getAll("syllabusItemIds").map((value) => String(value).trim()).filter(Boolean)));
+  const submittedSyllabusItemIds = Array.from(new Set(formData.getAll("syllabusItemIds").map((value) => String(value).trim()).filter(Boolean)));
 
   if (!token || !linkVersion) redirect("/delegado/error");
 
@@ -2194,29 +2199,36 @@ export async function saveDelegateChildPlanAction(formData: FormData) {
       .maybeSingle<{ id: string }>();
     if (claimError || !claimedLink) throw claimError ?? new Error("El enlace ha cambiado mientras guardabas. Recarga la pagina e intentalo de nuevo.");
 
-    if (syllabusItemIds.length) {
-      const { data: existingPlan, error: existingPlanError } = await supabase
+    const [{ data: existingPlan, error: existingPlanError }, { data: availableItems, error: availableItemsError }] = await Promise.all([
+      supabase
         .from("child_class_plans")
         .select("syllabus_item_ids")
         .eq("class_id", kidsClass.id)
-        .maybeSingle<{ syllabus_item_ids: string[] | null }>();
-      if (existingPlanError) throw existingPlanError;
-      const existingIds = new Set(existingPlan?.syllabus_item_ids ?? []);
-      const newSyllabusItemIds = syllabusItemIds.filter((id) => !existingIds.has(id));
-      if (newSyllabusItemIds.length) {
-        const { data: allowedItems, error: allowedItemsError } = await supabase
-          .from("child_syllabus_items")
-          .select("id,child_syllabus_contents!inner(archived_at)")
-          .in("id", newSyllabusItemIds)
-          .eq("active", true)
-          .is("child_syllabus_contents.archived_at", null)
-          .returns<Array<{ id: string }>>();
-        if (allowedItemsError) throw allowedItemsError;
-        if ((allowedItems ?? []).length !== newSyllabusItemIds.length) {
-          throw new Error("Hay contenidos infantiles que ya no estan disponibles.");
-        }
-      }
+        .maybeSingle<{ syllabus_item_ids: string[] | null }>(),
+      supabase
+        .from("child_syllabus_items")
+        .select("id,child_syllabus_contents!inner(archived_at)")
+        .eq("active", true)
+        .is("child_syllabus_contents.archived_at", null)
+        .returns<Array<{ id: string }>>()
+    ]);
+    if (existingPlanError) throw existingPlanError;
+    if (availableItemsError) throw availableItemsError;
+    const savedSyllabusItemIds = existingPlan?.syllabus_item_ids ?? [];
+    const availableSyllabusItemIds = (availableItems ?? []).map((item) => item.id);
+    const submittedValidation = validateChildClassPlanSubmittedIds(
+      submittedSyllabusItemIds,
+      availableSyllabusItemIds,
+      savedSyllabusItemIds
+    );
+    if (submittedValidation.invalidIds.length) {
+      throw new Error("Hay contenidos infantiles que ya no estan disponibles.");
     }
+    const syllabusItemIds = reconcileChildClassPlanItemIds(
+      savedSyllabusItemIds,
+      submittedValidation.ids,
+      availableSyllabusItemIds
+    );
     if (closeAfter) {
       const { data: attendance, error: attendanceError } = await supabase
         .from("attendance_logs")
@@ -3488,7 +3500,7 @@ export async function saveChildClassPlanAction(formData: FormData) {
   const activities = Array.from(new Set(
     formData.getAll("activities").map((value) => String(value).trim()).filter(Boolean)
   ));
-  const syllabusItemIds = Array.from(new Set(
+  const submittedSyllabusItemIds = Array.from(new Set(
     formData.getAll("syllabusItemIds").map((value) => String(value).trim()).filter(Boolean)
   ));
   const groupLabel = emptyToNull(String(formData.get("groupLabel") ?? ""));
@@ -3521,6 +3533,36 @@ export async function saveChildClassPlanAction(formData: FormData) {
   }
 
   try {
+    const [{ data: existingPlan, error: existingPlanError }, { data: availableItems, error: availableItemsError }] = await Promise.all([
+      supabase
+        .from("child_class_plans")
+        .select("syllabus_item_ids")
+        .eq("class_id", classId)
+        .maybeSingle<{ syllabus_item_ids: string[] | null }>(),
+      supabase
+        .from("child_syllabus_items")
+        .select("id,child_syllabus_contents!inner(archived_at)")
+        .eq("active", true)
+        .is("child_syllabus_contents.archived_at", null)
+        .returns<Array<{ id: string }>>()
+    ]);
+    if (existingPlanError) throw existingPlanError;
+    if (availableItemsError) throw availableItemsError;
+    const savedSyllabusItemIds = existingPlan?.syllabus_item_ids ?? [];
+    const availableSyllabusItemIds = (availableItems ?? []).map((item) => item.id);
+    const submittedValidation = validateChildClassPlanSubmittedIds(
+      submittedSyllabusItemIds,
+      availableSyllabusItemIds,
+      savedSyllabusItemIds
+    );
+    if (submittedValidation.invalidIds.length) {
+      throw new Error("Hay contenidos infantiles que ya no estan disponibles.");
+    }
+    const syllabusItemIds = reconcileChildClassPlanItemIds(
+      savedSyllabusItemIds,
+      submittedValidation.ids,
+      availableSyllabusItemIds
+    );
     const now = new Date().toISOString();
     const { error: planError } = await supabase
       .from("child_class_plans")

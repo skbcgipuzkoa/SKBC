@@ -172,6 +172,32 @@ export function reconcileChildExamItemIds(
   return [...preserved, ...appendedDefaults];
 }
 
+export function reconcileChildClassPlanItemIds(
+  savedIds: readonly string[],
+  selectedIds: readonly string[],
+  availableIds: readonly string[]
+): string[] {
+  const available = new Set(uniqueIds(availableIds));
+  const historical = uniqueIds(savedIds).filter((id) => !available.has(id));
+  const selectedAvailable = uniqueIds(selectedIds).filter((id) => available.has(id));
+  return uniqueIds([...historical, ...selectedAvailable]);
+}
+
+export function validateChildClassPlanSubmittedIds(
+  submittedIds: readonly string[],
+  availableIds: readonly string[],
+  savedIds: readonly string[]
+): { ids: string[]; invalidIds: string[] } {
+  const available = new Set(uniqueIds(availableIds));
+  const saved = new Set(uniqueIds(savedIds));
+  const ids: string[] = [];
+  const invalidIds: string[] = [];
+  for (const id of uniqueIds(submittedIds)) {
+    (available.has(id) || saved.has(id) ? ids : invalidIds).push(id);
+  }
+  return { ids, invalidIds };
+}
+
 export function childExamTargetGradesWithoutScorableItems(
   items: readonly ChildProgramAssignment[],
   targetGrades: readonly string[]
@@ -239,4 +265,8 @@ function representedChildTargetGrades(targetGrades: readonly string[]): ChildPro
 function childGradeOrder(grade: string): number {
   const index = CHILD_PROGRAM_GRADES.indexOf(normalizeChildGrade(grade) as ChildProgramGrade);
   return index < 0 ? CHILD_PROGRAM_GRADES.length : index;
+}
+
+function uniqueIds(ids: readonly string[]): string[] {
+  return Array.from(new Set(ids.map((id) => String(id).trim()).filter(Boolean)));
 }

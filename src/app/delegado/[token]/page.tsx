@@ -149,7 +149,7 @@ export default async function DelegateClassPage({
       .returns<MemberOption[]>()
   ]) : [{ data: [] }, { data: [] }, { data: [] }];
   const kidsClassId = kidsClasses[0]?.id ?? null;
-  const [{ data: childPlan }, { data: childSyllabusItems }] = kidsClassId ? await Promise.all([
+  const [{ data: childPlan, error: childPlanError }, { data: childSyllabusItems, error: childSyllabusError }] = kidsClassId ? await Promise.all([
     supabase
       .from("child_class_plans")
       .select("objective,activities,syllabus_item_ids,notes")
@@ -162,16 +162,17 @@ export default async function DelegateClassPage({
       .is("child_syllabus_contents.archived_at", null)
       .order("sort_order")
       .returns<ChildSyllabusItemRow[]>()
-  ]) : [{ data: null as ChildPlanRow | null }, { data: [] as ChildSyllabusItemRow[] }];
+  ]) : [{ data: null as ChildPlanRow | null, error: null }, { data: [] as ChildSyllabusItemRow[], error: null }];
   const activeChildSyllabusIds = new Set((childSyllabusItems ?? []).map((item) => item.id));
   const historicalChildSyllabusIds = (childPlan?.syllabus_item_ids ?? []).filter((id) => !activeChildSyllabusIds.has(id));
-  const { data: historicalChildSyllabusItems } = historicalChildSyllabusIds.length
+  const { data: historicalChildSyllabusItems, error: historicalChildSyllabusError } = historicalChildSyllabusIds.length
     ? await supabase
       .from("child_syllabus_items")
       .select("id,grade,title,category,description")
       .in("id", historicalChildSyllabusIds)
       .returns<ChildSyllabusItemRow[]>()
-    : { data: [] as ChildSyllabusItemRow[] };
+    : { data: [] as ChildSyllabusItemRow[], error: null };
+  const childSyllabusLoadError = childPlanError ?? childSyllabusError ?? historicalChildSyllabusError;
 
   const attendanceKeys = new Set((attendance ?? []).map((item) => `${item.class_id}:${item.member_id}`));
   const title = mode === "combined" ? "Clase adultos + ninos" : mode === "kids" ? "Clase ninos" : "Clase adultos";
@@ -273,27 +274,40 @@ export default async function DelegateClassPage({
               {query.saved === "kids-plan" ? <p className="save-ok">Programa infantil guardado correctamente.</p> : null}
               {query.error === "kids-plan" ? <p className="form-error">No se ha podido guardar el programa infantil{query.detail ? `: ${query.detail}` : "."}</p> : null}
             </section>
-            <DelegateChildPlanSection plan={childPlan} syllabusItems={childSyllabusItems ?? []} historicalSyllabusItems={historicalChildSyllabusItems ?? []} />
-            <section className="delegate-submit-bar delegate-submit-bar-secondary">
-              <div>
-                <strong>Guardar programa</strong>
-                <span>La clase seguira abierta para poder modificarlo.</span>
-              </div>
-              <button type="submit">
-                <ClipboardCheck aria-hidden="true" size={18} />
-                Guardar programa
-              </button>
-            </section>
-            <section className="delegate-submit-bar">
-              <div>
-                <strong>Cerrar clase infantil</strong>
-                <span>Guarda el programa actual y cierra la clase en una sola accion.</span>
-              </div>
-              <ClosingClassButton name="intent" value="close">
-                <Send aria-hidden="true" size={18} />
-                Guardar y cerrar
-              </ClosingClassButton>
-            </section>
+            {childSyllabusLoadError ? (
+              <section className="delegate-step-card">
+                <p className="form-error">No se ha podido cargar el programa infantil. Recarga la pagina antes de guardar o cerrar la clase.</p>
+              </section>
+            ) : (
+              <>
+                <DelegateChildPlanSection
+                  plan={childPlan}
+                  syllabusItems={childSyllabusItems ?? []}
+                  historicalSyllabusItems={historicalChildSyllabusItems ?? []}
+                  savedSyllabusItemIds={childPlan?.syllabus_item_ids ?? []}
+                />
+                <section className="delegate-submit-bar delegate-submit-bar-secondary">
+                  <div>
+                    <strong>Guardar programa</strong>
+                    <span>La clase seguira abierta para poder modificarlo.</span>
+                  </div>
+                  <button type="submit">
+                    <ClipboardCheck aria-hidden="true" size={18} />
+                    Guardar programa
+                  </button>
+                </section>
+                <section className="delegate-submit-bar">
+                  <div>
+                    <strong>Cerrar clase infantil</strong>
+                    <span>Guarda el programa actual y cierra la clase en una sola accion.</span>
+                  </div>
+                  <ClosingClassButton name="intent" value="close">
+                    <Send aria-hidden="true" size={18} />
+                    Guardar y cerrar
+                  </ClosingClassButton>
+                </section>
+              </>
+            )}
           </form>
         </div>
       ) : adultClasses.length && step !== "attendance" ? (
@@ -382,7 +396,17 @@ export default async function DelegateClassPage({
   );
 }
 
-function DelegateChildPlanSection({ plan, syllabusItems, historicalSyllabusItems }: { plan: ChildPlanRow | null; syllabusItems: ChildSyllabusItemRow[]; historicalSyllabusItems: ChildSyllabusItemRow[] }) {
+function DelegateChildPlanSection({
+  plan,
+  syllabusItems,
+  historicalSyllabusItems,
+  savedSyllabusItemIds
+}: {
+  plan: ChildPlanRow | null;
+  syllabusItems: ChildSyllabusItemRow[];
+  historicalSyllabusItems: ChildSyllabusItemRow[];
+  savedSyllabusItemIds: string[];
+}) {
   const selectedActivities = new Set(plan?.activities ?? []);
   const selectedItems = new Set(plan?.syllabus_item_ids ?? []);
   const byGrade = new Map<string, ChildSyllabusItemRow[]>();
@@ -393,7 +417,7 @@ function DelegateChildPlanSection({ plan, syllabusItems, historicalSyllabusItems
 
   return (
     <section className="delegate-step-card delegate-child-plan">
-      {historicalSyllabusItems.map((item) => <input key={item.id} type="hidden" name="syllabusItemIds" value={item.id} />)}
+      {savedSyllabusItemIds.map((id) => <input key={id} type="hidden" name="savedSyllabusItemIds" value={id} />)}
       {historicalSyllabusItems.length ? <p className="muted">Contenido historico conservado: {historicalSyllabusItems.map((item) => item.title).join(", ")}.</p> : null}
       <label>
         Objetivo del dia
