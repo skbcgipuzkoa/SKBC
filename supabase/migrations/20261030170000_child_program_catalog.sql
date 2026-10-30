@@ -1,3 +1,5 @@
+set local lock_timeout = '5s';
+
 create table if not exists public.child_syllabus_contents (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -45,12 +47,40 @@ update public.child_syllabus_items
 set content_id = id
 where content_id is null;
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_catalog.pg_constraint constraint_record
+    where constraint_record.conname = 'child_syllabus_items_content_id_not_null'
+      and constraint_record.conrelid = 'public.child_syllabus_items'::regclass
+  ) then
+    alter table public.child_syllabus_items
+      add constraint child_syllabus_items_content_id_not_null
+      check (content_id is not null) not valid;
+  end if;
+end;
+$$;
+
+alter table public.child_syllabus_items
+  validate constraint child_syllabus_items_content_id_not_null;
+
 alter table public.child_syllabus_items
   alter column content_id set not null;
 
+alter table public.child_syllabus_items
+  drop constraint if exists child_syllabus_items_content_id_not_null;
+
+-- Supabase runs migrations transactionally, so these indexes cannot use concurrently.
 create unique index if not exists child_syllabus_items_content_grade_unique
   on public.child_syllabus_items (content_id, upper(trim(grade)))
   where content_id is not null;
+
+create index if not exists exam_event_items_child_syllabus_item_idx
+  on public.exam_event_items (child_syllabus_item_id);
+
+create index if not exists child_class_plans_syllabus_item_ids_gin_idx
+  on public.child_class_plans using gin (syllabus_item_ids);
 
 create or replace function public.sync_child_syllabus_assignment_content()
 returns trigger
@@ -137,7 +167,7 @@ as $$
     (
       select count(*)
       from public.child_class_plans plan
-      where p_syllabus_item_id = any(plan.syllabus_item_ids)
+      where plan.syllabus_item_ids @> array[p_syllabus_item_id]::uuid[]
     ) as class_plan_count,
     (
       select count(*)
@@ -175,7 +205,7 @@ as $$
       where exists (
         select 1
         from assignments
-        where assignments.id = any(plan.syllabus_item_ids)
+        where plan.syllabus_item_ids @> array[assignments.id]::uuid[]
       )
     ) as class_plan_count,
     (
