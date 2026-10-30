@@ -22,6 +22,7 @@ const sectionItems: NavItem[] = [
   { label: "Dia especial", href: "/clases/nueva?especial=1" },
   { label: "Kenshis", href: "/kenshis" },
   { label: "Provisionales", href: "/provisionales" },
+  { label: "Programa infantil", href: "/programa-infantil" },
   { label: "Clases", href: "/clases" },
   { label: "Actas", href: "/actas-clase" },
   { label: "Busen", href: "/clases-negras" },

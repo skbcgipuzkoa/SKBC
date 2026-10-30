@@ -43,6 +43,10 @@ assert.deepEqual(
 const pureSource = readFileSync(new URL("../src/lib/child-program.ts", import.meta.url), "utf8");
 const serverSource = readFileSync(new URL("../src/lib/child-program.server.ts", import.meta.url), "utf8");
 const actionsSource = readFileSync(new URL("../src/app/actions.ts", import.meta.url), "utf8");
+const pageUrl = new URL("../src/app/programa-infantil/page.tsx", import.meta.url);
+const editorUrl = new URL("../src/app/programa-infantil/ChildProgramEditor.tsx", import.meta.url);
+const sidebarSource = readFileSync(new URL("../src/app/components/SidebarNav.tsx", import.meta.url), "utf8");
+const globalStylesSource = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
 const atomicMigrationUrl = new URL("../supabase/migrations/20261030171000_child_program_atomic_mutations.sql", import.meta.url);
 const atomicWritesMigrationUrl = new URL("../supabase/migrations/20261030172000_child_program_atomic_writes.sql", import.meta.url);
 
@@ -89,6 +93,43 @@ for (const rpc of [
 assert.doesNotMatch(serverSource, /upsert\(reordered/);
 assert.doesNotMatch(serverSource, /insertedIds|createdContent|catch \(error\) \{[\s\S]*upsert\(existing/);
 assert.doesNotMatch(serverSource, /\.rpc\("remove_child_syllabus_assignment_if_unused"/);
+
+assert.equal(existsSync(pageUrl), true, "dedicated child-program admin page must exist");
+assert.equal(existsSync(editorUrl), true, "multi-grade child-program editor must exist");
+const pageSource = readFileSync(pageUrl, "utf8");
+const editorSource = readFileSync(editorUrl, "utf8");
+assert.match(pageSource, /hasInternalAccess\(\)/);
+assert.match(pageSource, /redirect\("\/skbc-interno"\)/);
+assert.match(pageSource, /getChildProgramCatalog\(\)/);
+assert.match(pageSource, /childProgramContentUsage/);
+for (const view of ["Temario por grados", "Catalogo general", "Archivados"]) {
+  assert.match(pageSource, new RegExp(view));
+}
+for (const action of [
+  "moveChildProgramAssignmentAction",
+  "archiveChildProgramContentAction",
+  "restoreChildProgramContentAction",
+  "deleteUnusedChildProgramContentAction"
+]) {
+  assert.match(pageSource, new RegExp(action));
+}
+assert.match(pageSource, /content-in-use/);
+assert.match(pageSource, /histori/);
+assert.match(editorSource, /^\"use client\";/);
+assert.match(editorSource, /createChildProgramContentAction/);
+assert.match(editorSource, /updateChildProgramContentAction/);
+assert.match(editorSource, /name="assignments"/);
+assert.match(editorSource, /JSON\.stringify/);
+for (const field of ["active", "examRelevant", "sortOrder"]) {
+  assert.match(editorSource, new RegExp(field));
+}
+assert.match(editorSource, /CHILD_PROGRAM_GRADES/);
+assert.match(sidebarSource, /Programa infantil/);
+assert.match(sidebarSource, /\/programa-infantil/);
+for (const breakpoint of ["820px", "768px", "390px"]) {
+  assert.match(globalStylesSource, new RegExp(`max-width: ${breakpoint}`));
+}
+assert.match(globalStylesSource, /\.child-program-/);
 
 for (const definition of [
   /create or replace function public\.remove_child_syllabus_assignment_if_unused/,
