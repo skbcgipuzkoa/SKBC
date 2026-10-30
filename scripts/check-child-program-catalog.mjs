@@ -44,9 +44,12 @@ const pureSource = readFileSync(new URL("../src/lib/child-program.ts", import.me
 const serverSource = readFileSync(new URL("../src/lib/child-program.server.ts", import.meta.url), "utf8");
 const actionsSource = readFileSync(new URL("../src/app/actions.ts", import.meta.url), "utf8");
 const atomicMigrationUrl = new URL("../supabase/migrations/20261030171000_child_program_atomic_mutations.sql", import.meta.url);
+const atomicWritesMigrationUrl = new URL("../supabase/migrations/20261030172000_child_program_atomic_writes.sql", import.meta.url);
 
 assert.equal(existsSync(atomicMigrationUrl), true, "atomic child-program mutation migration must exist");
 const atomicMigrationSource = readFileSync(atomicMigrationUrl, "utf8");
+assert.equal(existsSync(atomicWritesMigrationUrl), true, "atomic child-program write migration must exist");
+const atomicWritesMigrationSource = readFileSync(atomicWritesMigrationUrl, "utf8");
 
 assert.doesNotMatch(pureSource, /createAdminClient|server-only/);
 assert.match(serverSource, /^import "server-only";/);
@@ -67,15 +70,25 @@ for (const action of [
 assert.match(actionsSource, /parseChildProgramContentForm/);
 assert.match(actionsSource, /normalizeChildGrade/);
 assert.match(actionsSource, /error=content-in-use/);
-assert.match(actionsSource, /saved=child-program-restored-inactive/);
+assert.match(actionsSource, /saved=child-program-restored/);
+assert.doesNotMatch(actionsSource, /child-program-restored-inactive/);
 assert.doesNotMatch(actionsSource, /await childProgramContentUsage\(contentId\)/);
 for (const path of ["/programa-infantil", "/areas-tecnicas", "/examenes", "/dojo", "/clases", "/delegado", "/ficha", "/kenshis"]) {
   assert.match(actionsSource, new RegExp(`\\"${path.replaceAll("/", "\\/")}\\"`));
 }
 assert.match(actionsSource, /revalidatePath\(path, "layout"\)/);
-assert.match(serverSource, /upsert\(reordered, \{ onConflict: "id" \}\)/);
-assert.match(serverSource, /\.rpc\("remove_child_syllabus_assignment_if_unused"/);
 assert.match(serverSource, /\.rpc\("delete_unused_child_syllabus_content"/);
+for (const rpc of [
+  "save_child_program_content",
+  "move_child_program_assignment",
+  "archive_child_syllabus_content",
+  "restore_child_syllabus_content"
+]) {
+  assert.match(serverSource, new RegExp(`\\.rpc\\(\\"${rpc}\\"`));
+}
+assert.doesNotMatch(serverSource, /upsert\(reordered/);
+assert.doesNotMatch(serverSource, /insertedIds|createdContent|catch \(error\) \{[\s\S]*upsert\(existing/);
+assert.doesNotMatch(serverSource, /\.rpc\("remove_child_syllabus_assignment_if_unused"/);
 
 for (const definition of [
   /create or replace function public\.remove_child_syllabus_assignment_if_unused/,
@@ -101,5 +114,35 @@ assert.ok(
 assert.doesNotMatch(atomicMigrationSource, /(?:delete from|update) public\.(?:child_syllabus_history|child_class_plans|exam_event_items)/);
 assert.match(atomicMigrationSource, /revoke execute on function[\s\S]+from public/);
 assert.match(atomicMigrationSource, /grant execute on function[\s\S]+to service_role/);
+
+assert.match(atomicWritesMigrationSource, /add column if not exists active_before_archive boolean/);
+assert.match(atomicWritesMigrationSource, /create or replace function public\.normalize_child_program_grade/);
+assert.match(atomicWritesMigrationSource, /child_syllabus_items_content_normalized_grade_unique/);
+assert.ok((atomicWritesMigrationSource.match(/public\.normalize_child_program_grade\(/g) ?? []).length >= 6);
+for (const definition of [
+  "save_child_program_content",
+  "move_child_program_assignment",
+  "archive_child_syllabus_content",
+  "restore_child_syllabus_content"
+]) {
+  assert.match(atomicWritesMigrationSource, new RegExp(`create or replace function public\\.${definition}`));
+}
+assert.match(atomicWritesMigrationSource, /jsonb_array_elements\(p_assignments\)/);
+assert.match(atomicWritesMigrationSource, /order by item\.id[\s\S]*for update/);
+assert.match(atomicWritesMigrationSource, /pg_advisory_xact_lock/);
+assert.match(atomicWritesMigrationSource, /active_before_archive = item\.active/);
+assert.match(atomicWritesMigrationSource, /active = coalesce\(item\.active_before_archive, false\)/);
+const reorderFunctionSource = atomicWritesMigrationSource
+  .split("create or replace function public.move_child_program_assignment")[1]
+  .split("revoke execute on function")[0];
+assert.match(reorderFunctionSource, /set sort_order = reordered\.sort_order/);
+assert.doesNotMatch(reorderFunctionSource, /\b(?:active|exam_relevant|title|category|description|updated_by|updated_at)\s*=/);
+for (const usagePath of ["child_syllabus_history", "child_class_plans", "exam_event_items"]) {
+  assert.match(atomicWritesMigrationSource, new RegExp(`public\\.${usagePath}`));
+}
+assert.match(atomicWritesMigrationSource, /lock table public\.child_class_plans in share row exclusive mode/);
+assert.match(atomicWritesMigrationSource, /CHILD_PROGRAM_ASSIGNMENT_NOT_FOUND/);
+assert.match(atomicWritesMigrationSource, /CHILD_PROGRAM_REORDER_TARGET_NOT_FOUND/);
+assert.match(atomicWritesMigrationSource, /grant execute on function[\s\S]+to service_role/);
 
 console.log("Child program catalog checks passed.");

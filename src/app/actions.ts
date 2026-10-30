@@ -1163,10 +1163,14 @@ export async function moveChildProgramAssignmentAction(formData: FormData) {
   const direction = String(formData.get("direction") ?? "");
   if (!assignmentId || (direction !== "up" && direction !== "down")) redirect("/programa-infantil?error=invalid-move");
   try {
-    await moveChildProgramAssignment(assignmentId, direction, "WEB SKBC");
+    await moveChildProgramAssignment(assignmentId, direction);
   } catch (error) {
     console.error("Error moving child program assignment", error);
-    const code = error instanceof Error && error.message === "child-program-order-conflict" ? "order-conflict" : "move-failed";
+    const code = isAtomicMutationError(error, "CHILD_PROGRAM_REORDER_TARGET_NOT_FOUND")
+      ? "order-boundary"
+      : isAtomicMutationError(error, "CHILD_PROGRAM_ASSIGNMENT_NOT_FOUND") || isAtomicMutationError(error, "CHILD_PROGRAM_ASSIGNMENT_NOT_IN_GRADE")
+        ? "invalid-move"
+        : "move-failed";
     redirect(`/programa-infantil?error=${code}`);
   }
   revalidateChildProgramConsumers();
@@ -1192,14 +1196,13 @@ export async function restoreChildProgramContentAction(formData: FormData) {
   const contentId = String(formData.get("contentId") ?? "").trim();
   if (!contentId) redirect("/programa-infantil?error=missing-content");
   try {
-    // The schema does not retain pre-archive active flags, so restore safely leaves every assignment inactive.
     await setChildProgramContentArchived(contentId, false, "WEB SKBC");
   } catch (error) {
     console.error("Error restoring child program content", error);
     redirect("/programa-infantil?error=restore-failed");
   }
   revalidateChildProgramConsumers();
-  redirect("/programa-infantil?saved=child-program-restored-inactive");
+  redirect("/programa-infantil?saved=child-program-restored");
 }
 
 export async function deleteUnusedChildProgramContentAction(formData: FormData) {

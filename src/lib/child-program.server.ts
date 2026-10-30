@@ -104,146 +104,34 @@ export async function childProgramContentUsage(contentId: string): Promise<Child
 
 export async function saveChildProgramContent(input: SaveChildProgramContentInput): Promise<string> {
   const supabase = createAdminClient();
-  const now = new Date().toISOString();
-  let contentId = input.contentId;
-  let createdContent = false;
-
-  if (!contentId) {
-    const { data, error } = await supabase
-      .from("child_syllabus_contents")
-      .insert({
-        title: input.title,
-        category: input.category,
-        description: input.description,
-        created_by: input.actor,
-        updated_by: input.actor
-      })
-      .select("id")
-      .single<{ id: string }>();
-    if (error || !data) throw error ?? new Error("child-program-content-create-failed");
-    contentId = data.id;
-    createdContent = true;
-  }
-
-  const { data: existingData, error: existingError } = await supabase
-    .from("child_syllabus_items")
-    .select("id,content_id,grade,title,category,description,active,exam_relevant,sort_order,created_by,updated_by,created_at,updated_at")
-    .eq("content_id", contentId);
-  if (existingError) {
-    if (createdContent) await supabase.from("child_syllabus_contents").delete().eq("id", contentId);
-    throw existingError;
-  }
-
-  const existing = (existingData ?? []) as Array<AssignmentRow & Record<string, unknown>>;
-  const existingByGrade = new Map(existing.map((row) => [normalizeChildGrade(row.grade), row]));
-  const requestedGrades = new Set(input.assignments.map((assignment) => assignment.grade));
-  const insertedIds: string[] = [];
-
-  try {
-    for (const assignment of input.assignments) {
-      const retained = existingByGrade.get(assignment.grade);
-      const values = {
-        content_id: contentId,
-        grade: assignment.grade,
-        active: assignment.active,
-        exam_relevant: assignment.examRelevant,
-        sort_order: assignment.sortOrder,
-        updated_by: input.actor,
-        updated_at: now
-      };
-      if (retained) {
-        const { error } = await supabase.from("child_syllabus_items").update(values).eq("id", retained.id);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from("child_syllabus_items")
-          .insert({ ...values, title: input.title, category: input.category, description: input.description, created_by: input.actor })
-          .select("id")
-          .single<{ id: string }>();
-        if (error || !data) throw error ?? new Error("child-program-assignment-create-failed");
-        insertedIds.push(data.id);
-      }
-    }
-
-    for (const omitted of existing.filter((row) => !requestedGrades.has(normalizeChildGrade(row.grade)))) {
-      const { error: removeError } = await supabase.rpc("remove_child_syllabus_assignment_if_unused", {
-        p_syllabus_item_id: omitted.id
-      });
-      if (removeError && isAtomicMutationError(removeError, "CHILD_PROGRAM_ASSIGNMENT_IN_USE")) {
-        const { error } = await supabase
-          .from("child_syllabus_items")
-          .update({ active: false, updated_by: input.actor, updated_at: now })
-          .eq("id", omitted.id);
-        if (error) throw error;
-      } else if (removeError) throw removeError;
-    }
-
-    const { error: contentError } = await supabase
-      .from("child_syllabus_contents")
-      .update({ title: input.title, category: input.category, description: input.description, updated_by: input.actor, updated_at: now })
-      .eq("id", contentId);
-    if (contentError) throw contentError;
-    return contentId;
-  } catch (error) {
-    if (insertedIds.length) await supabase.from("child_syllabus_items").delete().in("id", insertedIds);
-    if (createdContent) {
-      await supabase.from("child_syllabus_contents").delete().eq("id", contentId);
-    } else if (existing.length) {
-      await supabase.from("child_syllabus_items").upsert(existing, { onConflict: "id" });
-    }
-    throw error;
-  }
+  const { data, error } = await supabase.rpc("save_child_program_content", {
+    p_content_id: input.contentId ?? null,
+    p_title: input.title,
+    p_category: input.category,
+    p_description: input.description,
+    p_assignments: input.assignments,
+    p_actor: input.actor
+  });
+  if (error) throw error;
+  if (!data) throw new Error("child-program-content-save-failed");
+  return String(data);
 }
 
-export async function moveChildProgramAssignment(assignmentId: string, direction: "up" | "down", actor: string) {
+export async function moveChildProgramAssignment(assignmentId: string, direction: "up" | "down") {
   const supabase = createAdminClient();
-  const current = await getChildProgramAssignment(assignmentId);
-  if (!current) throw new Error("child-program-assignment-not-found");
-
-  const { data, error } = await supabase
-    .from("child_syllabus_items")
-    .select("id,content_id,grade,title,category,description,active,exam_relevant,sort_order")
-    .order("sort_order", { ascending: true })
-    .order("title", { ascending: true })
-    .order("id", { ascending: true });
+  const { error } = await supabase.rpc("move_child_program_assignment", {
+    p_assignment_id: assignmentId,
+    p_direction: direction
+  });
   if (error) throw error;
-
-  const ordered = (data ?? []).filter((row) => normalizeChildGrade(row.grade) === current.grade) as AssignmentRow[];
-  const currentIndex = ordered.findIndex((row) => row.id === assignmentId);
-  const target = ordered[currentIndex + (direction === "up" ? -1 : 1)];
-  if (currentIndex < 0 || !target) return;
-
-  const now = new Date().toISOString();
-  [ordered[currentIndex], ordered[currentIndex + (direction === "up" ? -1 : 1)]] = [target, ordered[currentIndex]];
-  const reordered = ordered.map((row, index) => ({
-    ...row,
-    sort_order: (index + 1) * 10,
-    updated_by: actor,
-    updated_at: now
-  }));
-  // One multi-row statement keeps a grade contiguous even when legacy rows share an order value.
-  const { error: reorderError } = await supabase.from("child_syllabus_items").upsert(reordered, { onConflict: "id" });
-  if (reorderError) throw reorderError;
 }
 
 export async function setChildProgramContentArchived(contentId: string, archived: boolean, actor: string) {
   const supabase = createAdminClient();
-  const now = new Date().toISOString();
-  const { error: contentError } = await supabase
-    .from("child_syllabus_contents")
-    .update({ archived_at: archived ? now : null, updated_by: actor, updated_at: now })
-    .eq("id", contentId);
-  if (contentError) throw contentError;
-  if (!archived) return;
-
-  const { error: assignmentError } = await supabase
-    .from("child_syllabus_items")
-    .update({ active: false, updated_by: actor, updated_at: now })
-    .eq("content_id", contentId);
-  if (assignmentError) {
-    await supabase.from("child_syllabus_contents").update({ archived_at: null, updated_by: actor, updated_at: now }).eq("id", contentId);
-    throw assignmentError;
-  }
+  const { error } = archived
+    ? await supabase.rpc("archive_child_syllabus_content", { p_content_id: contentId, p_actor: actor })
+    : await supabase.rpc("restore_child_syllabus_content", { p_content_id: contentId, p_actor: actor });
+  if (error) throw error;
 }
 
 export async function deleteUnusedChildProgramContent(contentId: string) {
