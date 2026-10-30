@@ -2195,15 +2195,26 @@ export async function saveDelegateChildPlanAction(formData: FormData) {
     if (claimError || !claimedLink) throw claimError ?? new Error("El enlace ha cambiado mientras guardabas. Recarga la pagina e intentalo de nuevo.");
 
     if (syllabusItemIds.length) {
-      const { data: allowedItems, error: allowedItemsError } = await supabase
-        .from("child_syllabus_items")
-        .select("id")
-        .in("id", syllabusItemIds)
-        .eq("active", true)
-        .returns<Array<{ id: string }>>();
-      if (allowedItemsError) throw allowedItemsError;
-      if ((allowedItems ?? []).length !== syllabusItemIds.length) {
-        throw new Error("Hay contenidos infantiles que ya no estan disponibles.");
+      const { data: existingPlan, error: existingPlanError } = await supabase
+        .from("child_class_plans")
+        .select("syllabus_item_ids")
+        .eq("class_id", kidsClass.id)
+        .maybeSingle<{ syllabus_item_ids: string[] | null }>();
+      if (existingPlanError) throw existingPlanError;
+      const existingIds = new Set(existingPlan?.syllabus_item_ids ?? []);
+      const newSyllabusItemIds = syllabusItemIds.filter((id) => !existingIds.has(id));
+      if (newSyllabusItemIds.length) {
+        const { data: allowedItems, error: allowedItemsError } = await supabase
+          .from("child_syllabus_items")
+          .select("id,child_syllabus_contents!inner(archived_at)")
+          .in("id", newSyllabusItemIds)
+          .eq("active", true)
+          .is("child_syllabus_contents.archived_at", null)
+          .returns<Array<{ id: string }>>();
+        if (allowedItemsError) throw allowedItemsError;
+        if ((allowedItems ?? []).length !== newSyllabusItemIds.length) {
+          throw new Error("Hay contenidos infantiles que ya no estan disponibles.");
+        }
       }
     }
     if (closeAfter) {
@@ -3542,9 +3553,10 @@ export async function saveChildClassPlanAction(formData: FormData) {
     if (targetedSyllabusItemId) {
       const { data: syllabusItem, error: syllabusItemError } = await supabase
         .from("child_syllabus_items")
-        .select("id,title,grade")
+        .select("id,title,grade,child_syllabus_contents!inner(archived_at)")
         .eq("id", targetedSyllabusItemId)
         .eq("active", true)
+        .is("child_syllabus_contents.archived_at", null)
         .single<{ id: string; title: string; grade: string | null }>();
       if (syllabusItemError || !syllabusItem) throw syllabusItemError ?? new Error("Tecnica infantil no encontrada.");
 

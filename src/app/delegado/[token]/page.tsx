@@ -157,11 +157,21 @@ export default async function DelegateClassPage({
       .maybeSingle<ChildPlanRow>(),
     supabase
       .from("child_syllabus_items")
-      .select("id,grade,title,category,description")
+      .select("id,grade,title,category,description,child_syllabus_contents!inner(archived_at)")
       .eq("active", true)
+      .is("child_syllabus_contents.archived_at", null)
       .order("sort_order")
       .returns<ChildSyllabusItemRow[]>()
   ]) : [{ data: null as ChildPlanRow | null }, { data: [] as ChildSyllabusItemRow[] }];
+  const activeChildSyllabusIds = new Set((childSyllabusItems ?? []).map((item) => item.id));
+  const historicalChildSyllabusIds = (childPlan?.syllabus_item_ids ?? []).filter((id) => !activeChildSyllabusIds.has(id));
+  const { data: historicalChildSyllabusItems } = historicalChildSyllabusIds.length
+    ? await supabase
+      .from("child_syllabus_items")
+      .select("id,grade,title,category,description")
+      .in("id", historicalChildSyllabusIds)
+      .returns<ChildSyllabusItemRow[]>()
+    : { data: [] as ChildSyllabusItemRow[] };
 
   const attendanceKeys = new Set((attendance ?? []).map((item) => `${item.class_id}:${item.member_id}`));
   const title = mode === "combined" ? "Clase adultos + ninos" : mode === "kids" ? "Clase ninos" : "Clase adultos";
@@ -263,7 +273,7 @@ export default async function DelegateClassPage({
               {query.saved === "kids-plan" ? <p className="save-ok">Programa infantil guardado correctamente.</p> : null}
               {query.error === "kids-plan" ? <p className="form-error">No se ha podido guardar el programa infantil{query.detail ? `: ${query.detail}` : "."}</p> : null}
             </section>
-            <DelegateChildPlanSection plan={childPlan} syllabusItems={childSyllabusItems ?? []} />
+            <DelegateChildPlanSection plan={childPlan} syllabusItems={childSyllabusItems ?? []} historicalSyllabusItems={historicalChildSyllabusItems ?? []} />
             <section className="delegate-submit-bar delegate-submit-bar-secondary">
               <div>
                 <strong>Guardar programa</strong>
@@ -372,7 +382,7 @@ export default async function DelegateClassPage({
   );
 }
 
-function DelegateChildPlanSection({ plan, syllabusItems }: { plan: ChildPlanRow | null; syllabusItems: ChildSyllabusItemRow[] }) {
+function DelegateChildPlanSection({ plan, syllabusItems, historicalSyllabusItems }: { plan: ChildPlanRow | null; syllabusItems: ChildSyllabusItemRow[]; historicalSyllabusItems: ChildSyllabusItemRow[] }) {
   const selectedActivities = new Set(plan?.activities ?? []);
   const selectedItems = new Set(plan?.syllabus_item_ids ?? []);
   const byGrade = new Map<string, ChildSyllabusItemRow[]>();
@@ -383,6 +393,8 @@ function DelegateChildPlanSection({ plan, syllabusItems }: { plan: ChildPlanRow 
 
   return (
     <section className="delegate-step-card delegate-child-plan">
+      {historicalSyllabusItems.map((item) => <input key={item.id} type="hidden" name="syllabusItemIds" value={item.id} />)}
+      {historicalSyllabusItems.length ? <p className="muted">Contenido historico conservado: {historicalSyllabusItems.map((item) => item.title).join(", ")}.</p> : null}
       <label>
         Objetivo del dia
         <select name="objective" defaultValue={plan?.objective ?? ""}>

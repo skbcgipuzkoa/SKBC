@@ -115,9 +115,10 @@ export default async function StudentTechnicalAreaPage({
     member.class === "kids"
       ? supabase
           .from("child_syllabus_items")
-          .select("id,grade,title,category,description,exam_relevant,sort_order")
+          .select("id,grade,title,category,description,exam_relevant,sort_order,child_syllabus_contents!inner(archived_at)")
           .in("grade", allowedGrades)
           .eq("active", true)
+          .is("child_syllabus_contents.archived_at", null)
           .order("sort_order", { ascending: true })
           .order("title", { ascending: true })
           .returns<ChildSyllabusItem[]>()

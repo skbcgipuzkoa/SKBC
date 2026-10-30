@@ -209,14 +209,23 @@ export default async function DojoClassPage({
         .returns<ChildClassGroupWorkRow[]>(),
       supabase
         .from("child_syllabus_items")
-        .select("id,grade,title,category,description,exam_relevant,sort_order")
+        .select("id,grade,title,category,description,exam_relevant,sort_order,child_syllabus_contents!inner(archived_at)")
         .eq("active", true)
-        .eq("exam_relevant", true)
+        .is("child_syllabus_contents.archived_at", null)
         .order("sort_order", { ascending: true })
         .returns<ChildSyllabusItemRow[]>()
     ])
     : [{ data: null as ChildClassPlanRow | null }, { data: [] as ChildClassGroupWorkRow[] }, { data: [] as ChildSyllabusItemRow[] }];
   const childSyllabusItems = filterChildSyllabusItemsByGrade(rawChildSyllabusItems ?? [], childSyllabusGradeKeys);
+  const availableChildSyllabusIds = new Set(childSyllabusItems.map((item) => item.id));
+  const historicalChildSyllabusIds = (childClassPlan?.syllabus_item_ids ?? []).filter((id) => !availableChildSyllabusIds.has(id));
+  const { data: historicalChildSyllabusItems } = historicalChildSyllabusIds.length
+    ? await supabase
+      .from("child_syllabus_items")
+      .select("id,grade,title,category,description,exam_relevant,sort_order")
+      .in("id", historicalChildSyllabusIds)
+      .returns<ChildSyllabusItemRow[]>()
+    : { data: [] as ChildSyllabusItemRow[] };
   const dojoReturnTo = `/dojo/${mainClass.legacy_id ?? legacyId}?step=${step}${step === "kids" && query.section === "kids-technical" ? "&section=kids-technical" : ""}`;
 
   return (
@@ -274,6 +283,7 @@ export default async function DojoClassPage({
                 members={kids}
                 syllabusItems={childSyllabusItems}
                 targetedSyllabusItems={rawChildSyllabusItems ?? []}
+                historicalSyllabusItems={historicalChildSyllabusItems ?? []}
                 open={query.section === "kids-technical"}
               />
               <ProvisionalAttendanceForm classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} />
@@ -493,6 +503,7 @@ function DojoChildPlanPanel({
   members,
   syllabusItems,
   targetedSyllabusItems,
+  historicalSyllabusItems,
   open
 }: {
   classId: string;
@@ -503,6 +514,7 @@ function DojoChildPlanPanel({
   members: MemberRow[];
   syllabusItems: ChildSyllabusItemRow[];
   targetedSyllabusItems: ChildSyllabusItemRow[];
+  historicalSyllabusItems: ChildSyllabusItemRow[];
   open?: boolean;
 }) {
   const activities = new Set(plan?.activities ?? []);
@@ -553,6 +565,10 @@ function DojoChildPlanPanel({
         <input type="hidden" name="classId" value={classId} />
         <input type="hidden" name="legacyId" value={legacyId} />
         <input type="hidden" name="returnTo" value={returnTo} />
+        {historicalSyllabusItems.map((item) => <input key={item.id} type="hidden" name="syllabusItemIds" value={item.id} />)}
+        {historicalSyllabusItems.length ? (
+          <p className="muted">Contenido historico conservado: {historicalSyllabusItems.map((item) => item.title).join(", ")}.</p>
+        ) : null}
         <label>
           Objetivo
           <select name="objective" defaultValue={plan?.objective ?? ""}>

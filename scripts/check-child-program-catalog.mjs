@@ -105,6 +105,12 @@ const pageUrl = new URL("../src/app/programa-infantil/page.tsx", import.meta.url
 const editorUrl = new URL("../src/app/programa-infantil/ChildProgramEditor.tsx", import.meta.url);
 const sidebarSource = readFileSync(new URL("../src/app/components/SidebarNav.tsx", import.meta.url), "utf8");
 const globalStylesSource = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+const dojoSource = readFileSync(new URL("../src/app/dojo/[legacyId]/page.tsx", import.meta.url), "utf8");
+const classesSource = readFileSync(new URL("../src/app/clases/[legacyId]/page.tsx", import.meta.url), "utf8");
+const delegateSource = readFileSync(new URL("../src/app/delegado/[token]/page.tsx", import.meta.url), "utf8");
+const studentAreaSource = readFileSync(new URL("../src/app/alumno/area-tecnica/[token]/page.tsx", import.meta.url), "utf8");
+const fichaSource = readFileSync(new URL("../src/app/ficha/[token]/page.tsx", import.meta.url), "utf8");
+const kenshisSource = readFileSync(new URL("../src/app/kenshis/[legacyId]/page.tsx", import.meta.url), "utf8");
 const atomicMigrationUrl = new URL("../supabase/migrations/20261030171000_child_program_atomic_mutations.sql", import.meta.url);
 const atomicWritesMigrationUrl = new URL("../supabase/migrations/20261030172000_child_program_atomic_writes.sql", import.meta.url);
 
@@ -202,6 +208,23 @@ for (const breakpoint of ["820px", "768px", "390px"]) {
 assert.match(globalStylesSource, /\.child-program-/);
 assert.doesNotMatch(globalStylesSource, /\.child-program-table thead\s*\{\s*display:\s*none/);
 assert.match(globalStylesSource, /\.child-program-table thead\s*\{[^}]*clip:/);
+
+for (const [name, source] of [
+  ["dojo", dojoSource],
+  ["classes", classesSource],
+  ["delegate", delegateSource],
+  ["student area", studentAreaSource]
+]) {
+  assert.match(source, /child_syllabus_contents!inner\(archived_at\)/, `${name} availability must join canonical content`);
+  assert.match(source, /\.is\("child_syllabus_contents\.archived_at", null\)/, `${name} availability must exclude archived content`);
+}
+assert.doesNotMatch(dojoSource, /\.eq\("exam_relevant", true\)/);
+assert.doesNotMatch(classesSource, /\.eq\("exam_relevant", true\)/);
+assert.match(dojoSource, /historicalChildSyllabusItems/);
+assert.match(classesSource, /historicalChildSyllabusItems/);
+assert.match(delegateSource, /historicalChildSyllabusItems/);
+assert.match(fichaSource, /\.from\("child_syllabus_history"\)[\s\S]*?\.select\("practiced_on,child_syllabus_items\(title,grade,category,description\)"\)/);
+assert.match(kenshisSource, /\.from\("child_syllabus_history"\)[\s\S]*?\.select\("practiced_on,created_at,child_syllabus_items\(title,grade,category\)"\)/);
 
 for (const definition of [
   /create or replace function public\.remove_child_syllabus_assignment_if_unused/,
