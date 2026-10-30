@@ -270,7 +270,19 @@ export default async function ClaseDetailPage({
   const isCorrectionMode = (clase.closed && clase.status === "pending")
     || (dayClasses ?? []).some((item) => item.closed && item.status === "pending");
   const canEditClosedClass = !clase.closed || isCorrectionMode;
-  const correctionSection = String(query.edit ?? "");
+  const requestedCorrectionSection = String(query.edit ?? "");
+  const correctionDayClasses = dayClasses ?? [];
+  const correctionHasKids = correctionDayClasses.some((item) => item.class_group === "kids") || clase.class_group === "kids";
+  const correctionHasAdults = correctionDayClasses.some((item) => item.class_group === "adults") || clase.class_group === "adults";
+  const availableCorrectionSections = [
+    ...(correctionHasKids ? ["kids-attendance", "kids-technical"] : []),
+    ...(correctionHasAdults ? ["adult-technical", "adult-attendance"] : [])
+  ];
+  const correctionSection = isCorrectionMode
+    ? availableCorrectionSections.includes(requestedCorrectionSection)
+      ? requestedCorrectionSection
+      : availableCorrectionSections[0] ?? ""
+    : "";
   const activeStep = clase.class_group === "adults"
     ? ((clase.closed && !isCorrectionMode) || ["asistencia", "cierre"].includes(String(query.step ?? "")) || correctionSection.endsWith("attendance") ? "attendance" : "techniques")
     : "attendance";
@@ -306,6 +318,10 @@ export default async function ClaseDetailPage({
       : isCombinedDay && !clase.closed
         ? attendanceClasses.filter((item) => item.class_group === "adults")
         : attendanceClasses;
+  const hasPendingAttendance = attendancePanelClasses.some((dayClass) => {
+    const attendedIds = new Set((dayAttendance ?? []).filter((item) => item.class_id === dayClass.id).map((item) => item.member_id));
+    return (dayMembers ?? []).some((member) => member.class === dayClass.class_group && !attendedIds.has(member.id));
+  });
   const registeredAttendanceGroups = clase.class_group === "adults" && activeStep === "attendance"
     ? attendanceClasses.map((dayClass) => ({
       title: dayClass.class_group === "kids" ? "Ninos" : "Adultos",
@@ -451,11 +467,12 @@ export default async function ClaseDetailPage({
         compact
         open={query.section === "kids-technical"}
       />
-      <form action={addBulkAttendanceAction} className="attendance-day-form">
+      <form action={addBulkAttendanceAction} className="attendance-day-form" data-class-primary-form={pendingKidsDayMembers.length ? "kids-attendance" : undefined}>
         <input type="hidden" name="classId" value={kidsDayClass.id} />
         <input type="hidden" name="legacyId" value={kidsDayClass.legacy_id ?? legacyId} />
         <input type="hidden" name="returnLegacyId" value={legacyId} />
         <input type="hidden" name="returnStep" value="" />
+        <input type="hidden" name="returnTo" value={`/clases/${legacyId}?saved=kids-attendance#asistencia`} />
         <input type="hidden" name="groupClassIds" value={kidsDayClass.id} />
         <div className="attendance-checklist">
           {pendingKidsDayMembers.length ? pendingKidsDayMembers.map((member) => (
@@ -485,6 +502,11 @@ export default async function ClaseDetailPage({
   ) : null;
   const attendancePanel = (
     <><AttendanceDayForm action={addBulkAttendanceAction}>
+      {hasPendingAttendance ? (
+        isCorrectionMode && correctionSection === "kids-attendance"
+          ? <input type="hidden" data-class-primary-form="kids-attendance" />
+          : <input type="hidden" data-class-primary-form="adult-attendance" />
+      ) : null}
       <input type="hidden" name="classId" value={clase.id} />
       <input type="hidden" name="legacyId" value={legacyId} />
       <input type="hidden" name="returnLegacyId" value={legacyId} />
@@ -705,7 +727,7 @@ export default async function ClaseDetailPage({
       <h2>Asistencia final</h2>
       <>
           {clase.closed ? <p className="muted">Acta cerrada: puedes anadir asistencias que faltaban como correccion.</p> : null}
-          <form action={addBulkAttendanceAction} className="quick-form">
+          <form action={addBulkAttendanceAction} className="quick-form" data-class-primary-form={pendingClassMembers.length ? (clase.class_group === "kids" ? "kids-attendance" : "adult-attendance") : undefined}>
             <input type="hidden" name="classId" value={clase.id} />
             <input type="hidden" name="legacyId" value={legacyId} />
             <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=asistencia#asistencia`} />
@@ -769,7 +791,9 @@ export default async function ClaseDetailPage({
     </article>
   );
   const requestedSection = String(query.section ?? "");
-  const currentClassSection = requestedSection === "kids-technical" || requestedSection === "adult-technical"
+  const currentClassSection = isCorrectionMode
+    ? correctionSection
+    : requestedSection === "kids-technical" || requestedSection === "adult-technical"
     ? requestedSection
     : clase.class_group === "kids"
       ? "kids-attendance"
@@ -782,22 +806,22 @@ export default async function ClaseDetailPage({
             : "adult-technical";
   const classSectionLinks: ClassSectionLink[] = [
     ...(kidsDayClass || clase.class_group === "kids" ? [
-      { id: "kids-attendance", label: "Asistencia ninos", href: `/clases/${legacyId}#asistencia-ninos-rapida`, done: kidsRegisteredCount > 0 || Boolean(clase.class_group === "kids" && attendance?.length) },
-      { id: "kids-technical", label: "Tecnica ninos", href: `/clases/${legacyId}?section=kids-technical#tecnica-ninos`, done: Boolean(childClassPlan?.objective || childClassPlan?.syllabus_item_ids?.length || childClassGroupWork?.length) }
+      { id: "kids-attendance", label: "Asistencia ninos", href: isCorrectionMode ? `/clases/${legacyId}?edit=kids-attendance#asistencia` : `/clases/${legacyId}#asistencia-ninos-rapida`, done: kidsRegisteredCount > 0 || Boolean(clase.class_group === "kids" && attendance?.length) },
+      { id: "kids-technical", label: "Tecnica ninos", href: isCorrectionMode ? `/clases/${legacyId}?edit=kids-technical#tecnica-ninos` : `/clases/${legacyId}?section=kids-technical#tecnica-ninos`, done: Boolean(childClassPlan?.objective || childClassPlan?.syllabus_item_ids?.length || childClassGroupWork?.length) }
     ] : []),
     ...(clase.class_group === "adults" ? [
-      { id: "adult-technical", label: "Tecnica adultos", href: `/clases/${legacyId}?section=adult-technical#plan-tecnico`, done: completedPlan > 0 },
-      { id: "adult-attendance", label: "Asistencia adultos", href: `/clases/${legacyId}?step=asistencia#asistencia`, done: adultRegisteredCount > 0 }
+      { id: "adult-technical", label: "Tecnica adultos", href: isCorrectionMode ? `/clases/${legacyId}?edit=adult-technical#plan-tecnico` : `/clases/${legacyId}?section=adult-technical#plan-tecnico`, done: completedPlan > 0 },
+      { id: "adult-attendance", label: "Asistencia adultos", href: isCorrectionMode ? `/clases/${legacyId}?edit=adult-attendance#asistencia` : `/clases/${legacyId}?step=asistencia#asistencia`, done: adultRegisteredCount > 0 }
     ] : []),
-    { id: "close", label: "Revisar y cerrar", href: clase.class_group === "adults" ? `/clases/${legacyId}?step=cierre#revision-final` : `/clases/${legacyId}#cierre-clase`, done: clase.closed },
-    { id: "orders", label: "Pedidos", href: `/pedidos-cinturones?tab=payments&returnTo=${encodeURIComponent(`/clases/${legacyId}${query.step ? `?step=${encodeURIComponent(String(query.step))}` : query.section ? `?section=${encodeURIComponent(String(query.section))}` : ""}`)}` },
-    { id: "deliveries", label: "Entregas", href: `/entregas?returnTo=${encodeURIComponent(`/clases/${legacyId}${query.step ? `?step=${encodeURIComponent(String(query.step))}` : query.section ? `?section=${encodeURIComponent(String(query.section))}` : ""}`)}` }
+    { id: "close", label: "Revisar y cerrar", href: isCorrectionMode ? "#correction-close" : clase.class_group === "adults" ? `/clases/${legacyId}?step=cierre#revision-final` : `/clases/${legacyId}#cierre-clase`, done: clase.closed },
+    { id: "orders", label: "Pedidos", href: `/pedidos-cinturones?tab=payments&returnTo=${encodeURIComponent(`/clases/${legacyId}${query.edit ? `?edit=${encodeURIComponent(String(query.edit))}` : query.step ? `?step=${encodeURIComponent(String(query.step))}` : query.section ? `?section=${encodeURIComponent(String(query.section))}` : ""}`)}` },
+    { id: "deliveries", label: "Entregas", href: `/entregas?returnTo=${encodeURIComponent(`/clases/${legacyId}${query.edit ? `?edit=${encodeURIComponent(String(query.edit))}` : query.step ? `?step=${encodeURIComponent(String(query.step))}` : query.section ? `?section=${encodeURIComponent(String(query.section))}` : ""}`)}` }
   ];
 
   return (
     <div className="shell">
       <SidebarNav current="/clases" />
-      <main className="main class-detail-main">
+      <main className="main class-detail-main class-workspace-with-actions">
         <div className="topbar">
           <div>
             <p className="eyebrow">
@@ -934,7 +958,7 @@ export default async function ClaseDetailPage({
         ) : null}
 
         {isCorrectionMode ? (
-          <section className="class-correction-panel" aria-label="Clase reabierta para correccion">
+          <section className="class-correction-panel" id="correction-close" aria-label="Clase reabierta para correccion">
             <div className="class-correction-head">
               <div>
                 <p className="eyebrow">Clase reabierta para correccion</p>
@@ -946,7 +970,7 @@ export default async function ClaseDetailPage({
                 <input type="hidden" name="legacyId" value={legacyId} />
                 <ClosingClassButton className="primary-link button-reset">
                   <Check aria-hidden="true" size={16} />
-                  Guardar cambios y cerrar todo
+                  Guardar correcciones y cerrar clase
                 </ClosingClassButton>
               </form>
             </div>
@@ -1069,7 +1093,11 @@ export default async function ClaseDetailPage({
           </div>
         </details>
 
-        {!isCorrectionMode ? <ClassSectionNav links={classSectionLinks} current={currentClassSection} /> : null}
+        <ClassSectionNav
+          links={classSectionLinks}
+          current={currentClassSection}
+          correctionLabel={isCorrectionMode ? "En correccion" : undefined}
+        />
 
         <section className="card class-mission-card">
           <div>
@@ -1182,14 +1210,15 @@ export default async function ClaseDetailPage({
               <span className="status" data-plan-total-count data-plan-total-label=" realizadas">{completedPlan}/{(plan ?? []).length} realizadas</span>
             </div>
             <PlanTechniqueForm action={updateClassPlanTechniquesAction}>
+              {canEditClosedClass && groupedPlan.length ? <input type="hidden" data-class-primary-form="adult-technical" /> : null}
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
               <input type="hidden" name="nextStep" value="attendance" />
-              <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=adult-technical#plan-tecnico` : `/clases/${legacyId}?step=asistencia#asistencia`} />
+              <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=adult-technical&saved=techniques#plan-tecnico` : `/clases/${legacyId}?step=tecnicas&saved=techniques#plan-tecnico`} />
               {canEditClosedClass && groupedPlan.length ? (
                 <div className="plan-save-row">
-                  <p className="muted">Marca todas las tecnicas realizadas y guarda una sola vez antes de pasar asistencia.</p>
-                  <button type="submit">Guardar y pasar asistencia</button>
+                  <p className="muted">Marca todas las tecnicas realizadas y guarda cuando quieras.</p>
+                  <button type="submit">Guardar tecnicas</button>
                 </div>
               ) : null}
               <section className="plan-board mobile-plan-board">
@@ -1252,7 +1281,7 @@ export default async function ClaseDetailPage({
               </section>
               {canEditClosedClass && groupedPlan.length ? (
                 <div className="plan-save-row bottom">
-                  <button type="submit">Guardar y pasar asistencia</button>
+                  <button type="submit">Guardar tecnicas</button>
                 </div>
               ) : null}
               </PlanTechniqueForm>
@@ -1514,7 +1543,7 @@ function ChildLightPlanPanel({
           })}
         </div>
       ) : null}
-      <form action={saveChildClassPlanAction} className="child-light-plan-form">
+      <form action={saveChildClassPlanAction} className="child-light-plan-form" data-class-primary-form="kids-technical">
         <input type="hidden" name="classId" value={classId} />
         <input type="hidden" name="legacyId" value={legacyId} />
         <input type="hidden" name="returnTo" value={returnTo} />
@@ -1846,7 +1875,7 @@ function buildClassMission({
 
     return {
       title: isCombinedDay ? "2. Marca tecnicas adultas" : "Marca tecnicas adultas",
-      description: "Despliega cada grado, marca todo lo realizado y pulsa Guardar y pasar asistencia.",
+      description: "Despliega cada grado, marca todo lo realizado y pulsa Guardar tecnicas.",
       primaryHref: "#plan-tecnico",
       primaryLabel: "Ir al plan",
       secondaryHref: "/clases",
