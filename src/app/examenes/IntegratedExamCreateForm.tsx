@@ -11,6 +11,7 @@ import {
   type ChildProgramAssignment
 } from "@/lib/child-program";
 import type { IntegratedExamProgram } from "@/lib/integrated-exams";
+import type { TemplateExamSnapshotItem } from "@/lib/integrated-exam-snapshot";
 
 type MemberOption = {
   id: string;
@@ -27,6 +28,7 @@ type DuplicationTemplate = {
   notes: string | null;
   memberIds: string[];
   examinerNames: string[];
+  items: TemplateExamSnapshotItem[];
 };
 
 export function IntegratedExamCreateForm({
@@ -45,7 +47,7 @@ export function IntegratedExamCreateForm({
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>(
     kidMembers.filter((member) => duplicatedMemberIds.has(member.id)).map((member) => member.id)
   );
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>(duplicationTemplate?.items.map((item) => item.id) ?? []);
   const targetGrades = useMemo(
     () => selectedKidIds.map((id) => resolveChildExamTargetGrade(kidMembers.find((member) => member.id === id)?.grade)),
     [kidMembers, selectedKidIds]
@@ -85,6 +87,17 @@ export function IntegratedExamCreateForm({
       const itemIndex = next.indexOf(itemId);
       const swapIndex = next.indexOf(swapId);
       [next[itemIndex], next[swapIndex]] = [next[swapIndex], next[itemIndex]];
+      return next;
+    });
+  }
+
+  function moveTemplateItem(itemId: string, direction: -1 | 1) {
+    setSelectedItemIds((current) => {
+      const index = current.indexOf(itemId);
+      const swapIndex = index + direction;
+      if (index < 0 || swapIndex < 0 || swapIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
       return next;
     });
   }
@@ -149,6 +162,33 @@ export function IntegratedExamCreateForm({
             ))}
           </div>
         </details>
+        {programType === "kids_progressive" && duplicationTemplate ? (
+          <fieldset className="wide progressive-exam-syllabus">
+            <legend>Temario copiado</legend>
+            <p className="muted">Se conserva la ficha guardada en el examen original. Desmarca o reordena antes de crear la copia.</p>
+            {[...selectedItemIds, ...duplicationTemplate.items.map((item) => item.id).filter((id) => !selectedItemIds.includes(id))].map((id) => {
+              const item = duplicationTemplate.items.find((candidate) => candidate.id === id);
+              if (!item) return null;
+              const selected = selectedItemIds.includes(item.id);
+              const selectedIndex = selectedItemIds.indexOf(item.id);
+              return (
+                <div className="progressive-exam-item" key={item.id}>
+                  <label>
+                    <input type="checkbox" checked={selected} onChange={(event) => toggleItem(item.id, event.target.checked)} />
+                    <span><strong>{item.name}</strong><small>{item.grade ?? "Sin grado"}{item.category ? ` - ${item.category}` : ""}</small></span>
+                  </label>
+                  {selected ? (
+                    <div className="progressive-exam-order">
+                      <button type="button" title="Subir" aria-label={`Subir ${item.name}`} disabled={selectedIndex === 0} onClick={() => moveTemplateItem(item.id, -1)}><ChevronUp size={16} /></button>
+                      <button type="button" title="Bajar" aria-label={`Bajar ${item.name}`} disabled={selectedIndex === selectedItemIds.length - 1} onClick={() => moveTemplateItem(item.id, 1)}><ChevronDown size={16} /></button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+            {selectedItemIds.map((id) => <input key={id} type="hidden" name="templateEventItemIds" value={id} />)}
+          </fieldset>
+        ) : null}
         {programType === "kids_progressive" && !duplicationTemplate ? (
           <fieldset className="wide progressive-exam-syllabus">
             <legend>Temario progresivo</legend>

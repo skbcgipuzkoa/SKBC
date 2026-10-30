@@ -5,7 +5,11 @@ import {
   evaluateExamTechnicalReadiness
 } from "../src/lib/exam-technical-readiness.ts";
 import { parseExamNotice } from "../src/lib/exam-notice.ts";
-import { copyExamSnapshotItems } from "../src/lib/integrated-exam-snapshot.ts";
+import {
+  buildSelectedProgressiveExamSnapshot,
+  copyExamSnapshotItems,
+  validateTemplateExamItemSelection
+} from "../src/lib/integrated-exam-snapshot.ts";
 import { progressiveTargetGradesWithoutScorableItems } from "../src/lib/child-program.ts";
 
 const technique = (id, name, category, contentType = null) => ({
@@ -73,6 +77,26 @@ assert.deepEqual(copiedSnapshot, [{ ...storedSnapshot[0], exam_event_id: "new-ev
 assert.notEqual(copiedSnapshot[0], storedSnapshot[0]);
 storedSnapshot[0].name = "Catalog title changed later";
 assert.equal(copiedSnapshot[0].name, "Stored title");
+
+const templateSnapshot = [
+  { id: "white", exam_event_id: "template", source: "child_syllabus", child_syllabus_item_id: "current-white", section: "KIHON", name: "Stored white", summary: "Old white summary", grade: "BLANCO", category: "goho", weight: 1, order_index: 1, cut_grade: null, active: true },
+  { id: "yellow", exam_event_id: "template", source: "child_syllabus", child_syllabus_item_id: "current-yellow", section: "JUHO", name: "Stored yellow", summary: "Old yellow summary", grade: "AMARILLO", category: "juho", weight: 2, order_index: 2, cut_grade: null, active: true },
+  { id: "inactive", exam_event_id: "template", source: "manual", child_syllabus_item_id: null, section: null, name: "Inactive", summary: null, grade: "AMARILLO", category: null, weight: 1, order_index: 3, cut_grade: null, active: false },
+  { id: "old-cut", exam_event_id: "template", source: "cut", child_syllabus_item_id: null, section: "CORTE", name: "Old cut", summary: null, grade: "AMARILLO", category: "corte", weight: 0, order_index: 4, cut_grade: "AMARILLO", active: true }
+];
+assert.deepEqual(validateTemplateExamItemSelection(templateSnapshot, ["yellow", "white"]), ["yellow", "white"]);
+assert.throws(() => validateTemplateExamItemSelection(templateSnapshot, ["foreign"]), /plantilla/);
+assert.throws(() => validateTemplateExamItemSelection(templateSnapshot, ["inactive"]), /evaluable/);
+assert.throws(() => validateTemplateExamItemSelection(templateSnapshot, ["old-cut"]), /evaluable/);
+assert.deepEqual(
+  buildSelectedProgressiveExamSnapshot(templateSnapshot, ["yellow", "white"], "new-event", ["BLANCO-AMARILLO", "AMARILLO-NARANJA"]),
+  [
+    { exam_event_id: "new-event", source: "child_syllabus", child_syllabus_item_id: "current-yellow", section: "JUHO", name: "Stored yellow", summary: "Old yellow summary", grade: "AMARILLO", category: "juho", weight: 2, order_index: 1, cut_grade: null, active: true },
+    { exam_event_id: "new-event", source: "child_syllabus", child_syllabus_item_id: "current-white", section: "KIHON", name: "Stored white", summary: "Old white summary", grade: "BLANCO", category: "goho", weight: 1, order_index: 2, cut_grade: null, active: true },
+    { exam_event_id: "new-event", source: "cut", section: "CORTE", name: "Corte progresivo: se sienta BLANCO-AMARILLO", summary: "Los kenshis cuyo objetivo termina en BLANCO-AMARILLO pueden finalizar aqui si el examen es progresivo.", grade: "BLANCO-AMARILLO", category: "corte", weight: 0, order_index: 3, cut_grade: "BLANCO-AMARILLO", active: true },
+    { exam_event_id: "new-event", source: "cut", section: "CORTE", name: "Corte progresivo: se sienta AMARILLO-NARANJA", summary: "Los kenshis cuyo objetivo termina en AMARILLO-NARANJA pueden finalizar aqui si el examen es progresivo.", grade: "AMARILLO-NARANJA", category: "corte", weight: 0, order_index: 4, cut_grade: "AMARILLO-NARANJA", active: true }
+  ]
+);
 assert.deepEqual(
   progressiveTargetGradesWithoutScorableItems(
     [{ grade: "AMARILLO", scorable: true }],
@@ -97,6 +121,7 @@ assert.match(examPageSource, /getChildProgramCatalog/);
 assert.match(examPageSource, /<IntegratedExamCreateForm/);
 assert.doesNotMatch(examPageSource, /<form action=\{createIntegratedExamEventAction\} className="edit-form">/);
 assert.match(actionsSource, /formData\.getAll\("childSyllabusItemIds"\)/);
+assert.match(actionsSource, /formData\.getAll\("templateEventItemIds"\)/);
 assert.match(actionsSource, /childSyllabusItemIds\s*\n/);
 assert.match(integratedExamsSource, /childSyllabusItemIds\?: string\[\]/);
 assert.match(integratedExamsSource, /loadApprovedChildExamAssignments/);
@@ -106,5 +131,10 @@ assert.match(integratedExamsSource, /resolveChildExamTargetGrade/);
 assert.doesNotMatch(integratedExamsSource, /kidsTargetByCurrentGrade/);
 assert.match(integratedExamsSource, /no tienen contenido evaluable seleccionado/);
 assert.match(integratedExamsSource, /input\.templateEventId[\s\S]*copyExamItems/);
+assert.match(integratedExamsSource, /templateEventItemIds\?: string\[\]/);
+assert.match(integratedExamsSource, /buildSelectedProgressiveExamSnapshot/);
+assert.match(integratedExamsSource, /validateTemplateExamItemSelection/);
+assert.match(examFormSource, /duplicationTemplate\.items/);
+assert.match(examFormSource, /name="templateEventItemIds"/);
 
 console.log("Exam technical readiness checks passed.");

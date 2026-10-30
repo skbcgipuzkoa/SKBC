@@ -91,10 +91,14 @@ type TechnicalHistory = {
 type ChildTechnicalHistory = {
   practiced_on: string;
   created_at: string;
+  title_snapshot: string | null;
+  category_snapshot: string | null;
+  description_snapshot: string | null;
   child_syllabus_items: {
     title: string;
     grade: string | null;
     category: string | null;
+    description: string | null;
   } | null;
 };
 
@@ -246,7 +250,7 @@ export default async function KenshiDetailPage({
     member.class === "kids"
       ? supabase
           .from("child_syllabus_history")
-          .select("practiced_on,created_at,child_syllabus_items(title,grade,category)")
+          .select("practiced_on,created_at,title_snapshot,category_snapshot,description_snapshot,child_syllabus_items(title,grade,category,description)")
           .eq("member_id", member.id)
           .order("practiced_on", { ascending: false })
           .order("created_at", { ascending: false })
@@ -992,13 +996,13 @@ function buildAuditTechniqueRows(
 ): AuditTechniqueRow[] {
   if (memberClass === "kids") {
     return childHistory
-      .filter((item) => item.child_syllabus_items?.title)
+      .filter((item) => item.title_snapshot ?? item.child_syllabus_items?.title)
       .map((item) => ({
-        key: `${item.created_at}-${item.child_syllabus_items?.title ?? "tecnica"}`,
+        key: `${item.created_at}-${item.title_snapshot ?? item.child_syllabus_items?.title ?? "tecnica"}`,
         date: item.practiced_on,
-        name: item.child_syllabus_items?.title ?? "Tecnica infantil",
+        name: item.title_snapshot ?? item.child_syllabus_items?.title ?? "Tecnica infantil",
         group: item.child_syllabus_items?.grade ?? "Programa infantil",
-        countsAs: item.child_syllabus_items?.category ?? "practica infantil"
+        countsAs: (item.title_snapshot !== null ? item.category_snapshot : item.child_syllabus_items?.category) ?? "practica infantil"
       }));
   }
 

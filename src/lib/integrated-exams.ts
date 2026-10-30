@@ -11,7 +11,12 @@ import {
   resolveChildExamTargetGrade,
   type ChildProgramAssignment
 } from "@/lib/child-program";
-import { copyExamSnapshotItems } from "@/lib/integrated-exam-snapshot";
+import {
+  buildSelectedProgressiveExamSnapshot,
+  copyExamSnapshotItems,
+  validateTemplateExamItemSelection,
+  type TemplateExamSnapshotItem
+} from "@/lib/integrated-exam-snapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type IntegratedExamProgram = "adults" | "kids_progressive" | "kids" | "dan_tribunal";
@@ -144,6 +149,7 @@ export async function createIntegratedExamEvent(input: {
   examinerNames: string[];
   notes?: string | null;
   templateEventId?: string | null;
+  templateEventItemIds?: string[];
   childSyllabusItemIds?: string[];
 }) {
   const supabase = createAdminClient();
@@ -202,7 +208,13 @@ export async function createIntegratedExamEvent(input: {
   let items;
   try {
     items = input.templateEventId
-      ? await copyExamItems(input.templateEventId, event.id, input.programType)
+      ? await copyExamItems(
+          input.templateEventId,
+          event.id,
+          input.programType,
+          input.templateEventItemIds ?? [],
+          students.map((student) => student.target_grade).filter(Boolean) as string[]
+        )
       : await buildExamItems(
           event.id,
           input.programType,
@@ -255,7 +267,13 @@ export async function createIntegratedExamEvent(input: {
   return { eventId: event.id, studentCount: insertedStudents?.length ?? students.length, itemCount: items.length };
 }
 
-async function copyExamItems(templateEventId: string, eventId: string, programType: IntegratedExamProgram) {
+async function copyExamItems(
+  templateEventId: string,
+  eventId: string,
+  programType: IntegratedExamProgram,
+  selectedItemIds: string[],
+  targetGrades: string[]
+) {
   const supabase = createAdminClient();
   const { data: template, error: templateError } = await supabase
     .from("exam_events")
@@ -269,12 +287,16 @@ async function copyExamItems(templateEventId: string, eventId: string, programTy
 
   const { data: templateItems, error: itemsError } = await supabase
     .from("exam_event_items")
-    .select("source,technique_id,child_syllabus_item_id,section,name,summary,grade,category,weight,order_index,cut_grade,active")
+    .select("id,exam_event_id,source,technique_id,child_syllabus_item_id,section,name,summary,grade,category,weight,order_index,cut_grade,active")
     .eq("exam_event_id", templateEventId)
     .order("order_index");
 
   if (itemsError) throw itemsError;
-  return copyExamSnapshotItems(templateItems ?? [], eventId);
+  if (programType === "kids_progressive") {
+    validateTemplateExamItemSelection((templateItems ?? []) as TemplateExamSnapshotItem[], selectedItemIds);
+    return buildSelectedProgressiveExamSnapshot((templateItems ?? []) as TemplateExamSnapshotItem[], selectedItemIds, eventId, targetGrades);
+  }
+  return copyExamSnapshotItems((templateItems ?? []).map(({ id: _id, exam_event_id: _examEventId, ...item }) => item), eventId);
 }
 
 export async function getIntegratedExamDuplicationTemplate(eventId: string) {
@@ -287,7 +309,7 @@ export async function getIntegratedExamDuplicationTemplate(eventId: string) {
 
   if (eventError || !event) return null;
 
-  const [{ data: students, error: studentsError }, { data: examiners, error: examinersError }] = await Promise.all([
+  const [{ data: students, error: studentsError }, { data: examiners, error: examinersError }, { data: items, error: itemsError }] = await Promise.all([
     supabase
       .from("exam_event_students")
       .select("member_id")
@@ -299,14 +321,24 @@ export async function getIntegratedExamDuplicationTemplate(eventId: string) {
       .select("name")
       .eq("exam_event_id", eventId)
       .order("created_at")
-      .returns<Array<{ name: string }>>()
+      .returns<Array<{ name: string }>>(),
+    supabase
+      .from("exam_event_items")
+      .select("id,exam_event_id,source,technique_id,child_syllabus_item_id,section,name,summary,grade,category,weight,order_index,cut_grade,active")
+      .eq("exam_event_id", eventId)
+      .eq("active", true)
+      .neq("source", "cut")
+      .gt("weight", 0)
+      .order("order_index")
+      .returns<TemplateExamSnapshotItem[]>()
   ]);
 
-  if (studentsError || examinersError) throw studentsError ?? examinersError;
+  if (studentsError || examinersError || itemsError) throw studentsError ?? examinersError ?? itemsError;
   return {
     ...event,
     memberIds: (students ?? []).map((student) => student.member_id),
-    examinerNames: (examiners ?? []).map((examiner) => examiner.name)
+    examinerNames: (examiners ?? []).map((examiner) => examiner.name),
+    items: items ?? []
   };
 }
 

@@ -148,11 +148,30 @@ const fichaSource = readFileSync(new URL("../src/app/ficha/[token]/page.tsx", im
 const kenshisSource = readFileSync(new URL("../src/app/kenshis/[legacyId]/page.tsx", import.meta.url), "utf8");
 const atomicMigrationUrl = new URL("../supabase/migrations/20261030171000_child_program_atomic_mutations.sql", import.meta.url);
 const atomicWritesMigrationUrl = new URL("../supabase/migrations/20261030172000_child_program_atomic_writes.sql", import.meta.url);
+const historySnapshotsMigrationUrl = new URL("../supabase/migrations/20261030173000_child_program_history_snapshots_and_consolidation.sql", import.meta.url);
 
 assert.equal(existsSync(atomicMigrationUrl), true, "atomic child-program mutation migration must exist");
 const atomicMigrationSource = readFileSync(atomicMigrationUrl, "utf8");
 assert.equal(existsSync(atomicWritesMigrationUrl), true, "atomic child-program write migration must exist");
 const atomicWritesMigrationSource = readFileSync(atomicWritesMigrationUrl, "utf8");
+assert.equal(existsSync(historySnapshotsMigrationUrl), true, "history snapshot and consolidation migration must exist");
+const historySnapshotsMigrationSource = readFileSync(historySnapshotsMigrationUrl, "utf8");
+
+for (const column of ["title_snapshot", "category_snapshot", "description_snapshot"]) {
+  assert.match(historySnapshotsMigrationSource, new RegExp(`add column if not exists ${column}`));
+}
+assert.match(historySnapshotsMigrationSource, /update public\.child_syllabus_history history[\s\S]*title_snapshot[\s\S]*child_syllabus_items assignment/);
+assert.match(historySnapshotsMigrationSource, /alter column title_snapshot set not null/);
+assert.match(historySnapshotsMigrationSource, /normalized_grade/);
+assert.match(historySnapshotsMigrationSource, /normalized_title/);
+assert.match(historySnapshotsMigrationSource, /normalized_description/);
+assert.match(historySnapshotsMigrationSource, /group by[\s\S]*normalized_grade[\s\S]*having count\(\*\) > 1/);
+assert.match(historySnapshotsMigrationSource, /min\((?:normalized\.)?content_id::text\)::uuid/);
+assert.match(historySnapshotsMigrationSource, /update public\.child_syllabus_items assignment[\s\S]*set content_id = safe_group\.canonical_id/);
+assert.match(historySnapshotsMigrationSource, /delete from public\.child_syllabus_contents content[\s\S]*not exists/);
+assert.match(historySnapshotsMigrationSource, /create trigger snapshot_child_syllabus_history_on_insert\s+before insert on public\.child_syllabus_history/);
+assert.match(historySnapshotsMigrationSource, /create trigger preserve_child_syllabus_history_snapshots_on_update\s+before update on public\.child_syllabus_history/);
+assert.match(historySnapshotsMigrationSource, /new\.title_snapshot := old\.title_snapshot/);
 
 assert.doesNotMatch(pureSource, /createAdminClient|server-only/);
 assert.match(serverSource, /^import "server-only";/);
@@ -266,8 +285,18 @@ assert.ok((actionsSource.match(/reconcileChildClassPlanItemIds\(/g)?.length ?? 0
 assert.ok((actionsSource.match(/validateChildClassPlanSubmittedIds\(/g)?.length ?? 0) >= 2);
 assert.match(delegateSource, /const childSyllabusLoadError = childPlanError \?\? childSyllabusError \?\? historicalChildSyllabusError/);
 assert.match(delegateSource, /childSyllabusLoadError \? \([\s\S]*No se ha podido cargar el programa infantil[\s\S]*\) : \(/);
-assert.match(fichaSource, /\.from\("child_syllabus_history"\)[\s\S]*?\.select\("practiced_on,child_syllabus_items\(title,grade,category,description\)"\)/);
-assert.match(kenshisSource, /\.from\("child_syllabus_history"\)[\s\S]*?\.select\("practiced_on,created_at,child_syllabus_items\(title,grade,category\)"\)/);
+assert.match(fichaSource, /\.from\("child_syllabus_history"\)[\s\S]*?\.select\("practiced_on,title_snapshot,category_snapshot,description_snapshot,child_syllabus_items\(title,grade,category,description\)"\)/);
+assert.match(kenshisSource, /\.from\("child_syllabus_history"\)[\s\S]*?\.select\("practiced_on,created_at,title_snapshot,category_snapshot,description_snapshot,child_syllabus_items\(title,grade,category,description\)"\)/);
+for (const source of [fichaSource, kenshisSource]) {
+  assert.match(source, /title_snapshot\s*\?\?/);
+  assert.match(source, /title_snapshot\s*!==\s*null/);
+}
+assert.match(actionsSource, /\.select\("id,grade,title,category,description"\)/);
+assert.match(actionsSource, /\.select\("member_id,syllabus_item_id,title_snapshot,category_snapshot,description_snapshot"\)/);
+assert.match(actionsSource, /existingHistorySnapshots\.get\(`\$\{attendance\.member_id\}:\$\{item\.id\}`\)/);
+assert.match(actionsSource, /title_snapshot:\s*existingSnapshot\?\.title_snapshot\s*\?\?\s*item\.title/);
+assert.match(actionsSource, /category_snapshot:\s*existingSnapshot\s*\?\s*existingSnapshot\.category_snapshot\s*:\s*item\.category/);
+assert.match(actionsSource, /description_snapshot:\s*existingSnapshot\s*\?\s*existingSnapshot\.description_snapshot\s*:\s*item\.description/);
 
 for (const definition of [
   /create or replace function public\.remove_child_syllabus_assignment_if_unused/,

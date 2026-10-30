@@ -3713,6 +3713,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
     .map((value) => value.trim())
     .filter(Boolean);
   const templateEventId = String(formData.get("templateEventId") ?? "").trim() || null;
+  const templateEventItemIds = formData.getAll("templateEventItemIds").map((value) => String(value).trim()).filter(Boolean);
   const childSyllabusItemIds = formData.getAll("childSyllabusItemIds").map((value) => String(value).trim()).filter(Boolean);
 
   if (!memberIds.length || !examDate) {
@@ -3730,6 +3731,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
       examinerNames,
       notes: notes || null,
       templateEventId,
+      templateEventItemIds,
       childSyllabusItemIds
     });
     eventId = result.eventId;
@@ -5957,7 +5959,7 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
 const CHILD_TARGETED_SYLLABUS_PREFIX = "SKBC_SYLLABUS_ITEM:";
 
 async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof createAdminClient>, classId: string) {
-  const [{ data: clase, error: classError }, { data: plan, error: planError }, { data: attendances, error: attendanceError }, { data: targetedWork, error: targetedWorkError }] = await Promise.all([
+  const [{ data: clase, error: classError }, { data: plan, error: planError }, { data: attendances, error: attendanceError }, { data: targetedWork, error: targetedWorkError }, { data: existingHistory, error: existingHistoryError }] = await Promise.all([
     supabase
       .from("classes")
       .select("id,class_date,class_group")
@@ -5978,13 +5980,19 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
       .select("member_ids,notes")
       .eq("class_id", classId)
       .like("notes", `${CHILD_TARGETED_SYLLABUS_PREFIX}%`)
-      .returns<Array<{ member_ids: string[] | null; notes: string | null }>>()
+      .returns<Array<{ member_ids: string[] | null; notes: string | null }>>(),
+    supabase
+      .from("child_syllabus_history")
+      .select("member_id,syllabus_item_id,title_snapshot,category_snapshot,description_snapshot")
+      .eq("class_id", classId)
+      .returns<Array<{ member_id: string; syllabus_item_id: string; title_snapshot: string | null; category_snapshot: string | null; description_snapshot: string | null }>>()
   ]);
 
   if (classError) throw classError;
   if (planError) throw planError;
   if (attendanceError) throw attendanceError;
   if (targetedWorkError) throw targetedWorkError;
+  if (existingHistoryError) throw existingHistoryError;
   if (!clase || clase.class_group !== "kids") return;
 
   const planSyllabusItemIds = Array.from(new Set((plan?.syllabus_item_ids ?? []).filter(Boolean)));
@@ -5993,6 +6001,7 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
     memberIds: new Set(work.member_ids ?? [])
   })).filter((work) => work.itemId && work.memberIds.size);
   const syllabusItemIds = Array.from(new Set([...planSyllabusItemIds, ...targetedItems.map((work) => work.itemId)]));
+  const existingHistorySnapshots = new Map((existingHistory ?? []).map((row) => [`${row.member_id}:${row.syllabus_item_id}`, row]));
   const { error: deleteError } = await supabase
     .from("child_syllabus_history")
     .delete()
@@ -6004,9 +6013,9 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
   const [{ data: syllabusItems, error: syllabusError }, { data: overrides, error: overrideError }] = await Promise.all([
     supabase
       .from("child_syllabus_items")
-      .select("id,grade")
+      .select("id,grade,title,category,description")
       .in("id", syllabusItemIds)
-      .returns<Array<{ id: string; grade: string | null }>>(),
+      .returns<Array<{ id: string; grade: string | null; title: string; category: string | null; description: string | null }>>(),
     supabase
       .from("child_attendance_work_overrides")
       .select("attendance_id,work_mode,trained_grade")
@@ -6040,11 +6049,15 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
     syllabusItems.filter((item) => targetedItemIds.has(item.id)).forEach((item) => selectedItems.set(item.id, item));
 
     for (const item of selectedItems.values()) {
+      const existingSnapshot = existingHistorySnapshots.get(`${attendance.member_id}:${item.id}`);
       rows.push({
         member_id: attendance.member_id,
         class_id: classId,
         attendance_id: attendance.id,
         syllabus_item_id: item.id,
+        title_snapshot: existingSnapshot?.title_snapshot ?? item.title,
+        category_snapshot: existingSnapshot ? existingSnapshot.category_snapshot : item.category,
+        description_snapshot: existingSnapshot ? existingSnapshot.description_snapshot : item.description,
         practiced_on: clase.class_date,
         source: "class_plan",
         updated_at: now

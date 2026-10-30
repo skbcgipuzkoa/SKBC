@@ -193,6 +193,9 @@ type ChildBehavior = {
 
 type ChildSyllabusHistoryRow = {
   practiced_on: string;
+  title_snapshot: string | null;
+  category_snapshot: string | null;
+  description_snapshot: string | null;
   child_syllabus_items: {
     title: string;
     grade: string | null;
@@ -365,7 +368,7 @@ export default async function PublicFichaPage({
         .maybeSingle<ChildBehavior>(),
       loadAllPages<ChildSyllabusHistoryRow>((from, to) => supabase
         .from("child_syllabus_history")
-        .select("practiced_on,child_syllabus_items(title,grade,category,description)")
+        .select("practiced_on,title_snapshot,category_snapshot,description_snapshot,child_syllabus_items(title,grade,category,description)")
         .eq("member_id", member.id)
         .order("practiced_on", { ascending: false })
         .range(from, to)
@@ -1073,8 +1076,8 @@ async function loadChildProgramHistoryRows(
   const itemsById = new Map(items.map((item) => [item.id, item]));
   const existing = new Set(
     history
-      .filter((row) => row.child_syllabus_items?.title)
-      .map((row) => `${row.practiced_on}::${normalizeGradeAlias(row.child_syllabus_items?.grade)}::${normalize(row.child_syllabus_items?.category)}::${normalize(row.child_syllabus_items?.title)}`)
+      .filter((row) => row.title_snapshot ?? row.child_syllabus_items?.title)
+      .map((row) => `${row.practiced_on}::${normalizeGradeAlias(row.child_syllabus_items?.grade)}::${normalize(row.category_snapshot ?? row.child_syllabus_items?.category)}::${normalize(row.title_snapshot ?? row.child_syllabus_items?.title)}`)
   );
   const fallbackRows: ChildSyllabusHistoryRow[] = [];
   const addFallbackRow = (
@@ -1089,6 +1092,9 @@ async function loadChildProgramHistoryRows(
     existing.add(key);
     fallbackRows.push({
       practiced_on: practicedOn,
+      title_snapshot: title,
+      category_snapshot: category,
+      description_snapshot: description,
       child_syllabus_items: { title, grade, category, description }
     });
   };
@@ -1157,8 +1163,14 @@ function buildChildProgramHistory(history: ChildSyllabusHistoryRow[]) {
   }>();
 
   for (const row of history) {
-    const item = row.child_syllabus_items;
-    if (!item?.title) continue;
+    const liveItem = row.child_syllabus_items;
+    const item = {
+      title: row.title_snapshot ?? liveItem?.title ?? "",
+      grade: liveItem?.grade ?? null,
+      category: row.title_snapshot !== null ? row.category_snapshot : liveItem?.category ?? null,
+      description: row.title_snapshot !== null ? row.description_snapshot : liveItem?.description ?? null
+    };
+    if (!item.title) continue;
 
     const grade = normalizeGradeAlias(item.grade) || "SIN GRADO";
     const key = `${grade}::${normalize(item.category)}::${normalize(item.title)}`;
