@@ -317,3 +317,11 @@
     gap: 8px;
   }
 }
+.exam-score-feedback {
+  display: contents;
+}
+.exam-group-notes .exam-feedback-hint {
+  margin: 4px 0;
+  color: #805300;
+  font-size: 0.85rem;
+}

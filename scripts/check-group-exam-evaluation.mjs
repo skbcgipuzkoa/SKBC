@@ -130,6 +130,38 @@ const html = renderToStaticMarkup(
     backHref: "/examenes/event",
   }),
 );
+for (const [score, notes, prompted] of [
+  [5, "", true],
+  [10, "", false],
+  [0, "Revisar guardia", false],
+]) {
+  const feedbackHtml = renderToStaticMarkup(
+    React.createElement(
+      navigation.exports.ExamScoreFeedback,
+      {
+        initialScore: String(score),
+        initialNotes: notes,
+        name: "notes:student:item",
+        studentName: "Alumno",
+      },
+      React.createElement("input", {
+        type: "radio",
+        name: "score:student:item",
+        value: String(score),
+        defaultChecked: true,
+      }),
+    ),
+  );
+  assert.equal(
+    feedbackHtml.includes("Puedes anadir que necesita mejorar"),
+    prompted,
+  );
+  assert.ok(
+    feedbackHtml.includes('name="notes:student:item"'),
+    "Feedback uses the report's existing observation field",
+  );
+  assert.ok(!feedbackHtml.includes("required"), "Feedback stays optional");
+}
 assert.equal(
   (html.match(/type="radio"/g) || []).length,
   12,
@@ -161,6 +193,14 @@ assert.ok(
 );
 assert.ok(html.includes("Se sientan aqui"));
 assert.ok(html.includes("Omitir"));
+assert.ok(
+  html.includes("Puedes anadir que necesita mejorar"),
+  "Low rating invites optional feedback inline",
+);
+assert.ok(
+  !/<textarea[^>]*required/.test(html),
+  "Observations never block the exam",
+);
 assert.equal(
   (html.match(/Sumar un punto a /g) || []).length,
   3,

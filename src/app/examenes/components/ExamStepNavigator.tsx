@@ -16,6 +16,60 @@ export type ExamNavigationStep = {
   continueLabel?: string;
 };
 type Adjustment = { eventStudentId: string; delta: 1 | -1; reason: string };
+export function ExamScoreFeedback({
+  children,
+  initialScore,
+  initialNotes,
+  name,
+  studentName,
+}: {
+  children: ReactNode;
+  initialScore: string;
+  initialNotes: string;
+  name: string;
+  studentName: string;
+}) {
+  const [score, setScore] = useState(initialScore);
+  const [notes, setNotes] = useState(initialNotes);
+  const suggestNote = (score === "0" || score === "5") && !notes.trim();
+  return (
+    <div
+      className="exam-score-feedback"
+      onChange={(event) => {
+        const target = event.target as HTMLInputElement;
+        if (target.type === "radio") setScore(target.value);
+      }}
+    >
+      {children}
+      <div className="exam-group-notes">
+        {suggestNote ? (
+          <p className="exam-feedback-hint" role="status">
+            Puedes anadir que necesita mejorar. Es opcional.
+          </p>
+        ) : null}
+        <details open={initialNotes.trim() ? true : undefined}>
+          <summary>
+            {suggestNote ? "Anadir nota (opcional)" : "Observaciones"}
+          </summary>
+          <label>
+            Observaciones de {studentName}
+            <textarea
+              name={name}
+              rows={2}
+              maxLength={4000}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Que necesita aprender o mejorar..."
+            />
+          </label>
+          <p className="muted">
+            Esta nota aparecera en el informe individual del alumno.
+          </p>
+        </details>
+      </div>
+    </div>
+  );
+}
 const PointsContext = createContext<{
   adjustments: Adjustment[];
   add: (entry: Adjustment) => void;

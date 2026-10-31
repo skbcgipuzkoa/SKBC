@@ -7,6 +7,7 @@ import {
 import {
   ExamStepNavigator,
   StudentPointControls,
+  ExamScoreFeedback,
   type ExamNavigationStep,
 } from "./ExamStepNavigator";
 type Payload = Awaited<ReturnType<typeof getExaminerExamByToken>>;
@@ -234,74 +235,66 @@ export function ExamEvaluationForm({
                               name={student.members?.display_name ?? "Kenshi"}
                             />
                           </div>
-                          <fieldset className="exam-rating-options">
-                            <legend className="exam-rating-legend">
-                              Valoracion de{" "}
-                              {student.members?.display_name ?? "Kenshi"}
-                            </legend>
-                            {[
-                              {
-                                value: "10",
-                                label: "Bien",
-                                detail: "10",
-                                tone: "good",
-                              },
-                              {
-                                value: "5",
-                                label: "Mejorable",
-                                detail: "5",
-                                tone: "improve",
-                              },
-                              {
-                                value: "0",
-                                label: "Necesita aprenderlo",
-                                detail: "0",
-                                tone: "learn",
-                              },
-                              {
-                                value: "skip",
-                                label: "Omitir",
-                                detail: "Sin nota",
-                                tone: "skip",
-                              },
-                            ].map((option) => (
-                              <label
-                                className={`exam-rating-option exam-rating-${option.tone}`}
-                                key={option.value}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`score:${student.id}:${item.id}`}
-                                  value={option.value}
-                                  defaultChecked={defaultValue === option.value}
-                                  required
-                                />
-                                <span>
-                                  {option.label}
-                                  <strong>{option.detail}</strong>
-                                </span>
-                              </label>
-                            ))}
-                          </fieldset>
-                          <details
-                            className="exam-group-notes"
-                            open={Boolean(
-                              decodeScoreNotes(current?.notes).text,
-                            )}
+                          <ExamScoreFeedback
+                            initialScore={defaultValue}
+                            initialNotes={decodeScoreNotes(current?.notes).text}
+                            name={`notes:${student.id}:${item.id}`}
+                            studentName={
+                              student.members?.display_name ?? "Kenshi"
+                            }
                           >
-                            <summary>Observaciones</summary>
-                            <label>
-                              Observaciones de{" "}
-                              {student.members?.display_name ?? "Kenshi"}
-                              <textarea
-                                name={`notes:${student.id}:${item.id}`}
-                                rows={2}
-                                defaultValue={
-                                  decodeScoreNotes(current?.notes).text
-                                }
-                              />
-                            </label>
-                          </details>
+                            <fieldset className="exam-rating-options">
+                              <legend className="exam-rating-legend">
+                                Valoracion de{" "}
+                                {student.members?.display_name ?? "Kenshi"}
+                              </legend>
+                              {[
+                                {
+                                  value: "10",
+                                  label: "Bien",
+                                  detail: "10",
+                                  tone: "good",
+                                },
+                                {
+                                  value: "5",
+                                  label: "Mejorable",
+                                  detail: "5",
+                                  tone: "improve",
+                                },
+                                {
+                                  value: "0",
+                                  label: "Necesita aprenderlo",
+                                  detail: "0",
+                                  tone: "learn",
+                                },
+                                {
+                                  value: "skip",
+                                  label: "Omitir",
+                                  detail: "Sin nota",
+                                  tone: "skip",
+                                },
+                              ].map((option) => (
+                                <label
+                                  className={`exam-rating-option exam-rating-${option.tone}`}
+                                  key={option.value}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`score:${student.id}:${item.id}`}
+                                    value={option.value}
+                                    defaultChecked={
+                                      defaultValue === option.value
+                                    }
+                                    required
+                                  />
+                                  <span>
+                                    {option.label}
+                                    <strong>{option.detail}</strong>
+                                  </span>
+                                </label>
+                              ))}
+                            </fieldset>
+                          </ExamScoreFeedback>
                         </div>
                       );
                     })}
