@@ -4,9 +4,11 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createIntegratedExamEventAction } from "@/app/actions";
 import {
+  CHILD_PROGRAM_GRADES,
   normalizeChildGrade,
   reconcileChildExamItemIds,
   resolveChildExamGrades,
+  resolveChildExamScopeTargets,
   resolveChildExamTargetGrade,
   type ChildProgramAssignment
 } from "@/lib/child-program";
@@ -48,19 +50,21 @@ export function IntegratedExamCreateForm({
     kidMembers.filter((member) => duplicatedMemberIds.has(member.id)).map((member) => member.id)
   );
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>(duplicationTemplate?.items.map((item) => item.id) ?? []);
+  const [maxKidsGrade, setMaxKidsGrade] = useState("");
   const targetGrades = useMemo(
     () => selectedKidIds.map((id) => resolveChildExamTargetGrade(kidMembers.find((member) => member.id === id)?.grade)),
     [kidMembers, selectedKidIds]
   );
-  const representedGrades = useMemo(() => resolveChildExamGrades(targetGrades), [targetGrades]);
+  const scopeTargets = useMemo(() => resolveChildExamScopeTargets(targetGrades, maxKidsGrade), [targetGrades, maxKidsGrade]);
+  const representedGrades = useMemo(() => resolveChildExamGrades(scopeTargets), [scopeTargets]);
   const previousTargetGrades = useRef<string[]>([]);
 
   useEffect(() => {
     if (programType !== "kids_progressive" || duplicationTemplate) return;
     const previousGrades = previousTargetGrades.current;
-    setSelectedItemIds((current) => reconcileChildExamItemIds(catalogAssignments, current, previousGrades, targetGrades));
-    previousTargetGrades.current = targetGrades;
-  }, [catalogAssignments, duplicationTemplate, programType, targetGrades]);
+    setSelectedItemIds((current) => reconcileChildExamItemIds(catalogAssignments, current, previousGrades, scopeTargets));
+    previousTargetGrades.current = scopeTargets;
+  }, [catalogAssignments, duplicationTemplate, programType, scopeTargets]);
 
   const availableAssignments = useMemo(() => {
     const allowedGrades = new Set<string>(representedGrades);
@@ -128,6 +132,16 @@ export function IntegratedExamCreateForm({
           </select>
         </label>
         <label>Fecha<input name="examDate" type="date" required /></label>
+        {programType === "kids_progressive" ? (
+          <label>
+            Recorrido infantil hasta
+            <select name="maxKidsGrade" value={maxKidsGrade} onChange={(event) => setMaxKidsGrade(event.target.value)}>
+              <option value="">Automatico segun los kenshis seleccionados</option>
+              {CHILD_PROGRAM_GRADES.map((grade) => <option key={grade} value={grade}>{grade === "1 DAN" ? "1 DAN (Negro)" : grade}</option>)}
+            </select>
+            <small>Amplia el temario disponible hasta el grado elegido. Cada kenshi conserva su objetivo y su corte.</small>
+          </label>
+        ) : null}
         <label>Aprobado desde %<input name="passPercentage" type="number" min="0" max="100" step="1" defaultValue={duplicationTemplate?.pass_percentage ?? 70} /></label>
         <label className="wide">Titulo<input name="title" placeholder="Examen junio, examen infantil..." defaultValue={duplicationTemplate ? `${duplicationTemplate.title} - copia` : ""} /></label>
         <label className="wide">

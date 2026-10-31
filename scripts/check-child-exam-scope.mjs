@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import * as childProgram from '../src/lib/child-program.ts';
+const { normalizeChildGrade, resolveChildExamTargetGrade, resolveChildExamScopeTargets, resolveChildExamGrades, reconcileChildExamItemIds, buildChildExamSnapshot } = childProgram;
+
+assert.equal(normalizeChildGrade('1 KYU'), 'MARRON');
+assert.equal(resolveChildExamTargetGrade('3 KYU'), 'VERDE-AZUL');
+assert.equal(resolveChildExamTargetGrade('2 KYU'), 'AZUL-MARRON');
+assert.equal(resolveChildExamTargetGrade('1 KYU'), '1 DAN');
+const targets = ['VERDE'];
+assert.deepEqual(resolveChildExamScopeTargets(targets, ''), targets);
+assert.deepEqual(resolveChildExamScopeTargets(targets, '1 DAN'), ['VERDE', '1 DAN']);
+assert.deepEqual(targets, ['VERDE'], 'Scope does not change student promotion targets');
+assert.equal(resolveChildExamGrades(resolveChildExamScopeTargets(targets, '1 DAN')).at(-1), '1 DAN');
+assert.equal(resolveChildExamGrades(resolveChildExamScopeTargets(['MARRON'], 'VERDE')).at(-1), 'MARRON');
+assert.throws(() => resolveChildExamScopeTargets(targets, '10 DAN'), /grado/i);
+const assignments = ['VERDE', 'AZUL', 'MARRON', '1 DAN'].map((grade, index) => ({ id: `item-${index}`, contentId: `content-${index}`, grade, title: grade, category: 'goho', description: null, active: true, examRelevant: true, sortOrder: index }));
+const expanded = resolveChildExamScopeTargets(targets, '1 DAN');
+const selected = reconcileChildExamItemIds(assignments, ['item-0'], targets, expanded);
+assert.deepEqual(selected, ['item-0', 'item-1', 'item-2', 'item-3']);
+const snapshot = buildChildExamSnapshot(assignments.filter(item => selected.includes(item.id)), expanded);
+assert.ok(snapshot.some(row => row.source === 'cut' && row.cutGrade === '1 DAN'));
+assert.deepEqual(reconcileChildExamItemIds(assignments, selected, expanded, targets), ['item-0']);
+console.log('Child exam scope regression checks passed.');

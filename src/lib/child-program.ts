@@ -62,6 +62,13 @@ export type ChildExamSnapshotRow =
 
 const gradeAliases = new Map<string, ChildProgramGrade>([
   ["MINARAI", "BLANCO"],
+  ["5 KYU", "AMARILLO"],
+  ["4 KYU", "NARANJA"],
+  ["3 KYU", "VERDE"],
+  ["2 KYU", "AZUL"],
+  ["1 KYU", "MARRON"],
+  ["NEGRO", "1 DAN"],
+  ["SHODAN", "1 DAN"],
   ...CHILD_PROGRAM_GRADES.flatMap((grade) => {
     const aliases: Array<readonly [string, ChildProgramGrade]> = [[grade, grade]];
     if (grade.includes("-")) {
@@ -122,6 +129,16 @@ export function resolveChildExamGrades(targetGrades: readonly string[]): ChildPr
 
 export function resolveChildExamTargetGrade(currentGrade: string | null | undefined): ChildProgramGrade {
   return childTargetByCurrentGrade[normalizeChildGrade(currentGrade)] ?? "BLANCO-AMARILLO";
+}
+
+export function resolveChildExamScopeTargets(targetGrades: readonly string[], maxGrade?: string | null): string[] {
+  const targets = normalizeSelectedGrades(targetGrades);
+  if (!maxGrade?.trim()) return targets;
+  const normalized = normalizeChildGrade(maxGrade);
+  if (!CHILD_PROGRAM_GRADES.includes(normalized as ChildProgramGrade)) {
+    throw new Error("Selecciona un grado infantil valido para el recorrido.");
+  }
+  return normalizeSelectedGrades([...targets, normalized]);
 }
 
 export function orderChildExamAssignments<T extends ChildProgramAssignment>(items: readonly T[]): T[] {

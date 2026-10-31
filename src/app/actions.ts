@@ -3726,6 +3726,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
       title,
       examDate,
       programType,
+        maxKidsGrade: String(formData.get("maxKidsGrade") ?? "").trim() || null,
       passPercentage: Number.isFinite(passPercentage) ? passPercentage : 70,
       memberIds,
       examinerNames,

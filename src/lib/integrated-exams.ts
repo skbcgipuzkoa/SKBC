@@ -8,6 +8,7 @@ import {
   normalizeChildGrade,
   progressiveTargetGradesWithoutScorableItems,
   resolveChildExamGrades,
+  resolveChildExamScopeTargets,
   resolveChildExamTargetGrade,
   type ChildProgramAssignment
 } from "@/lib/child-program";
@@ -147,6 +148,7 @@ export async function createIntegratedExamEvent(input: {
   passPercentage: number;
   memberIds: string[];
   examinerNames: string[];
+  maxKidsGrade?: string | null;
   notes?: string | null;
   templateEventId?: string | null;
   templateEventItemIds?: string[];
@@ -171,6 +173,11 @@ export async function createIntegratedExamEvent(input: {
   const expectedClass = input.programType === "adults" || input.programType === "dan_tribunal" ? "adults" : "kids";
   const filteredMembers = members.filter((member) => member.class === expectedClass);
   if (!filteredMembers.length) throw new Error("Los kenshis seleccionados no coinciden con el tipo de examen.");
+
+  const scopeTargets = resolveChildExamScopeTargets(
+    filteredMembers.map((member) => resolveTargetGrade(member.class, member.grade)),
+    input.programType === "kids_progressive" ? input.maxKidsGrade : null
+  );
 
   const title = input.title.trim() || defaultExamTitle(input.programType, input.examDate);
   const { data: event, error: eventError } = await supabase
@@ -213,12 +220,12 @@ export async function createIntegratedExamEvent(input: {
           event.id,
           input.programType,
           input.templateEventItemIds ?? [],
-          students.map((student) => student.target_grade).filter(Boolean) as string[]
+          input.programType === "kids_progressive" ? scopeTargets : students.map((student) => student.target_grade).filter(Boolean) as string[]
         )
       : await buildExamItems(
           event.id,
           input.programType,
-          students.map((student) => student.target_grade).filter(Boolean) as string[],
+          input.programType === "kids_progressive" ? scopeTargets : students.map((student) => student.target_grade).filter(Boolean) as string[],
           input.childSyllabusItemIds
         );
   } catch (error) {
