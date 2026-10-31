@@ -268,7 +268,7 @@ export async function renderIntegratedExamReportPdf({
     paragraph(review.conclusion);
   }
   const submitted = examiners.filter(
-    (examiner) => examiner.submitted_at && !examiner.revoked_at,
+    (examiner) => examiner.submitted_at && !examiner.revoked_at && scores.some((score)=>score.event_student_id===student.id&&score.examiner_id===examiner.id),
   );
   const submittedIds = new Set(submitted.map((examiner) => examiner.id));
   const sessionScores = scores.filter(

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { hasInternalAccess } from "@/lib/auth";
 import {
   saveIntegratedExamStudentReview,
+  saveIntegratedExamAssignments,
   submitInternalIntegratedExamScores,
   retryIntegratedExamDocuments,
   type ScoreInput,
@@ -107,5 +108,24 @@ export async function retryIntegratedExamDocumentsAction(form: FormData) {
   revalidatePath(`/examenes/${eventId}`);
   redirect(
     `/examenes/${eventId}?${errorText ? `error=documents&detail=${encodeURIComponent(errorText)}` : "saved=documents"}`,
+  );
+}
+
+export async function saveIntegratedExamAssignmentsAction(form: FormData) {
+  if (!(await hasInternalAccess())) redirect("/");
+  const eventId = text(form, "eventId");
+  let errorText = "";
+  try {
+    const scopes: Record<string, string[]> = {};
+    for (const key of form.keys())
+      if (key.startsWith("scope:"))
+        scopes[key.slice(6)] = form.getAll(key).map((value) => String(value));
+    await saveIntegratedExamAssignments({ eventId, scopes });
+  } catch (error) {
+    errorText = message(error);
+  }
+  revalidatePath(`/examenes/${eventId}`);
+  redirect(
+    `/examenes/${eventId}?${errorText ? `error=assignments&detail=${encodeURIComponent(errorText)}` : "saved=assignments"}`,
   );
 }

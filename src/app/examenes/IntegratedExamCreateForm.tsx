@@ -152,6 +152,17 @@ export function IntegratedExamCreateForm({
 
   return (
     <form action={createIntegratedExamEventAction} className="edit-form">
+      {programType === "adults" || programType === "dan_tribunal" ? (
+        <p className="info-banner wide">
+          Despues de crear, asigna uno o varios grados objetivo a cada
+          examinador desde el panel del examen. Cada uno empieza con todos los
+          grados asignados
+          {duplicationTemplate
+            ? "; las asignaciones del examen original no se copian"
+            : ""}
+          .
+        </p>
+      ) : null}
       {duplicationTemplate ? (
         <div className="info-banner wide">
           <strong>Duplicando: {duplicationTemplate.title}</strong>
@@ -253,7 +264,7 @@ export function IntegratedExamCreateForm({
           />
           <span>
             Examino yo (Alvaro Calvo)
-              <small>Queda pendiente hasta que yo abra mi evaluacion.</small>
+            <small>Queda pendiente hasta que yo abra mi evaluacion.</small>
           </span>
         </label>
         <label className="wide">

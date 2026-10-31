@@ -1,3 +1,4 @@
+import * as assignmentHelpers from "../src/lib/integrated-exam-assignments.ts";
 import * as sessionHelpers from "../src/lib/integrated-exam-session.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -123,6 +124,7 @@ vm.runInNewContext(source, {
   module,
   exports: module.exports,
   require(name) {
+    if (name.endsWith("integrated-exam-assignments")) return assignmentHelpers;
     if (name.endsWith("integrated-exam-session")) return sessionHelpers;
     if (name === "node:crypto") return { randomUUID };
     if (name.endsWith("integrated-exam-documents"))
@@ -442,6 +444,7 @@ vm.runInNewContext(source, {
   JSON,
   Error,
   require(name) {
+    if (name.endsWith("integrated-exam-assignments")) return assignmentHelpers;
     if (name.endsWith("integrated-exam-session")) return sessionHelpers;
     if (name === "node:crypto") return { randomUUID };
     if (name.endsWith("integrated-exam-review")) return reviewHelpers;
@@ -548,4 +551,87 @@ assert.equal(
   "document retries never promote again",
 );
 console.log("Integrated exam document recovery checks passed");
-await assert.rejects(()=>backend.createIntegratedExamItem({eventId:"e",name:"Late syllabus edit"}),/temario no puede/);
+await assert.rejects(
+  () =>
+    backend.createIntegratedExamItem({
+      eventId: "e",
+      name: "Late syllabus edit",
+    }),
+  /temario no puede/,
+);
+// Grade-scoped evaluation must not expose or accept another group's pupils.
+database.exam_events[0].status = "active";
+database.exam_events[0].notes = assignmentHelpers.encodeExamAssignments(
+  "Teacher event notes",
+  { x: ["1 KYU"], y: ["2 KYU"] },
+);
+database.exam_event_students[1].target_grade = "2 KYU";
+database.exam_event_items.push({
+  ...item,
+  id: "i-other",
+  grade: "2 KYU",
+  exam_event_id: "e",
+  order_index: 0,
+});
+database.exam_event_examiners[0].submitted_at = null;
+database.exam_event_examiners[0].exam_events = database.exam_events[0];
+database.exam_event_examiners.push({
+  ...database.exam_event_examiners[0],
+  id: "y",
+  name: "Other examiner",
+  access_token: "other-secret",
+  submitted_at: "2026-10-31T11:00:00Z",
+});
+database.exam_event_scores.push({
+  ...score,
+  event_student_id: "failed",
+  event_item_id: "i-other",
+  exam_event_id: "e",
+  examiner_id: "x",
+});
+const assigned =
+  await registrationModule.exports.getExaminerExamByToken("secret");
+assert.deepEqual(
+  assigned.students.map((row) => row.id),
+  ["s"],
+);
+assert.deepEqual(
+  assigned.items.map((row) => row.id),
+  ["i"],
+);
+assert.equal(assigned.examiner.exam_events, undefined);
+assert.equal(assigned.event.notes, "Teacher event notes");
+assert.equal(assigned.assignedGrades.join(","), "1 KYU");
+assert.ok(!JSON.stringify(assigned).includes("other-secret"));
+await assert.rejects(
+  () =>
+    registrationModule.exports.submitIntegratedExamScores({
+      token: "secret",
+      scores: [
+        {
+          eventStudentId: "failed",
+          eventItemId: "i-other",
+          score: 10,
+          skipped: false,
+        },
+      ],
+    }),
+  /ajena/,
+);
+await assert.rejects(
+  () =>
+    registrationModule.exports.saveIntegratedExamAssignments({
+      eventId: "e",
+      scopes: { x: ["1 KYU"], y: ["2 KYU"] },
+    }),
+  /despues/,
+);
+database.exam_event_examiners[0].submitted_at = "2026-10-31T11:00:00Z";
+const assignedAdmin =
+  await registrationModule.exports.getIntegratedExamAdmin("e");
+assert.ok(
+  !assignedAdmin.scores.some(
+    (row) => row.examiner_id === "x" && row.event_student_id === "failed",
+  ),
+);
+console.log("Scoped examiner backend checks passed");

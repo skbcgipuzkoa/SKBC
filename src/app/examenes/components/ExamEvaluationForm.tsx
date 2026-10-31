@@ -66,7 +66,10 @@ export function ExamEvaluationForm({
   const steps: ExamNavigationStep[] = [
     ...visibleItems.map((item): ExamNavigationStep => ({
       id: item.id,
-      title: item.name,
+      title:
+        !isKidsProgressive && item.grade
+          ? `${item.grade} · ${item.name}`
+          : item.name,
       kind: item.source === "cut" ? "cut" : "exercise",
       continueLabel:
         item.source === "cut"
@@ -89,6 +92,19 @@ export function ExamEvaluationForm({
         </p>
       </section>
 
+      {!isKidsProgressive && payload.assignedGrades?.length ? (
+        <section className="card exam-assigned-grades">
+          <h2>Tu recorrido por grados</h2>
+          <p>
+            Grados objetivo asignados:{" "}
+            <strong>{payload.assignedGrades.join(", ")}</strong>.
+          </p>
+          <p className="muted">
+            Evalua el temario completo de estos grados y sus alumnos. El
+            profesor revisa al final todo el examen.
+          </p>
+        </section>
+      ) : null}
       {backHref ? (
         <p>
           <a className="text-link" href={backHref}>

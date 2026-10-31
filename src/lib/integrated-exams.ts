@@ -1,4 +1,10 @@
 import {
+  decodeExamAssignments,
+  encodeExamAssignments,
+  resolveExamAssignments,
+  validateExamAssignments,
+} from "@/lib/integrated-exam-assignments";
+import {
   prepareSessionSubmission,
   type ExamSubmissionExtras,
 } from "@/lib/integrated-exam-session";
@@ -232,7 +238,7 @@ export async function createIntegratedExamEvent(input: {
       program_type: input.programType,
       pass_percentage: input.passPercentage || 70,
       status: "active",
-      notes: input.notes ?? null,
+      notes: encodeExamAssignments(input.notes ?? "", {}),
       created_by: "WEB SKBC",
     })
     .select("id")
@@ -334,6 +340,22 @@ export async function createIntegratedExamEvent(input: {
     .insert(names.map((name) => ({ exam_event_id: event.id, name })))
     .select("id,name");
   if (examinersError) throw examinersError;
+  const initialAssignments = resolveExamAssignments({
+    programType: input.programType,
+    notes: null,
+    examiners: (assigned ?? []).map((row) => ({ ...row, revoked_at: null })),
+    students,
+  });
+  const { error: settingsError } = await supabase
+    .from("exam_events")
+    .update({
+      notes: encodeExamAssignments(
+        input.notes ?? "",
+        initialAssignments.examinerGradeScopes,
+      ),
+    })
+    .eq("id", event.id);
+  if (settingsError) throw settingsError;
   await refreshIntegratedExamReview(event.id);
   return {
     eventId: event.id,
@@ -448,6 +470,7 @@ export async function getIntegratedExamDuplicationTemplate(eventId: string) {
     throw studentsError ?? examinersError ?? itemsError;
   return {
     ...event,
+    notes: decodeExamAssignments(event.notes).text,
     memberIds: (students ?? []).map((student) => student.member_id),
     examinerNames: (examiners ?? []).map((examiner) => examiner.name),
     items: items ?? [],
@@ -526,13 +549,27 @@ export async function getIntegratedExamAdmin(eventId: string) {
       scoresError ??
       reviewsError
     );
+  const assignments = resolveExamAssignments({
+    programType: event.program_type,
+    notes: event.notes,
+    examiners: examiners ?? [],
+    students: students ?? [],
+  });
+  const assignmentStudents = new Map(
+    (students ?? []).map((student) => [student.id, student]),
+  );
   const validIds = new Set(
     (examiners ?? [])
       .filter((row) => row.submitted_at && !row.revoked_at)
       .map((row) => row.id),
   );
-  const validScores = (scores ?? []).filter((row) =>
-    validIds.has(row.examiner_id),
+  const validScores = (scores ?? []).filter(
+    (row) =>
+      validIds.has(row.examiner_id) &&
+      (!assignments.adultTargetGrades.length ||
+        assignments.examinerGradeScopes[row.examiner_id]?.includes(
+          assignmentStudents.get(row.event_student_id)?.target_grade ?? "",
+        )),
   );
   const summaries = (students ?? []).map((student) => {
     const review = parseReviewEnvelope(
@@ -561,7 +598,8 @@ export async function getIntegratedExamAdmin(eventId: string) {
     };
   });
   return {
-    event,
+    event: { ...event, notes: decodeExamAssignments(event.notes).text },
+    ...assignments,
     students: students ?? [],
     items: items ?? [],
     examiners: examiners ?? [],
@@ -794,12 +832,52 @@ export async function getExaminerExamByToken(token: string) {
 
   if (studentsError || itemsError || scoresError)
     throw studentsError ?? itemsError ?? scoresError;
-  return {
-    examiner: examiner as ExamEventExaminer,
-    event,
+  const assignment = resolveExamAssignments({
+    programType: event.program_type,
+    notes: event.notes,
+    examiners: [examiner],
     students: students ?? [],
-    items: items ?? [],
-    existingScores: existingScores ?? [],
+  });
+  const isAdult =
+    event.program_type === "adults" || event.program_type === "dan_tribunal";
+  const assignedGrades = isAdult
+    ? (assignment.examinerGradeScopes[examiner.id] ?? [])
+    : [];
+  const assignedStudents = (students ?? []).filter(
+    (student) =>
+      !isAdult || assignedGrades.includes(student.target_grade ?? ""),
+  );
+  const studentIds = new Set(assignedStudents.map((student) => student.id));
+  const assignedItems = (items ?? []).filter(
+    (item) => !isAdult || assignedGrades.includes(item.grade ?? ""),
+  );
+  if (isAdult)
+    assignedItems.sort(
+      (left, right) =>
+        assignedGrades.indexOf(left.grade ?? "") -
+        assignedGrades.indexOf(right.grade ?? ""),
+    );
+  const itemIds = new Set(assignedItems.map((item) => item.id));
+  const safeExaminer: ExamEventExaminer = {
+    id: examiner.id,
+    exam_event_id: examiner.exam_event_id,
+    name: examiner.name,
+    email: examiner.email,
+    access_token: examiner.access_token,
+    submitted_at: examiner.submitted_at,
+    revoked_at: examiner.revoked_at,
+  };
+  return {
+    examiner: safeExaminer,
+    event: { ...event, notes: decodeExamAssignments(event.notes).text },
+    assignedGrades,
+    students: assignedStudents,
+    items: assignedItems,
+    existingScores: (existingScores ?? []).filter(
+      (score) =>
+        studentIds.has(score.event_student_id) &&
+        itemIds.has(score.event_item_id),
+    ),
   };
 }
 
@@ -853,6 +931,35 @@ async function withEventMutationLock<T>(
       .eq("updated_at", lease);
     if (releaseError) throw releaseError;
   }
+}
+export async function saveIntegratedExamAssignments(input: {
+  eventId: string;
+  scopes: Record<string, string[]>;
+}) {
+  const data = await getIntegratedExamAdmin(input.eventId);
+  if (
+    data.event.program_type !== "adults" &&
+    data.event.program_type !== "dan_tribunal"
+  )
+    throw new Error(
+      "La asignacion por grados solo corresponde a examenes adultos.",
+    );
+  if (data.examiners.some((row) => row.submitted_at))
+    throw new Error(
+      "Las asignaciones no pueden cambiar despues de recibir una evaluacion.",
+    );
+  const scopes = validateExamAssignments(
+    input.scopes,
+    data.examiners,
+    data.adultTargetGrades,
+  );
+  return withEventMutationLock(data.event, async () => {
+    const { error } = await createAdminClient()
+      .from("exam_events")
+      .update({ notes: encodeExamAssignments(data.event.notes ?? "", scopes) })
+      .eq("id", input.eventId);
+    if (error) throw error;
+  });
 }
 export async function getInternalExamEvaluation(
   eventId: string,
@@ -1298,7 +1405,16 @@ export async function finalizeIntegratedExamEvent(
             memberId: student.member_id,
             examDate: event.exam_date,
             grade: student.target_grade!,
-            examiner: active.map((row) => row.name).join(", "),
+            examiner: active
+              .filter(
+                (row) =>
+                  !data.adultTargetGrades.length ||
+                  data.examinerGradeScopes[row.id]?.includes(
+                    student.target_grade ?? "",
+                  ),
+              )
+              .map((row) => row.name)
+              .join(", "),
             registeredBy: finalizedBy,
           });
           review.registeredExamId = result.examId;

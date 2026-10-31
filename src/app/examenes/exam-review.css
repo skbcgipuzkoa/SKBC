@@ -441,3 +441,22 @@
     position: static;
   }
 }
+
+.exam-grade-assignments fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.exam-grade-assignment-row {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.exam-grade-assignment-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.7rem;
+}
+.exam-assigned-grades strong {
+  font-size: 1.1em;
+}

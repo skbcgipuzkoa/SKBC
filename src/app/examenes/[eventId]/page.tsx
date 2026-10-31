@@ -1,3 +1,4 @@
+import { ExamGradeAssignmentForm } from "@/app/examenes/components/ExamGradeAssignmentForm";
 import {
   saveIntegratedExamReviewAction,
   retryIntegratedExamDocumentsAction,
@@ -36,8 +37,16 @@ export default async function IntegratedExamPage({
 
   const { eventId } = await params;
   const query = await searchParams;
-  const { event, students, items, examiners, scores, summaries } =
-    await getIntegratedExamAdmin(eventId);
+  const {
+    event,
+    students,
+    items,
+    examiners,
+    scores,
+    summaries,
+    examinerGradeScopes,
+    adultTargetGrades,
+  } = await getIntegratedExamAdmin(eventId);
   const publicBaseUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://skbc.vercel.app";
   const scorableItems = items.filter((item) => item.source !== "cut");
@@ -95,6 +104,12 @@ export default async function IntegratedExamPage({
             necesitas.
           </p>
         ) : null}
+        {query.saved === "assignments" ? (
+          <p className="save-ok">
+            Grados asignados guardados. Los enlaces de cada examinador muestran
+            su recorrido.
+          </p>
+        ) : null}
         {query.saved === "review" ? (
           <p className="save-ok">
             Revision guardada. Los grados se actualizan solo al registrar los
@@ -148,6 +163,19 @@ export default async function IntegratedExamPage({
           </article>
         </section>
 
+        {event.program_type === "adults" ||
+        event.program_type === "dan_tribunal" ? (
+          <ExamGradeAssignmentForm
+            eventId={eventId}
+            examiners={examiners}
+            grades={adultTargetGrades}
+            scopes={examinerGradeScopes}
+            locked={
+              isCompleted ||
+              examiners.some((examiner) => Boolean(examiner.submitted_at))
+            }
+          />
+        ) : null}
         <section className="card">
           <div className="section-heading-row">
             <div>
@@ -174,6 +202,16 @@ export default async function IntegratedExamPage({
                     <tr key={examiner.id}>
                       <td data-label="Examinador">
                         <strong>{examiner.name}</strong>
+                        {event.program_type === "adults" ||
+                        event.program_type === "dan_tribunal" ? (
+                          <p className="muted">
+                            Grados:{" "}
+                            {(
+                              examinerGradeScopes[examiner.id] ??
+                              adultTargetGrades
+                            ).join(", ")}
+                          </p>
+                        ) : null}
                       </td>
                       <td data-label="Estado">
                         {examiner.submitted_at ? (
