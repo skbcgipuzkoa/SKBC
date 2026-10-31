@@ -90,7 +90,7 @@ export async function SidebarNav({ current }: SidebarNavProps) {
           </span>
           <b>Accesos</b>
         </summary>
-        <div className="mobile-nav-panel">
+        <nav className="mobile-nav-panel" aria-label="Accesos" tabIndex={0}>
           {noticeAlertCount ? (
             <a className="mobile-priority-alert nav-alert" href="/avisos" aria-current={current === "/avisos" ? "page" : undefined}>
               Avisos pendientes
@@ -111,7 +111,7 @@ export async function SidebarNav({ current }: SidebarNavProps) {
               {item.href === "/alertas" && websiteAlertCount ? <span className="nav-alert-count">{websiteAlertCount}</span> : null}
             </a>
           ))}
-        </div>
+        </nav>
       </details>
       <nav className="nav" aria-label="Principal">
         {navItems.map((item) => (

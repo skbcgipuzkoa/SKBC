@@ -8471,6 +8471,7 @@ tbody tr:hover {
   .sidebar {
     box-shadow: 0 8px 22px rgba(15, 27, 45, 0.14);
     border-right: 0;
+    --mobile-nav-header-space: 176px;
     padding: 9px 10px 10px;
     position: sticky;
     top: 0;
@@ -8479,10 +8480,12 @@ tbody tr:hover {
 
   .sidebar:has(.sidebar-alert-stack) {
     padding-top: 58px;
+    --mobile-nav-header-space: 224px;
   }
 
   .sidebar:has(.sidebar-alert-stack-double) {
     padding-top: 108px;
+    --mobile-nav-header-space: 274px;
   }
 
   .brand {
@@ -8572,6 +8575,13 @@ tbody tr:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-top: 8px;
     padding: 8px;
+    box-sizing: border-box;
+    max-height: calc(100vh - var(--mobile-nav-header-space));
+    max-height: calc(100dvh - var(--mobile-nav-header-space) - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y pinch-zoom;
   }
 
   .mobile-nav-panel a {
