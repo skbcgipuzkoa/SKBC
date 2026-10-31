@@ -3,6 +3,10 @@ import {
   isExamItemRelevantForStudent,
   isKidsProgressiveCutForStudent,
 } from "@/lib/integrated-exams";
+import {
+  ExamStepNavigator,
+  type ExamNavigationStep,
+} from "./ExamStepNavigator";
 type Payload = Awaited<ReturnType<typeof getExaminerExamByToken>>;
 export function ExamEvaluationForm({
   payload,
@@ -35,6 +39,33 @@ export function ExamEvaluationForm({
   const isKidsProgressive =
     payload.event.program_type === "kids" ||
     payload.event.program_type === "kids_progressive";
+  const visibleItems = payload.items.filter(
+    (item) => item.source === "cut" || item.weight > 0,
+  );
+  function continuingAfterCut(item: Payload["items"][number]) {
+    return payload.students.filter(
+      (student) =>
+        !isKidsProgressive ||
+        (!isKidsProgressiveCutForStudent(student, item) &&
+          isExamItemRelevantForStudent(payload.event.program_type, student, {
+            grade: item.cut_grade ?? item.grade,
+          })),
+    );
+  }
+  const steps: ExamNavigationStep[] = [
+    ...visibleItems.map((item): ExamNavigationStep => ({
+      id: item.id,
+      title: item.name,
+      kind: item.source === "cut" ? "cut" : "exercise",
+      continueLabel:
+        item.source === "cut"
+          ? continuingAfterCut(item).length
+            ? "Continuar con el resto de kenshis"
+            : "Finalizar recorrido"
+          : "Continuar",
+    })),
+    { id: "finish", title: "Enviar evaluacion", kind: "finish" },
+  ];
 
   return (
     <main className="public-exam-page">
@@ -77,8 +108,11 @@ export function ExamEvaluationForm({
           {Object.entries(fields).map(([name, value]) => (
             <input key={name} type="hidden" name={name} value={value} />
           ))}
-          <section className="card">
-            <h2>Evaluacion en grupo</h2>
+          <details className="card exam-wizard-help">
+            <summary>
+              Como valorar: Bien 10 · Mejorable 5 · Necesita aprenderlo 0 ·
+              Omitir
+            </summary>
             <p className="muted">
               Valora cada tecnica o ejercicio para todos los alumnos que
               continuan: Bien (10), Mejorable (5), Necesita aprenderlo (0) u
@@ -86,11 +120,10 @@ export function ExamEvaluationForm({
               media de las valoraciones de los examinadores, con revision final
               del profesor.
             </p>
-          </section>
+          </details>
 
-          {payload.items
-            .filter((item) => item.source === "cut" || item.weight > 0)
-            .map((item) => {
+          <ExamStepNavigator steps={steps}>
+            {visibleItems.map((item) => {
               if (item.source === "cut") {
                 const seatedStudents = isKidsProgressive
                   ? payload.students.filter((student) =>
@@ -112,6 +145,20 @@ export function ExamEvaluationForm({
                                 student.members?.display_name ?? "Kenshi",
                             )
                             .join(", ")}
+                        </p>
+                      </div>
+                    ) : null}
+                    {isKidsProgressive ? (
+                      <div className="exam-continuing-list">
+                        <strong>Continuan</strong>
+                        <p>
+                          {continuingAfterCut(item)
+                            .map(
+                              (student) =>
+                                student.members?.display_name ?? "Kenshi",
+                            )
+                            .join(", ") ||
+                            "Todos los kenshis han terminado su recorrido. Continua para revisar el envio."}
                         </p>
                       </div>
                     ) : null}
@@ -238,13 +285,19 @@ export function ExamEvaluationForm({
               );
             })}
 
-          <section className="card sticky-submit-card">
-            <p className="muted">
-              {payload.students.length} kenshis - {scorableItems.length} puntos
-              evaluables
-            </p>
-            <button type="submit">Enviar evaluacion</button>
-          </section>
+            <section className="card exam-finish-screen">
+              <h2>Recorrido completado</h2>
+              <p>
+                Has terminado las valoraciones y los cortes. Puedes volver atras
+                para revisar las notas antes de enviar.
+              </p>
+              <p className="muted">
+                {payload.students.length} kenshis - {scorableItems.length}{" "}
+                puntos evaluables
+              </p>
+              <button type="submit">Enviar evaluacion</button>
+            </section>
+          </ExamStepNavigator>
         </form>
       )}
     </main>

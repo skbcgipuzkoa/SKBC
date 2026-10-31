@@ -154,6 +154,55 @@
 .exam-group-notes textarea {
   width: 100%;
 }
+.exam-step-navigator {
+  scroll-margin-top: 16px;
+}
+.exam-wizard-step[hidden] {
+  display: none;
+}
+.exam-wizard-step:focus-visible {
+  outline: 2px solid #3769af;
+  outline-offset: 3px;
+}
+.exam-step-progress {
+  padding: 0.4rem 0;
+  margin-bottom: 0.8rem;
+}
+.exam-step-progress p {
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+}
+.exam-step-progress progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  accent-color: #234d70;
+}
+.exam-step-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+.exam-step-controls p {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+}
+.exam-wizard-help summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.exam-continuing-list {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: #eaf2f8;
+}
+.exam-finish-screen > button {
+  margin-top: 1rem;
+}
 @media (max-width: 600px) {
   .exam-student-review > summary {
     align-items: flex-start;

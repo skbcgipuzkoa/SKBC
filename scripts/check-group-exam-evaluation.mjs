@@ -22,16 +22,38 @@ const compiled = ts.transpileModule(source, {
 }).outputText;
 const module = { exports: {} };
 const jsx = await import("react/jsx-runtime");
+const navigation = { exports: {} };
+vm.runInNewContext(
+  ts.transpileModule(
+    fs.readFileSync(
+      "src/app/examenes/components/ExamStepNavigator.tsx",
+      "utf8",
+    ),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.ReactJSX,
+        target: ts.ScriptTarget.ES2022,
+      },
+    },
+  ).outputText,
+  {
+    exports: navigation.exports,
+    require: (name) => (name === "react" ? React : jsx),
+  },
+);
 vm.runInNewContext(compiled, {
   exports: module.exports,
   require: (name) =>
     name === "react/jsx-runtime"
       ? jsx
-      : {
-          isExamItemRelevantForStudent: isReviewItemRelevantForStudent,
-          isKidsProgressiveCutForStudent: (student, item) =>
-            student.target_grade === item.cut_grade,
-        },
+      : name === "./ExamStepNavigator"
+        ? navigation.exports
+        : {
+            isExamItemRelevantForStudent: isReviewItemRelevantForStudent,
+            isKidsProgressiveCutForStudent: (student, item) =>
+              student.target_grade === item.cut_grade,
+          },
 });
 const students = [
   {

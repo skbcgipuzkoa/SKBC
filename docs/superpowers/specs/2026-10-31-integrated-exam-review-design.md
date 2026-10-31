@@ -55,3 +55,9 @@ Una alternativa menor seria anadir acceso directo y un informe de lectura: resue
 ## Limites
 
 No se cambia el temario, la progresion de grados ni las evaluaciones historicas originales. Esta propuesta no añade notificaciones a familias ni envio de mensajes. La publicacion del nuevo flujo se realiza tras aprobar el diseno y superar las verificaciones.
+
+### Recorrido por actividad (31/10/2026)
+Cada tecnica o ejercicio ocupa una pantalla con todos los kenshis a quienes corresponde. Continuar requiere una valoracion u Omitir para cada uno. Los cortes tienen pantalla propia con quienes se sientan y quienes continuan. Anterior conserva las valoraciones y observaciones. El envio se realiza en una ultima pantalla independiente.
+
+Validacion: recorrido local de dos alumnos con distintos grados, cuatro opciones, bloqueo parcial, regreso conservando notas, cortes y envio completo de FormData; typecheck, build y regresiones de navegacion y evaluacion correctos.
+
