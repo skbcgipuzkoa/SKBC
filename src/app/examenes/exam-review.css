@@ -460,3 +460,30 @@
 .exam-assigned-grades strong {
   font-size: 1.1em;
 }
+.exam-dashboard-panel > summary {
+  cursor: pointer;
+  padding: 4px 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  color: #173d5c;
+}
+.exam-dashboard-panel > summary strong {
+  font-size: 1.05rem;
+}
+.exam-dashboard-panel > summary small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+.exam-dashboard-panel[open] > summary {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.exam-dashboard-panel > summary:focus-visible {
+  outline: 3px solid #3769af;
+  outline-offset: 4px;
+  border-radius: 4px;
+}

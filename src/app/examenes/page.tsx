@@ -1,11 +1,27 @@
-import { FileText, GraduationCap, LogOut, ScrollText, Trophy } from "lucide-react";
+import {
+  FileText,
+  GraduationCap,
+  LogOut,
+  ScrollText,
+  Trophy,
+} from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
-import { deleteExamAction, deleteIntegratedExamEventAction, generateDiplomaAction, logoutAction, registerExamAction, saveExamReportAction } from "@/app/actions";
+import {
+  deleteExamAction,
+  deleteIntegratedExamEventAction,
+  generateDiplomaAction,
+  logoutAction,
+  registerExamAction,
+  saveExamReportAction,
+} from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { getChildProgramCatalog } from "@/lib/child-program.server";
 import { adultGrades, kidsGrades } from "@/lib/grades";
-import { getIntegratedExamDuplicationTemplate, getRecentIntegratedExamEvents } from "@/lib/integrated-exams";
+import {
+  getIntegratedExamDuplicationTemplate,
+  getRecentIntegratedExamEvents,
+} from "@/lib/integrated-exams";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { IntegratedExamCreateForm } from "./IntegratedExamCreateForm";
 
@@ -28,13 +44,28 @@ type ExamRow = {
   report_url: string | null;
   report_type: string | null;
   report_file_name: string | null;
-  members: { legacy_id: string | null; display_name: string; class: "kids" | "adults" } | null;
+  members: {
+    legacy_id: string | null;
+    display_name: string;
+    class: "kids" | "adults";
+  } | null;
 };
 
 export default async function ExamenesPage({
-  searchParams
+  searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; detail?: string; class?: string; status?: string; q?: string; member?: string; from?: string; to?: string; duplicate?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    saved?: string;
+    detail?: string;
+    class?: string;
+    status?: string;
+    q?: string;
+    member?: string;
+    from?: string;
+    to?: string;
+    duplicate?: string;
+  }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -44,11 +75,19 @@ export default async function ExamenesPage({
   const supabase = createAdminClient();
   let examsQuery = supabase
     .from("exams")
-    .select("id,member_id,exam_date,grade,cycle_attendance,examiner,diploma_url,diploma_registry,report_url,report_type,report_file_name,members(legacy_id,display_name,class)")
+    .select(
+      "id,member_id,exam_date,grade,cycle_attendance,examiner,diploma_url,diploma_registry,report_url,report_type,report_file_name,members(legacy_id,display_name,class)",
+    )
     .order("exam_date", { ascending: false })
     .limit(200);
 
-  const [{ data: members }, { data: rawExams }, integratedEvents, duplicationTemplate, childProgramCatalog] = await Promise.all([
+  const [
+    { data: members },
+    { data: rawExams },
+    integratedEvents,
+    duplicationTemplate,
+    childProgramCatalog,
+  ] = await Promise.all([
     supabase
       .from("members")
       .select("id,display_name,class,grade")
@@ -58,18 +97,33 @@ export default async function ExamenesPage({
       .returns<MemberOption[]>(),
     examsQuery.returns<ExamRow[]>(),
     getRecentIntegratedExamEvents(),
-    params.duplicate ? getIntegratedExamDuplicationTemplate(params.duplicate) : Promise.resolve(null),
-    getChildProgramCatalog()
+    params.duplicate
+      ? getIntegratedExamDuplicationTemplate(params.duplicate)
+      : Promise.resolve(null),
+    getChildProgramCatalog(),
   ]);
 
   const exams = filterExams(rawExams ?? [], params);
   const gradeOptions = [...new Set([...adultGrades, ...kidsGrades])];
   const missingReport = exams.filter((exam) => !exam.report_url).length;
   const missingDiploma = exams.filter((exam) => !exam.diploma_url).length;
-  const completeExams = exams.filter((exam) => exam.report_url && exam.diploma_url).length;
-  const adultMembers = (members ?? []).filter((member) => member.class === "adults");
-  const kidMembers = (members ?? []).filter((member) => member.class === "kids");
-  const hasHistoryFilters = Boolean(params.q || params.class || params.status || params.member || params.from || params.to);
+  const completeExams = exams.filter(
+    (exam) => exam.report_url && exam.diploma_url,
+  ).length;
+  const adultMembers = (members ?? []).filter(
+    (member) => member.class === "adults",
+  );
+  const kidMembers = (members ?? []).filter(
+    (member) => member.class === "kids",
+  );
+  const hasHistoryFilters = Boolean(
+    params.q ||
+    params.class ||
+    params.status ||
+    params.member ||
+    params.from ||
+    params.to,
+  );
   const childCatalogAssignments = childProgramCatalog
     .filter((content) => !content.archivedAt)
     .flatMap((content) => content.assignments)
@@ -85,30 +139,174 @@ export default async function ExamenesPage({
             <h1>Examenes</h1>
           </div>
           <form action={logoutAction}>
-            <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
+            <button
+              className="icon-button"
+              type="submit"
+              title="Salir"
+              aria-label="Salir"
+            >
               <LogOut aria-hidden="true" size={18} />
             </button>
           </form>
         </div>
 
-        {params.saved === "exam" ? <p className="save-ok">Examen registrado.</p> : null}
-        {params.saved === "report" ? <p className="save-ok">Informe guardado en la linea de examen.</p> : null}
-        {params.saved === "diploma" ? <p className="save-ok">Diploma generado y guardado.</p> : null}
-        {params.saved === "delete" ? <p className="save-ok">Examen eliminado y ficha recalculada.</p> : null}
-        {params.saved === "integrated" ? <p className="save-ok">Examen creado y pendiente de evaluar. Abrelo cuando quieras empezar o compartir los enlaces.</p> : null}
-        {params.error === "exam" ? <p className="form-error">No se pudo registrar el examen.</p> : null}
-        {params.error === "integrated" ? <p className="form-error">No se pudo crear el examen integrado{params.detail ? `: ${params.detail}` : "."}</p> : null}
-        {params.error === "report" ? <p className="form-error">No se pudo guardar el informe.</p> : null}
-        {params.error === "diploma" ? <p className="form-error">No se pudo generar el diploma{params.detail ? `: ${params.detail}` : "."}</p> : null}
-        {params.error === "delete" ? <p className="form-error">No se pudo eliminar el examen{params.detail ? `: ${params.detail}` : "."}</p> : null}
+        {params.saved === "exam" ? (
+          <p className="save-ok">Examen registrado.</p>
+        ) : null}
+        {params.saved === "report" ? (
+          <p className="save-ok">Informe guardado en la linea de examen.</p>
+        ) : null}
+        {params.saved === "diploma" ? (
+          <p className="save-ok">Diploma generado y guardado.</p>
+        ) : null}
+        {params.saved === "delete" ? (
+          <p className="save-ok">Examen eliminado y ficha recalculada.</p>
+        ) : null}
+        {params.saved === "integrated" ? (
+          <p className="save-ok">
+            Examen creado y pendiente de evaluar. Abrelo cuando quieras empezar
+            o compartir los enlaces.
+          </p>
+        ) : null}
+        {params.error === "exam" ? (
+          <p className="form-error">No se pudo registrar el examen.</p>
+        ) : null}
+        {params.error === "integrated" ? (
+          <p className="form-error">
+            No se pudo crear el examen integrado
+            {params.detail ? `: ${params.detail}` : "."}
+          </p>
+        ) : null}
+        {params.error === "report" ? (
+          <p className="form-error">No se pudo guardar el informe.</p>
+        ) : null}
+        {params.error === "diploma" ? (
+          <p className="form-error">
+            No se pudo generar el diploma
+            {params.detail ? `: ${params.detail}` : "."}
+          </p>
+        ) : null}
+        {params.error === "delete" ? (
+          <p className="form-error">
+            No se pudo eliminar el examen
+            {params.detail ? `: ${params.detail}` : "."}
+          </p>
+        ) : null}
 
-        <section className="card" id="crear-examen">
+        <section className="card" id="examenes-creados">
+          <div className="section-heading-row">
+            <div>
+              <h2>Examenes creados</h2>
+              <p className="muted">
+                Abre un examen para evaluar o revisar sus resultados.
+              </p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Examen</th>
+                  <th>Tipo</th>
+                  <th>Estado</th>
+                  <th>Kenshis</th>
+                  <th>Examinadores</th>
+                  <th>Accion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {integratedEvents.map((event) => (
+                  <tr key={event.id}>
+                    <td data-label="Fecha">{event.exam_date}</td>
+                    <td data-label="Examen">
+                      <strong>{event.title}</strong>
+                    </td>
+                    <td data-label="Tipo">
+                      {event.program_type === "kids_progressive"
+                        ? "Ninos progresivo"
+                        : "Adultos"}
+                    </td>
+                    <td data-label="Estado">
+                      <span className="state-badge">
+                        {event.status === "completed" ||
+                        event.status === "archived"
+                          ? "Registrado"
+                          : !(event.exam_event_examiners ?? []).some(
+                                (examiner) => examiner.submitted_at,
+                              )
+                            ? "Pendiente de evaluar"
+                            : (event.exam_event_examiners ?? []).every(
+                                  (examiner) => examiner.submitted_at,
+                                )
+                              ? "Pendiente de revision del profesor"
+                              : "Evaluaciones en curso"}
+                      </span>
+                    </td>
+                    <td data-label="Kenshis">
+                      {event.exam_event_students?.length ?? 0}
+                    </td>
+                    <td data-label="Examinadores">
+                      {
+                        (event.exam_event_examiners ?? []).filter(
+                          (examiner) => examiner.submitted_at,
+                        ).length
+                      }
+                      /{event.exam_event_examiners?.length ?? 0} enviados
+                    </td>
+                    <td data-label="Accion">
+                      <div className="inline-actions">
+                        <a className="text-link" href={`/examenes/${event.id}`}>
+                          Abrir
+                        </a>
+                        <a
+                          className="mini-action"
+                          href={`/examenes?duplicate=${event.id}#crear-examen`}
+                        >
+                          Duplicar
+                        </a>
+                        <form action={deleteIntegratedExamEventAction}>
+                          <input
+                            type="hidden"
+                            name="eventId"
+                            value={event.id}
+                          />
+                          <button className="mini-action danger" type="submit">
+                            Eliminar
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!integratedEvents.length ? (
+                  <tr>
+                    <td colSpan={7} className="muted">
+                      Aun no hay examenes integrados.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <details
+          className="card exam-dashboard-panel"
+          id="crear-examen"
+          open={Boolean(params.duplicate || params.error === "integrated")}
+        >
+          <summary>
+            <strong>Crear examen</strong>
+            <small>Adultos o infantil · alumnos, temario y examinadores</small>
+          </summary>
           <div className="section-heading-row">
             <div>
               <p className="eyebrow">Nuevo sistema</p>
               <h2>Crear examen integrado</h2>
               <p className="muted">
-                Crea el examen dentro de SKBC, genera enlaces para examinadores y calcula resultados con los datos del sistema nuevo.
+                Crea el examen dentro de SKBC, genera enlaces para examinadores
+                y calcula resultados con los datos del sistema nuevo.
               </p>
             </div>
           </div>
@@ -118,200 +316,276 @@ export default async function ExamenesPage({
             catalogAssignments={childCatalogAssignments}
             duplicationTemplate={duplicationTemplate}
           />
-        </section>
+        </details>
 
-        <section className="card" id="examenes-creados">
-          <div className="section-heading-row">
-            <div>
-              <h2>Examenes creados</h2>
-              <p className="muted">Abre el examen cuando vayas a evaluar. Cada examinador tiene su enlace; la nota es la media y la decision final corresponde al profesor.</p>
-            </div>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Fecha</th><th>Examen</th><th>Tipo</th><th>Estado</th><th>Kenshis</th><th>Examinadores</th><th>Accion</th></tr>
-              </thead>
-              <tbody>
-                {integratedEvents.map((event) => (
-                  <tr key={event.id}>
-                    <td data-label="Fecha">{event.exam_date}</td>
-                    <td data-label="Examen"><strong>{event.title}</strong></td>
-                    <td data-label="Tipo">{event.program_type === "kids_progressive" ? "Ninos progresivo" : "Adultos"}</td>
-                    <td data-label="Estado"><span className="state-badge">{event.status === "completed" || event.status === "archived" ? "Registrado" : !(event.exam_event_examiners ?? []).some((examiner) => examiner.submitted_at) ? "Pendiente de evaluar" : (event.exam_event_examiners ?? []).every((examiner) => examiner.submitted_at) ? "Pendiente de revision del profesor" : "Evaluaciones en curso"}</span></td>
-                    <td data-label="Kenshis">{event.exam_event_students?.length ?? 0}</td>
-                    <td data-label="Examinadores">
-                      {(event.exam_event_examiners ?? []).filter((examiner) => examiner.submitted_at).length}/{event.exam_event_examiners?.length ?? 0} enviados
-                    </td>
-                    <td data-label="Accion">
-                      <div className="inline-actions">
-                        <a className="text-link" href={`/examenes/${event.id}`}>Abrir</a>
-                        <a className="mini-action" href={`/examenes?duplicate=${event.id}#crear-examen`}>Duplicar</a>
-                        <form action={deleteIntegratedExamEventAction}>
-                          <input type="hidden" name="eventId" value={event.id} />
-                          <button className="mini-action danger" type="submit">Eliminar</button>
-                        </form>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!integratedEvents.length ? (
-                  <tr><td colSpan={7} className="muted">Aun no hay examenes integrados.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="card">
+        <details
+          className="card exam-dashboard-panel"
+          id="registro-manual"
+          open={params.error === "exam"}
+        >
+          <summary>
+            <strong>Registrar examen ya realizado</strong>
+            <small>Registro manual de fecha y nuevo grado</small>
+          </summary>
           <div className="section-heading-row">
             <div>
               <h2>Registrar examen real</h2>
-              <p className="muted">Esto actualiza la ficha del kenshi, su grado y el calculo de proximos examenes.</p>
+              <p className="muted">
+                Esto actualiza la ficha del kenshi, su grado y el calculo de
+                proximos examenes.
+              </p>
             </div>
-            <a className="secondary-link" href="/diplomas-verificacion">Generar diploma de prueba</a>
+            <a className="secondary-link" href="/diplomas-verificacion">
+              Generar diploma de prueba
+            </a>
           </div>
           <form action={registerExamAction} className="edit-form">
-            <p className="muted">Selecciona uno o varios kenshis. La fecha y el nuevo grado se aplicaran a todos los seleccionados.</p>
+            <p className="muted">
+              Selecciona uno o varios kenshis. La fecha y el nuevo grado se
+              aplicaran a todos los seleccionados.
+            </p>
             <div className="form-grid">
               <details className="exam-member-picker">
-                <summary>Adultos <span>{adultMembers.length}</span></summary>
+                <summary>
+                  Adultos <span>{adultMembers.length}</span>
+                </summary>
                 <div className="attendance-checklist compact-picker">
                   {adultMembers.map((member) => (
                     <label className="check-row" key={member.id}>
-                      <input name="memberIds" type="checkbox" value={member.id} />
-                      <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
+                      <input
+                        name="memberIds"
+                        type="checkbox"
+                        value={member.id}
+                      />
+                      <span>
+                        <strong>{member.display_name}</strong>
+                        <small>{member.grade ?? "Sin grado"}</small>
+                      </span>
                     </label>
                   ))}
                 </div>
               </details>
               <details className="exam-member-picker">
-                <summary>Ninos <span>{kidMembers.length}</span></summary>
+                <summary>
+                  Ninos <span>{kidMembers.length}</span>
+                </summary>
                 <div className="attendance-checklist compact-picker">
                   {kidMembers.map((member) => (
                     <label className="check-row" key={member.id}>
-                      <input name="memberIds" type="checkbox" value={member.id} />
-                      <span><strong>{member.display_name}</strong><small>{member.grade ?? "Sin grado"}</small></span>
+                      <input
+                        name="memberIds"
+                        type="checkbox"
+                        value={member.id}
+                      />
+                      <span>
+                        <strong>{member.display_name}</strong>
+                        <small>{member.grade ?? "Sin grado"}</small>
+                      </span>
                     </label>
                   ))}
                 </div>
               </details>
-              <label>Fecha examen<input name="examDate" type="date" required /></label>
+              <label>
+                Fecha examen
+                <input name="examDate" type="date" required />
+              </label>
               <label>
                 Nuevo grado
                 <select name="grade" required>
                   <option value="">Seleccionar</option>
-                  {gradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                  {gradeOptions.map((grade) => (
+                    <option key={grade} value={grade}>
+                      {grade}
+                    </option>
+                  ))}
                 </select>
               </label>
-              <label className="wide">Examinador<input name="examiner" placeholder="Sensei / tribunal" /></label>
+              <label className="wide">
+                Examinador
+                <input name="examiner" placeholder="Sensei / tribunal" />
+              </label>
             </div>
             <div className="form-actions">
               <button type="submit">Registrar examen</button>
             </div>
           </form>
-        </section>
+        </details>
 
-        <section className="grid stats compact exam-stats" aria-label="Resumen examenes">
-          <article className="card">
-            <GraduationCap aria-hidden="true" size={19} />
-            <h2>Examenes visibles</h2>
-            <div className="metric">{exams.length}</div>
-          </article>
-          <article className="card">
-            <FileText aria-hidden="true" size={19} />
-            <h2>Informes pendientes</h2>
-            <div className="metric">{missingReport}</div>
-          </article>
-          <article className="card">
-            <Trophy aria-hidden="true" size={19} />
-            <h2>Diplomas pendientes</h2>
-            <div className="metric">{missingDiploma}</div>
-          </article>
-          <article className="card">
-            <ScrollText aria-hidden="true" size={19} />
-            <h2>Completos</h2>
-            <div className="metric">{completeExams}</div>
-          </article>
-        </section>
-
-        <form className="filters exam-filters" action="/examenes">
-          <label>
-            Buscar
-            <input name="q" defaultValue={params.q ?? ""} placeholder="Kenshi, grado, examinador..." />
-          </label>
-          <label>
-            Kenshi
-            <select name="member" defaultValue={params.member ?? ""}>
-              <option value="">Todos</option>
-              {(members ?? []).map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.display_name} - {member.class === "kids" ? "Ninos" : "Adultos"}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Desde
-            <input name="from" type="date" defaultValue={params.from ?? ""} />
-          </label>
-          <label>
-            Hasta
-            <input name="to" type="date" defaultValue={params.to ?? ""} />
-          </label>
-          <label>
-            Clase
-            <select name="class" defaultValue={params.class ?? ""}>
-              <option value="">Todas</option>
-              <option value="adults">Adultos</option>
-              <option value="kids">Ninos</option>
-            </select>
-          </label>
-          <label>
-            Estado
-            <select name="status" defaultValue={params.status ?? ""}>
-              <option value="">Todos</option>
-              <option value="pending-report">Sin informe</option>
-              <option value="pending-diploma">Sin diploma</option>
-              <option value="complete">Completo</option>
-            </select>
-          </label>
-          <button type="submit">Filtrar</button>
-          <a className="secondary-link" href="/examenes">Limpiar</a>
-        </form>
-
-        <details className="card foldable-admin-section" open={hasHistoryFilters}>
+        <details
+          className="card exam-dashboard-panel"
+          id="historial-examenes"
+          open={Boolean(
+            hasHistoryFilters ||
+            ["report", "diploma"].includes(params.error ?? "") ||
+            ["report", "diploma"].includes(params.saved ?? ""),
+          )}
+        >
           <summary>
-            <span>
-              <strong>Seguimiento de examenes</strong>
-              <small>{exams.length} registros visibles{hasHistoryFilters ? " con filtros aplicados" : ""}</small>
-            </span>
+            <strong>Historial, informes y diplomas</strong>
+            <small>
+              {exams.length} registros
+              {hasHistoryFilters ? " · filtros aplicados" : ""} ·{" "}
+              {missingReport} informes y {missingDiploma} diplomas pendientes
+            </small>
           </summary>
+          <section
+            className="grid stats compact exam-stats"
+            aria-label="Resumen examenes"
+          >
+            <article className="card">
+              <GraduationCap aria-hidden="true" size={19} />
+              <h2>Examenes visibles</h2>
+              <div className="metric">{exams.length}</div>
+            </article>
+            <article className="card">
+              <FileText aria-hidden="true" size={19} />
+              <h2>Informes pendientes</h2>
+              <div className="metric">{missingReport}</div>
+            </article>
+            <article className="card">
+              <Trophy aria-hidden="true" size={19} />
+              <h2>Diplomas pendientes</h2>
+              <div className="metric">{missingDiploma}</div>
+            </article>
+            <article className="card">
+              <ScrollText aria-hidden="true" size={19} />
+              <h2>Completos</h2>
+              <div className="metric">{completeExams}</div>
+            </article>
+          </section>
+
+          <form className="filters exam-filters" action="/examenes">
+            <label>
+              Buscar
+              <input
+                name="q"
+                defaultValue={params.q ?? ""}
+                placeholder="Kenshi, grado, examinador..."
+              />
+            </label>
+            <label>
+              Kenshi
+              <select name="member" defaultValue={params.member ?? ""}>
+                <option value="">Todos</option>
+                {(members ?? []).map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.display_name} -{" "}
+                    {member.class === "kids" ? "Ninos" : "Adultos"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Desde
+              <input name="from" type="date" defaultValue={params.from ?? ""} />
+            </label>
+            <label>
+              Hasta
+              <input name="to" type="date" defaultValue={params.to ?? ""} />
+            </label>
+            <label>
+              Clase
+              <select name="class" defaultValue={params.class ?? ""}>
+                <option value="">Todas</option>
+                <option value="adults">Adultos</option>
+                <option value="kids">Ninos</option>
+              </select>
+            </label>
+            <label>
+              Estado
+              <select name="status" defaultValue={params.status ?? ""}>
+                <option value="">Todos</option>
+                <option value="pending-report">Sin informe</option>
+                <option value="pending-diploma">Sin diploma</option>
+                <option value="complete">Completo</option>
+              </select>
+            </label>
+            <button type="submit">Filtrar</button>
+            <a className="secondary-link" href="/examenes">
+              Limpiar
+            </a>
+          </form>
+
           <section className="table-wrap">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Registro</th><th>Kenshi</th><th>Clase</th><th>Grado</th><th>Asistencias ciclo</th><th>Examinador</th><th>Informe</th><th>Diploma</th><th>Gestion</th></tr>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Registro</th>
+                  <th>Kenshi</th>
+                  <th>Clase</th>
+                  <th>Grado</th>
+                  <th>Asistencias ciclo</th>
+                  <th>Examinador</th>
+                  <th>Informe</th>
+                  <th>Diploma</th>
+                  <th>Gestion</th>
+                </tr>
               </thead>
               <tbody>
                 {(exams ?? []).map((exam) => (
-                  <tr key={`${exam.exam_date}-${exam.members?.display_name}-${exam.grade}`}>
+                  <tr
+                    key={`${exam.exam_date}-${exam.members?.display_name}-${exam.grade}`}
+                  >
                     <td data-label="Fecha">{exam.exam_date}</td>
-                    <td data-label="Registro">{exam.diploma_registry ?? (exam.diploma_url ? "Pendiente registro" : "-")}</td>
-                    <td data-label="Kenshi">
-                      {exam.members?.legacy_id ? <a className="text-link" href={`/kenshis/${exam.members.legacy_id}`}><strong>{exam.members.display_name}</strong></a> : <strong>{exam.members?.display_name ?? "-"}</strong>}
+                    <td data-label="Registro">
+                      {exam.diploma_registry ??
+                        (exam.diploma_url ? "Pendiente registro" : "-")}
                     </td>
-                    <td data-label="Clase">{exam.members?.class === "kids" ? "Ninos" : "Adultos"}</td>
+                    <td data-label="Kenshi">
+                      {exam.members?.legacy_id ? (
+                        <a
+                          className="text-link"
+                          href={`/kenshis/${exam.members.legacy_id}`}
+                        >
+                          <strong>{exam.members.display_name}</strong>
+                        </a>
+                      ) : (
+                        <strong>{exam.members?.display_name ?? "-"}</strong>
+                      )}
+                    </td>
+                    <td data-label="Clase">
+                      {exam.members?.class === "kids" ? "Ninos" : "Adultos"}
+                    </td>
                     <td data-label="Grado">{exam.grade}</td>
-                    <td data-label="Asistencias">{exam.cycle_attendance ?? 0}</td>
+                    <td data-label="Asistencias">
+                      {exam.cycle_attendance ?? 0}
+                    </td>
                     <td data-label="Examinador">{exam.examiner ?? "-"}</td>
                     <td data-label="Informe">
                       {exam.report_url ? (
-                        <span className="exam-doc-stack"><span className="state-badge state-completada">Informe OK</span><a className="text-link" href={exam.report_url} target="_blank">{exam.report_file_name || "Abrir informe"}</a></span>
+                        <span className="exam-doc-stack">
+                          <span className="state-badge state-completada">
+                            Informe OK
+                          </span>
+                          <a
+                            className="text-link"
+                            href={exam.report_url}
+                            target="_blank"
+                          >
+                            {exam.report_file_name || "Abrir informe"}
+                          </a>
+                        </span>
                       ) : (
-                        <form action={saveExamReportAction} className="inline-report-form">
+                        <form
+                          action={saveExamReportAction}
+                          className="inline-report-form"
+                        >
                           <input type="hidden" name="examId" value={exam.id} />
-                          <input name="reportUrl" placeholder="URL informe PDF" required />
-                          <input name="reportType" placeholder="Tipo" defaultValue={exam.members?.class === "kids" ? "Ninos" : "Adultos"} />
+                          <input
+                            name="reportUrl"
+                            placeholder="URL informe PDF"
+                            required
+                          />
+                          <input
+                            name="reportType"
+                            placeholder="Tipo"
+                            defaultValue={
+                              exam.members?.class === "kids"
+                                ? "Ninos"
+                                : "Adultos"
+                            }
+                          />
                           <input name="reportFileName" placeholder="Archivo" />
                           <button type="submit">Guardar URL</button>
                         </form>
@@ -319,25 +593,45 @@ export default async function ExamenesPage({
                     </td>
                     <td data-label="Diploma">
                       {exam.diploma_url ? (
-                        <span className="exam-doc-stack"><span className="state-badge state-completada">Diploma OK</span><a className="text-link" href={exam.diploma_url} target="_blank">Abrir diploma</a></span>
+                        <span className="exam-doc-stack">
+                          <span className="state-badge state-completada">
+                            Diploma OK
+                          </span>
+                          <a
+                            className="text-link"
+                            href={exam.diploma_url}
+                            target="_blank"
+                          >
+                            Abrir diploma
+                          </a>
+                        </span>
                       ) : (
                         <form action={generateDiplomaAction}>
                           <input type="hidden" name="examId" value={exam.id} />
-                          <button className="mini-action selected" type="submit">Generar diploma</button>
+                          <button
+                            className="mini-action selected"
+                            type="submit"
+                          >
+                            Generar diploma
+                          </button>
                         </form>
                       )}
                     </td>
                     <td data-label="Gestion">
                       <form action={deleteExamAction}>
                         <input type="hidden" name="examId" value={exam.id} />
-                        <button className="mini-action danger" type="submit">Eliminar</button>
+                        <button className="mini-action danger" type="submit">
+                          Eliminar
+                        </button>
                       </form>
                     </td>
                   </tr>
                 ))}
                 {!exams.length ? (
                   <tr>
-                    <td colSpan={10} className="muted">No hay examenes con estos filtros.</td>
+                    <td colSpan={10} className="muted">
+                      No hay examenes con estos filtros.
+                    </td>
                   </tr>
                 ) : null}
               </tbody>
@@ -349,22 +643,45 @@ export default async function ExamenesPage({
   );
 }
 
-function filterExams(exams: ExamRow[], params: { class?: string; status?: string; q?: string; member?: string; from?: string; to?: string }) {
+function filterExams(
+  exams: ExamRow[],
+  params: {
+    class?: string;
+    status?: string;
+    q?: string;
+    member?: string;
+    from?: string;
+    to?: string;
+  },
+) {
   const q = normalize(params.q);
   return exams.filter((exam) => {
-    if ((params.class === "kids" || params.class === "adults") && exam.members?.class !== params.class) return false;
+    if (
+      (params.class === "kids" || params.class === "adults") &&
+      exam.members?.class !== params.class
+    )
+      return false;
     if (params.member && exam.member_id !== params.member) return false;
     if (params.from && exam.exam_date < params.from) return false;
     if (params.to && exam.exam_date > params.to) return false;
     if (params.status === "pending-report" && exam.report_url) return false;
     if (params.status === "pending-diploma" && exam.diploma_url) return false;
-    if (params.status === "complete" && (!exam.report_url || !exam.diploma_url)) return false;
+    if (params.status === "complete" && (!exam.report_url || !exam.diploma_url))
+      return false;
     if (!q) return true;
-    return [exam.diploma_registry, exam.members?.display_name, exam.members?.class, exam.grade, exam.examiner, exam.report_file_name]
-      .some((value) => normalize(value).includes(q));
+    return [
+      exam.diploma_registry,
+      exam.members?.display_name,
+      exam.members?.class,
+      exam.grade,
+      exam.examiner,
+      exam.report_file_name,
+    ].some((value) => normalize(value).includes(q));
   });
 }
 
 function normalize(value: string | null | undefined) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
