@@ -191,16 +191,13 @@ export function ExamEvaluationForm({
 
               return (
                 <section className="card exam-score-card" key={item.id}>
-                  <div className="section-heading-row">
+                  <div className="section-heading-row exam-activity-heading">
                     <div>
                       <p className="eyebrow">
                         {item.grade ?? "-"} -{" "}
                         {item.section ?? item.category ?? "Item"}
                       </p>
                       <h2>{item.name}</h2>
-                      {item.summary ? (
-                        <p className="muted">{item.summary}</p>
-                      ) : null}
                     </div>
                     {isKidsProgressive ? (
                       <span className="state-badge">
@@ -208,6 +205,11 @@ export function ExamEvaluationForm({
                       </span>
                     ) : null}
                   </div>
+                  {item.summary ? (
+                    <p className="muted exam-activity-description">
+                      {item.summary}
+                    </p>
+                  ) : null}
                   <div className="exam-score-grid exam-group-rows">
                     {relevantStudents.map((student) => {
                       const current = scoreMap.get(`${student.id}:${item.id}`);

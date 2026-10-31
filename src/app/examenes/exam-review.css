@@ -279,3 +279,41 @@
   background: transparent;
   padding: 0;
 }
+.exam-score-card > .exam-activity-heading {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: #173d5c;
+  color: #fff;
+  box-shadow: 0 5px 18px rgb(8 30 48 / 18%);
+}
+.exam-score-card .exam-activity-heading h2 {
+  margin: 4px 0 0;
+  color: #fff;
+  font-size: clamp(1.6rem, 3vw, 2.35rem);
+  line-height: 1.15;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.exam-activity-heading .eyebrow {
+  margin: 0;
+  color: #d2e6f5;
+}
+.exam-activity-heading .state-badge {
+  background: #fff;
+  color: #173d5c;
+  flex-shrink: 0;
+}
+.exam-activity-description {
+  margin-bottom: 16px;
+}
+@media (max-width: 600px) {
+  .exam-score-card > .exam-activity-heading {
+    top: 4px;
+    padding: 12px;
+    gap: 8px;
+  }
+}
