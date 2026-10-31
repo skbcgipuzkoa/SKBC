@@ -6,6 +6,7 @@ import {
 } from "@/lib/integrated-exams";
 import {
   ExamStepNavigator,
+  StudentPointControls,
   type ExamNavigationStep,
 } from "./ExamStepNavigator";
 type Payload = Awaited<ReturnType<typeof getExaminerExamByToken>>;
@@ -226,6 +227,10 @@ export function ExamEvaluationForm({
                               {student.current_grade ?? "-"} para{" "}
                               {student.target_grade ?? "-"}
                             </small>
+                            <StudentPointControls
+                              studentId={student.id}
+                              name={student.members?.display_name ?? "Kenshi"}
+                            />
                           </div>
                           <fieldset className="exam-rating-options">
                             <legend className="exam-rating-legend">

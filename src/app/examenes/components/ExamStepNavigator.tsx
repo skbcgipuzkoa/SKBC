@@ -1,6 +1,8 @@
 "use client";
 import {
   Children,
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useRef,
@@ -14,6 +16,95 @@ export type ExamNavigationStep = {
   continueLabel?: string;
 };
 type Adjustment = { eventStudentId: string; delta: 1 | -1; reason: string };
+const PointsContext = createContext<{
+  adjustments: Adjustment[];
+  add: (entry: Adjustment) => void;
+} | null>(null);
+
+export function StudentPointControls({
+  studentId,
+  name,
+}: {
+  studentId: string;
+  name: string;
+}) {
+  const points = useContext(PointsContext);
+  const [delta, setDelta] = useState<1 | -1 | null>(null);
+  const [reason, setReason] = useState("");
+  if (!points) return null;
+  const total = points.adjustments
+    .filter((entry) => entry.eventStudentId === studentId)
+    .reduce((sum, entry) => sum + entry.delta, 0);
+  return (
+    <div className="exam-student-points">
+      <div className="exam-student-point-buttons">
+        <button
+          type="button"
+          className="secondary-button"
+          aria-label={`Sumar un punto a ${name}`}
+          disabled={points.adjustments.length >= 100}
+          onClick={() => {
+            setDelta(1);
+            setReason("");
+          }}
+        >
+          +1
+        </button>
+        <span role="status">
+          Extra: {total > 0 ? "+" : ""}
+          {total}
+        </span>
+        <button
+          type="button"
+          className="secondary-button"
+          aria-label={`Restar un punto a ${name}`}
+          disabled={points.adjustments.length >= 100}
+          onClick={() => {
+            setDelta(-1);
+            setReason("");
+          }}
+        >
+          −1
+        </button>
+      </div>
+      {delta !== null ? (
+        <div className="exam-student-point-reason">
+          <label>
+            Motivo del {delta > 0 ? "+1" : "−1"} para {name}
+            <input
+              autoFocus
+              maxLength={1000}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!reason.trim() || points.adjustments.length >= 100}
+            onClick={() => {
+              points.add({
+                eventStudentId: studentId,
+                delta,
+                reason: reason.trim(),
+              });
+              setDelta(null);
+              setReason("");
+            }}
+          >
+            Guardar punto
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setDelta(null)}
+          >
+            Cancelar
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 export function findCompletedCutoff(
   steps: Pick<ExamNavigationStep, "id" | "kind">[],
   index: number,
@@ -48,8 +139,6 @@ export function ExamStepNavigator({
   });
   const [adjustments, setAdjustments] =
     useState<Adjustment[]>(initialAdjustments);
-  const [studentId, setStudentId] = useState(students[0]?.id ?? "");
-  const [reason, setReason] = useState("");
   const [stopReason, setStopReason] = useState("");
   const [confirmCutoff, setConfirmCutoff] = useState<number | null>(null);
   const [stop, setStop] = useState<{
@@ -134,283 +223,246 @@ export function ExamStepNavigator({
     setConfirmCutoff(null);
     goTo(from);
   }
-  function addAdjustment(delta: 1 | -1) {
-    if (!studentId || !reason.trim() || adjustments.length >= 100) return;
-    setAdjustments((current) => [
-      ...current,
-      { eventStudentId: studentId, delta, reason: reason.trim() },
-    ]);
-    setReason("");
-  }
   if (!step || screens.length !== steps.length)
     return (
       <p className="form-error">No se pudo preparar el recorrido del examen.</p>
     );
   return (
-    <div className="exam-step-navigator" ref={root} onChange={checkCurrentStep}>
-      <input
-        type="hidden"
-        name="examAdjustments"
-        value={JSON.stringify(adjustments)}
-      />
-      {stop ? (
-        <>
-          <input
-            type="hidden"
-            name="stopAfterItemId"
-            value={steps[stop.cutoff].id}
-          />
-          <input type="hidden" name="stopReason" value={stop.reason} />
-        </>
-      ) : null}
-      <div className="exam-step-progress" aria-live="polite">
-        <p>
-          Paso {index + 1} de {steps.length} ·{" "}
-          {step.kind === "cut"
-            ? "Se sientan"
-            : step.kind === "finish"
-              ? "Finalizar"
-              : "Tecnica o ejercicio"}
-        </p>
-        <progress
-          max={steps.length}
-          value={index + 1}
-          aria-label="Progreso del examen"
+    <PointsContext.Provider
+      value={{
+        adjustments,
+        add: (entry) =>
+          setAdjustments((current) =>
+            current.length < 100 ? [...current, entry] : current,
+          ),
+      }}
+    >
+      <div
+        className="exam-step-navigator"
+        ref={root}
+        onChange={checkCurrentStep}
+      >
+        <input
+          type="hidden"
+          name="examAdjustments"
+          value={JSON.stringify(adjustments)}
         />
-      </div>
-      <details className="card exam-session-adjustments">
-        <summary>Puntos extra y penalizaciones ({adjustments.length})</summary>
-        <p>
-          Se suman o restan al total de puntos acumulados; no cambian las notas
-          de las tecnicas. Cada punto requiere su motivo y puedes eliminar una
-          entrada erronea.
-        </p>
-        <label>
-          Alumno
-          <select
-            value={studentId}
-            onChange={(event) => setStudentId(event.target.value)}
-          >
-            {students.map((student) => (
-              <option key={student.id} value={student.id}>
-                {student.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Motivo de este punto
-          <input
-            value={reason}
-            maxLength={1000}
-            onChange={(event) => setReason(event.target.value)}
-          />
-        </label>
-        <div className="form-actions">
-          <button
-            type="button"
-            disabled={!studentId || !reason.trim() || adjustments.length >= 100}
-            onClick={() => addAdjustment(1)}
-          >
-            +1 punto
-          </button>
-          <button
-            type="button"
-            disabled={!studentId || !reason.trim() || adjustments.length >= 100}
-            onClick={() => addAdjustment(-1)}
-          >
-            −1 punto
-          </button>
-        </div>
-        {students.map((student) => (
-          <p key={student.id}>
-            <strong>{student.name}</strong>:{" "}
-            {adjustments
-              .filter((entry) => entry.eventStudentId === student.id)
-              .reduce((total, entry) => total + entry.delta, 0)}{" "}
-            puntos
-          </p>
-        ))}
-        {adjustments.length >= 100 ? (
-          <p role="status">
-            Limite de 100 entradas. Elimina una entrada erronea antes de anadir
-            otra.
-          </p>
+        {stop ? (
+          <>
+            <input
+              type="hidden"
+              name="stopAfterItemId"
+              value={steps[stop.cutoff].id}
+            />
+            <input type="hidden" name="stopReason" value={stop.reason} />
+          </>
         ) : null}
-        <ul>
-          {adjustments.map((entry, i) => (
-            <li key={i}>
-              <strong>
-                {
-                  students.find(
-                    (student) => student.id === entry.eventStudentId,
-                  )?.name
-                }
-              </strong>{" "}
-              {entry.delta > 0 ? "+1" : "−1"}: {entry.reason}{" "}
+        <div className="exam-step-progress" aria-live="polite">
+          <p>
+            Paso {index + 1} de {steps.length} ·{" "}
+            {step.kind === "cut"
+              ? "Se sientan"
+              : step.kind === "finish"
+                ? "Finalizar"
+                : "Tecnica o ejercicio"}
+          </p>
+          <progress
+            max={steps.length}
+            value={index + 1}
+            aria-label="Progreso del examen"
+          />
+        </div>
+        <details className="card exam-session-adjustments">
+          <summary>
+            Puntos extra y penalizaciones ({adjustments.length})
+          </summary>
+          <p>
+            Se suman o restan al total de puntos acumulados; no cambian las
+            notas de las tecnicas. Cada punto requiere su motivo y puedes
+            eliminar una entrada erronea.
+          </p>
+          {adjustments.length >= 100 ? (
+            <p role="status">
+              Limite de 100 entradas. Elimina una entrada erronea antes de
+              anadir otra.
+            </p>
+          ) : null}
+          <ul>
+            {adjustments.map((entry, i) => (
+              <li key={i}>
+                <strong>
+                  {
+                    students.find(
+                      (student) => student.id === entry.eventStudentId,
+                    )?.name
+                  }
+                </strong>{" "}
+                {entry.delta > 0 ? "+1" : "−1"}: {entry.reason}{" "}
+                <button
+                  type="button"
+                  className="secondary-button"
+                  aria-label={`Eliminar punto ${i + 1}`}
+                  onClick={() =>
+                    setAdjustments((current) =>
+                      current.filter((_, entryIndex) => entryIndex !== i),
+                    )
+                  }
+                >
+                  Eliminar entrada
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+        {screens.map((screen, screenIndex) => (
+          <div
+            className="exam-wizard-step"
+            key={steps[screenIndex].id}
+            ref={(element) => {
+              screenRefs.current[screenIndex] = element;
+            }}
+            hidden={screenIndex !== index}
+            inert={screenIndex !== index}
+            tabIndex={-1}
+            aria-label={steps[screenIndex].title}
+          >
+            <fieldset
+              className="exam-step-fieldset"
+              disabled={Boolean(
+                stop &&
+                screenIndex > stop.cutoff &&
+                steps[screenIndex].kind !== "finish",
+              )}
+            >
+              {steps[screenIndex].kind === "finish" ? (
+                <div className="exam-session-finish">
+                  <h2>
+                    {stop
+                      ? "Examen terminado antes del final"
+                      : "Recorrido completado"}
+                  </h2>
+                  {stop ? (
+                    <>
+                      <p>
+                        Ultima actividad completada:{" "}
+                        <strong>{steps[stop.cutoff].title}</strong>. Solo se
+                        enviaran las actividades completas hasta aqui. Las
+                        posteriores quedan fuera del recorrido y no puntuan como
+                        cero.
+                      </p>
+                      <p>Motivo: {stop.reason}</p>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={resume}
+                      >
+                        Cancelar fin anticipado y continuar examen
+                      </button>
+                    </>
+                  ) : (
+                    <p>
+                      Has terminado las valoraciones y los cortes. Puedes volver
+                      atras para revisar antes de enviar.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+              {screen}
+            </fieldset>
+          </div>
+        ))}
+        {confirmCutoff !== null ? (
+          <section
+            className="card exam-stop-confirmation"
+            aria-label="Confirmar fin anticipado"
+          >
+            <h2>Terminar examen aqui</h2>
+            <p>
+              Ultima actividad completada:{" "}
+              <strong>{steps[confirmCutoff].title}</strong>. Una actividad
+              parcialmente valorada queda fuera, junto con todas las
+              posteriores.
+            </p>
+            <label>
+              Motivo del fin anticipado
+              <textarea
+                value={stopReason}
+                maxLength={1000}
+                onChange={(event) => setStopReason(event.target.value)}
+              />
+            </label>
+            <div className="form-actions">
+              <button
+                type="button"
+                disabled={!stopReason.trim()}
+                onClick={() => {
+                  setStop({
+                    cutoff: confirmCutoff,
+                    reason: stopReason.trim(),
+                    from: index,
+                  });
+                  setConfirmCutoff(null);
+                  goTo(steps.length - 1);
+                }}
+              >
+                Confirmar y revisar envio
+              </button>
               <button
                 type="button"
                 className="secondary-button"
-                aria-label={`Eliminar punto ${i + 1}`}
-                onClick={() =>
-                  setAdjustments((current) =>
-                    current.filter((_, entryIndex) => entryIndex !== i),
-                  )
-                }
+                onClick={() => setConfirmCutoff(null)}
               >
-                Eliminar entrada
+                Seguir examinando
               </button>
-            </li>
-          ))}
-        </ul>
-      </details>
-      {screens.map((screen, screenIndex) => (
-        <div
-          className="exam-wizard-step"
-          key={steps[screenIndex].id}
-          ref={(element) => {
-            screenRefs.current[screenIndex] = element;
-          }}
-          hidden={screenIndex !== index}
-          inert={screenIndex !== index}
-          tabIndex={-1}
-          aria-label={steps[screenIndex].title}
-        >
-          <fieldset
-            className="exam-step-fieldset"
-            disabled={Boolean(
-              stop &&
-              screenIndex > stop.cutoff &&
-              steps[screenIndex].kind !== "finish",
-            )}
+            </div>
+          </section>
+        ) : null}
+        <section className="card sticky-submit-card exam-step-controls">
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={index === 0}
+            onClick={() => {
+              if (stop) resume();
+              else goTo(index - 1);
+            }}
           >
-            {steps[screenIndex].kind === "finish" ? (
-              <div className="exam-session-finish">
-                <h2>
-                  {stop
-                    ? "Examen terminado antes del final"
-                    : "Recorrido completado"}
-                </h2>
-                {stop ? (
-                  <>
-                    <p>
-                      Ultima actividad completada:{" "}
-                      <strong>{steps[stop.cutoff].title}</strong>. Solo se
-                      enviaran las actividades completas hasta aqui. Las
-                      posteriores quedan fuera del recorrido y no puntuan como
-                      cero.
-                    </p>
-                    <p>Motivo: {stop.reason}</p>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={resume}
-                    >
-                      Cancelar fin anticipado y continuar examen
-                    </button>
-                  </>
-                ) : (
-                  <p>
-                    Has terminado las valoraciones y los cortes. Puedes volver
-                    atras para revisar antes de enviar.
-                  </p>
-                )}
-              </div>
-            ) : null}
-            {screen}
-          </fieldset>
-        </div>
-      ))}
-      {confirmCutoff !== null ? (
-        <section
-          className="card exam-stop-confirmation"
-          aria-label="Confirmar fin anticipado"
-        >
-          <h2>Terminar examen aqui</h2>
-          <p>
-            Ultima actividad completada:{" "}
-            <strong>{steps[confirmCutoff].title}</strong>. Una actividad
-            parcialmente valorada queda fuera, junto con todas las posteriores.
-          </p>
-          <label>
-            Motivo del fin anticipado
-            <textarea
-              value={stopReason}
-              maxLength={1000}
-              onChange={(event) => setStopReason(event.target.value)}
-            />
-          </label>
-          <div className="form-actions">
-            <button
-              type="button"
-              disabled={!stopReason.trim()}
-              onClick={() => {
-                setStop({
-                  cutoff: confirmCutoff,
-                  reason: stopReason.trim(),
-                  from: index,
-                });
-                setConfirmCutoff(null);
-                goTo(steps.length - 1);
-              }}
-            >
-              Confirmar y revisar envio
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setConfirmCutoff(null)}
-            >
-              Seguir examinando
-            </button>
-          </div>
-        </section>
-      ) : null}
-      <section className="card sticky-submit-card exam-step-controls">
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={index === 0}
-          onClick={() => {
-            if (stop) resume();
-            else goTo(index - 1);
-          }}
-        >
-          Anterior
-        </button>
-        {!last ? (
-          <>
-            <p className="muted" role="status">
-              {completion.answered}/{completion.total} kenshis valorados. Puedes
-              usar Omitir.
+            Anterior
+          </button>
+          {!last ? (
+            <>
+              <p className="muted" role="status">
+                {completion.answered}/{completion.total} kenshis valorados.
+                Puedes usar Omitir.
+              </p>
+              <button
+                type="button"
+                disabled={!completion.ready}
+                onClick={() => {
+                  if (checkCurrentStep()) goTo(index + 1);
+                }}
+              >
+                {step.continueLabel ?? "Continuar"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={availableCutoff < 0}
+                onClick={() => {
+                  checkCurrentStep();
+                  setConfirmCutoff(availableCutoff);
+                }}
+              >
+                Terminar examen aqui
+              </button>
+            </>
+          ) : (
+            <p className="muted">
+              Revisa lo necesario con Anterior o envia la evaluacion.
             </p>
-            <button
-              type="button"
-              disabled={!completion.ready}
-              onClick={() => {
-                if (checkCurrentStep()) goTo(index + 1);
-              }}
-            >
-              {step.continueLabel ?? "Continuar"}
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={availableCutoff < 0}
-              onClick={() => {
-                checkCurrentStep();
-                setConfirmCutoff(availableCutoff);
-              }}
-            >
-              Terminar examen aqui
-            </button>
-          </>
-        ) : (
-          <p className="muted">
-            Revisa lo necesario con Anterior o envia la evaluacion.
-          </p>
-        )}
-      </section>
-    </div>
+          )}
+        </section>
+      </div>
+    </PointsContext.Provider>
   );
 }

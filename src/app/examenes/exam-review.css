@@ -258,3 +258,24 @@
 .exam-step-controls {
   flex-wrap: wrap;
 }
+.exam-student-point-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.exam-student-point-buttons button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.exam-student-point-reason {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.exam-group-student .exam-student-point-reason label {
+  display: grid;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}

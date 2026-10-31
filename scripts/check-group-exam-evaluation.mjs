@@ -161,6 +161,20 @@ assert.ok(
 );
 assert.ok(html.includes("Se sientan aqui"));
 assert.ok(html.includes("Omitir"));
+assert.equal(
+  (html.match(/Sumar un punto a /g) || []).length,
+  3,
+  "Each assessed pupil row has a direct reward button",
+);
+assert.equal(
+  (html.match(/Restar un punto a /g) || []).length,
+  3,
+  "Each assessed pupil row has a direct penalty button",
+);
+assert.ok(
+  !html.includes("<select"),
+  "No pupil selector needed for point adjustments",
+);
 assert.ok(
   !/<select[^>]*name="score:/.test(html),
   "No numeric dropdown per student",
