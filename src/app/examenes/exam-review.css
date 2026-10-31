@@ -222,3 +222,39 @@
     flex-wrap: wrap;
   }
 }
+
+.exam-step-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.exam-session-adjustments label,
+.exam-stop-confirmation label {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.8rem 0;
+}
+.exam-session-adjustments li {
+  padding: 0.5rem 0;
+}
+.exam-session-adjustments summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.exam-session-finish {
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.exam-stop-confirmation {
+  border: 2px solid #c27b10;
+}
+.exam-stop-confirmation textarea {
+  width: 100%;
+  min-height: 6rem;
+}
+.exam-step-controls {
+  flex-wrap: wrap;
+}

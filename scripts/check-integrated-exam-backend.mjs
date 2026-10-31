@@ -1,3 +1,4 @@
+import * as sessionHelpers from "../src/lib/integrated-exam-session.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -122,6 +123,7 @@ vm.runInNewContext(source, {
   module,
   exports: module.exports,
   require(name) {
+    if (name.endsWith("integrated-exam-session")) return sessionHelpers;
     if (name === "node:crypto") return { randomUUID };
     if (name.endsWith("integrated-exam-documents"))
       return {
@@ -245,10 +247,13 @@ await assert.rejects(
   /entre 0 y 10/,
 );
 await assert.rejects(
-  () => backend.submitIntegratedExamScores({
-    token: "secret",
-    scores: [{ eventStudentId: "s", eventItemId: "i", score: 7.5, skipped: false }],
-  }),
+  () =>
+    backend.submitIntegratedExamScores({
+      token: "secret",
+      scores: [
+        { eventStudentId: "s", eventItemId: "i", score: 7.5, skipped: false },
+      ],
+    }),
   /0, 5 o 10/,
 );
 await assert.rejects(
@@ -437,6 +442,7 @@ vm.runInNewContext(source, {
   JSON,
   Error,
   require(name) {
+    if (name.endsWith("integrated-exam-session")) return sessionHelpers;
     if (name === "node:crypto") return { randomUUID };
     if (name.endsWith("integrated-exam-review")) return reviewHelpers;
     if (name.endsWith("supabase/admin"))
@@ -542,3 +548,4 @@ assert.equal(
   "document retries never promote again",
 );
 console.log("Integrated exam document recovery checks passed");
+await assert.rejects(()=>backend.createIntegratedExamItem({eventId:"e",name:"Late syllabus edit"}),/temario no puede/);

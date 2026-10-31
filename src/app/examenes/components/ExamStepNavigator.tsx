@@ -1,5 +1,4 @@
 "use client";
-
 import {
   Children,
   useCallback,
@@ -8,20 +7,37 @@ import {
   useState,
   type ReactNode,
 } from "react";
-
 export type ExamNavigationStep = {
   id: string;
   title: string;
   kind: "exercise" | "cut" | "finish";
   continueLabel?: string;
 };
-
+type Adjustment = { eventStudentId: string; delta: 1 | -1; reason: string };
+export function findCompletedCutoff(
+  steps: Pick<ExamNavigationStep, "id" | "kind">[],
+  index: number,
+  complete: Array<boolean | null>,
+) {
+  let cutoff = -1;
+  for (let i = 0; i <= index; i++) {
+    if (steps[i]?.kind !== "exercise") continue;
+    if (complete[i] === null) continue;
+    if (!complete[i]) break;
+    cutoff = i;
+  }
+  return cutoff;
+}
 export function ExamStepNavigator({
   steps,
   children,
+  students = [],
+  initialAdjustments = [],
 }: {
   steps: ExamNavigationStep[];
   children: ReactNode;
+  students?: { id: string; name: string }[];
+  initialAdjustments?: Adjustment[];
 }) {
   const screens = Children.toArray(children);
   const [index, setIndex] = useState(0);
@@ -30,14 +46,25 @@ export function ExamStepNavigator({
     total: 0,
     ready: false,
   });
+  const [adjustments, setAdjustments] =
+    useState<Adjustment[]>(initialAdjustments);
+  const [studentId, setStudentId] = useState(students[0]?.id ?? "");
+  const [reason, setReason] = useState("");
+  const [stopReason, setStopReason] = useState("");
+  const [confirmCutoff, setConfirmCutoff] = useState<number | null>(null);
+  const [stop, setStop] = useState<{
+    cutoff: number;
+    reason: string;
+    from: number;
+  } | null>(null);
+  const [availableCutoff, setAvailableCutoff] = useState(-1);
   const root = useRef<HTMLDivElement>(null);
   const screenRefs = useRef<Array<HTMLDivElement | null>>([]);
   const last = index === steps.length - 1;
   const step = steps[index];
-
-  const checkCurrentStep = useCallback(() => {
+  function screenCompletion(screenIndex: number) {
     const radios = Array.from(
-      screenRefs.current[index]?.querySelectorAll<HTMLInputElement>(
+      screenRefs.current[screenIndex]?.querySelectorAll<HTMLInputElement>(
         'input[type="radio"][required]',
       ) ?? [],
     );
@@ -45,44 +72,97 @@ export function ExamStepNavigator({
     const answered = groups.filter((name) =>
       radios.some((radio) => radio.name === name && radio.checked),
     ).length;
-    const result = {
+    return {
       answered,
       total: groups.length,
-      ready: answered === groups.length,
+      ready: groups.length === answered,
     };
+  }
+  const checkCurrentStep = useCallback(() => {
+    const result = screenCompletion(index);
     setCompletion(result);
+    const cutoff = findCompletedCutoff(
+      steps,
+      index,
+      steps.map((_, i) => {
+        const state = screenCompletion(i);
+        return state.total ? state.ready : null;
+      }),
+    );
+    const hasNumeric = screenRefs.current
+      .slice(0, cutoff + 1)
+      .some((screen) =>
+        Array.from(
+          screen?.querySelectorAll<HTMLInputElement>(
+            'input[type="radio"]:checked',
+          ) ?? [],
+        ).some(
+          (radio) =>
+            radio.value !== "skip" &&
+            radio.value !== "" &&
+            Number.isFinite(Number(radio.value)),
+        ),
+      );
+    setAvailableCutoff(hasNumeric ? cutoff : -1);
     return result.ready;
-  }, [index]);
-
+  }, [index, steps]);
   useEffect(() => {
     checkCurrentStep();
   }, [checkCurrentStep]);
   useEffect(() => {
     const form = root.current?.closest("form");
-    const guardSubmission = (event: Event) => {
+    const guard = (event: Event) => {
       if (!last) event.preventDefault();
     };
-    form?.addEventListener("submit", guardSubmission, true);
-    return () => form?.removeEventListener("submit", guardSubmission, true);
+    form?.addEventListener("submit", guard, true);
+    return () => form?.removeEventListener("submit", guard, true);
   }, [last]);
-
+  // Disabled fieldsets omit all later controls from native validation and FormData.
+  // Unmounting their disabled state on resume restores the original uncontrolled values.
   function goTo(next: number) {
     if (next < 0 || next >= steps.length) return;
     setIndex(next);
     root.current?.scrollIntoView({ block: "start", behavior: "instant" });
-    // Focus the new screen heading after React has changed which screen is visible.
     requestAnimationFrame(() =>
       screenRefs.current[next]?.focus({ preventScroll: true }),
     );
   }
-
+  function resume() {
+    if (!stop) return;
+    const from = stop.from;
+    setStop(null);
+    setConfirmCutoff(null);
+    goTo(from);
+  }
+  function addAdjustment(delta: 1 | -1) {
+    if (!studentId || !reason.trim() || adjustments.length >= 100) return;
+    setAdjustments((current) => [
+      ...current,
+      { eventStudentId: studentId, delta, reason: reason.trim() },
+    ]);
+    setReason("");
+  }
   if (!step || screens.length !== steps.length)
     return (
       <p className="form-error">No se pudo preparar el recorrido del examen.</p>
     );
-
   return (
     <div className="exam-step-navigator" ref={root} onChange={checkCurrentStep}>
+      <input
+        type="hidden"
+        name="examAdjustments"
+        value={JSON.stringify(adjustments)}
+      />
+      {stop ? (
+        <>
+          <input
+            type="hidden"
+            name="stopAfterItemId"
+            value={steps[stop.cutoff].id}
+          />
+          <input type="hidden" name="stopReason" value={stop.reason} />
+        </>
+      ) : null}
       <div className="exam-step-progress" aria-live="polite">
         <p>
           Paso {index + 1} de {steps.length} ·{" "}
@@ -98,6 +178,92 @@ export function ExamStepNavigator({
           aria-label="Progreso del examen"
         />
       </div>
+      <details className="card exam-session-adjustments">
+        <summary>Puntos extra y penalizaciones ({adjustments.length})</summary>
+        <p>
+          Se suman o restan al total de puntos acumulados; no cambian las notas
+          de las tecnicas. Cada punto requiere su motivo y puedes eliminar una
+          entrada erronea.
+        </p>
+        <label>
+          Alumno
+          <select
+            value={studentId}
+            onChange={(event) => setStudentId(event.target.value)}
+          >
+            {students.map((student) => (
+              <option key={student.id} value={student.id}>
+                {student.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Motivo de este punto
+          <input
+            value={reason}
+            maxLength={1000}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </label>
+        <div className="form-actions">
+          <button
+            type="button"
+            disabled={!studentId || !reason.trim() || adjustments.length >= 100}
+            onClick={() => addAdjustment(1)}
+          >
+            +1 punto
+          </button>
+          <button
+            type="button"
+            disabled={!studentId || !reason.trim() || adjustments.length >= 100}
+            onClick={() => addAdjustment(-1)}
+          >
+            −1 punto
+          </button>
+        </div>
+        {students.map((student) => (
+          <p key={student.id}>
+            <strong>{student.name}</strong>:{" "}
+            {adjustments
+              .filter((entry) => entry.eventStudentId === student.id)
+              .reduce((total, entry) => total + entry.delta, 0)}{" "}
+            puntos
+          </p>
+        ))}
+        {adjustments.length >= 100 ? (
+          <p role="status">
+            Limite de 100 entradas. Elimina una entrada erronea antes de anadir
+            otra.
+          </p>
+        ) : null}
+        <ul>
+          {adjustments.map((entry, i) => (
+            <li key={i}>
+              <strong>
+                {
+                  students.find(
+                    (student) => student.id === entry.eventStudentId,
+                  )?.name
+                }
+              </strong>{" "}
+              {entry.delta > 0 ? "+1" : "−1"}: {entry.reason}{" "}
+              <button
+                type="button"
+                className="secondary-button"
+                aria-label={`Eliminar punto ${i + 1}`}
+                onClick={() =>
+                  setAdjustments((current) =>
+                    current.filter((_, entryIndex) => entryIndex !== i),
+                  )
+                }
+              >
+                Eliminar entrada
+              </button>
+            </li>
+          ))}
+        </ul>
+      </details>
       {screens.map((screen, screenIndex) => (
         <div
           className="exam-wizard-step"
@@ -110,26 +276,114 @@ export function ExamStepNavigator({
           tabIndex={-1}
           aria-label={steps[screenIndex].title}
         >
-          {screen}
+          <fieldset
+            className="exam-step-fieldset"
+            disabled={Boolean(
+              stop &&
+              screenIndex > stop.cutoff &&
+              steps[screenIndex].kind !== "finish",
+            )}
+          >
+            {steps[screenIndex].kind === "finish" ? (
+              <div className="exam-session-finish">
+                <h2>
+                  {stop
+                    ? "Examen terminado antes del final"
+                    : "Recorrido completado"}
+                </h2>
+                {stop ? (
+                  <>
+                    <p>
+                      Ultima actividad completada:{" "}
+                      <strong>{steps[stop.cutoff].title}</strong>. Solo se
+                      enviaran las actividades completas hasta aqui. Las
+                      posteriores quedan fuera del recorrido y no puntuan como
+                      cero.
+                    </p>
+                    <p>Motivo: {stop.reason}</p>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={resume}
+                    >
+                      Cancelar fin anticipado y continuar examen
+                    </button>
+                  </>
+                ) : (
+                  <p>
+                    Has terminado las valoraciones y los cortes. Puedes volver
+                    atras para revisar antes de enviar.
+                  </p>
+                )}
+              </div>
+            ) : null}
+            {screen}
+          </fieldset>
         </div>
       ))}
+      {confirmCutoff !== null ? (
+        <section
+          className="card exam-stop-confirmation"
+          aria-label="Confirmar fin anticipado"
+        >
+          <h2>Terminar examen aqui</h2>
+          <p>
+            Ultima actividad completada:{" "}
+            <strong>{steps[confirmCutoff].title}</strong>. Una actividad
+            parcialmente valorada queda fuera, junto con todas las posteriores.
+          </p>
+          <label>
+            Motivo del fin anticipado
+            <textarea
+              value={stopReason}
+              maxLength={1000}
+              onChange={(event) => setStopReason(event.target.value)}
+            />
+          </label>
+          <div className="form-actions">
+            <button
+              type="button"
+              disabled={!stopReason.trim()}
+              onClick={() => {
+                setStop({
+                  cutoff: confirmCutoff,
+                  reason: stopReason.trim(),
+                  from: index,
+                });
+                setConfirmCutoff(null);
+                goTo(steps.length - 1);
+              }}
+            >
+              Confirmar y revisar envio
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setConfirmCutoff(null)}
+            >
+              Seguir examinando
+            </button>
+          </div>
+        </section>
+      ) : null}
       <section className="card sticky-submit-card exam-step-controls">
         <button
           type="button"
           className="secondary-button"
           disabled={index === 0}
-          onClick={() => goTo(index - 1)}
+          onClick={() => {
+            if (stop) resume();
+            else goTo(index - 1);
+          }}
         >
           Anterior
         </button>
         {!last ? (
           <>
-            {completion.total > 0 ? (
-              <p className="muted" role="status">
-                {completion.answered}/{completion.total} kenshis valorados.
-                Puedes usar Omitir.
-              </p>
-            ) : null}
+            <p className="muted" role="status">
+              {completion.answered}/{completion.total} kenshis valorados. Puedes
+              usar Omitir.
+            </p>
             <button
               type="button"
               disabled={!completion.ready}
@@ -138,6 +392,17 @@ export function ExamStepNavigator({
               }}
             >
               {step.continueLabel ?? "Continuar"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={availableCutoff < 0}
+              onClick={() => {
+                checkCurrentStep();
+                setConfirmCutoff(availableCutoff);
+              }}
+            >
+              Terminar examen aqui
             </button>
           </>
         ) : (

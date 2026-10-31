@@ -26,7 +26,7 @@ function loadComponent(file, extra = {}) {
   });
   return module.exports;
 }
-const { ExamStepNavigator } = loadComponent(
+const { ExamStepNavigator, findCompletedCutoff } = loadComponent(
   "src/app/examenes/components/ExamStepNavigator.tsx",
 );
 const screens = [
@@ -69,3 +69,45 @@ assert.match(html, /Continuar/);
 assert.match(html, /Paso 1 de 3/);
 assert.ok(html.includes('aria-live="polite"'));
 console.log("Exam step navigation server-render checks passed.");
+
+assert.equal(
+  findCompletedCutoff(
+    [
+      { id: "a", kind: "exercise" },
+      { id: "cut", kind: "cut" },
+      { id: "b", kind: "exercise" },
+    ],
+    2,
+    [true, true, false],
+  ),
+  0,
+);
+assert.equal(
+  findCompletedCutoff(
+    [
+      { id: "a", kind: "exercise" },
+      { id: "b", kind: "exercise" },
+    ],
+    1,
+    [true, true],
+  ),
+  1,
+);
+assert.equal(
+  findCompletedCutoff([{ id: "a", kind: "exercise" }], 0, [false]),
+  -1,
+);
+assert.match(html, /Puntos extra y penalizaciones/);
+assert.match(html, /Terminar examen aqui/);
+
+assert.equal(
+  findCompletedCutoff(
+    [
+      { id: "empty", kind: "exercise" },
+      { id: "done", kind: "exercise" },
+    ],
+    1,
+    [null, true],
+  ),
+  1,
+);

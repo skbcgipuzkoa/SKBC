@@ -1,3 +1,4 @@
+import { decodeScoreNotes } from "./integrated-exam-session.ts";
 import { CHILD_PROGRAM_GRADES, normalizeChildGrade } from "./child-program.ts";
 
 export type ReviewAdjustment = { score: number; notes: string };
@@ -54,6 +55,18 @@ export type StudentReviewSummary<T extends ReviewItem = ReviewItem> = {
   scoredItems: number;
   complete: boolean;
   sourceSignature: string;
+  pointAdjustments: number;
+  examinerAdjustments: Array<{
+    examinerId: string;
+    delta: number;
+    reason: string;
+  }>;
+  earlyStops: Array<{
+    examinerId: string;
+    afterItemId: string;
+    reason: string;
+  }>;
+  notReachedItems: number;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -165,14 +178,44 @@ export function buildStudentReview<T extends ReviewItem>(input: {
     if (!isValidReviewScore(adjustment.score))
       throw new Error("Puntuacion de revision fuera del rango 0-10.");
   }
+  const decoded = new Map(
+    scores.map((score) => [score, decodeScoreNotes(score.notes)]),
+  );
+  const reachedItems = sourceItems.filter((item) => {
+    const rows = scores.filter((row) => row.event_item_id === item.id);
+    return !rows.length || !rows.every((row) => decoded.get(row)!.outsideRoute);
+  });
+  const routeExaminers = new Set(
+    scores
+      .filter((row) => !decoded.get(row)!.outsideRoute)
+      .map((row) => row.examiner_id ?? ""),
+  );
+  const examinerAdjustments = scores.flatMap((row) =>
+    decoded
+      .get(row)!
+      .adjustments.map((entry) => ({
+        examinerId: row.examiner_id ?? "",
+        ...entry,
+      })),
+  );
+  const earlyStops = scores.flatMap((row) => {
+    const stop = decoded.get(row)!.stop;
+    return stop ? [{ examinerId: row.examiner_id ?? "", ...stop }] : [];
+  });
+  const pointAdjustments = routeExaminers.size
+    ? examinerAdjustments
+        .filter((entry) => routeExaminers.has(entry.examinerId))
+        .reduce((sum, entry) => sum + entry.delta, 0) / routeExaminers.size
+    : 0;
   let baseTotal = 0;
   let baseMax = 0;
   let total = 0;
   let max = 0;
-  let complete = sourceItems.length > 0;
-  const items = sourceItems.map((item): ReviewedItem<T> => {
+  let complete = reachedItems.length > 0;
+  const items = reachedItems.map((item): ReviewedItem<T> => {
     const itemScores = scores.filter(
-      (score) => score.event_item_id === item.id,
+      (score) =>
+        score.event_item_id === item.id && !decoded.get(score)!.outsideRoute,
     );
     const validScores = itemScores.filter(
       (score) => !score.skipped && isValidReviewScore(score.score),
@@ -205,7 +248,7 @@ export function buildStudentReview<T extends ReviewItem>(input: {
       originalScore,
       score,
       notes: itemScores
-        .map((entry) => entry.notes?.trim() ?? "")
+        .map((entry) => decoded.get(entry)!.text.trim())
         .filter(Boolean),
       adjustmentNotes: adjustment?.notes ?? "",
       adjusted: Boolean(adjustment),
@@ -213,7 +256,17 @@ export function buildStudentReview<T extends ReviewItem>(input: {
       scored: score !== null,
     };
   });
-  const percentage = max ? Math.round((total / max) * 1000) / 10 : 0;
+  const percent = (points: number, denominator: number) =>
+    denominator
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            Math.round(((points + pointAdjustments) / denominator) * 1000) / 10,
+          ),
+        )
+      : 0;
+  const percentage = percent(total, max);
   const snapshot = JSON.stringify({
     passPercentage: input.passPercentage,
     items: sourceItems
@@ -244,7 +297,11 @@ export function buildStudentReview<T extends ReviewItem>(input: {
     hash = Math.imul(hash ^ snapshot.charCodeAt(index), 16777619);
   return {
     items,
-    basePercentage: baseMax ? Math.round((baseTotal / baseMax) * 1000) / 10 : 0,
+    basePercentage: percent(baseTotal, baseMax),
+    pointAdjustments,
+    examinerAdjustments,
+    earlyStops,
+    notReachedItems: sourceItems.length - reachedItems.length,
     percentage,
     automaticPassed: complete && max > 0 && percentage >= input.passPercentage,
     totalItems: items.length,

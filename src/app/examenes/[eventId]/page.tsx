@@ -3,6 +3,7 @@ import {
   retryIntegratedExamDocumentsAction,
 } from "@/app/examenes/review-actions";
 import { isReviewCurrent } from "@/lib/integrated-exam-review";
+import { decodeScoreNotes } from "@/lib/integrated-exam-session";
 import { LogOut } from "lucide-react";
 import {
   createIntegratedExamItemAction,
@@ -282,6 +283,53 @@ export default async function IntegratedExamPage({
                   <strong>{summary.percentage}%</strong> · Umbral:{" "}
                   {event.pass_percentage}%
                 </p>
+                {originals.some((score) => {
+                  const session = decodeScoreNotes(score.notes);
+                  return session.stop || session.adjustments.length;
+                }) ? (
+                  <section className="exam-review-item">
+                    <h3>Puntos extra, penalizaciones y finalizacion</h3>
+                    <p>
+                      Los movimientos se aplican al total acumulado. Con varios
+                      examinadores se usa la media de sus ajustes.
+                    </p>
+                    <ul>
+                      {originals.flatMap((score) => {
+                        const session = decodeScoreNotes(score.notes);
+                        const name =
+                          examiners.find(
+                            (examiner) => examiner.id === score.examiner_id,
+                          )?.name ?? "Examinador";
+                        return [
+                          ...session.adjustments.map((movement, index) => (
+                            <li
+                              key={`${score.examiner_id}:${score.event_item_id}:point:${index}`}
+                            >
+                              {name}: {movement.delta > 0 ? "+" : ""}
+                              {movement.delta} punto. {movement.reason}
+                            </li>
+                          )),
+                          ...(session.stop
+                            ? [
+                                <li
+                                  key={`${score.examiner_id}:${score.event_item_id}:stop`}
+                                >
+                                  {name}: examen terminado despues de{" "}
+                                  {items.find(
+                                    (item) =>
+                                      item.id === session.stop!.afterItemId,
+                                  )?.name ?? "la ultima actividad completada"}
+                                  . Motivo: {session.stop.reason}. El temario
+                                  posterior no realizado queda fuera del
+                                  calculo.
+                                </li>,
+                              ]
+                            : []),
+                        ];
+                      })}
+                    </ul>
+                  </section>
+                ) : null}
                 <form
                   action={saveIntegratedExamReviewAction}
                   className="exam-review-form"
@@ -316,8 +364,15 @@ export default async function IntegratedExamPage({
                                     )?.name
                                   }
                                 </strong>
-                                : {score.skipped ? "No evaluado" : score.score}
-                                {score.notes ? <p>{score.notes}</p> : null}
+                                :{" "}
+                                {decodeScoreNotes(score.notes).outsideRoute
+                                  ? "No realizado"
+                                  : score.skipped
+                                    ? "No evaluado"
+                                    : score.score}
+                                {decodeScoreNotes(score.notes).text ? (
+                                  <p>{decodeScoreNotes(score.notes).text}</p>
+                                ) : null}
                               </li>
                             ))}
                         </ul>

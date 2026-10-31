@@ -1,4 +1,5 @@
 "use server";
+import { parseExamSubmissionExtras } from "@/lib/integrated-exam-session";
 
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
@@ -3872,7 +3873,7 @@ export async function submitIntegratedExamScoresAction(formData: FormData) {
   }
 
   try {
-    await submitIntegratedExamScores({ token, scores });
+    await submitIntegratedExamScores({ token, scores, extras:parseExamSubmissionExtras(formData) });
   } catch (error) {
     console.error("Error submitting integrated exam scores", error);
     redirect(`/examinar/${token}?error=submit&detail=${encodeURIComponent(errorMessage(error))}`);

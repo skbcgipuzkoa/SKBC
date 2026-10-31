@@ -9,6 +9,8 @@ import {
   buildStudentReview,
 } from "../src/lib/integrated-exam-review.ts";
 
+import { decodeScoreNotes } from "../src/lib/integrated-exam-session.ts";
+
 const source = fs.readFileSync(
   "src/app/examenes/components/ExamEvaluationForm.tsx",
   "utf8",
@@ -47,13 +49,15 @@ vm.runInNewContext(compiled, {
   require: (name) =>
     name === "react/jsx-runtime"
       ? jsx
-      : name === "./ExamStepNavigator"
-        ? navigation.exports
-        : {
-            isExamItemRelevantForStudent: isReviewItemRelevantForStudent,
-            isKidsProgressiveCutForStudent: (student, item) =>
-              student.target_grade === item.cut_grade,
-          },
+      : name === "@/lib/integrated-exam-session"
+        ? { decodeScoreNotes }
+        : name === "./ExamStepNavigator"
+          ? navigation.exports
+          : {
+              isExamItemRelevantForStudent: isReviewItemRelevantForStudent,
+              isKidsProgressiveCutForStudent: (student, item) =>
+                student.target_grade === item.cut_grade,
+            },
 });
 const students = [
   {
@@ -157,7 +161,10 @@ assert.ok(
 );
 assert.ok(html.includes("Se sientan aqui"));
 assert.ok(html.includes("Omitir"));
-assert.ok(!html.includes("<select"), "No numeric dropdown per student");
+assert.ok(
+  !/<select[^>]*name="score:/.test(html),
+  "No numeric dropdown per student",
+);
 assert.ok(
   !html.includes('name="token"'),
   "Internal form never exposes shared token",

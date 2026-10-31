@@ -1,4 +1,5 @@
 "use server";
+import { parseExamSubmissionExtras } from "@/lib/integrated-exam-session";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hasInternalAccess } from "@/lib/auth";
@@ -78,6 +79,7 @@ export async function submitInternalExamScoresAction(form: FormData) {
       eventId,
       examinerId,
       scores: parseScores(form),
+      extras: parseExamSubmissionExtras(form),
     });
   } catch (error) {
     errorText = message(error);

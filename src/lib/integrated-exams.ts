@@ -1,3 +1,7 @@
+import {
+  prepareSessionSubmission,
+  type ExamSubmissionExtras,
+} from "@/lib/integrated-exam-session";
 import { randomUUID } from "node:crypto";
 import {
   isReviewItemRelevantForStudent,
@@ -369,7 +373,8 @@ async function copyExamItems(
       "id,exam_event_id,source,technique_id,child_syllabus_item_id,section,name,summary,grade,category,weight,order_index,cut_grade,active",
     )
     .eq("exam_event_id", templateEventId)
-    .order("order_index");
+    .order("order_index")
+    .order("id");
 
   if (itemsError) throw itemsError;
   if (programType === "kids_progressive") {
@@ -434,6 +439,7 @@ export async function getIntegratedExamDuplicationTemplate(eventId: string) {
       .neq("source", "cut")
       .gt("weight", 0)
       .order("order_index")
+      .order("id")
       .returns<TemplateExamSnapshotItem[]>(),
   ]);
 
@@ -481,6 +487,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
       )
       .eq("exam_event_id", eventId)
       .order("order_index")
+      .order("id")
       .returns<ExamEventItem[]>(),
     supabase
       .from("exam_event_examiners")
@@ -620,7 +627,12 @@ export async function updateIntegratedExamItem(input: {
   if (itemError || !item)
     throw itemError ?? new Error("Item de examen no encontrado.");
 
-  const event = (await getIntegratedExamAdmin(item.exam_event_id)).event;
+  const data = await getIntegratedExamAdmin(item.exam_event_id);
+  if (data.examiners.some((examiner) => examiner.submitted_at))
+    throw new Error(
+      "El temario no puede modificarse despues de recibir una evaluacion.",
+    );
+  const event = data.event;
   return withEventMutationLock(event, async () => {
     const update: Record<string, unknown> = {
       active: input.active,
@@ -658,7 +670,12 @@ export async function createIntegratedExamItem(input: {
   weight?: number | null;
 }) {
   const supabase = createAdminClient();
-  const event = (await getIntegratedExamAdmin(input.eventId)).event;
+  const data = await getIntegratedExamAdmin(input.eventId);
+  if (data.examiners.some((examiner) => examiner.submitted_at))
+    throw new Error(
+      "El temario no puede modificarse despues de recibir una evaluacion.",
+    );
+  const event = data.event;
   return withEventMutationLock(event, async () => {
     const name = input.name.trim();
     if (!name) throw new Error("Indica el nombre del punto de examen.");
@@ -700,7 +717,12 @@ export async function deleteIntegratedExamItem(itemId: string) {
   if (itemError || !item)
     throw itemError ?? new Error("Item de examen no encontrado.");
 
-  const event = (await getIntegratedExamAdmin(item.exam_event_id)).event;
+  const data = await getIntegratedExamAdmin(item.exam_event_id);
+  if (data.examiners.some((examiner) => examiner.submitted_at))
+    throw new Error(
+      "El temario no puede modificarse despues de recibir una evaluacion.",
+    );
+  const event = data.event;
   return withEventMutationLock(event, async () => {
     const { error } = await supabase
       .from("exam_event_items")
@@ -751,6 +773,7 @@ export async function getExaminerExamByToken(token: string) {
       .eq("exam_event_id", examiner.exam_event_id)
       .eq("active", true)
       .order("order_index")
+      .order("id")
       .returns<ExamEventItem[]>(),
     supabase
       .from("exam_event_scores")
@@ -848,6 +871,7 @@ export async function submitInternalIntegratedExamScores(input: {
   eventId: string;
   examinerId: string;
   scores: ScoreInput[];
+  extras?: ExamSubmissionExtras;
 }) {
   const payload = await getIntegratedExamAdmin(input.eventId);
   const examiner = payload.examiners.find(
@@ -857,6 +881,7 @@ export async function submitInternalIntegratedExamScores(input: {
   await submitIntegratedExamScores({
     token: examiner.access_token!,
     scores: input.scores,
+    extras: input.extras,
   });
 }
 export type ScoreInput = {
@@ -869,11 +894,33 @@ export type ScoreInput = {
 export async function submitIntegratedExamScores(input: {
   token: string;
   scores: ScoreInput[];
+  extras?: ExamSubmissionExtras;
 }) {
   const payload = await getExaminerExamByToken(input.token);
   return withEventMutationLock(payload.event, async () => {
     if (payload.examiner.submitted_at || payload.examiner.revoked_at)
       throw new Error("Esta evaluacion ya fue enviada o revocada.");
+    const prepared = prepareSessionSubmission({
+      items: payload.items.filter((item) => item.active),
+      students: payload.students.map((student) => ({
+        id: student.id,
+        itemIds: payload.items
+          .filter(
+            (item) =>
+              item.active &&
+              item.source !== "cut" &&
+              Number(item.weight) > 0 &&
+              isExamItemRelevantForStudent(
+                payload.event.program_type,
+                student,
+                item,
+              ),
+          )
+          .map((item) => item.id),
+      })),
+      scores: input.scores,
+      extras: input.extras ?? { adjustments: [] },
+    });
     const expected = new Set(
       payload.students.flatMap((student) =>
         payload.items
@@ -892,7 +939,7 @@ export async function submitIntegratedExamScores(input: {
       ),
     );
     const seen = new Set<string>();
-    for (const row of input.scores) {
+    for (const row of prepared) {
       const key = row.eventStudentId + ":" + row.eventItemId;
       if (!expected.has(key) || seen.has(key))
         throw new Error("Puntuacion duplicada o ajena al temario del alumno.");
@@ -905,9 +952,10 @@ export async function submitIntegratedExamScores(input: {
       )
         throw new Error("Las notas deben estar entre 0 y 10.");
       if (!row.skipped && ![0, 5, 10].includes(row.score!))
-        throw new Error("Las valoraciones del examen son 0, 5 o 10. Usa Omitir si no se ha evaluado.");
-      if ((row.notes?.length ?? 0) > 4000)
-        throw new Error("Observacion demasiado larga.");
+        throw new Error(
+          "Las valoraciones del examen son 0, 5 o 10. Usa Omitir si no se ha evaluado.",
+        );
+
       seen.add(key);
     }
     if (!expected.size || seen.size !== expected.size)
@@ -926,7 +974,7 @@ export async function submitIntegratedExamScores(input: {
     if (claimError) throw claimError;
     if (!claim) throw new Error("Esta evaluacion ya fue enviada.");
     const { error } = await supabase.from("exam_event_scores").upsert(
-      input.scores.map((row) => ({
+      prepared.map((row) => ({
         exam_event_id: payload.event.id,
         event_student_id: row.eventStudentId,
         event_item_id: row.eventItemId,
@@ -1012,7 +1060,17 @@ export async function saveIntegratedExamStudentReview(
     }
     const summary = buildStudentReview({
       studentId: input.studentId,
-      items: old.items,
+      items: data.items.filter(
+        (item) =>
+          item.active &&
+          item.source !== "cut" &&
+          Number(item.weight) > 0 &&
+          isExamItemRelevantForStudent(
+            data.event.program_type,
+            data.students.find((student) => student.id === input.studentId)!,
+            item,
+          ),
+      ),
       scores: data.scores.filter(
         (row) => row.event_student_id === input.studentId,
       ),

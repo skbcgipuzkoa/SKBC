@@ -25,6 +25,23 @@ vm.runInNewContext(compiled, {
   Uint8Array,
   require: (id) => {
     if (id === "pdf-lib") return require(id);
+    if (id === "@/lib/integrated-exam-session")
+      return {
+        decodeScoreNotes: (notes) =>
+          notes === "SESSION_FIXTURE"
+            ? {
+                text: "Muestra correcta",
+                outsideRoute: false,
+                adjustments: [
+                  { delta: 1, reason: "Demostracion excelente" },
+                  { delta: -1, reason: "No presta atencion" },
+                ],
+                stop: { afterItemId: "item", reason: "Falta de tiempo" },
+              }
+            : notes === "NOT_REACHED"
+              ? { text: "", outsideRoute: true, adjustments: [] }
+              : { text: notes ?? "", outsideRoute: false, adjustments: [] },
+      };
     if (id === "@/lib/integrated-exam-review")
       return {
         isReviewItemRelevantForStudent: (_program, student, item) =>
@@ -169,6 +186,33 @@ await module.exports.renderIntegratedExamReportPdf({
   review: { ...args.review, decision: "pass" },
 });
 assert.ok(drawing.some((line) => line === "Decision final: APTO"));
+drawing.length = 0;
+await module.exports.renderIntegratedExamReportPdf({
+  ...args,
+  items: [
+    item,
+    { ...item, id: "later", name: "Actividad posterior", order_index: 1 },
+  ],
+  scores: [
+    { ...args.scores[0], notes: "SESSION_FIXTURE" },
+    {
+      ...args.scores[0],
+      event_item_id: "later",
+      score: null,
+      skipped: true,
+      notes: "NOT_REACHED",
+    },
+  ],
+});
+for (const expected of [
+  "Demostracion excelente",
+  "No presta atencion",
+  "Falta de tiempo",
+  "No realizado",
+  "Muestra correcta",
+])
+  assert.ok(drawing.join("\n").includes(expected), expected);
+assert.ok(!drawing.join("\n").includes("SESSION_FIXTURE"));
 console.log(
   "Integrated exam report checks passed (pure PDF rendering, no external writes).",
 );

@@ -1,4 +1,5 @@
 import { PDFDocument, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import { decodeScoreNotes } from "@/lib/integrated-exam-session";
 import {
   isReviewItemRelevantForStudent,
   type ReviewEnvelope,
@@ -270,6 +271,31 @@ export async function renderIntegratedExamReportPdf({
     (examiner) => examiner.submitted_at && !examiner.revoked_at,
   );
   const submittedIds = new Set(submitted.map((examiner) => examiner.id));
+  const sessionScores = scores.filter(
+    (score) =>
+      score.event_student_id === student.id &&
+      submittedIds.has(score.examiner_id),
+  );
+  for (const score of sessionScores) {
+    const session = decodeScoreNotes(score.notes);
+    const examinerName =
+      submitted.find((examiner) => examiner.id === score.examiner_id)?.name ??
+      "Examinador";
+    for (const movement of session.adjustments) {
+      paragraph(
+        `${examinerName}: ${movement.delta > 0 ? "+" : ""}${movement.delta} punto acumulado. Motivo: ${movement.reason}`,
+      );
+    }
+    if (session.stop) {
+      const lastItem = items.find(
+        (item) => item.id === session.stop!.afterItemId,
+      );
+      paragraph(
+        `${examinerName}: finalizacion anticipada despues de ${lastItem?.name ?? "la ultima actividad completada"}. Motivo: ${session.stop.reason}`,
+        { bold: true },
+      );
+    }
+  }
   const rows = items
     .filter(
       (item) =>
@@ -298,12 +324,18 @@ export async function renderIntegratedExamReportPdf({
       const original = valid.length
         ? valid.reduce((sum, score) => sum + score.score!, 0) / valid.length
         : null;
-      const adjustment = review?.adjustments[item.id];
+      const outsideRoute =
+        originals.length > 0 &&
+        originals.every((score) => decodeScoreNotes(score.notes).outsideRoute);
+      const adjustment = outsideRoute
+        ? undefined
+        : review?.adjustments[item.id];
       return {
         item,
         originals,
         original,
         adjustment,
+        outsideRoute,
         effective: adjustment?.score ?? original,
       };
     });
@@ -338,9 +370,11 @@ export async function renderIntegratedExamReportPdf({
     if (row.item.summary) paragraph(row.item.summary, { size: 9 });
     paragraph(
       "Media original: " +
-        (row.original === null
-          ? "No evaluado"
-          : row.original.toFixed(1) + "/10") +
+        (row.outsideRoute
+          ? "No realizado (fuera del recorrido evaluado)"
+          : row.original === null
+            ? "No evaluado"
+            : row.original.toFixed(1) + "/10") +
         " | Nota efectiva: " +
         (row.effective === null
           ? "No evaluado"
@@ -354,13 +388,16 @@ export async function renderIntegratedExamReportPdf({
       paragraph(
         examiner.name +
           ": " +
-          (!original || original.skipped || original.score === null
-            ? "No evaluado"
-            : original.score + "/10"),
+          (original && decodeScoreNotes(original.notes).outsideRoute
+            ? "No realizado (fuera del recorrido evaluado)"
+            : !original || original.skipped || original.score === null
+              ? "No evaluado"
+              : original.score + "/10"),
         { indent: 10 },
       );
-      if (original?.notes)
-        paragraph("Observaciones: " + original.notes, { indent: 10 });
+      const observation = decodeScoreNotes(original?.notes).text;
+      if (observation)
+        paragraph("Observaciones: " + observation, { indent: 10 });
     }
     if (row.adjustment) {
       paragraph("Ajuste del responsable: " + row.adjustment.score + "/10", {

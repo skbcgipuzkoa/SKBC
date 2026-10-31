@@ -1,3 +1,4 @@
+import { decodeScoreNotes } from "@/lib/integrated-exam-session";
 import {
   getExaminerExamByToken,
   isExamItemRelevantForStudent,
@@ -26,6 +27,12 @@ export function ExamEvaluationForm({
       `${score.event_student_id}:${score.event_item_id}`,
       score,
     ]),
+  );
+  const initialAdjustments = payload.existingScores.flatMap((score) =>
+    decodeScoreNotes(score.notes).adjustments.map((adjustment) => ({
+      ...adjustment,
+      eventStudentId: score.event_student_id,
+    })),
   );
   const submitted = Boolean(
     payload.examiner.submitted_at ||
@@ -122,7 +129,14 @@ export function ExamEvaluationForm({
             </p>
           </details>
 
-          <ExamStepNavigator steps={steps}>
+          <ExamStepNavigator
+            steps={steps}
+            initialAdjustments={initialAdjustments}
+            students={payload.students.map((student) => ({
+              id: student.id,
+              name: student.members?.display_name ?? "Kenshi",
+            }))}
+          >
             {visibleItems.map((item) => {
               if (item.source === "cut") {
                 const seatedStudents = isKidsProgressive
@@ -264,7 +278,9 @@ export function ExamEvaluationForm({
                           </fieldset>
                           <details
                             className="exam-group-notes"
-                            open={Boolean(current?.notes)}
+                            open={Boolean(
+                              decodeScoreNotes(current?.notes).text,
+                            )}
                           >
                             <summary>Observaciones</summary>
                             <label>
@@ -273,7 +289,9 @@ export function ExamEvaluationForm({
                               <textarea
                                 name={`notes:${student.id}:${item.id}`}
                                 rows={2}
-                                defaultValue={current?.notes ?? ""}
+                                defaultValue={
+                                  decodeScoreNotes(current?.notes).text
+                                }
                               />
                             </label>
                           </details>
@@ -286,14 +304,9 @@ export function ExamEvaluationForm({
             })}
 
             <section className="card exam-finish-screen">
-              <h2>Recorrido completado</h2>
-              <p>
-                Has terminado las valoraciones y los cortes. Puedes volver atras
-                para revisar las notas antes de enviar.
-              </p>
               <p className="muted">
                 {payload.students.length} kenshis - {scorableItems.length}{" "}
-                puntos evaluables
+                actividades del temario completo
               </p>
               <button type="submit">Enviar evaluacion</button>
             </section>
