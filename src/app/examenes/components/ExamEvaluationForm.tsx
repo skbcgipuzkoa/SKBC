@@ -78,10 +78,13 @@ export function ExamEvaluationForm({
             <input key={name} type="hidden" name={name} value={value} />
           ))}
           <section className="card">
-            <h2>Como puntuar</h2>
+            <h2>Evaluacion en grupo</h2>
             <p className="muted">
-              Puntua de 0 a 10 en pasos de 0,5. Usa No evaluado si ese punto no
-              se ha evaluado para ese kenshi.
+              Valora cada tecnica o ejercicio para todos los alumnos que
+              continuan: Bien (10), Mejorable (5), Necesita aprenderlo (0) u
+              Omitir. Omitir no puntua ni cuenta como cero. La nota final es la
+              media de las valoraciones de los examinadores, con revision final
+              del profesor.
             </p>
           </section>
 
@@ -143,18 +146,18 @@ export function ExamEvaluationForm({
                       </span>
                     ) : null}
                   </div>
-                  <div className="exam-score-grid">
+                  <div className="exam-score-grid exam-group-rows">
                     {relevantStudents.map((student) => {
                       const current = scoreMap.get(`${student.id}:${item.id}`);
                       const defaultValue = current?.skipped
                         ? "skip"
                         : String(current?.score ?? "");
                       return (
-                        <fieldset
+                        <div
                           className="exam-score-row"
                           key={`${student.id}-${item.id}`}
                         >
-                          <legend>
+                          <div className="exam-group-student">
                             <strong>
                               {student.members?.display_name ?? "Kenshi"}
                             </strong>
@@ -162,37 +165,72 @@ export function ExamEvaluationForm({
                               {student.current_grade ?? "-"} para{" "}
                               {student.target_grade ?? "-"}
                             </small>
-                          </legend>
-                          <label>
-                            Puntuacion
-                            <select
-                              name={`score:${student.id}:${item.id}`}
-                              defaultValue={defaultValue}
-                              required
-                            >
-                              <option value="" disabled>
-                                Seleccionar
-                              </option>
-                              {Array.from(
-                                { length: 21 },
-                                (_, index) => index / 2,
-                              ).map((score) => (
-                                <option key={score} value={score}>
-                                  {score}
-                                </option>
-                              ))}
-                              <option value="skip">No evaluado</option>
-                            </select>
-                          </label>
-                          <label className="exam-score-notes">
-                            Observaciones
-                            <textarea
-                              name={`notes:${student.id}:${item.id}`}
-                              rows={2}
-                              defaultValue={current?.notes ?? ""}
-                            />
-                          </label>
-                        </fieldset>
+                          </div>
+                          <fieldset className="exam-rating-options">
+                            <legend className="exam-rating-legend">
+                              Valoracion de{" "}
+                              {student.members?.display_name ?? "Kenshi"}
+                            </legend>
+                            {[
+                              {
+                                value: "10",
+                                label: "Bien",
+                                detail: "10",
+                                tone: "good",
+                              },
+                              {
+                                value: "5",
+                                label: "Mejorable",
+                                detail: "5",
+                                tone: "improve",
+                              },
+                              {
+                                value: "0",
+                                label: "Necesita aprenderlo",
+                                detail: "0",
+                                tone: "learn",
+                              },
+                              {
+                                value: "skip",
+                                label: "Omitir",
+                                detail: "Sin nota",
+                                tone: "skip",
+                              },
+                            ].map((option) => (
+                              <label
+                                className={`exam-rating-option exam-rating-${option.tone}`}
+                                key={option.value}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`score:${student.id}:${item.id}`}
+                                  value={option.value}
+                                  defaultChecked={defaultValue === option.value}
+                                  required
+                                />
+                                <span>
+                                  {option.label}
+                                  <strong>{option.detail}</strong>
+                                </span>
+                              </label>
+                            ))}
+                          </fieldset>
+                          <details
+                            className="exam-group-notes"
+                            open={Boolean(current?.notes)}
+                          >
+                            <summary>Observaciones</summary>
+                            <label>
+                              Observaciones de{" "}
+                              {student.members?.display_name ?? "Kenshi"}
+                              <textarea
+                                name={`notes:${student.id}:${item.id}`}
+                                rows={2}
+                                defaultValue={current?.notes ?? ""}
+                              />
+                            </label>
+                          </details>
+                        </div>
                       );
                     })}
                   </div>

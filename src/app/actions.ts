@@ -3720,10 +3720,8 @@ export async function createIntegratedExamEventAction(formData: FormData) {
     redirect("/examenes?error=integrated");
   }
 
-  let eventId: string;
-  let ownExaminerId: string | undefined;
   try {
-    const result = await createIntegratedExamEvent({
+    await createIntegratedExamEvent({
       title,
       examDate,
       programType,
@@ -3737,15 +3735,13 @@ export async function createIntegratedExamEventAction(formData: FormData) {
       templateEventItemIds,
       childSyllabusItemIds
     });
-    eventId = result.eventId;
-    ownExaminerId = result.ownExaminerId;
   } catch (error) {
     console.error("Error creating integrated exam", error);
     redirect(`/examenes?error=integrated&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
   revalidatePath("/examenes");
-  redirect(ownExaminerId ? `/examenes/${eventId}/evaluar?examiner=${ownExaminerId}` : `/examenes/${eventId}?saved=created`);
+  redirect("/examenes?saved=integrated#examenes-creados");
 }
 
 export async function deleteIntegratedExamEventAction(formData: FormData) {

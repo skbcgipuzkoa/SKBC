@@ -245,6 +245,13 @@ await assert.rejects(
   /entre 0 y 10/,
 );
 await assert.rejects(
+  () => backend.submitIntegratedExamScores({
+    token: "secret",
+    scores: [{ eventStudentId: "s", eventItemId: "i", score: 7.5, skipped: false }],
+  }),
+  /0, 5 o 10/,
+);
+await assert.rejects(
   () => backend.finalizeIntegratedExamEvent("e"),
   /Todos los examinadores/,
 );

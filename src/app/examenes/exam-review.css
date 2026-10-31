@@ -50,6 +50,110 @@
 .exam-review-form fieldset:disabled {
   opacity: 0.85;
 }
+.exam-score-grid.exam-group-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.exam-group-rows .exam-score-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 3fr);
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0.85rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+.exam-group-student small {
+  display: block;
+  color: var(--muted);
+  margin-top: 0.3rem;
+}
+.exam-rating-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.exam-rating-legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.exam-rating-options .exam-rating-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 56px;
+  padding: 0.6rem 0.4rem;
+  border: 2px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.exam-rating-option input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0;
+}
+.exam-rating-option strong {
+  display: block;
+  margin-top: 0.15rem;
+}
+.exam-rating-option:has(input:checked) {
+  border-color: #234d70;
+  background: #eaf2f8;
+  box-shadow: 0 0 0 1px #234d70;
+}
+.exam-rating-good:has(input:checked) {
+  background: #e7f6ed;
+  border-color: #24633c;
+}
+.exam-rating-improve:has(input:checked) {
+  background: #fff3d8;
+  border-color: #7d5800;
+}
+.exam-rating-learn:has(input:checked) {
+  background: #fbe9e8;
+  border-color: #993b37;
+}
+.exam-rating-option:focus-within {
+  outline: 3px solid #3769af;
+  outline-offset: 3px;
+}
+.exam-group-notes {
+  grid-column: 1/-1;
+}
+.exam-group-notes summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.exam-group-rows .exam-group-notes label {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  justify-content: stretch;
+}
+.exam-group-notes textarea {
+  width: 100%;
+}
 @media (max-width: 600px) {
   .exam-student-review > summary {
     align-items: flex-start;
@@ -58,6 +162,12 @@
   .exam-score-row {
     display: grid;
     grid-template-columns: 1fr;
+  }
+  .exam-group-rows .exam-score-row {
+    grid-template-columns: 1fr;
+  }
+  .exam-rating-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .exam-review .form-actions {
     flex-wrap: wrap;

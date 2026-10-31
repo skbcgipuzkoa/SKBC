@@ -904,6 +904,8 @@ export async function submitIntegratedExamScores(input: {
           row.score > 10)
       )
         throw new Error("Las notas deben estar entre 0 y 10.");
+      if (!row.skipped && ![0, 5, 10].includes(row.score!))
+        throw new Error("Las valoraciones del examen son 0, 5 o 10. Usa Omitir si no se ha evaluado.");
       if ((row.notes?.length ?? 0) > 4000)
         throw new Error("Observacion demasiado larga.");
       seen.add(key);

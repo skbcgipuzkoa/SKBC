@@ -253,7 +253,7 @@ export function IntegratedExamCreateForm({
           />
           <span>
             Examino yo (Alvaro Calvo)
-            <small>Abre mi evaluacion al crear el examen.</small>
+              <small>Queda pendiente hasta que yo abra mi evaluacion.</small>
           </span>
         </label>
         <label className="wide">

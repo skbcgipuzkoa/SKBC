@@ -95,7 +95,7 @@ export default async function ExamenesPage({
         {params.saved === "report" ? <p className="save-ok">Informe guardado en la linea de examen.</p> : null}
         {params.saved === "diploma" ? <p className="save-ok">Diploma generado y guardado.</p> : null}
         {params.saved === "delete" ? <p className="save-ok">Examen eliminado y ficha recalculada.</p> : null}
-        {params.saved === "integrated" ? <p className="save-ok">Examen integrado creado.</p> : null}
+        {params.saved === "integrated" ? <p className="save-ok">Examen creado y pendiente de evaluar. Abrelo cuando quieras empezar o compartir los enlaces.</p> : null}
         {params.error === "exam" ? <p className="form-error">No se pudo registrar el examen.</p> : null}
         {params.error === "integrated" ? <p className="form-error">No se pudo crear el examen integrado{params.detail ? `: ${params.detail}` : "."}</p> : null}
         {params.error === "report" ? <p className="form-error">No se pudo guardar el informe.</p> : null}
@@ -120,11 +120,11 @@ export default async function ExamenesPage({
           />
         </section>
 
-        <section className="card">
+        <section className="card" id="examenes-creados">
           <div className="section-heading-row">
             <div>
-              <h2>Examenes integrados recientes</h2>
-              <p className="muted">Entra en un examen para copiar enlaces de examinadores y revisar resultados.</p>
+              <h2>Examenes creados</h2>
+              <p className="muted">Abre el examen cuando vayas a evaluar. Cada examinador tiene su enlace; la nota es la media y la decision final corresponde al profesor.</p>
             </div>
           </div>
           <div className="table-wrap">
@@ -138,7 +138,7 @@ export default async function ExamenesPage({
                     <td data-label="Fecha">{event.exam_date}</td>
                     <td data-label="Examen"><strong>{event.title}</strong></td>
                     <td data-label="Tipo">{event.program_type === "kids_progressive" ? "Ninos progresivo" : "Adultos"}</td>
-                    <td data-label="Estado"><span className="state-badge">{event.status}</span></td>
+                    <td data-label="Estado"><span className="state-badge">{event.status === "completed" || event.status === "archived" ? "Registrado" : !(event.exam_event_examiners ?? []).some((examiner) => examiner.submitted_at) ? "Pendiente de evaluar" : (event.exam_event_examiners ?? []).every((examiner) => examiner.submitted_at) ? "Pendiente de revision del profesor" : "Evaluaciones en curso"}</span></td>
                     <td data-label="Kenshis">{event.exam_event_students?.length ?? 0}</td>
                     <td data-label="Examinadores">
                       {(event.exam_event_examiners ?? []).filter((examiner) => examiner.submitted_at).length}/{event.exam_event_examiners?.length ?? 0} enviados
