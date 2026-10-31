@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { hasInternalAccess } from "@/lib/auth";
 import {
   saveIntegratedExamStudentReview,
-  saveIntegratedExamAssignments,
+  saveAdultGradeGroups,
   submitInternalIntegratedExamScores,
   retryIntegratedExamDocuments,
   type ScoreInput,
@@ -79,6 +79,7 @@ export async function submitInternalExamScoresAction(form: FormData) {
     await submitInternalIntegratedExamScores({
       eventId,
       examinerId,
+      grade: text(form, "grade") || undefined,
       scores: parseScores(form),
       extras: parseExamSubmissionExtras(form),
     });
@@ -88,7 +89,7 @@ export async function submitInternalExamScoresAction(form: FormData) {
   revalidatePath(`/examenes/${eventId}`);
   redirect(
     errorText
-      ? `/examenes/${eventId}/evaluar?examiner=${encodeURIComponent(examinerId)}&error=submit&detail=${encodeURIComponent(errorText)}`
+      ? `/examenes/${eventId}/evaluar?examiner=${encodeURIComponent(examinerId)}&grade=${encodeURIComponent(text(form, "grade"))}&error=submit&detail=${encodeURIComponent(errorText)}`
       : `/examenes/${eventId}?saved=evaluation`,
   );
 }
@@ -116,11 +117,25 @@ export async function saveIntegratedExamAssignmentsAction(form: FormData) {
   const eventId = text(form, "eventId");
   let errorText = "";
   try {
-    const scopes: Record<string, string[]> = {};
-    for (const key of form.keys())
-      if (key.startsWith("scope:"))
-        scopes[key.slice(6)] = form.getAll(key).map((value) => String(value));
-    await saveIntegratedExamAssignments({ eventId, scopes });
+    const examiners = form.getAll("examinerIds").map((value) => {
+      const id = String(value);
+      return {
+        id,
+        name: text(form, `examinerName:${id}`),
+        grades: form.getAll(`scope:${id}`).map(String),
+      };
+    });
+    const name = text(form, "examinerName:new");
+    if (name || form.getAll("scope:new").length)
+      examiners.push({
+        id: "",
+        name,
+        grades: form.getAll("scope:new").map(String),
+      });
+    await saveAdultGradeGroups({
+      eventId,
+      examiners: examiners.map((row) => ({ ...row, id: row.id || undefined })),
+    });
   } catch (error) {
     errorText = message(error);
   }

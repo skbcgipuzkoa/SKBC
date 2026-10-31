@@ -1,4 +1,6 @@
 "use client";
+import { resolveAdultExamTargetGrade } from "@/lib/integrated-exam-assignments";
+import { adultGrades } from "@/lib/grades";
 
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,6 +53,22 @@ export function IntegratedExamCreateForm({
   const [programType, setProgramType] = useState<IntegratedExamProgram>(
     duplicationTemplate?.program_type ?? "adults",
   );
+  const [selectedAdultIds, setSelectedAdultIds] = useState<string[]>(
+    adultMembers
+      .filter((member) => duplicatedMemberIds.has(member.id))
+      .map((member) => member.id),
+  );
+  const isAdult = programType === "adults" || programType === "dan_tribunal";
+  const adultGroups = adultGrades
+    .map((grade) => ({
+      grade,
+      members: adultMembers.filter(
+        (member) =>
+          selectedAdultIds.includes(member.id) &&
+          resolveAdultExamTargetGrade(member.grade) === grade,
+      ),
+    }))
+    .filter((group) => group.members.length);
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>(
     kidMembers
       .filter((member) => duplicatedMemberIds.has(member.id))
@@ -152,17 +170,6 @@ export function IntegratedExamCreateForm({
 
   return (
     <form action={createIntegratedExamEventAction} className="edit-form">
-      {programType === "adults" || programType === "dan_tribunal" ? (
-        <p className="info-banner wide">
-          Despues de crear, asigna uno o varios grados objetivo a cada
-          examinador desde el panel del examen. Cada uno empieza con todos los
-          grados asignados
-          {duplicationTemplate
-            ? "; las asignaciones del examen original no se copian"
-            : ""}
-          .
-        </p>
-      ) : null}
       {duplicationTemplate ? (
         <div className="info-banner wide">
           <strong>Duplicando: {duplicationTemplate.title}</strong>
@@ -207,6 +214,64 @@ export function IntegratedExamCreateForm({
             <option value="kids_progressive">Ninos - progresivo</option>
           </select>
         </label>
+        {isAdult ? (
+          <section className="wide exam-adult-student-first">
+            <h2>1. Selecciona los alumnos</h2>
+            <div className="attendance-checklist compact-picker">
+              {adultMembers.map((member) => (
+                <label className="check-row" key={member.id}>
+                  <input
+                    name="memberIds"
+                    type="checkbox"
+                    value={member.id}
+                    checked={selectedAdultIds.includes(member.id)}
+                    onChange={(event) =>
+                      setSelectedAdultIds((current) =>
+                        event.target.checked
+                          ? [...current, member.id]
+                          : current.filter((id) => id !== member.id),
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>{member.display_name}</strong>
+                    <small>{member.grade ?? "Sin grado"}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <h3>Grupos por grado objetivo</h3>
+            {adultGroups.length ? (
+              adultGroups.map((group) => (
+                <article className="exam-group-preview" key={group.grade}>
+                  <strong>
+                    {group.grade} · {group.members.length} alumnos
+                  </strong>
+                  <p>
+                    {group.members
+                      .map((member) => member.display_name)
+                      .join(", ")}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <p className="muted">
+                Selecciona alumnos para preparar sus grupos y temarios.
+              </p>
+            )}
+            <p>
+              Se crea un grupo y enlace por grado. Puedes asignar el mismo
+              examinador a varios grupos despues de crear. Cada persona se
+              identifica antes de evaluar.
+            </p>
+            {duplicationTemplate ? (
+              <p className="muted">
+                Los grupos nuevos se forman con los alumnos elegidos; las
+                personas del examen original no se copian.
+              </p>
+            ) : null}
+          </section>
+        ) : null}
         <label>
           Fecha
           <input name="examDate" type="date" required />
@@ -255,78 +320,65 @@ export function IntegratedExamCreateForm({
             }
           />
         </label>
-        <label className="check-row wide">
-          <input
-            type="checkbox"
-            name="examineMyself"
-            value="true"
-            defaultChecked
-          />
-          <span>
-            Examino yo (Alvaro Calvo)
-            <small>Queda pendiente hasta que yo abra mi evaluacion.</small>
-          </span>
-        </label>
-        <label className="wide">
-          Otros examinadores (adicionales)
-          <textarea
-            name="examinerNames"
-            rows={3}
-            placeholder="Un examinador adicional por linea. Recibiran su propio enlace."
-            defaultValue={duplicationTemplate?.examinerNames.join("\n") ?? ""}
-          />
-        </label>
-        <details className="exam-member-picker">
-          <summary>
-            Adultos <span>{adultMembers.length}</span>
-          </summary>
-          <div className="attendance-checklist compact-picker">
-            {adultMembers.map((member) => (
-              <label
-                className="check-row"
-                key={`integrated-adult-${member.id}`}
-              >
-                <input
-                  name="memberIds"
-                  type="checkbox"
-                  value={member.id}
-                  defaultChecked={duplicatedMemberIds.has(member.id)}
-                />
-                <span>
-                  <strong>{member.display_name}</strong>
-                  <small>{member.grade ?? "Sin grado"}</small>
-                </span>
-              </label>
-            ))}
-          </div>
-        </details>
-        <details
-          className="exam-member-picker"
-          open={programType === "kids_progressive" ? true : undefined}
-        >
-          <summary>
-            Ninos <span>{kidMembers.length}</span>
-          </summary>
-          <div className="attendance-checklist compact-picker">
-            {kidMembers.map((member) => (
-              <label className="check-row" key={`integrated-kid-${member.id}`}>
-                <input
-                  name="memberIds"
-                  type="checkbox"
-                  value={member.id}
-                  checked={selectedKidIds.includes(member.id)}
-                  onChange={(event) =>
-                    toggleKid(member.id, event.target.checked)
-                  }
-                />
-                <span>
-                  <strong>{member.display_name}</strong>
-                  <small>{member.grade ?? "Sin grado"}</small>
-                </span>
-              </label>
-            ))}
-          </div>
-        </details>
+        {!isAdult ? (
+          <>
+            <label className="check-row wide">
+              <input
+                type="checkbox"
+                name="examineMyself"
+                value="true"
+                defaultChecked
+              />
+              <span>
+                Examino yo (Alvaro Calvo)
+                <small>Queda pendiente hasta que yo abra mi evaluacion.</small>
+              </span>
+            </label>
+            <label className="wide">
+              Otros examinadores (adicionales)
+              <textarea
+                name="examinerNames"
+                rows={3}
+                placeholder="Un examinador adicional por linea. Recibiran su propio enlace."
+                defaultValue={
+                  duplicationTemplate?.examinerNames.join("\n") ?? ""
+                }
+              />
+            </label>
+          </>
+        ) : null}
+        {!isAdult ? (
+          <details
+            className="exam-member-picker"
+            open={programType === "kids_progressive" ? true : undefined}
+          >
+            <summary>
+              Ninos <span>{kidMembers.length}</span>
+            </summary>
+            <div className="attendance-checklist compact-picker">
+              {kidMembers.map((member) => (
+                <label
+                  className="check-row"
+                  key={`integrated-kid-${member.id}`}
+                >
+                  <input
+                    name="memberIds"
+                    type="checkbox"
+                    value={member.id}
+                    checked={selectedKidIds.includes(member.id)}
+                    onChange={(event) =>
+                      toggleKid(member.id, event.target.checked)
+                    }
+                  />
+                  <span>
+                    <strong>{member.display_name}</strong>
+                    <small>{member.grade ?? "Sin grado"}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </details>
+        ) : null}
         {programType === "kids_progressive" && duplicationTemplate ? (
           <fieldset className="wide progressive-exam-syllabus">
             <legend>Temario copiado</legend>

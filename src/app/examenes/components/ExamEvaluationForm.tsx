@@ -1,3 +1,4 @@
+import { identifyIntegratedExaminerAction } from "@/app/actions";
 import { decodeScoreNotes } from "@/lib/integrated-exam-session";
 import { driveImageUrl } from "@/lib/drive";
 import {
@@ -40,7 +41,13 @@ export function ExamEvaluationForm({
   );
   const submitted = Boolean(
     payload.examiner.submitted_at ||
-    query.saved ||
+    query.saved === "1" ||
+    query.saved === "evaluation" ||
+    (fields.grade && payload.completedGrades?.includes(fields.grade)) ||
+    (payload.assignedGrades?.length &&
+      payload.assignedGrades.every((grade) =>
+        payload.completedGrades?.includes(grade),
+      )) ||
     payload.event.status === "completed" ||
     payload.event.status === "archived",
   );
@@ -81,6 +88,64 @@ export function ExamEvaluationForm({
     { id: "finish", title: "Enviar evaluacion", kind: "finish" },
   ];
 
+  if (payload.needsExaminerName)
+    return (
+      <main className="public-exam-page">
+        <section className="public-exam-hero">
+          <p className="eyebrow">SKBC Gipuzkoa</p>
+          <h1>{payload.event.title}</h1>
+          <h2>Identificate antes de evaluar</h2>
+          <p>
+            Escribe tu nombre para atribuirte las valoraciones de{" "}
+            {payload.routeGrades?.join(", ") || "este grupo"}.
+          </p>
+        </section>
+        {query.error ? (
+          <p className="form-error">
+            {query.detail || "No se pudo guardar el nombre."}
+          </p>
+        ) : null}
+        {fields.token ? (
+          <form action={identifyIntegratedExaminerAction} className="card">
+            <input type="hidden" name="token" value={fields.token} />
+            {fields.grade ? (
+              <input type="hidden" name="grade" value={fields.grade} />
+            ) : null}
+            <label>
+              Nombre y apellidos
+              <input
+                name="examinerName"
+                required
+                maxLength={120}
+                autoComplete="name"
+              />
+            </label>
+            <button type="submit">Identificarme y abrir el grupo</button>
+          </form>
+        ) : (
+          <section className="card">
+            <p>
+              Asigna el nombre del examinador desde el panel de grupos antes de
+              abrir la evaluacion interna.
+            </p>
+            {backHref ? (
+              <a className="secondary-link" href={backHref}>
+                Volver al panel y asignar nombre
+              </a>
+            ) : null}
+          </section>
+        )}
+      </main>
+    );
+  const remainingGrades =
+    payload.assignedGrades?.filter(
+      (grade) => !payload.completedGrades?.includes(grade),
+    ) ?? [];
+  const remainingHref = fields.token
+    ? `/examinar/${fields.token}`
+    : fields.eventId && fields.examinerId
+      ? `/examenes/${fields.eventId}/evaluar?examiner=${encodeURIComponent(fields.examinerId)}`
+      : backHref;
   return (
     <main className="public-exam-page">
       <section className="public-exam-hero">
@@ -98,6 +163,14 @@ export function ExamEvaluationForm({
           <p>
             Grados objetivo asignados:{" "}
             <strong>{payload.assignedGrades.join(", ")}</strong>.
+          </p>
+          <p>
+            Este recorrido:{" "}
+            <strong>
+              {payload.routeGrades?.join(", ") || "Sin grados pendientes"}
+            </strong>
+            . Completados: {payload.completedGrades?.join(", ") || "Ninguno"}.
+            Pendientes: {remainingGrades.join(", ") || "Ninguno"}.
           </p>
           <p className="muted">
             Evalua el temario completo de estos grados y sus alumnos. El
@@ -123,7 +196,18 @@ export function ExamEvaluationForm({
       ) : null}
       {submitted ? (
         <section className="card">
-          <h2>Evaluacion recibida</h2>
+          <h2>
+            {fields.grade
+              ? `Evaluacion de ${fields.grade} recibida`
+              : "Evaluacion recibida"}
+          </h2>
+          {remainingGrades.length && remainingHref ? (
+            <p>
+              <a className="secondary-link" href={remainingHref}>
+                Continuar con grados pendientes: {remainingGrades.join(", ")}
+              </a>
+            </p>
+          ) : null}
           <p className="muted">
             {backHref
               ? "Evaluacion recibida. Vuelve a la revision para consultar las notas y decidir los resultados."

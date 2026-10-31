@@ -7,13 +7,18 @@ export default async function ExaminerTokenPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string }>;
+  searchParams: Promise<{
+    grade?: string;
+    saved?: string;
+    error?: string;
+    detail?: string;
+  }>;
 }) {
   const { token } = await params;
   const query = await searchParams;
   let payload: Awaited<ReturnType<typeof getExaminerExamByToken>>;
   try {
-    payload = await getExaminerExamByToken(token);
+    payload = await getExaminerExamByToken(token, query.grade);
   } catch {
     return (
       <main className="public-exam-page">
@@ -39,7 +44,7 @@ export default async function ExaminerTokenPage({
     <ExamEvaluationForm
       payload={payload}
       action={submitIntegratedExamScoresAction}
-      fields={{ token }}
+      fields={{ token, ...(query.grade ? { grade: query.grade } : {}) }}
       query={query}
     />
   );

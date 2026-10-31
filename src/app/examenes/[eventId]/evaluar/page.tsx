@@ -10,6 +10,7 @@ export default async function InternalExamEvaluationPage({
   params: Promise<{ eventId: string }>;
   searchParams: Promise<{
     examiner?: string;
+    grade?: string;
     saved?: string;
     error?: string;
     detail?: string;
@@ -19,12 +20,20 @@ export default async function InternalExamEvaluationPage({
   const { eventId } = await params;
   const query = await searchParams;
   if (!query.examiner) redirect(`/examenes/${eventId}`);
-  const payload = await getInternalExamEvaluation(eventId, query.examiner);
+  const payload = await getInternalExamEvaluation(
+    eventId,
+    query.examiner,
+    query.grade,
+  );
   return (
     <ExamEvaluationForm
       payload={payload}
       action={submitInternalExamScoresAction}
-      fields={{ eventId, examinerId: query.examiner }}
+      fields={{
+        eventId,
+        examinerId: query.examiner,
+        ...(query.grade ? { grade: query.grade } : {}),
+      }}
       query={query}
       backHref={`/examenes/${eventId}#revision`}
     />

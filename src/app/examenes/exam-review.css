@@ -487,3 +487,45 @@
   outline-offset: 4px;
   border-radius: 4px;
 }
+.exam-adult-grade-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.exam-adult-grade-card,
+.exam-group-preview {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 0.6rem 0;
+}
+.exam-adult-grade-card ul {
+  list-style: none;
+  padding: 0;
+}
+.exam-adult-grade-card li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.6rem 0;
+}
+.exam-adult-grade-card .form-actions {
+  display: grid;
+}
+.exam-adult-grade-card .form-actions > div {
+  display: grid;
+  gap: 0.5rem;
+}
+.exam-adult-student-first {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+}
+.exam-adult-student-first .compact-picker {
+  max-height: 360px;
+  overflow: auto;
+}
+.exam-grade-assignment-row > label {
+  display: grid;
+  gap: 0.4rem;
+}

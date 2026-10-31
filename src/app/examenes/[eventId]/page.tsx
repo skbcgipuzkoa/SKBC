@@ -1,3 +1,5 @@
+import { StudentExamPhoto } from "@/app/examenes/components/ExamStepNavigator";
+import { driveImageUrl } from "@/lib/drive";
 import { ExamGradeAssignmentForm } from "@/app/examenes/components/ExamGradeAssignmentForm";
 import {
   saveIntegratedExamReviewAction,
@@ -46,14 +48,31 @@ export default async function IntegratedExamPage({
     summaries,
     examinerGradeScopes,
     adultTargetGrades,
+    pendingExaminerIds,
+    gradeGroupMode,
+    hasSubmittedScores,
+    completedGradesByExaminer,
   } = await getIntegratedExamAdmin(eventId);
   const publicBaseUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://skbc.vercel.app";
   const scorableItems = items.filter((item) => item.source !== "cut");
   const isCompleted =
     event.status === "completed" || event.status === "archived";
+  const isAdult =
+    event.program_type === "adults" || event.program_type === "dan_tribunal";
+  const isExaminerComplete = (examiner: (typeof examiners)[number]) => {
+    if (!isAdult) return Boolean(examiner.submitted_at);
+    const assigned = examinerGradeScopes[examiner.id] ?? adultTargetGrades;
+    return (
+      !pendingExaminerIds.includes(examiner.id) &&
+      assigned.length > 0 &&
+      assigned.every((grade) =>
+        completedGradesByExaminer[examiner.id]?.includes(grade),
+      )
+    );
+  };
   const submittedExaminers = examiners.filter(
-    (examiner) => examiner.submitted_at && !examiner.revoked_at,
+    (examiner) => !examiner.revoked_at && isExaminerComplete(examiner),
   ).length;
   const passedSummaries = summaries.filter(
     (summary) => summary.review?.decision === "pass",
@@ -72,7 +91,7 @@ export default async function IntegratedExamPage({
     );
   const allSubmitted = examiners
     .filter((examiner) => !examiner.revoked_at)
-    .every((examiner) => examiner.submitted_at);
+    .every(isExaminerComplete);
   const documentFailures = summaries.some(
     (summary) => summary.review?.documentErrors?.length,
   );
@@ -165,13 +184,83 @@ export default async function IntegratedExamPage({
 
         {event.program_type === "adults" ||
         event.program_type === "dan_tribunal" ? (
+          <section className="card">
+            <h2>Grupos por grado objetivo</h2>
+            <p>
+              {gradeGroupMode
+                ? "Grupos creados con los alumnos seleccionados."
+                : "Alumnos agrupados por el grado al que se presentan."}{" "}
+              Cada enlace de grado abre solo su grupo; el enlace personal de
+              cada examinador incluye todos sus grados pendientes.
+            </p>
+            <div className="exam-adult-grade-cards">
+              {adultTargetGrades.map((grade) => (
+                <article className="exam-adult-grade-card" key={grade}>
+                  <h3>{grade}</h3>
+                  <ul>
+                    {students
+                      .filter((student) => student.target_grade === grade)
+                      .map((student) => (
+                        <li key={student.id}>
+                          <StudentExamPhoto
+                            src={driveImageUrl(student.members?.photo_url)}
+                            name={student.members?.display_name ?? "Kenshi"}
+                          />
+                          <strong>{student.members?.display_name}</strong>
+                        </li>
+                      ))}
+                  </ul>
+                  <div className="form-actions">
+                    {examiners
+                      .filter(
+                        (examiner) =>
+                          !examiner.revoked_at &&
+                          (
+                            examinerGradeScopes[examiner.id] ??
+                            adultTargetGrades
+                          ).includes(grade),
+                      )
+                      .map((examiner) => (
+                        <div key={examiner.id}>
+                          <a
+                            className="secondary-link"
+                            href={`${publicBaseUrl}/examinar/${examiner.access_token}?grade=${encodeURIComponent(grade)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {pendingExaminerIds.includes(examiner.id)
+                              ? "Identificar al abrir"
+                              : examiner.name}{" "}
+                            · {grade}
+                          </a>
+                          {!pendingExaminerIds.includes(examiner.id) &&
+                          !isCompleted ? (
+                            <a
+                              className="text-link"
+                              href={`/examenes/${eventId}/evaluar?examiner=${examiner.id}&grade=${encodeURIComponent(grade)}`}
+                            >
+                              Evaluar este grado en el panel
+                            </a>
+                          ) : null}
+                        </div>
+                      ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {event.program_type === "adults" ||
+        event.program_type === "dan_tribunal" ? (
           <ExamGradeAssignmentForm
             eventId={eventId}
             examiners={examiners}
             grades={adultTargetGrades}
             scopes={examinerGradeScopes}
+            pendingExaminerIds={pendingExaminerIds}
             locked={
               isCompleted ||
+              hasSubmittedScores ||
               examiners.some((examiner) => Boolean(examiner.submitted_at))
             }
           />
@@ -196,61 +285,67 @@ export default async function IntegratedExamPage({
                 </tr>
               </thead>
               <tbody>
-                {examiners.map((examiner) => {
-                  const url = `${publicBaseUrl}/examinar/${examiner.access_token}`;
-                  return (
-                    <tr key={examiner.id}>
-                      <td data-label="Examinador">
-                        <strong>{examiner.name}</strong>
-                        {event.program_type === "adults" ||
-                        event.program_type === "dan_tribunal" ? (
-                          <p className="muted">
-                            Grados:{" "}
-                            {(
-                              examinerGradeScopes[examiner.id] ??
-                              adultTargetGrades
-                            ).join(", ")}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td data-label="Estado">
-                        {examiner.submitted_at ? (
-                          <span className="state-badge state-completada">
-                            Enviado
-                          </span>
-                        ) : (
-                          <span className="state-badge">Pendiente</span>
-                        )}
-                      </td>
-                      <td data-label="Enlace">
-                        {!isCompleted &&
-                        !examiner.revoked_at &&
-                        !examiner.submitted_at ? (
-                          <p>
-                            <a
-                              className="secondary-link"
-                              href={`/examenes/${eventId}/evaluar?examiner=${examiner.id}`}
-                            >
-                              Examinar como {examiner.name}
-                            </a>
-                          </p>
-                        ) : (
-                          <p>
-                            <a href="#revision">Revisar evaluaciones</a>
-                          </p>
-                        )}
-                        <a
-                          className="text-link"
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {url}
-                        </a>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {examiners
+                  .filter((examiner) => !examiner.revoked_at)
+                  .map((examiner) => {
+                    const url = `${publicBaseUrl}/examinar/${examiner.access_token}`;
+                    return (
+                      <tr key={examiner.id}>
+                        <td data-label="Examinador">
+                          <strong>
+                            {pendingExaminerIds.includes(examiner.id)
+                              ? "Identificar al abrir"
+                              : examiner.name}
+                          </strong>
+                          {event.program_type === "adults" ||
+                          event.program_type === "dan_tribunal" ? (
+                            <p className="muted">
+                              Grados:{" "}
+                              {(
+                                examinerGradeScopes[examiner.id] ??
+                                adultTargetGrades
+                              ).join(", ")}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td data-label="Estado">
+                          {isExaminerComplete(examiner) ? (
+                            <span className="state-badge state-completada">
+                              Enviado
+                            </span>
+                          ) : (
+                            <span className="state-badge">Pendiente</span>
+                          )}
+                        </td>
+                        <td data-label="Enlace">
+                          {!isCompleted &&
+                          !examiner.revoked_at &&
+                          !isExaminerComplete(examiner) ? (
+                            <p>
+                              <a
+                                className="secondary-link"
+                                href={`/examenes/${eventId}/evaluar?examiner=${examiner.id}`}
+                              >
+                                Examinar como {examiner.name}
+                              </a>
+                            </p>
+                          ) : (
+                            <p>
+                              <a href="#revision">Revisar evaluaciones</a>
+                            </p>
+                          )}
+                          <a
+                            className="text-link"
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {url}
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
@@ -278,14 +373,7 @@ export default async function IntegratedExamPage({
             const review = summary.review;
             const current = isReviewCurrent(review, summary);
             const originals = scores.filter(
-              (score) =>
-                score.event_student_id === student.id &&
-                examiners.some(
-                  (examiner) =>
-                    examiner.id === score.examiner_id &&
-                    examiner.submitted_at &&
-                    !examiner.revoked_at,
-                ),
+              (score) => score.event_student_id === student.id,
             );
             return (
               <details className="exam-student-review" key={student.id}>

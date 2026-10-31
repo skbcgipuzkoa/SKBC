@@ -1,4 +1,5 @@
 "use server";
+import { identifyIntegratedExaminer } from "@/lib/integrated-exams";
 import { parseExamSubmissionExtras } from "@/lib/integrated-exam-session";
 
 import { randomBytes } from "crypto";
@@ -3852,12 +3853,20 @@ export async function deleteIntegratedExamItemAction(formData: FormData) {
 }
 
 export async function submitIntegratedExamScoresAction(formData: FormData) {
+  const grade = String(formData.get("grade") ?? "").trim() || undefined;
+  const gradeQuery = grade ? `&grade=${encodeURIComponent(grade)}` : "";
   const token = String(formData.get("token") ?? "").trim();
   if (!token) {
     redirect("/examinar/error");
   }
 
-  const scores: Array<{ eventStudentId: string; eventItemId: string; score: number | null; skipped: boolean; notes:string }> = [];
+  const scores: Array<{
+    eventStudentId: string;
+    eventItemId: string;
+    score: number | null;
+    skipped: boolean;
+    notes: string;
+  }> = [];
   for (const [key, value] of formData.entries()) {
     if (!key.startsWith("score:")) continue;
     const [, eventStudentId, eventItemId] = key.split(":");
@@ -3867,19 +3876,45 @@ export async function submitIntegratedExamScoresAction(formData: FormData) {
       eventStudentId,
       eventItemId,
       score: rawValue === "skip" ? null : Number(rawValue),
-      notes: String(formData.get(`notes:${eventStudentId}:${eventItemId}`) ?? "").trim(),
-      skipped: rawValue === "skip"
+      notes: String(
+        formData.get(`notes:${eventStudentId}:${eventItemId}`) ?? "",
+      ).trim(),
+      skipped: rawValue === "skip",
     });
   }
 
   try {
-    await submitIntegratedExamScores({ token, scores, extras:parseExamSubmissionExtras(formData) });
+    await submitIntegratedExamScores({
+      token,
+      scores,
+      extras: parseExamSubmissionExtras(formData),
+      grade,
+    });
   } catch (error) {
     console.error("Error submitting integrated exam scores", error);
-    redirect(`/examinar/${token}?error=submit&detail=${encodeURIComponent(errorMessage(error))}`);
+    redirect(
+      `/examinar/${token}?error=submit&detail=${encodeURIComponent(errorMessage(error))}${gradeQuery}`,
+    );
   }
 
-  redirect(`/examinar/${token}?saved=1`);
+  redirect(`/examinar/${token}?saved=1${gradeQuery}`);
+}
+
+export async function identifyIntegratedExaminerAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  const grade = String(formData.get("grade") ?? "").trim();
+  let error = "";
+  try {
+    await identifyIntegratedExaminer({
+      token,
+      name: String(formData.get("examinerName") ?? ""),
+    });
+  } catch (cause) {
+    error = errorMessage(cause);
+  }
+  redirect(
+    `/examinar/${encodeURIComponent(token)}?${grade ? `grade=${encodeURIComponent(grade)}&` : ""}${error ? `error=identify&detail=${encodeURIComponent(error)}` : "identified=1"}`,
+  );
 }
 
 export async function finalizeIntegratedExamEventAction(formData: FormData) {

@@ -1,4 +1,5 @@
 import {
+  completedExaminerGrades,
   decodeExamAssignments,
   encodeExamAssignments,
   resolveExamAssignments,
@@ -190,12 +191,19 @@ export async function createIntegratedExamEvent(input: {
   const memberIds = [...new Set(input.memberIds.filter(Boolean))];
   if (!memberIds.length) throw new Error("Selecciona al menos un kenshi.");
   if (!input.examDate) throw new Error("Indica fecha de examen.");
+  const isAdultCreation =
+    input.programType === "adults" || input.programType === "dan_tribunal";
   const names = [
     ...new Set(input.examinerNames.map((name) => name.trim()).filter(Boolean)),
   ];
-  if (input.examineMyself !== false && !names.includes("Alvaro Calvo"))
+  if (
+    !isAdultCreation &&
+    input.examineMyself !== false &&
+    !names.includes("Alvaro Calvo")
+  )
     names.unshift("Alvaro Calvo");
-  if (!names.length) throw new Error("Selecciona al menos un examinador.");
+  if (!isAdultCreation && !names.length)
+    throw new Error("Selecciona al menos un examinador.");
 
   const { data: members, error: membersError } = await supabase
     .from("members")
@@ -335,9 +343,18 @@ export async function createIntegratedExamEvent(input: {
     throw itemsError;
   }
 
+  const creationTargets = resolveExamAssignments({
+    programType: input.programType,
+    notes: null,
+    examiners: [],
+    students,
+  }).adultTargetGrades;
+  const creationNames = isAdultCreation
+    ? creationTargets.map((grade) => "Pendiente · " + grade)
+    : names;
   const { data: assigned, error: examinersError } = await supabase
     .from("exam_event_examiners")
-    .insert(names.map((name) => ({ exam_event_id: event.id, name })))
+    .insert(creationNames.map((name) => ({ exam_event_id: event.id, name })))
     .select("id,name");
   if (examinersError) throw examinersError;
   const initialAssignments = resolveExamAssignments({
@@ -351,7 +368,20 @@ export async function createIntegratedExamEvent(input: {
     .update({
       notes: encodeExamAssignments(
         input.notes ?? "",
-        initialAssignments.examinerGradeScopes,
+        isAdultCreation
+          ? Object.fromEntries(
+              (assigned ?? []).map((row) => [
+                row.id,
+                [creationTargets[creationNames.indexOf(row.name)]],
+              ]),
+            )
+          : initialAssignments.examinerGradeScopes,
+        isAdultCreation
+          ? {
+              gradeGroupMode: true,
+              pendingExaminerIds: (assigned ?? []).map((row) => row.id),
+            }
+          : undefined,
       ),
     })
     .eq("id", event.id);
@@ -360,7 +390,7 @@ export async function createIntegratedExamEvent(input: {
   return {
     eventId: event.id,
     ownExaminerId:
-      input.examineMyself !== false
+      !isAdultCreation && input.examineMyself !== false
         ? assigned?.find((row) => row.name === "Alvaro Calvo")?.id
         : undefined,
     studentCount: insertedStudents?.length ?? students.length,
@@ -558,16 +588,37 @@ export async function getIntegratedExamAdmin(eventId: string) {
   const assignmentStudents = new Map(
     (students ?? []).map((student) => [student.id, student]),
   );
+  const settings = decodeExamAssignments(event.notes);
+  const completedGradesByExaminer = Object.fromEntries(
+    (examiners ?? []).map((examiner) => [
+      examiner.id,
+      completedExaminerGrades({
+        grades: assignments.examinerGradeScopes[examiner.id] ?? [],
+        students: students ?? [],
+        items: items ?? [],
+        scores: (scores ?? []).filter(
+          (score) => score.examiner_id === examiner.id,
+        ),
+      }),
+    ]),
+  );
+  const isAdult =
+    event.program_type === "adults" || event.program_type === "dan_tribunal";
   const validIds = new Set(
     (examiners ?? [])
-      .filter((row) => row.submitted_at && !row.revoked_at)
+      .filter(
+        (row) =>
+          !row.revoked_at &&
+          !settings.pendingExaminerIds?.includes(row.id) &&
+          (isAdult || row.submitted_at),
+      )
       .map((row) => row.id),
   );
   const validScores = (scores ?? []).filter(
     (row) =>
       validIds.has(row.examiner_id) &&
-      (!assignments.adultTargetGrades.length ||
-        assignments.examinerGradeScopes[row.examiner_id]?.includes(
+      (!isAdult ||
+        completedGradesByExaminer[row.examiner_id]?.includes(
           assignmentStudents.get(row.event_student_id)?.target_grade ?? "",
         )),
   );
@@ -600,6 +651,11 @@ export async function getIntegratedExamAdmin(eventId: string) {
   return {
     event: { ...event, notes: decodeExamAssignments(event.notes).text },
     ...assignments,
+    gradeGroupMode: settings.gradeGroupMode ?? false,
+    pendingExaminerIds: settings.pendingExaminerIds ?? [],
+    completedGradesByExaminer,
+    hasSubmittedScores: Boolean(scores?.length),
+    rawScores: scores ?? [],
     students: students ?? [],
     items: items ?? [],
     examiners: examiners ?? [],
@@ -667,7 +723,10 @@ export async function updateIntegratedExamItem(input: {
     throw itemError ?? new Error("Item de examen no encontrado.");
 
   const data = await getIntegratedExamAdmin(item.exam_event_id);
-  if (data.examiners.some((examiner) => examiner.submitted_at))
+  if (
+    data.hasSubmittedScores ||
+    data.examiners.some((examiner) => examiner.submitted_at)
+  )
     throw new Error(
       "El temario no puede modificarse despues de recibir una evaluacion.",
     );
@@ -710,7 +769,10 @@ export async function createIntegratedExamItem(input: {
 }) {
   const supabase = createAdminClient();
   const data = await getIntegratedExamAdmin(input.eventId);
-  if (data.examiners.some((examiner) => examiner.submitted_at))
+  if (
+    data.hasSubmittedScores ||
+    data.examiners.some((examiner) => examiner.submitted_at)
+  )
     throw new Error(
       "El temario no puede modificarse despues de recibir una evaluacion.",
     );
@@ -757,7 +819,10 @@ export async function deleteIntegratedExamItem(itemId: string) {
     throw itemError ?? new Error("Item de examen no encontrado.");
 
   const data = await getIntegratedExamAdmin(item.exam_event_id);
-  if (data.examiners.some((examiner) => examiner.submitted_at))
+  if (
+    data.hasSubmittedScores ||
+    data.examiners.some((examiner) => examiner.submitted_at)
+  )
     throw new Error(
       "El temario no puede modificarse despues de recibir una evaluacion.",
     );
@@ -774,7 +839,7 @@ export async function deleteIntegratedExamItem(itemId: string) {
   });
 }
 
-export async function getExaminerExamByToken(token: string) {
+export async function getExaminerExamByToken(token: string, grade?: string) {
   const supabase = createAdminClient();
   const { data: examiner, error: examinerError } = await supabase
     .from("exam_event_examiners")
@@ -843,13 +908,31 @@ export async function getExaminerExamByToken(token: string) {
   const assignedGrades = isAdult
     ? (assignment.examinerGradeScopes[examiner.id] ?? [])
     : [];
+  if (grade && (!isAdult || !assignedGrades.includes(grade)))
+    throw new Error("Grado ajeno a esta asignacion.");
+  const completedGrades = isAdult
+    ? completedExaminerGrades({
+        grades: assignedGrades,
+        students: students ?? [],
+        items: items ?? [],
+        scores: existingScores ?? [],
+      })
+    : [];
+  const routeGrades = isAdult
+    ? grade
+      ? [grade]
+      : assignedGrades.filter((entry) => !completedGrades.includes(entry))
+    : [];
+  const needsExaminerName =
+    decodeExamAssignments(event.notes).pendingExaminerIds?.includes(
+      examiner.id,
+    ) ?? false;
   const assignedStudents = (students ?? []).filter(
-    (student) =>
-      !isAdult || assignedGrades.includes(student.target_grade ?? ""),
+    (student) => !isAdult || routeGrades.includes(student.target_grade ?? ""),
   );
   const studentIds = new Set(assignedStudents.map((student) => student.id));
   const assignedItems = (items ?? []).filter(
-    (item) => !isAdult || assignedGrades.includes(item.grade ?? ""),
+    (item) => !isAdult || routeGrades.includes(item.grade ?? ""),
   );
   if (isAdult)
     assignedItems.sort(
@@ -871,6 +954,9 @@ export async function getExaminerExamByToken(token: string) {
     examiner: safeExaminer,
     event: { ...event, notes: decodeExamAssignments(event.notes).text },
     assignedGrades,
+    routeGrades,
+    completedGrades,
+    needsExaminerName,
     students: assignedStudents,
     items: assignedItems,
     existingScores: (existingScores ?? []).filter(
@@ -944,7 +1030,7 @@ export async function saveIntegratedExamAssignments(input: {
     throw new Error(
       "La asignacion por grados solo corresponde a examenes adultos.",
     );
-  if (data.examiners.some((row) => row.submitted_at))
+  if (data.hasSubmittedScores || data.examiners.some((row) => row.submitted_at))
     throw new Error(
       "Las asignaciones no pueden cambiar despues de recibir una evaluacion.",
     );
@@ -956,14 +1042,228 @@ export async function saveIntegratedExamAssignments(input: {
   return withEventMutationLock(data.event, async () => {
     const { error } = await createAdminClient()
       .from("exam_events")
-      .update({ notes: encodeExamAssignments(data.event.notes ?? "", scopes) })
+      .update({
+        notes: encodeExamAssignments(data.event.notes ?? "", scopes, {
+          gradeGroupMode: data.gradeGroupMode,
+          pendingExaminerIds: data.pendingExaminerIds,
+        }),
+      })
       .eq("id", input.eventId);
     if (error) throw error;
+  });
+}
+function validateExaminerName(name: string): string {
+  const value = name.trim().replace(/\s+/g, " ");
+  if (
+    !value ||
+    value.length > 120 ||
+    /[\u0000-\u001f]/.test(value) ||
+    value.startsWith("Pendiente ·")
+  )
+    throw new Error(
+      "Indica un nombre real de examinador de hasta 120 caracteres.",
+    );
+  return value;
+}
+export async function identifyIntegratedExaminer(input: {
+  token: string;
+  name: string;
+}) {
+  const payload = await getExaminerExamByToken(input.token);
+  const data = await getIntegratedExamAdmin(payload.event.id);
+  if (!data.pendingExaminerIds.includes(payload.examiner.id))
+    throw new Error("Esta asignacion ya tiene examinador identificado.");
+  if (
+    payload.examiner.submitted_at ||
+    data.rawScores.some((score) => score.examiner_id === payload.examiner.id)
+  )
+    throw new Error("No se puede cambiar el nombre despues de evaluar.");
+  const name = validateExaminerName(input.name);
+  return withEventMutationLock(data.event, async () => {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("exam_event_examiners")
+      .update({ name })
+      .eq("id", payload.examiner.id)
+      .eq("exam_event_id", data.event.id)
+      .is("revoked_at", null);
+    if (error) throw error;
+    const { error: settingsError } = await supabase
+      .from("exam_events")
+      .update({
+        notes: encodeExamAssignments(
+          data.event.notes ?? "",
+          data.examinerGradeScopes,
+          {
+            gradeGroupMode: data.gradeGroupMode,
+            pendingExaminerIds: data.pendingExaminerIds.filter(
+              (id) => id !== payload.examiner.id,
+            ),
+          },
+        ),
+      })
+      .eq("id", data.event.id);
+    if (settingsError) throw settingsError;
+  });
+}
+export async function saveAdultGradeGroups(input: {
+  eventId: string;
+  examiners: Array<{ id?: string; name: string; grades: string[] }>;
+}) {
+  const data = await getIntegratedExamAdmin(input.eventId);
+  if (
+    data.event.program_type !== "adults" &&
+    data.event.program_type !== "dan_tribunal"
+  )
+    throw new Error("Los grupos por grados corresponden a examenes adultos.");
+  if (data.hasSubmittedScores || data.examiners.some((row) => row.submitted_at))
+    throw new Error(
+      "Los grupos no pueden cambiar despues de recibir puntuaciones.",
+    );
+  if (
+    !Array.isArray(input.examiners) ||
+    !input.examiners.length ||
+    input.examiners.length > 100 ||
+    input.examiners.filter((row) => !row.id).length > 1
+  )
+    throw new Error("Anade como maximo un examinador nuevo en cada guardado.");
+  const seenIds = new Set<string>();
+  const groups = new Map<
+    string,
+    { id?: string; name: string; grades: string[]; pending: boolean }
+  >();
+  for (const row of input.examiners) {
+    const existing = row.id
+      ? data.examiners.find((entry) => entry.id === row.id && !entry.revoked_at)
+      : undefined;
+    if (row.id && (!existing || seenIds.has(row.id)))
+      throw new Error("Examinador ajeno o duplicado.");
+    if (row.id) seenIds.add(row.id);
+    const pending = Boolean(
+      existing &&
+      data.pendingExaminerIds.includes(existing.id) &&
+      (!row.name.trim() || row.name.trim() === existing.name),
+    );
+    const name = pending ? existing!.name : validateExaminerName(row.name);
+    if (
+      !Array.isArray(row.grades) ||
+      !row.grades.length ||
+      row.grades.some((grade) => !data.adultTargetGrades.includes(grade))
+    )
+      throw new Error(
+        "Selecciona grados objetivo validos para cada examinador.",
+      );
+    const key = pending
+      ? "pending:" + row.id
+      : name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+    const old = groups.get(key);
+    if (old) {
+      old.grades = [...new Set([...old.grades, ...row.grades])];
+      if (!old.id && row.id) old.id = row.id;
+    } else
+      groups.set(key, {
+        id: row.id,
+        name,
+        grades: [...new Set(row.grades)],
+        pending,
+      });
+  }
+  if (
+    data.adultTargetGrades.some(
+      (grade) =>
+        ![...groups.values()].some((row) => row.grades.includes(grade)),
+    )
+  )
+    throw new Error("Todos los grados objetivo necesitan un examinador.");
+  return withEventMutationLock(data.event, async () => {
+    const supabase = createAdminClient();
+    const scopes: Record<string, string[]> = {};
+    const pending: string[] = [];
+    const keepers = new Set<string>();
+    const inserted: string[] = [];
+    const originalNotes = encodeExamAssignments(
+      data.event.notes ?? "",
+      data.examinerGradeScopes,
+      {
+        gradeGroupMode: data.gradeGroupMode,
+        pendingExaminerIds: data.pendingExaminerIds,
+      },
+    );
+    const suspendedAt = new Date().toISOString();
+    async function updateExaminer(id: string, values: Record<string, unknown>) {
+      const { error } = await supabase
+        .from("exam_event_examiners")
+        .update(values)
+        .eq("id", id)
+        .eq("exam_event_id", data.event.id);
+      if (error) throw error;
+    }
+    try {
+      // Suspend links while their identities and scopes are staged. A failed save cannot expand access.
+      for (const row of data.examiners.filter((row) => !row.revoked_at))
+        await updateExaminer(row.id, { revoked_at: suspendedAt });
+      for (const group of groups.values()) {
+        let id = group.id;
+        if (!id) {
+          const { data: created, error } = await supabase
+            .from("exam_event_examiners")
+            .insert({
+              exam_event_id: data.event.id,
+              name: group.name,
+              revoked_at: suspendedAt,
+            })
+            .select("id")
+            .single<{ id: string }>();
+          if (error || !created)
+            throw error ?? new Error("No se pudo crear el examinador.");
+          id = created.id;
+          inserted.push(id);
+        } else await updateExaminer(id, { name: group.name });
+        keepers.add(id);
+        scopes[id] = data.adultTargetGrades.filter((grade) =>
+          group.grades.includes(grade),
+        );
+        if (group.pending) pending.push(id);
+      }
+      const { error } = await supabase
+        .from("exam_events")
+        .update({
+          notes: encodeExamAssignments(data.event.notes ?? "", scopes, {
+            gradeGroupMode: true,
+            pendingExaminerIds: pending,
+          }),
+        })
+        .eq("id", data.event.id);
+      if (error) throw error;
+      for (const id of keepers) await updateExaminer(id, { revoked_at: null });
+    } catch (error) {
+      // Restore the old configuration before re-enabling old links; leave new links revoked.
+      for (const id of [...keepers, ...inserted])
+        await updateExaminer(id, { revoked_at: suspendedAt });
+      const { error: restoreError } = await supabase
+        .from("exam_events")
+        .update({ notes: originalNotes })
+        .eq("id", data.event.id);
+      if (restoreError)
+        throw new Error(
+          "No se pudo restaurar la configuracion. Los enlaces quedan desactivados; revisa los grupos antes de continuar.",
+        );
+      for (const row of data.examiners)
+        await updateExaminer(row.id, {
+          name: row.name,
+          revoked_at: row.revoked_at,
+        });
+      throw error;
+    }
   });
 }
 export async function getInternalExamEvaluation(
   eventId: string,
   examinerId: string,
+  grade?: string,
 ) {
   const payload = await getIntegratedExamAdmin(eventId);
   const examiner = payload.examiners.find(
@@ -971,7 +1271,7 @@ export async function getInternalExamEvaluation(
   );
   if (!examiner)
     throw new Error("Selecciona una asignacion valida de este examen.");
-  const data = await getExaminerExamByToken(examiner.access_token!);
+  const data = await getExaminerExamByToken(examiner.access_token!, grade);
   const { access_token: _token, ...safeExaminer } = data.examiner;
   return { ...data, examiner: safeExaminer };
 }
@@ -980,6 +1280,7 @@ export async function submitInternalIntegratedExamScores(input: {
   examinerId: string;
   scores: ScoreInput[];
   extras?: ExamSubmissionExtras;
+  grade?: string;
 }) {
   const payload = await getIntegratedExamAdmin(input.eventId);
   const examiner = payload.examiners.find(
@@ -990,6 +1291,7 @@ export async function submitInternalIntegratedExamScores(input: {
     token: examiner.access_token!,
     scores: input.scores,
     extras: input.extras,
+    grade: input.grade,
   });
 }
 export type ScoreInput = {
@@ -1003,9 +1305,52 @@ export async function submitIntegratedExamScores(input: {
   token: string;
   scores: ScoreInput[];
   extras?: ExamSubmissionExtras;
+  grade?: string;
 }) {
-  const payload = await getExaminerExamByToken(input.token);
+  const payload = await getExaminerExamByToken(input.token, input.grade);
   return withEventMutationLock(payload.event, async () => {
+    if (payload.needsExaminerName)
+      throw new Error("Indica tu nombre antes de enviar la evaluacion.");
+    const fullAdultRoute =
+      payload.assignedGrades.length > 0 &&
+      payload.assignedGrades.every((grade) =>
+        payload.completedGrades.includes(grade),
+      );
+    if (fullAdultRoute && !payload.examiner.submitted_at) {
+      const completedData = await getIntegratedExamAdmin(payload.event.id);
+      if (
+        input.scores.some((score) => {
+          const student = completedData.students.find(
+            (student) => student.id === score.eventStudentId,
+          );
+          const item = completedData.items.find(
+            (item) => item.id === score.eventItemId,
+          );
+          return (
+            !student ||
+            !item ||
+            !payload.assignedGrades.includes(student.target_grade ?? "") ||
+            (input.grade && student.target_grade !== input.grade) ||
+            !isExamItemRelevantForStudent(
+              payload.event.program_type,
+              student,
+              item,
+            )
+          );
+        })
+      )
+        throw new Error("Puntuacion ajena a esta asignacion.");
+      const { error } = await createAdminClient()
+        .from("exam_event_examiners")
+        .update({ submitted_at: new Date().toISOString() })
+        .eq("id", payload.examiner.id)
+        .is("submitted_at", null)
+        .is("revoked_at", null);
+      if (error) throw error;
+      return;
+    }
+    if (input.grade && payload.completedGrades.includes(input.grade))
+      throw new Error("Este grado ya fue enviado.");
     if (payload.examiner.submitted_at || payload.examiner.revoked_at)
       throw new Error("Esta evaluacion ya fue enviada o revocada.");
     const prepared = prepareSessionSubmission({
@@ -1069,18 +1414,7 @@ export async function submitIntegratedExamScores(input: {
     if (!expected.size || seen.size !== expected.size)
       throw new Error("Completa todos los puntos con una nota o No evaluado.");
     const supabase = createAdminClient();
-    // Claim submission first: competing requests cannot overwrite an accepted evaluation.
     const now = new Date().toISOString();
-    const { data: claim, error: claimError } = await supabase
-      .from("exam_event_examiners")
-      .update({ submitted_at: now })
-      .eq("id", payload.examiner.id)
-      .is("submitted_at", null)
-      .is("revoked_at", null)
-      .select("id")
-      .maybeSingle();
-    if (claimError) throw claimError;
-    if (!claim) throw new Error("Esta evaluacion ya fue enviada.");
     const { error } = await supabase.from("exam_event_scores").upsert(
       prepared.map((row) => ({
         exam_event_id: payload.event.id,
@@ -1094,13 +1428,24 @@ export async function submitIntegratedExamScores(input: {
       })),
       { onConflict: "event_student_id,event_item_id,examiner_id" },
     );
-    if (error) {
-      await supabase
+    if (error) throw error;
+    const all = await getIntegratedExamAdmin(payload.event.id);
+    const adult =
+      payload.event.program_type === "adults" ||
+      payload.event.program_type === "dan_tribunal";
+    const fullySubmitted =
+      !adult ||
+      payload.assignedGrades.every((grade) =>
+        all.completedGradesByExaminer[payload.examiner.id]?.includes(grade),
+      );
+    if (fullySubmitted) {
+      const { error: examinerError } = await supabase
         .from("exam_event_examiners")
-        .update({ submitted_at: null })
+        .update({ submitted_at: now })
         .eq("id", payload.examiner.id)
-        .eq("submitted_at", now);
-      throw error;
+        .is("submitted_at", null)
+        .is("revoked_at", null);
+      if (examinerError) throw examinerError;
     }
     await refreshIntegratedExamReview(payload.event.id);
   });
@@ -1344,7 +1689,14 @@ export async function finalizeIntegratedExamEvent(
       "Otro registro esta en curso. Espera antes de reintentarlo.",
     );
   const active = data.examiners.filter((row) => !row.revoked_at);
-  if (!active.length || active.some((row) => !row.submitted_at))
+  const completedExaminer = (row: ExamEventExaminer) =>
+    Boolean(row.submitted_at) ||
+    ((data.examinerGradeScopes[row.id]?.length ?? 0) > 0 &&
+      !data.pendingExaminerIds.includes(row.id) &&
+      data.examinerGradeScopes[row.id].every((grade) =>
+        data.completedGradesByExaminer[row.id]?.includes(grade),
+      ));
+  if (!active.length || active.some((row) => !completedExaminer(row)))
     throw new Error(
       "Todos los examinadores activos deben enviar su evaluacion.",
     );
@@ -1378,6 +1730,17 @@ export async function finalizeIntegratedExamEvent(
   if (lockError) throw lockError;
   if (!locked) throw new Error("El examen ha cambiado; vuelve a cargarlo.");
   try {
+    for (const row of active.filter(
+      (row) => !row.submitted_at && completedExaminer(row),
+    )) {
+      const { error } = await supabase
+        .from("exam_event_examiners")
+        .update({ submitted_at: new Date().toISOString() })
+        .eq("id", row.id)
+        .is("submitted_at", null)
+        .is("revoked_at", null);
+      if (error) throw error;
+    }
     // Reload after the lock so edits accepted immediately before it cannot use stale decisions.
     data = await getIntegratedExamAdmin(eventId);
     if (
