@@ -17,7 +17,7 @@ type MemberForExam = {
 
 export const externalExamAuth = {
   supabaseUrl: "https://zipfwmmwcawfbqofhwmc.supabase.co",
-  supabaseAnonKey: "sb_publishable_j1dhehxot0jJ98uUNblN4A_c3ujTqn6"
+  supabaseAnonKey: "sb_publishable_j1dhehxot0jJ98uUNblN4A_c3ujTqn6",
 };
 
 type ExternalExamPayload = {
@@ -45,7 +45,7 @@ export async function registerExam({
   examDate,
   grade,
   examiner,
-  registeredBy
+  registeredBy,
 }: {
   memberId: string;
   examDate: string;
@@ -56,28 +56,49 @@ export async function registerExam({
   const supabase = createAdminClient();
   const { data: member, error: memberError } = await supabase
     .from("members")
-    .select("id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history")
+    .select(
+      "id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history",
+    )
     .eq("id", memberId)
     .single<MemberForExam>();
 
   if (memberError || !member) throw new Error("Kenshi no encontrado.");
 
-  const cycleStart = member.last_exam_on ?? member.joined_on ?? null;
-  const cycleAttendance = await countCycleAttendance(member.id, cycleStart, examDate);
-  const nextExamHistory = appendHistory(member.exam_history, `${examDate} (${grade})`);
-  const nextAttendanceHistory = appendHistory(member.attendance_history, `${grade}: ${cycleAttendance}`);
-
   const { data: existingExam, error: existingExamError } = await supabase
     .from("exams")
-    .select("id")
+    .select("id,cycle_attendance")
     .eq("member_id", member.id)
     .eq("exam_date", examDate)
     .eq("grade", grade)
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle<{ id: string }>();
+    .maybeSingle<{ id: string; cycle_attendance: number | null }>();
 
   if (existingExamError) throw existingExamError;
+
+  const cycleStart = member.last_exam_on ?? member.joined_on ?? null;
+  const cycleAttendance =
+    existingExam?.cycle_attendance ??
+    (await countCycleAttendance(member.id, cycleStart, examDate));
+  const historyEntry = `${examDate} (${grade})`;
+  const alreadyInHistory = (member.exam_history ?? "")
+    .split("|")
+    .some((entry) => entry.trim() === historyEntry);
+  const nextExamHistory = alreadyInHistory
+    ? member.exam_history
+    : appendHistory(member.exam_history, historyEntry);
+  const nextAttendanceHistory = alreadyInHistory
+    ? member.attendance_history
+    : appendHistory(member.attendance_history, `${grade}: ${cycleAttendance}`);
+
+  // Retrying an older registered event must not undo a later promotion.
+  if (existingExam && member.last_exam_on && member.last_exam_on > examDate) {
+    return {
+      examId: existingExam.id,
+      memberLegacyId: member.legacy_id,
+      cycleAttendance,
+    };
+  }
 
   let examId = existingExam?.id ?? null;
   if (!examId) {
@@ -89,7 +110,7 @@ export async function registerExam({
         grade,
         cycle_attendance: cycleAttendance,
         examiner,
-        registered_by: registeredBy
+        registered_by: registeredBy,
       })
       .select("id")
       .single<{ id: string }>();
@@ -106,7 +127,7 @@ export async function registerExam({
       next_exam_on: null,
       exam_history: nextExamHistory,
       attendance_history: nextAttendanceHistory,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
     .eq("id", member.id);
 
@@ -128,10 +149,14 @@ export async function registerExam({
       examDate,
       targetGrade: grade,
       program: member.class,
-      createdBy: registeredBy
+      createdBy: registeredBy,
     });
   } catch (error) {
-    console.error("Error creating automatic exam belt order", { examId, memberId: member.id, error });
+    console.error("Error creating automatic exam belt order", {
+      examId,
+      memberId: member.id,
+      error,
+    });
   }
 
   return { examId, memberLegacyId: member.legacy_id, cycleAttendance };
@@ -140,8 +165,11 @@ export async function registerExam({
 export async function registerExternalExam(payload: ExternalExamPayload) {
   const examDate = normalizeDate(payload.fechaExamen ?? payload.examDate);
   const grade = String(payload.grado ?? payload.grade ?? "").trim();
-  const examiner = String(payload.examinador ?? payload.examiner ?? "").trim() || null;
-  const registeredBy = String(payload.registradoPor ?? payload.registeredBy ?? "EXTERNAL EXAM APP").trim();
+  const examiner =
+    String(payload.examinador ?? payload.examiner ?? "").trim() || null;
+  const registeredBy = String(
+    payload.registradoPor ?? payload.registeredBy ?? "EXTERNAL EXAM APP",
+  ).trim();
 
   if (!examDate) throw new Error("Falta fechaExamen.");
   if (!grade) throw new Error("Falta grado.");
@@ -152,17 +180,19 @@ export async function registerExternalExam(payload: ExternalExamPayload) {
     examDate,
     grade,
     examiner,
-    registeredBy
+    registeredBy,
   });
 
-  const documentUrl = String(payload.informeUrl ?? payload.reportUrl ?? payload.diplomaUrl ?? "").trim();
+  const documentUrl = String(
+    payload.informeUrl ?? payload.reportUrl ?? payload.diplomaUrl ?? "",
+  ).trim();
   if (documentUrl) {
     await saveExamReport({
       examId: result.examId,
       reportUrl: documentUrl,
       reportType: null,
       reportFileName: null,
-      createdBy: registeredBy
+      createdBy: registeredBy,
     });
   }
 
@@ -171,7 +201,7 @@ export async function registerExternalExam(payload: ExternalExamPayload) {
     examId: result.examId,
     memberId: member.id,
     memberLegacyId: result.memberLegacyId,
-    cycleAttendance: result.cycleAttendance
+    cycleAttendance: result.cycleAttendance,
   };
 }
 
@@ -180,7 +210,7 @@ export async function saveExamReport({
   reportUrl,
   reportType,
   reportFileName,
-  createdBy
+  createdBy,
 }: {
   examId: string;
   reportUrl: string;
@@ -196,7 +226,7 @@ export async function saveExamReport({
       report_created_at: new Date().toISOString(),
       report_created_by: createdBy,
       report_type: reportType,
-      report_file_name: reportFileName
+      report_file_name: reportFileName,
     })
     .eq("id", examId);
 
@@ -231,7 +261,9 @@ async function rebuildMemberExamSummary(memberId: string) {
     .select("exam_date,grade,cycle_attendance")
     .eq("member_id", memberId)
     .order("exam_date", { ascending: true })
-    .returns<{ exam_date: string; grade: string; cycle_attendance: number | null }[]>();
+    .returns<
+      { exam_date: string; grade: string; cycle_attendance: number | null }[]
+    >();
 
   if (error) throw error;
 
@@ -245,10 +277,16 @@ async function rebuildMemberExamSummary(memberId: string) {
     grade?: string;
   } = {
     last_exam_on: lastExam?.exam_date ?? null,
-    exam_history: exams?.length ? exams.map((item) => `${item.exam_date} (${item.grade})`).join(" | ") : null,
-    attendance_history: exams?.length ? exams.map((item) => `${item.grade}: ${item.cycle_attendance ?? 0}`).join(" | ") : null,
+    exam_history: exams?.length
+      ? exams.map((item) => `${item.exam_date} (${item.grade})`).join(" | ")
+      : null,
+    attendance_history: exams?.length
+      ? exams
+          .map((item) => `${item.grade}: ${item.cycle_attendance ?? 0}`)
+          .join(" | ")
+      : null,
     next_exam_on: null,
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   };
 
   if (lastExam?.grade) update.grade = lastExam.grade;
@@ -261,7 +299,11 @@ async function rebuildMemberExamSummary(memberId: string) {
   if (updateError) throw updateError;
 }
 
-async function countCycleAttendance(memberId: string, cycleStart: string | null, examDate: string) {
+async function countCycleAttendance(
+  memberId: string,
+  cycleStart: string | null,
+  examDate: string,
+) {
   const supabase = createAdminClient();
   let query = supabase
     .from("attendance_logs")
@@ -285,12 +327,16 @@ function appendHistory(current: string | null, next: string) {
 export async function findMemberForExternalExam(payload: ExternalExamPayload) {
   const supabase = createAdminClient();
   const directId = String(payload.memberId ?? "").trim();
-  const legacyId = String(payload.legacyId ?? payload.alumnoId ?? payload.alumnoRef ?? "").trim();
+  const legacyId = String(
+    payload.legacyId ?? payload.alumnoId ?? payload.alumnoRef ?? "",
+  ).trim();
 
   if (directId) {
     const { data, error } = await supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history")
+      .select(
+        "id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history",
+      )
       .eq("id", directId)
       .single<MemberForExam>();
     if (!error && data) return data;
@@ -299,7 +345,9 @@ export async function findMemberForExternalExam(payload: ExternalExamPayload) {
   if (legacyId) {
     const { data, error } = await supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history")
+      .select(
+        "id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history",
+      )
       .eq("legacy_id", legacyId)
       .single<MemberForExam>();
     if (!error && data) return data;
@@ -309,14 +357,17 @@ export async function findMemberForExternalExam(payload: ExternalExamPayload) {
   if (name) {
     const { data, error } = await supabase
       .from("members")
-      .select("id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history")
+      .select(
+        "id,legacy_id,display_name,class,grade,joined_on,last_exam_on,exam_history,attendance_history",
+      )
       .ilike("display_name", `%${name}%`)
       .limit(2)
       .returns<MemberForExam[]>();
 
     if (error) throw error;
     if (data.length === 1) return data[0];
-    if (data.length > 1) throw new Error("Hay mas de un kenshi que coincide con ese nombre.");
+    if (data.length > 1)
+      throw new Error("Hay mas de un kenshi que coincide con ese nombre.");
   }
 
   throw new Error("No se encontro el kenshi en el sistema nuevo.");
@@ -326,7 +377,9 @@ function normalizeDate(value: string | null | undefined) {
   const text = String(value ?? "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
   const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+  return Number.isNaN(parsed.getTime())
+    ? ""
+    : parsed.toISOString().slice(0, 10);
 }
 
 function normalizeText(value: string) {

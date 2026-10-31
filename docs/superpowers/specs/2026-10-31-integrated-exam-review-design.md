@@ -1,7 +1,7 @@
 # Evaluacion y revision final de examenes integrados SKBC
 
 Fecha: 31 de octubre de 2026.
-Estado: propuesta concreta pendiente de revision del usuario; sin cambios funcionales ni despliegue.
+Estado: diseno aprobado por el usuario e implementado; pruebas y revision de codigo superadas; despliegue en curso.
 
 ## Objetivo
 
@@ -26,7 +26,7 @@ Una alternativa menor seria anadir acceso directo y un informe de lectura: resue
 
 - Reutilizar las tablas exam_events, exam_event_students, exam_event_items, exam_event_examiners, exam_event_scores y exam_event_reviews.
 - Cargar y guardar notes en las puntuaciones y review_notes, reviewed_by y reviewed_at en revisiones; actualmente existen campos que el panel no expone.
-- Anadir una tabla de ajustes por alumno e item, con puntuacion efectiva opcional, motivo, autor y fechas; mantener las puntuaciones de examinadores intactas. Definir claves y validacion de pertenencia al mismo examen, rangos y permisos de administracion.
+- Guardar ajustes por alumno e item en un sobre JSON versionado dentro del campo review_notes existente, junto con conclusion, decision y referencias de registro/documentos. Esta concrecion tecnica reutiliza el almacenamiento disponible sin una migracion de produccion. Las puntuaciones de examinadores permanecen intactas. Validar pertenencia al mismo examen, rangos y permisos de administracion.
 - Reutilizar componentes de evaluacion entre la ruta interna autenticada y la ruta existente de examinadores. Todas las operaciones administrativas comprueban acceso interno en el servidor. El token de un examinador no concede permisos de revision o cierre.
 - Centralizar el calculo de notas originales, ajustadas y decisiones finales en logica comprobable, compartida por pantalla, cierre e informes. La autorizacion final no se deduce de la nota automatica.
 - Un recalculo no sustituye decisiones humanas guardadas. Si cambia la evaluacion despues de una revision, marcar esa revision como pendiente de confirmar sin borrar sus ajustes o notas.

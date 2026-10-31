@@ -3721,6 +3721,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
   }
 
   let eventId: string;
+  let ownExaminerId: string | undefined;
   try {
     const result = await createIntegratedExamEvent({
       title,
@@ -3730,19 +3731,21 @@ export async function createIntegratedExamEventAction(formData: FormData) {
       passPercentage: Number.isFinite(passPercentage) ? passPercentage : 70,
       memberIds,
       examinerNames,
+      examineMyself: formData.getAll("examineMyself").includes("true"),
       notes: notes || null,
       templateEventId,
       templateEventItemIds,
       childSyllabusItemIds
     });
     eventId = result.eventId;
+    ownExaminerId = result.ownExaminerId;
   } catch (error) {
     console.error("Error creating integrated exam", error);
     redirect(`/examenes?error=integrated&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
   revalidatePath("/examenes");
-  redirect(`/examenes/${eventId}?saved=created`);
+  redirect(ownExaminerId ? `/examenes/${eventId}/evaluar?examiner=${ownExaminerId}` : `/examenes/${eventId}?saved=created`);
 }
 
 export async function deleteIntegratedExamEventAction(formData: FormData) {
@@ -3857,7 +3860,7 @@ export async function submitIntegratedExamScoresAction(formData: FormData) {
     redirect("/examinar/error");
   }
 
-  const scores: Array<{ eventStudentId: string; eventItemId: string; score: number | null; skipped: boolean }> = [];
+  const scores: Array<{ eventStudentId: string; eventItemId: string; score: number | null; skipped: boolean; notes:string }> = [];
   for (const [key, value] of formData.entries()) {
     if (!key.startsWith("score:")) continue;
     const [, eventStudentId, eventItemId] = key.split(":");
@@ -3867,6 +3870,7 @@ export async function submitIntegratedExamScoresAction(formData: FormData) {
       eventStudentId,
       eventItemId,
       score: rawValue === "skip" ? null : Number(rawValue),
+      notes: String(formData.get(`notes:${eventStudentId}:${eventItemId}`) ?? "").trim(),
       skipped: rawValue === "skip"
     });
   }
@@ -3891,15 +3895,17 @@ export async function finalizeIntegratedExamEventAction(formData: FormData) {
     redirect("/examenes?error=integrated-finalize");
   }
 
+  let destination: string;
   try {
     const result = await finalizeIntegratedExamEvent(eventId, "WEB SKBC");
-    revalidatePath("/examenes");
-    revalidatePath(`/examenes/${eventId}`);
-    redirect(`/examenes/${eventId}?saved=finalized&registered=${result.registeredCount}`);
+    revalidatePath("/", "layout");
+    destination = `/examenes/${eventId}?saved=finalized&registered=${result.registeredCount}&documentErrors=${result.documentErrorCount}`;
   } catch (error) {
     console.error("Error finalizing integrated exam", error);
-    redirect(`/examenes/${eventId}?error=finalize&detail=${encodeURIComponent(errorMessage(error))}`);
+    destination = `/examenes/${eventId}?error=finalize&detail=${encodeURIComponent(errorMessage(error))}`;
   }
+  redirect(destination);
+
 }
 
 export async function saveExamReportAction(formData: FormData) {

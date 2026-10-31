@@ -1,7 +1,15 @@
-import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import {
+  isReviewItemRelevantForStudent,
+  type ReviewEnvelope,
+} from "@/lib/integrated-exam-review";
 import { ensureStudentExamFolder, examsRootFolderId } from "@/lib/diplomas";
 import { saveExamReport } from "@/lib/exams";
-import { getGoogleDriveAccessToken, makeDriveFilePublic, uploadPdfToDrive } from "@/lib/google-drive-api";
+import {
+  getGoogleDriveAccessToken,
+  makeDriveFilePublic,
+  uploadPdfToDrive,
+} from "@/lib/google-drive-api";
 
 type EventData = {
   title: string;
@@ -49,6 +57,7 @@ type ScoreData = {
   examiner_id: string;
   score: number | null;
   skipped: boolean;
+  notes?: string | null;
 };
 
 type SummaryData = {
@@ -67,19 +76,22 @@ export async function generateIntegratedExamDocumentsForStudent({
   examiners,
   scores,
   summary,
-  createdBy
+  review,
+  createdBy,
 }: {
-  examId: string;
+  examId?: string | null;
   event: EventData;
   student: StudentData;
   items: ItemData[];
   examiners: ExaminerData[];
   scores: ScoreData[];
   summary: SummaryData;
+  review?: ReviewEnvelope;
   createdBy: string;
 }) {
   const member = student.members;
-  if (!member?.display_name) throw new Error("El alumno no tiene nombre para generar el informe.");
+  if (!member?.display_name)
+    throw new Error("El alumno no tiene nombre para generar el informe.");
 
   const accessToken = await getGoogleDriveAccessToken();
   const folderId = await ensureStudentExamFolder({
@@ -87,32 +99,46 @@ export async function generateIntegratedExamDocumentsForStudent({
     rootFolderId: examsRootFolderId(),
     legacyId: member.legacy_id,
     name: member.display_name,
-    memberClass: member.class
+    memberClass: member.class,
   });
-  const pdf = await renderIntegratedExamReportPdf({ event, student, items, examiners, scores, summary });
+  const pdf = await renderIntegratedExamReportPdf({
+    event,
+    student,
+    items,
+    examiners,
+    scores,
+    summary,
+    review,
+  });
   const fileName = `Informe_${formatCompactDate(event.exam_date)}_${cleanFileName(member.display_name)}_${cleanFileName(student.target_grade || "examen")}.pdf`;
   const file = await uploadPdfToDrive({ accessToken, folderId, fileName, pdf });
   await makeDriveFilePublic(accessToken, file.id);
   const url = `https://drive.google.com/file/d/${file.id}/view`;
 
-  await saveExamReport({
-    examId,
-    reportUrl: url,
-    reportType: event.program_type === "kids_progressive" || event.program_type === "kids" ? "Infantil" : "Adultos",
-    reportFileName: fileName,
-    createdBy
-  });
+  if (examId)
+    await saveExamReport({
+      examId,
+      reportUrl: url,
+      reportType:
+        event.program_type === "kids_progressive" ||
+        event.program_type === "kids"
+          ? "Infantil"
+          : "Adultos",
+      reportFileName: fileName,
+      createdBy,
+    });
 
   return url;
 }
 
-async function renderIntegratedExamReportPdf({
+export async function renderIntegratedExamReportPdf({
   event,
   student,
   items,
   examiners,
   scores,
-  summary
+  summary,
+  review,
 }: {
   event: EventData;
   student: StudentData;
@@ -120,125 +146,245 @@ async function renderIntegratedExamReportPdf({
   examiners: ExaminerData[];
   scores: ScoreData[];
   summary: SummaryData;
+  review?: ReviewEnvelope;
 }) {
   const pdfDoc = await PDFDocument.create();
   const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const italic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
-  let page = pdfDoc.addPage([595, 842]);
-  let y = 785;
-
-  const colors = {
-    navy: rgb(0.04, 0.09, 0.18),
-    blue: rgb(0, 0.35, 0.73),
-    gold: rgb(0.74, 0.54, 0.18),
-    muted: rgb(0.38, 0.43, 0.52),
-    light: rgb(0.95, 0.97, 1),
-    green: rgb(0.05, 0.55, 0.25),
-    red: rgb(0.75, 0.08, 0.08)
-  };
-
-  page.drawRectangle({ x: 0, y: 742, width: 595, height: 100, color: colors.navy });
-  page.drawRectangle({ x: 0, y: 738, width: 595, height: 4, color: colors.gold });
-  page.drawText("SKBC Gipuzkoa", { x: 42, y: 794, size: 22, font: bold, color: rgb(1, 1, 1) });
-  page.drawText("Informe oficial de examen", { x: 42, y: 766, size: 13, font: regular, color: rgb(0.88, 0.92, 1) });
-  page.drawText(formatDate(event.exam_date), { x: 430, y: 777, size: 13, font: bold, color: rgb(1, 1, 1) });
-
-  y = 700;
-  page.drawText(student.members?.display_name ?? "Kenshi", { x: 42, y, size: fitText(student.members?.display_name ?? "Kenshi", 28, 430, bold), font: bold, color: colors.navy });
-  y -= 28;
-  page.drawText(`${student.members?.class === "kids" ? "Ficha infantil" : "Ficha adulta"} - ${student.current_grade || "Sin grado"} -> ${student.target_grade || "Sin objetivo"}`, { x: 42, y, size: 13, font: regular, color: colors.muted });
-
-  y -= 52;
-  drawMetric(page, { x: 42, y, title: "Resultado", value: summary.passed ? "APTO" : "REVISAR", note: `${summary.percentage}%`, color: summary.passed ? colors.green : colors.red, bold, regular });
-  drawMetric(page, { x: 220, y, title: "Items evaluados", value: `${summary.scoredItems}/${summary.totalItems}`, note: "puntuaciones validas", color: colors.blue, bold, regular });
-  drawMetric(page, { x: 398, y, title: "Minimo", value: `${event.pass_percentage}%`, note: "para aprobar", color: colors.gold, bold, regular });
-
-  y -= 105;
-  page.drawText("Resumen", { x: 42, y, size: 18, font: bold, color: colors.navy });
-  y -= 28;
-  const intro = summary.passed
-    ? "El examen queda registrado como aprobado tras la revision del responsable. El grado se actualiza en la ficha personal y queda enlazado con su informe y diploma."
-    : "El examen queda guardado para revision. El responsable puede ajustar el resultado final antes de registrar oficialmente el cambio de grado.";
-  y = drawParagraph(page, intro, { x: 42, y, width: 500, font: regular, size: 11, lineHeight: 16, color: colors.muted });
-
-  y -= 18;
-  page.drawText("Examinadores", { x: 42, y, size: 15, font: bold, color: colors.navy });
-  y -= 21;
-  const submitted = examiners.filter((examiner) => examiner.submitted_at && !examiner.revoked_at);
-  y = drawParagraph(page, submitted.map((examiner) => examiner.name).join(", ") || "Sin evaluaciones enviadas", { x: 42, y, width: 500, font: regular, size: 11, lineHeight: 15, color: colors.muted });
-
-  y -= 18;
-  page.drawText("Detalle evaluado", { x: 42, y, size: 15, font: bold, color: colors.navy });
-  y -= 18;
-
+  let page: PDFPage;
+  let y = 0;
+  const ink = rgb(0.04, 0.09, 0.18);
+  const muted = rgb(0.35, 0.39, 0.45);
+  // Standard PDF fonts cannot encode every script. Make unsupported characters
+  // visible as code points rather than silently discarding user observations.
+  function printable(value: string) {
+    return Array.from(value)
+      .map((character) => {
+        if (["\n", "\r", "\t"].includes(character)) return character;
+        try {
+          regular.encodeText(character);
+          return character;
+        } catch {
+          return (
+            "[U+" + character.codePointAt(0)!.toString(16).toUpperCase() + "]"
+          );
+        }
+      })
+      .join("");
+  }
+  function newPage() {
+    page = pdfDoc.addPage([595, 842]);
+    y = 788;
+    page.drawText("SKBC Gipuzkoa | Informe de examen", {
+      x: 42,
+      y,
+      size: 14,
+      font: bold,
+      color: ink,
+    });
+    y -= 30;
+  }
+  function paragraph(
+    value: string,
+    options: { bold?: boolean; size?: number; indent?: number } = {},
+  ) {
+    const font = options.bold ? bold : regular;
+    const size = options.size ?? 10;
+    const x = 42 + (options.indent ?? 0);
+    const width = 510 - (options.indent ?? 0);
+    const lines: string[] = [];
+    for (const block of printable(value).replace(/\r/g, "").split("\n")) {
+      let line = "";
+      for (const character of block.replace(/\t/g, "    ")) {
+        if (line && font.widthOfTextAtSize(line + character, size) > width) {
+          const space = line.lastIndexOf(" ");
+          if (space > line.length / 2) {
+            lines.push(line.slice(0, space));
+            line = line.slice(space + 1);
+          } else {
+            lines.push(line);
+            line = "";
+          }
+        }
+        line += character;
+      }
+      lines.push(line);
+    }
+    for (const line of lines) {
+      if (y < 63 + size) newPage();
+      page.drawText(line, {
+        x,
+        y,
+        size,
+        font,
+        color: options.bold ? ink : muted,
+      });
+      y -= size + 5;
+    }
+    y -= 4;
+  }
+  newPage();
+  paragraph(student.members?.display_name ?? "Kenshi", {
+    bold: true,
+    size: 21,
+  });
+  paragraph(event.title + " | " + formatDate(event.exam_date));
+  paragraph(
+    "Grado actual: " +
+      (student.current_grade || "Sin grado") +
+      " | Objetivo: " +
+      (student.target_grade || "Sin objetivo"),
+  );
+  const decision = review ? review.decision : summary.passed ? "pass" : "fail";
+  paragraph(
+    "Decision final: " +
+      (decision === "pass"
+        ? "APTO"
+        : decision === "fail"
+          ? "NO APTO"
+          : "PENDIENTE DE REVISION"),
+    { bold: true, size: 16 },
+  );
+  paragraph(
+    "Puntuacion efectiva: " +
+      summary.percentage +
+      "% | Umbral orientativo: " +
+      event.pass_percentage +
+      "% | Puntos evaluados: " +
+      summary.scoredItems +
+      "/" +
+      summary.totalItems,
+  );
+  paragraph(
+    decision === "pass"
+      ? "Decision del responsable: aprobado para el grado objetivo."
+      : decision === "fail"
+        ? "Decision del responsable: suspenso; conserva su grado actual."
+        : "El responsable aun no ha confirmado la decision final.",
+  );
+  if (review?.conclusion) {
+    paragraph("Conclusion y motivo de revision", { bold: true, size: 13 });
+    paragraph(review.conclusion);
+  }
+  const submitted = examiners.filter(
+    (examiner) => examiner.submitted_at && !examiner.revoked_at,
+  );
+  const submittedIds = new Set(submitted.map((examiner) => examiner.id));
   const rows = items
-    .filter((item) => item.active && item.source !== "cut")
-    .map((item) => ({ item, average: averageScore(scores.filter((score) => score.event_student_id === student.id && score.event_item_id === item.id && !score.skipped && score.score !== null)) }))
-    .filter((row) => row.average !== null || row.item.grade === student.target_grade || student.members?.class === "kids")
-    .slice(0, 80);
-
+    .filter(
+      (item) =>
+        item.active &&
+        Number.isFinite(item.weight) &&
+        item.weight > 0 &&
+        item.source !== "cut" &&
+        isReviewItemRelevantForStudent(event.program_type, student, item),
+    )
+    .sort((a, b) => a.order_index - b.order_index)
+    .map((item) => {
+      const originals = scores.filter(
+        (score) =>
+          score.event_student_id === student.id &&
+          score.event_item_id === item.id &&
+          submittedIds.has(score.examiner_id),
+      );
+      const valid = originals.filter(
+        (score) =>
+          !score.skipped &&
+          typeof score.score === "number" &&
+          Number.isFinite(score.score) &&
+          score.score >= 0 &&
+          score.score <= 10,
+      );
+      const original = valid.length
+        ? valid.reduce((sum, score) => sum + score.score!, 0) / valid.length
+        : null;
+      const adjustment = review?.adjustments[item.id];
+      return {
+        item,
+        originals,
+        original,
+        adjustment,
+        effective: adjustment?.score ?? original,
+      };
+    });
+  paragraph("Puntos con menor puntuacion efectiva", { bold: true, size: 13 });
+  const lowest = rows
+    .filter((row) => row.effective !== null)
+    .sort((a, b) => a.effective! - b.effective!)
+    .slice(0, 5);
+  paragraph(
+    lowest.length
+      ? lowest
+          .map(
+            (row) => row.item.name + ": " + row.effective!.toFixed(1) + "/10",
+          )
+          .join("; ")
+      : "Sin puntuaciones evaluadas.",
+  );
+  paragraph("Detalle de evaluaciones originales y revision", {
+    bold: true,
+    size: 13,
+  });
   for (const row of rows) {
-    if (y < 72) {
-      page = pdfDoc.addPage([595, 842]);
-      y = 790;
+    if (y < 120) newPage();
+    paragraph(
+      row.item.name +
+        " | " +
+        (row.item.grade || "-") +
+        " | " +
+        (row.item.section || row.item.category || "Item"),
+      { bold: true, size: 11 },
+    );
+    if (row.item.summary) paragraph(row.item.summary, { size: 9 });
+    paragraph(
+      "Media original: " +
+        (row.original === null
+          ? "No evaluado"
+          : row.original.toFixed(1) + "/10") +
+        " | Nota efectiva: " +
+        (row.effective === null
+          ? "No evaluado"
+          : row.effective.toFixed(1) + "/10"),
+      { bold: true },
+    );
+    for (const examiner of submitted) {
+      const original = row.originals.find(
+        (score) => score.examiner_id === examiner.id,
+      );
+      paragraph(
+        examiner.name +
+          ": " +
+          (!original || original.skipped || original.score === null
+            ? "No evaluado"
+            : original.score + "/10"),
+        { indent: 10 },
+      );
+      if (original?.notes)
+        paragraph("Observaciones: " + original.notes, { indent: 10 });
     }
-    page.drawRectangle({ x: 42, y: y - 11, width: 510, height: 24, color: colors.light });
-    page.drawText(row.item.name, { x: 52, y, size: 10, font: bold, color: colors.navy });
-    page.drawText(`${row.item.grade || "-"} - ${row.item.section || row.item.category || "item"}`, { x: 290, y, size: 9, font: regular, color: colors.muted });
-    page.drawText(row.average === null ? "-" : `${row.average.toFixed(1)}/10`, { x: 500, y, size: 10, font: bold, color: row.average !== null && row.average >= 7 ? colors.green : colors.muted });
-    y -= 28;
-    if (row.item.summary) {
-      y = drawParagraph(page, row.item.summary, { x: 52, y, width: 470, font: italic, size: 8.5, lineHeight: 12, color: colors.muted, maxLines: 2 });
-      y -= 8;
+    if (row.adjustment) {
+      paragraph("Ajuste del responsable: " + row.adjustment.score + "/10", {
+        bold: true,
+        indent: 10,
+      });
+      if (row.adjustment.notes)
+        paragraph("Motivo / observaciones: " + row.adjustment.notes, {
+          indent: 10,
+        });
     }
+    y -= 10;
   }
-
-  page.drawText("Documento generado por el sistema nuevo SKBC. Los PDFs se guardan en Google Drive y Supabase conserva solo el enlace.", {
-    x: 42,
-    y: 30,
-    size: 8,
-    font: regular,
-    color: colors.muted
-  });
-
+  const pages = pdfDoc.getPages();
+  pages.forEach((reportPage, index) =>
+    reportPage.drawText("SKBC | " + (index + 1) + "/" + pages.length, {
+      x: 42,
+      y: 30,
+      size: 8,
+      font: regular,
+      color: muted,
+    }),
+  );
   return Buffer.from(await pdfDoc.save());
-}
-
-function drawMetric(
-  page: PDFPage,
-  { x, y, title, value, note, color, bold, regular }: { x: number; y: number; title: string; value: string; note: string; color: ReturnType<typeof rgb>; bold: PDFFont; regular: PDFFont }
-) {
-  page.drawRectangle({ x, y: y - 44, width: 155, height: 66, borderColor: rgb(0.86, 0.9, 0.95), borderWidth: 1, color: rgb(0.98, 0.99, 1) });
-  page.drawText(title, { x: x + 14, y: y - 4, size: 10, font: bold, color: rgb(0.38, 0.43, 0.52) });
-  page.drawText(value, { x: x + 14, y: y - 31, size: 20, font: bold, color });
-  page.drawText(note, { x: x + 78, y: y - 27, size: 9, font: regular, color: rgb(0.38, 0.43, 0.52) });
-}
-
-function drawParagraph(page: PDFPage, text: string, options: { x: number; y: number; width: number; font: PDFFont; size: number; lineHeight: number; color: ReturnType<typeof rgb>; maxLines?: number }) {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (options.font.widthOfTextAtSize(next, options.size) <= options.width || !current) {
-      current = next;
-    } else {
-      lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  const visible = options.maxLines ? lines.slice(0, options.maxLines) : lines;
-  visible.forEach((line, index) => {
-    page.drawText(line, { x: options.x, y: options.y - index * options.lineHeight, size: options.size, font: options.font, color: options.color });
-  });
-  return options.y - visible.length * options.lineHeight;
-}
-
-function averageScore(scores: ScoreData[]) {
-  if (!scores.length) return null;
-  return scores.reduce((sum, score) => sum + Number(score.score ?? 0), 0) / scores.length;
 }
 
 function formatDate(value: string) {
@@ -257,12 +403,4 @@ function cleanFileName(value: string) {
     .replace(/[^A-Za-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 70);
-}
-
-function fitText(text: string, preferredSize: number, maxWidth: number, font: PDFFont) {
-  let size = preferredSize;
-  while (size > 16 && font.widthOfTextAtSize(text, size) > maxWidth) {
-    size -= 1;
-  }
-  return size;
 }

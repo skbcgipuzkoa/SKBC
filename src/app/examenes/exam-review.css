@@ -1,0 +1,65 @@
+.exam-student-review {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin: 1rem 0;
+  padding: 1rem;
+}
+.exam-student-review > summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  cursor: pointer;
+}
+.exam-student-review > summary strong {
+  margin-right: auto;
+}
+.exam-review-form fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.exam-review-item {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.exam-review-form label {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+.exam-weak-point {
+  border-left: 3px solid #d99b24;
+  padding: 0.6rem;
+  background: #fff8e9;
+}
+.exam-score-notes {
+  grid-column: 1/-1;
+}
+.exam-score-row select,
+.exam-review input,
+.exam-review textarea,
+.exam-review select {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.7rem;
+}
+.exam-score-row legend small {
+  display: block;
+}
+.exam-review-form fieldset:disabled {
+  opacity: 0.85;
+}
+@media (max-width: 600px) {
+  .exam-student-review > summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .exam-score-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .exam-review .form-actions {
+    flex-wrap: wrap;
+  }
+}

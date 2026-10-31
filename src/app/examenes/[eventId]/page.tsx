@@ -1,5 +1,17 @@
+import {
+  saveIntegratedExamReviewAction,
+  retryIntegratedExamDocumentsAction,
+} from "@/app/examenes/review-actions";
+import { isReviewCurrent } from "@/lib/integrated-exam-review";
 import { LogOut } from "lucide-react";
-import { createIntegratedExamItemAction, deleteIntegratedExamEventAction, deleteIntegratedExamItemAction, finalizeIntegratedExamEventAction, logoutAction, updateIntegratedExamItemAction } from "@/app/actions";
+import {
+  createIntegratedExamItemAction,
+  deleteIntegratedExamEventAction,
+  deleteIntegratedExamItemAction,
+  finalizeIntegratedExamEventAction,
+  logoutAction,
+  updateIntegratedExamItemAction,
+} from "@/app/actions";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { hasInternalAccess } from "@/lib/auth";
 import { getIntegratedExamAdmin } from "@/lib/integrated-exams";
@@ -7,10 +19,15 @@ import { redirect } from "next/navigation";
 
 export default async function IntegratedExamPage({
   params,
-  searchParams
+  searchParams,
 }: {
   params: Promise<{ eventId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string; registered?: string }>;
+  searchParams: Promise<{
+    saved?: string;
+    error?: string;
+    detail?: string;
+    registered?: string;
+  }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -18,12 +35,37 @@ export default async function IntegratedExamPage({
 
   const { eventId } = await params;
   const query = await searchParams;
-  const { event, students, items, examiners, scores, summaries } = await getIntegratedExamAdmin(eventId);
-  const publicBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://skbc.vercel.app";
+  const { event, students, items, examiners, scores, summaries } =
+    await getIntegratedExamAdmin(eventId);
+  const publicBaseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://skbc.vercel.app";
   const scorableItems = items.filter((item) => item.source !== "cut");
-  const isCompleted = event.status === "completed" || event.status === "archived";
-  const submittedExaminers = examiners.filter((examiner) => examiner.submitted_at && !examiner.revoked_at).length;
-  const passedSummaries = summaries.filter((summary) => summary.passed).length;
+  const isCompleted =
+    event.status === "completed" || event.status === "archived";
+  const submittedExaminers = examiners.filter(
+    (examiner) => examiner.submitted_at && !examiner.revoked_at,
+  ).length;
+  const passedSummaries = summaries.filter(
+    (summary) => summary.review?.decision === "pass",
+  ).length;
+  const failedSummaries = summaries.filter(
+    (summary) => summary.review?.decision === "fail",
+  ).length;
+  const ready =
+    students.length > 0 &&
+    summaries.length === students.length &&
+    summaries.every(
+      (summary) =>
+        summary.complete &&
+        isReviewCurrent(summary.review, summary) &&
+        summary.review?.decision,
+    );
+  const allSubmitted = examiners
+    .filter((examiner) => !examiner.revoked_at)
+    .every((examiner) => examiner.submitted_at);
+  const documentFailures = summaries.some(
+    (summary) => summary.review?.documentErrors?.length,
+  );
 
   return (
     <div className="shell">
@@ -35,16 +77,54 @@ export default async function IntegratedExamPage({
             <h1>{event.title}</h1>
           </div>
           <form action={logoutAction}>
-            <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
+            <button
+              className="icon-button"
+              type="submit"
+              title="Salir"
+              aria-label="Salir"
+            >
               <LogOut aria-hidden="true" size={18} />
             </button>
           </form>
         </div>
 
-        {query.saved === "created" ? <p className="save-ok">Examen integrado creado. Copia los enlaces de examinador si los necesitas.</p> : null}
-        {query.saved === "item" ? <p className="save-ok">Temario del examen actualizado.</p> : null}
-        {query.saved === "finalized" ? <p className="save-ok">Examen cerrado. Aprobados registrados en fichas y documentos enviados a Drive: {query.registered ?? "0"}.</p> : null}
-        {query.error ? <p className="form-error">Ha ocurrido un error{query.detail ? `: ${query.detail}` : "."}</p> : null}
+        {query.saved === "created" ? (
+          <p className="save-ok">
+            Examen integrado creado. Copia los enlaces de examinador si los
+            necesitas.
+          </p>
+        ) : null}
+        {query.saved === "review" ? (
+          <p className="save-ok">
+            Revision guardada. Los grados se actualizan solo al registrar los
+            resultados.
+          </p>
+        ) : null}
+        {query.saved === "evaluation" ? (
+          <p className="save-ok">
+            Evaluacion enviada. Revisa ahora los resultados y decide por alumno.
+          </p>
+        ) : null}
+        {query.saved === "documents" ? (
+          <p className="save-ok">
+            Documentos pendientes generados. Consulta los enlaces de cada
+            alumno.
+          </p>
+        ) : null}
+        {query.saved === "item" ? (
+          <p className="save-ok">Temario del examen actualizado.</p>
+        ) : null}
+        {query.saved === "finalized" ? (
+          <p className="save-ok">
+            Resultados registrados. Consulta los informes y el estado de
+            documentos de cada alumno.
+          </p>
+        ) : null}
+        {query.error ? (
+          <p className="form-error">
+            Ha ocurrido un error{query.detail ? `: ${query.detail}` : "."}
+          </p>
+        ) : null}
 
         <section className="grid stats compact">
           <article className="card">
@@ -53,7 +133,9 @@ export default async function IntegratedExamPage({
           </article>
           <article className="card">
             <h2>Tipo</h2>
-            <div className="metric">{event.program_type === "kids_progressive" ? "Ninos" : "Adultos"}</div>
+            <div className="metric">
+              {event.program_type === "kids_progressive" ? "Ninos" : "Adultos"}
+            </div>
           </article>
           <article className="card">
             <h2>Temario</h2>
@@ -69,22 +151,64 @@ export default async function IntegratedExamPage({
           <div className="section-heading-row">
             <div>
               <h2>Enlaces para examinadores</h2>
-              <p className="muted">Estos enlaces solo muestran el examen asignado. No abren el panel interno.</p>
+              <p className="muted">
+                Estos enlaces solo muestran el examen asignado. No abren el
+                panel interno.
+              </p>
             </div>
           </div>
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Examinador</th><th>Estado</th><th>Enlace</th></tr>
+                <tr>
+                  <th>Examinador</th>
+                  <th>Estado</th>
+                  <th>Enlace</th>
+                </tr>
               </thead>
               <tbody>
                 {examiners.map((examiner) => {
                   const url = `${publicBaseUrl}/examinar/${examiner.access_token}`;
                   return (
                     <tr key={examiner.id}>
-                      <td data-label="Examinador"><strong>{examiner.name}</strong></td>
-                      <td data-label="Estado">{examiner.submitted_at ? <span className="state-badge state-completada">Enviado</span> : <span className="state-badge">Pendiente</span>}</td>
-                      <td data-label="Enlace"><a className="text-link" href={url} target="_blank" rel="noopener noreferrer">{url}</a></td>
+                      <td data-label="Examinador">
+                        <strong>{examiner.name}</strong>
+                      </td>
+                      <td data-label="Estado">
+                        {examiner.submitted_at ? (
+                          <span className="state-badge state-completada">
+                            Enviado
+                          </span>
+                        ) : (
+                          <span className="state-badge">Pendiente</span>
+                        )}
+                      </td>
+                      <td data-label="Enlace">
+                        {!isCompleted &&
+                        !examiner.revoked_at &&
+                        !examiner.submitted_at ? (
+                          <p>
+                            <a
+                              className="secondary-link"
+                              href={`/examenes/${eventId}/evaluar?examiner=${examiner.id}`}
+                            >
+                              Examinar como {examiner.name}
+                            </a>
+                          </p>
+                        ) : (
+                          <p>
+                            <a href="#revision">Revisar evaluaciones</a>
+                          </p>
+                        )}
+                        <a
+                          className="text-link"
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {url}
+                        </a>
+                      </td>
                     </tr>
                   );
                 })}
@@ -93,37 +217,227 @@ export default async function IntegratedExamPage({
           </div>
         </section>
 
-        <section className="card">
-          <div className="section-heading-row">
-            <div>
-              <h2>Resultados provisionales</h2>
-              <p className="muted">
-                Se recalcula con las puntuaciones enviadas por los examinadores. En adultos cada kenshi cuenta solo su grado objetivo; en ninos progresivo cuenta hasta su corte.
-              </p>
-            </div>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Kenshi</th><th>Grado actual</th><th>Objetivo</th><th>Items puntuados</th><th>Resultado</th><th>Estado</th></tr>
-              </thead>
-              <tbody>
-                {students.map((student) => {
-                  const summary = summaries.find((item) => item.studentId === student.id);
-                  return (
-                    <tr key={student.id}>
-                      <td data-label="Kenshi"><strong>{student.members?.display_name ?? "-"}</strong></td>
-                      <td data-label="Actual">{student.current_grade ?? "-"}</td>
-                      <td data-label="Objetivo">{student.target_grade ?? "-"}</td>
-                      <td data-label="Items">{summary?.scoredItems ?? 0}/{(summary?.totalItems ?? scorableItems.length) * Math.max(examiners.length, 1)}</td>
-                      <td data-label="Resultado">{summary?.percentage ?? 0}%</td>
-                      <td data-label="Estado">{summary?.passed ? <span className="state-badge state-completada">Aprobado provisional</span> : <span className="state-badge state-pendiente">Revisar</span>}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        <section className="card exam-review" id="revision">
+          <p className="eyebrow">
+            1 Evaluar · 2 Revisar y decidir · 3 Registrar
+          </p>
+          <h2>Revision de cada alumno</h2>
+          <p className="muted">
+            Guardar una revision no actualiza grados. Confirma la decision de
+            cada alumno antes del registro final.
+          </p>
+          {students.map((student) => {
+            const summary = summaries.find(
+              (row) => row.studentId === student.id,
+            );
+            if (!summary)
+              return (
+                <p key={student.id}>
+                  Pendiente de evaluacion: {student.members?.display_name}
+                </p>
+              );
+            const review = summary.review;
+            const current = isReviewCurrent(review, summary);
+            const originals = scores.filter(
+              (score) =>
+                score.event_student_id === student.id &&
+                examiners.some(
+                  (examiner) =>
+                    examiner.id === score.examiner_id &&
+                    examiner.submitted_at &&
+                    !examiner.revoked_at,
+                ),
+            );
+            return (
+              <details className="exam-student-review" key={student.id}>
+                <summary>
+                  <strong>{student.members?.display_name ?? "Kenshi"}</strong>
+                  <span>
+                    {student.current_grade} → {student.target_grade}
+                  </span>
+                  <span>
+                    {summary.percentage}% · {summary.scoredItems}/
+                    {summary.totalItems} puntos
+                  </span>
+                  <span className="state-badge">
+                    {isCompleted
+                      ? review?.registeredAt
+                        ? "Registrado"
+                        : "Cerrado · consulta"
+                      : !summary.complete
+                        ? "Pendiente de evaluar"
+                        : current && review?.decision
+                          ? "Revisado"
+                          : "Pendiente de revision"}
+                  </span>
+                </summary>
+                {!current && review?.decision ? (
+                  <p className="form-error">
+                    La evaluacion ha cambiado. Revisa las notas y confirma de
+                    nuevo la decision.
+                  </p>
+                ) : null}
+                <p>
+                  Original: {summary.basePercentage}% · Efectivo:{" "}
+                  <strong>{summary.percentage}%</strong> · Umbral:{" "}
+                  {event.pass_percentage}%
+                </p>
+                <form
+                  action={saveIntegratedExamReviewAction}
+                  className="exam-review-form"
+                >
+                  <input type="hidden" name="eventId" value={eventId} />
+                  <input type="hidden" name="studentId" value={student.id} />
+                  <input
+                    type="hidden"
+                    name="sourceSignature"
+                    value={summary.sourceSignature}
+                  />
+                  <fieldset disabled={isCompleted}>
+                    <legend>
+                      Revision de {student.members?.display_name ?? "Kenshi"}
+                    </legend>
+                    {summary.items.map((item) => (
+                      <article className="exam-review-item" key={item.id}>
+                        <h3>{item.name}</h3>
+                        <p className="muted">
+                          {item.section ?? item.category} · {item.grade}
+                        </p>
+                        <ul>
+                          {originals
+                            .filter((score) => score.event_item_id === item.id)
+                            .map((score) => (
+                              <li key={score.examiner_id}>
+                                <strong>
+                                  {
+                                    examiners.find(
+                                      (examiner) =>
+                                        examiner.id === score.examiner_id,
+                                    )?.name
+                                  }
+                                </strong>
+                                : {score.skipped ? "No evaluado" : score.score}
+                                {score.notes ? <p>{score.notes}</p> : null}
+                              </li>
+                            ))}
+                        </ul>
+                        <p>
+                          Media original: {item.originalScore ?? "No evaluado"}{" "}
+                          · Nota efectiva:{" "}
+                          <strong>{item.score ?? "No evaluado"}</strong>
+                          {item.adjusted ? " (ajustada)" : ""}
+                        </p>
+                        {item.score !== null &&
+                        item.score < event.pass_percentage / 10 ? (
+                          <p className="exam-weak-point">
+                            Punto a reforzar segun la puntuacion recibida:{" "}
+                            {item.name} ({item.score}/10).
+                          </p>
+                        ) : null}
+                        <div className="form-grid">
+                          <label>
+                            Ajuste final (vacio restaura la media)
+                            <input
+                              name={`adjustment:${item.id}`}
+                              type="number"
+                              min="0"
+                              max="10"
+                              step="0.5"
+                              defaultValue={
+                                review?.adjustments[item.id]?.score ?? ""
+                              }
+                            />
+                          </label>
+                          <label>
+                            Motivo u observaciones del ajuste
+                            <textarea
+                              name={`adjustmentNotes:${item.id}`}
+                              rows={2}
+                              defaultValue={
+                                review?.adjustments[item.id]?.notes ?? ""
+                              }
+                            />
+                          </label>
+                        </div>
+                      </article>
+                    ))}
+                    <label>
+                      Conclusion y aspectos a mejorar
+                      <textarea
+                        name="conclusion"
+                        rows={4}
+                        defaultValue={review?.conclusion ?? ""}
+                      />
+                    </label>
+                    <p className="form-help">
+                      Si la decision contradice el porcentaje automatico,
+                      explica el motivo en la conclusion.
+                    </p>
+                    <label>
+                      Decision final
+                      <select
+                        name="decision"
+                        defaultValue={review?.decision ?? "pending"}
+                      >
+                        <option value="pending">Pendiente de revision</option>
+                        <option value="pass">Aprobar</option>
+                        <option value="fail">Suspender</option>
+                      </select>
+                    </label>
+                    {!isCompleted ? (
+                      <button type="submit">Guardar revision y decision</button>
+                    ) : null}
+                  </fieldset>
+                </form>
+                <div className="form-actions">
+                  {student.members?.legacy_id ? (
+                    <a href={`/kenshis/${student.members.legacy_id}`}>
+                      Ficha e historial del alumno
+                    </a>
+                  ) : null}
+                  {review?.reportUrl ? (
+                    <a
+                      href={review.reportUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Informe
+                    </a>
+                  ) : null}
+                  {review?.diplomaUrl ? (
+                    <a
+                      href={review.diplomaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Diploma
+                    </a>
+                  ) : null}
+                </div>
+                {review?.documentErrors?.length ? (
+                  <div className="form-error">
+                    <strong>Resultado registrado; documentos pendientes</strong>
+                    <ul>
+                      {review.documentErrors.map((error) => (
+                        <li key={error}>{error}</li>
+                      ))}
+                    </ul>
+                    <form action={retryIntegratedExamDocumentsAction}>
+                      <input type="hidden" name="eventId" value={eventId} />
+                      <input
+                        type="hidden"
+                        name="studentId"
+                        value={student.id}
+                      />
+                      <button type="submit">
+                        Reintentar documentos de este alumno
+                      </button>
+                    </form>
+                  </div>
+                ) : null}
+              </details>
+            );
+          })}
         </section>
 
         <section className="card">
@@ -131,29 +445,64 @@ export default async function IntegratedExamPage({
             <div>
               <h2>Cierre oficial</h2>
               <p className="muted">
-                Al cerrar, los aprobados se registran como examenes reales del sistema nuevo, se actualiza su grado y se recalculan fichas, rankings y semaforos.
+                Al cerrar, los aprobados se registran como examenes reales del
+                sistema nuevo, se actualiza su grado y se recalculan fichas,
+                rankings y semaforos.
               </p>
             </div>
-            <span className={isCompleted ? "state-badge state-completada" : "state-badge state-pendiente"}>
+            <span
+              className={
+                isCompleted
+                  ? "state-badge state-completada"
+                  : "state-badge state-pendiente"
+              }
+            >
               {isCompleted ? "Cerrado" : "Pendiente"}
             </span>
           </div>
           <div className="grid stats compact">
             <article className="metric-panel">
               <h2>Evaluadores enviados</h2>
-              <div className="metric">{submittedExaminers}/{examiners.length}</div>
+              <div className="metric">
+                {submittedExaminers}/{examiners.length}
+              </div>
             </article>
             <article className="metric-panel">
-              <h2>Aprobados provisionales</h2>
-              <div className="metric">{passedSummaries}/{students.length}</div>
+              <h2>Decisiones de aprobado</h2>
+              <div className="metric">
+                {passedSummaries}/{students.length}
+              </div>
             </article>
           </div>
+          <p>
+            {passedSummaries} aprobados · {failedSummaries} suspensos ·{" "}
+            {students.length - passedSummaries - failedSummaries} pendientes.
+          </p>
+          {documentFailures ? (
+            <p className="form-error">
+              Resultado registrado; hay documentos pendientes. Abre cada alumno
+              para consultar el error y reintentar sus documentos.
+            </p>
+          ) : null}
           {isCompleted ? (
-            <p className="muted">Este examen ya esta cerrado. Los informes y diplomas quedan guardados en Google Drive y enlazados en el historial de examenes.</p>
+            <p className="muted">
+              Registro cerrado. Consulta el estado de documentos de cada alumno.
+            </p>
           ) : (
-            <form action={finalizeIntegratedExamEventAction} className="form-actions">
+            <form
+              action={finalizeIntegratedExamEventAction}
+              className="form-actions"
+            >
               <input type="hidden" name="eventId" value={event.id} />
-              <button type="submit" disabled={!submittedExaminers}>Cerrar examen y registrar aprobados</button>
+              {!ready || !allSubmitted ? (
+                <p className="form-help">
+                  Completa las evaluaciones y confirma una decision actual para
+                  cada alumno.
+                </p>
+              ) : null}
+              <button type="submit" disabled={!ready || !allSubmitted}>
+                Registrar resultados y actualizar fichas
+              </button>
             </form>
           )}
         </section>
@@ -162,59 +511,169 @@ export default async function IntegratedExamPage({
           <summary>
             <span>
               <strong>Configurar temario del examen</strong>
-              <small>{scorableItems.filter((item) => item.active).length} activos de {scorableItems.length} puntos evaluables. Puedes quitar, editar o anadir puntos antes de evaluar.</small>
+              <small>
+                {scorableItems.filter((item) => item.active).length} activos de{" "}
+                {scorableItems.length} puntos evaluables. Puedes quitar, editar
+                o anadir puntos antes de evaluar.
+              </small>
             </span>
           </summary>
 
-          <form action={createIntegratedExamItemAction} className="exam-item-add-form">
+          <form
+            action={createIntegratedExamItemAction}
+            className="exam-item-add-form"
+          >
             <input type="hidden" name="eventId" value={event.id} />
             <h3>Anadir punto manual</h3>
             <div className="form-grid">
-              <label>Nombre<input name="name" placeholder="Ej. Atar el cinturon, Embu, Howa..." required /></label>
+              <label>
+                Nombre
+                <input
+                  name="name"
+                  placeholder="Ej. Atar el cinturon, Embu, Howa..."
+                  required
+                />
+              </label>
               <label>
                 Grado objetivo que evalua este punto
-                <input name="grade" placeholder={event.program_type === "kids_progressive" || event.program_type === "kids" ? "Ej. 5 KYU, 4 KYU..." : "Ej. 3 KYU"} />
+                <input
+                  name="grade"
+                  placeholder={
+                    event.program_type === "kids_progressive" ||
+                    event.program_type === "kids"
+                      ? "Ej. 5 KYU, 4 KYU..."
+                      : "Ej. 3 KYU"
+                  }
+                />
               </label>
               <p className="form-help">
-                En examenes infantiles progresivos, este grado indica hasta que objetivo continua el alumno. No es el grado actual.
+                En examenes infantiles progresivos, este grado indica hasta que
+                objetivo continua el alumno. No es el grado actual.
               </p>
-              <label>Seccion<input name="section" placeholder="Gakka, tecnica, kihon..." /></label>
-              <label>Peso<input name="weight" inputMode="decimal" defaultValue="1" /></label>
+              <label>
+                Seccion
+                <input name="section" placeholder="Gakka, tecnica, kihon..." />
+              </label>
+              <label>
+                Peso
+                <input name="weight" inputMode="decimal" defaultValue="1" />
+              </label>
             </div>
-            <label>Resumen<textarea name="summary" rows={3} placeholder="Indicaciones para el examinador" /></label>
-            <button type="submit">Anadir al examen</button>
+            <label>
+              Resumen
+              <textarea
+                name="summary"
+                rows={3}
+                placeholder="Indicaciones para el examinador"
+              />
+            </label>
+            <button type="submit" disabled={isCompleted}>
+              Anadir al examen
+            </button>
           </form>
 
           <div className="exam-item-editor-list">
             {items.map((item) => (
-              <article className={item.active ? "exam-item-editor" : "exam-item-editor inactive"} key={item.id}>
+              <article
+                className={
+                  item.active ? "exam-item-editor" : "exam-item-editor inactive"
+                }
+                key={item.id}
+              >
                 <form action={updateIntegratedExamItemAction}>
                   <input type="hidden" name="eventId" value={event.id} />
                   <input type="hidden" name="itemId" value={item.id} />
                   <div className="exam-item-editor-head">
                     <label className="check-row">
-                      <input name="active" type="checkbox" defaultChecked={item.active} disabled={isCompleted || item.source === "cut"} />
-                      <span>{item.source === "cut" ? "Corte progresivo" : item.active ? "Entra en examen" : "Fuera del examen"}</span>
+                      <input
+                        name="active"
+                        type="checkbox"
+                        defaultChecked={item.active}
+                        disabled={isCompleted || item.source === "cut"}
+                      />
+                      <span>
+                        {item.source === "cut"
+                          ? "Corte progresivo"
+                          : item.active
+                            ? "Entra en examen"
+                            : "Fuera del examen"}
+                      </span>
                     </label>
-                    <span className="state-badge">{item.source === "cut" ? "Corte" : item.source}</span>
+                    <span className="state-badge">
+                      {item.source === "cut" ? "Corte" : item.source}
+                    </span>
                   </div>
                   <div className="form-grid">
-                    <label>Orden<input name="orderIndex" inputMode="numeric" defaultValue={item.order_index} disabled={isCompleted} /></label>
-                    <label>{item.source === "cut" ? "Corte para objetivo" : "Grado objetivo"}<input name="grade" defaultValue={item.grade ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
-                    <label>Seccion<input name="section" defaultValue={item.section ?? item.category ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
-                    <label>Peso<input name="weight" inputMode="decimal" defaultValue={item.weight} disabled={isCompleted || item.source === "cut"} /></label>
+                    <label>
+                      Orden
+                      <input
+                        name="orderIndex"
+                        inputMode="numeric"
+                        defaultValue={item.order_index}
+                        disabled={isCompleted}
+                      />
+                    </label>
+                    <label>
+                      {item.source === "cut"
+                        ? "Corte para objetivo"
+                        : "Grado objetivo"}
+                      <input
+                        name="grade"
+                        defaultValue={item.grade ?? ""}
+                        disabled={isCompleted || item.source === "cut"}
+                      />
+                    </label>
+                    <label>
+                      Seccion
+                      <input
+                        name="section"
+                        defaultValue={item.section ?? item.category ?? ""}
+                        disabled={isCompleted || item.source === "cut"}
+                      />
+                    </label>
+                    <label>
+                      Peso
+                      <input
+                        name="weight"
+                        inputMode="decimal"
+                        defaultValue={item.weight}
+                        disabled={isCompleted || item.source === "cut"}
+                      />
+                    </label>
                   </div>
-                  <label>Item<input name="name" defaultValue={item.name} disabled={isCompleted || item.source === "cut"} /></label>
-                  <label>Resumen<textarea name="summary" rows={3} defaultValue={item.summary ?? ""} disabled={isCompleted || item.source === "cut"} /></label>
+                  <label>
+                    Item
+                    <input
+                      name="name"
+                      defaultValue={item.name}
+                      disabled={isCompleted || item.source === "cut"}
+                    />
+                  </label>
+                  <label>
+                    Resumen
+                    <textarea
+                      name="summary"
+                      rows={3}
+                      defaultValue={item.summary ?? ""}
+                      disabled={isCompleted || item.source === "cut"}
+                    />
+                  </label>
                   <div className="form-actions">
-                    <button type="submit" disabled={isCompleted || item.source === "cut"}>Guardar punto</button>
+                    <button
+                      type="submit"
+                      disabled={isCompleted || item.source === "cut"}
+                    >
+                      Guardar punto
+                    </button>
                   </div>
                 </form>
                 {item.source !== "cut" && !isCompleted ? (
                   <form action={deleteIntegratedExamItemAction}>
                     <input type="hidden" name="eventId" value={event.id} />
                     <input type="hidden" name="itemId" value={item.id} />
-                    <button className="danger-button" type="submit">Eliminar punto</button>
+                    <button className="danger-button" type="submit">
+                      Eliminar punto
+                    </button>
                   </form>
                 ) : null}
               </article>
@@ -225,13 +684,22 @@ export default async function IntegratedExamPage({
         <section className="card">
           <h2>Siguiente paso</h2>
           <p className="muted">
-            Despues del cierre, cada aprobado aparece en el historial normal de examenes con informe y diploma enlazados desde Google Drive.
+            Despues del cierre, cada aprobado aparece en el historial normal de
+            examenes con informe y diploma enlazados desde Google Drive.
           </p>
           <div className="form-actions">
-            <a className="secondary-link" href="/examenes">Volver a examenes</a>
+            <a className="secondary-link" href="/examenes">
+              Volver a examenes
+            </a>
             <form action={deleteIntegratedExamEventAction}>
               <input type="hidden" name="eventId" value={event.id} />
-              <button className="danger-button" type="submit">Eliminar examen integrado</button>
+              <button
+                className="danger-button"
+                type="submit"
+                disabled={isCompleted}
+              >
+                Eliminar examen integrado
+              </button>
             </form>
           </div>
         </section>
