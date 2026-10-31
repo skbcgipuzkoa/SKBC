@@ -397,7 +397,9 @@ export async function renderIntegratedExamReportPdf({
       );
       const observation = decodeScoreNotes(original?.notes).text;
       if (observation)
-        paragraph("Observaciones: " + observation, { indent: 10 });
+        paragraph("Recomendaciones de " + examiner.name + ": " + observation, {
+          indent: 10,
+        });
     }
     if (row.adjustment) {
       paragraph("Ajuste del responsable: " + row.adjustment.score + "/10", {

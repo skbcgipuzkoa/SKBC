@@ -59,12 +59,14 @@ export function ExamScoreFeedback({
   initialNotes,
   name,
   studentName,
+  examinerName,
 }: {
   children: ReactNode;
   initialScore: string;
   initialNotes: string;
   name: string;
   studentName: string;
+  examinerName?: string;
 }) {
   const [score, setScore] = useState(initialScore);
   const [notes, setNotes] = useState(initialNotes);
@@ -85,8 +87,11 @@ export function ExamScoreFeedback({
           </p>
         ) : null}
         <details open={initialNotes.trim() ? true : undefined}>
-          <summary>
-            {suggestNote ? "Anadir nota (opcional)" : "Observaciones"}
+          <summary className="exam-observations-toggle">
+            <span aria-hidden="true">✎ </span>Observaciones
+            <span className="exam-observations-status">
+              {notes.trim() ? "Con nota" : "Anadir nota (opcional)"}
+            </span>
           </summary>
           <label>
             Observaciones de {studentName}
@@ -100,7 +105,10 @@ export function ExamScoreFeedback({
             />
           </label>
           <p className="muted">
-            Esta nota aparecera en el informe individual del alumno.
+            Esta recomendacion aparecera en el informe individual del alumno
+            {examinerName
+              ? ` con tu nombre: ${examinerName}.`
+              : " con el nombre del examinador."}
           </p>
         </details>
       </div>

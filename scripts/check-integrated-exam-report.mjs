@@ -166,6 +166,7 @@ for (const expected of [
   "Media original: 0.0/10",
   "Nota efectiva: 9.0/10",
   "FIN ORIGINAL",
+  "Recomendaciones de Examinador:",
   "Correccion administrativa",
   "Motivo explicito",
   "[U+65E5]",

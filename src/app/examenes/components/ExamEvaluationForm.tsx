@@ -254,6 +254,7 @@ export function ExamEvaluationForm({
                             studentName={
                               student.members?.display_name ?? "Kenshi"
                             }
+                            examinerName={payload.examiner.name}
                           >
                             <fieldset className="exam-rating-options">
                               <legend className="exam-rating-legend">
