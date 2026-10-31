@@ -10,6 +10,7 @@ import {
 } from "../src/lib/integrated-exam-review.ts";
 
 import { decodeScoreNotes } from "../src/lib/integrated-exam-session.ts";
+import { driveImageUrl } from "../src/lib/drive.ts";
 
 const source = fs.readFileSync(
   "src/app/examenes/components/ExamEvaluationForm.tsx",
@@ -49,22 +50,27 @@ vm.runInNewContext(compiled, {
   require: (name) =>
     name === "react/jsx-runtime"
       ? jsx
-      : name === "@/lib/integrated-exam-session"
-        ? { decodeScoreNotes }
-        : name === "./ExamStepNavigator"
-          ? navigation.exports
-          : {
-              isExamItemRelevantForStudent: isReviewItemRelevantForStudent,
-              isKidsProgressiveCutForStudent: (student, item) =>
-                student.target_grade === item.cut_grade,
-            },
+      : name === "@/lib/drive"
+        ? { driveImageUrl }
+        : name === "@/lib/integrated-exam-session"
+          ? { decodeScoreNotes }
+          : name === "./ExamStepNavigator"
+            ? navigation.exports
+            : {
+                isExamItemRelevantForStudent: isReviewItemRelevantForStudent,
+                isKidsProgressiveCutForStudent: (student, item) =>
+                  student.target_grade === item.cut_grade,
+              },
 });
 const students = [
   {
     id: "low",
     current_grade: "BLANCO-AMARILLO",
     target_grade: "AMARILLO",
-    members: { display_name: "Alumno amarillo" },
+    members: {
+      display_name: "Alumno amarillo",
+      photo_url: "https://example.com/student.jpg",
+    },
   },
   {
     id: "high",
@@ -193,6 +199,14 @@ assert.ok(
 );
 assert.ok(html.includes("Se sientan aqui"));
 assert.ok(html.includes("Omitir"));
+assert.ok(
+  html.includes('src="https://example.com/student.jpg"'),
+  "Examiner can identify a pupil by their existing photo",
+);
+assert.ok(
+  html.includes('aria-label="Sin foto de Alumno verde"'),
+  "Missing photos have a named initials fallback",
+);
 assert.ok(
   html.includes("Puedes anadir que necesita mejorar"),
   "Low rating invites optional feedback inline",

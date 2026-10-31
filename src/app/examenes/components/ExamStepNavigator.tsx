@@ -16,6 +16,43 @@ export type ExamNavigationStep = {
   continueLabel?: string;
 };
 type Adjustment = { eventStudentId: string; delta: 1 | -1; reason: string };
+export function StudentExamPhoto({
+  src,
+  name,
+}: {
+  src: string | null;
+  name: string;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (!src || failedSrc === src)
+    return (
+      <span
+        className="exam-student-photo exam-student-photo-fallback"
+        role="img"
+        aria-label={`Sin foto de ${name}`}
+      >
+        {name
+          .trim()
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((part) => part[0])
+          .join("")
+          .toUpperCase() || "?"}
+      </span>
+    );
+  return (
+    <img
+      className="exam-student-photo"
+      src={src}
+      alt={`Foto de ${name}`}
+      width={72}
+      height={72}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailedSrc(src)}
+    />
+  );
+}
 export function ExamScoreFeedback({
   children,
   initialScore,

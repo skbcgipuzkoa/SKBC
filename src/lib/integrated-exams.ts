@@ -66,6 +66,7 @@ type ExamEventStudent = {
   final_percentage: number | null;
   final_passed: boolean | null;
   members?: {
+    photo_url: string | null;
     legacy_id: string | null;
     display_name: string;
     class: "kids" | "adults";
@@ -475,7 +476,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
     supabase
       .from("exam_event_students")
       .select(
-        "id,exam_event_id,member_id,display_order,current_grade,target_grade,final_percentage,final_passed,members(legacy_id,display_name,class,grade)",
+        "id,exam_event_id,member_id,display_order,current_grade,target_grade,final_percentage,final_passed,members(legacy_id,display_name,class,grade,photo_url)",
       )
       .eq("exam_event_id", eventId)
       .order("display_order")
@@ -760,7 +761,7 @@ export async function getExaminerExamByToken(token: string) {
     supabase
       .from("exam_event_students")
       .select(
-        "id,member_id,display_order,current_grade,target_grade,members(legacy_id,display_name,class,grade)",
+        "id,member_id,display_order,current_grade,target_grade,members(legacy_id,display_name,class,grade,photo_url)",
       )
       .eq("exam_event_id", examiner.exam_event_id)
       .order("display_order")

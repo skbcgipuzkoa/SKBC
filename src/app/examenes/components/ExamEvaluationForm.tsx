@@ -1,4 +1,5 @@
 import { decodeScoreNotes } from "@/lib/integrated-exam-session";
+import { driveImageUrl } from "@/lib/drive";
 import {
   getExaminerExamByToken,
   isExamItemRelevantForStudent,
@@ -8,6 +9,7 @@ import {
   ExamStepNavigator,
   StudentPointControls,
   ExamScoreFeedback,
+  StudentExamPhoto,
   type ExamNavigationStep,
 } from "./ExamStepNavigator";
 type Payload = Awaited<ReturnType<typeof getExaminerExamByToken>>;
@@ -223,17 +225,27 @@ export function ExamEvaluationForm({
                           key={`${student.id}-${item.id}`}
                         >
                           <div className="exam-group-student">
-                            <strong>
-                              {student.members?.display_name ?? "Kenshi"}
-                            </strong>
-                            <small>
-                              {student.current_grade ?? "-"} para{" "}
-                              {student.target_grade ?? "-"}
-                            </small>
-                            <StudentPointControls
-                              studentId={student.id}
-                              name={student.members?.display_name ?? "Kenshi"}
-                            />
+                            <div className="exam-student-identity">
+                              <StudentExamPhoto
+                                src={driveImageUrl(student.members?.photo_url)}
+                                name={student.members?.display_name ?? "Kenshi"}
+                              />
+                              <div>
+                                <strong>
+                                  {student.members?.display_name ?? "Kenshi"}
+                                </strong>
+                                <small>
+                                  {student.current_grade ?? "-"} para{" "}
+                                  {student.target_grade ?? "-"}
+                                </small>
+                                <StudentPointControls
+                                  studentId={student.id}
+                                  name={
+                                    student.members?.display_name ?? "Kenshi"
+                                  }
+                                />
+                              </div>
+                            </div>
                           </div>
                           <ExamScoreFeedback
                             initialScore={defaultValue}
