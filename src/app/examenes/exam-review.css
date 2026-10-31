@@ -529,3 +529,7 @@
   display: grid;
   gap: 0.4rem;
 }
+.exam-adult-student-first .check-row,
+.exam-grade-assignment-row .check-row {
+  grid-template-columns: 22px minmax(0, 1fr);
+}
