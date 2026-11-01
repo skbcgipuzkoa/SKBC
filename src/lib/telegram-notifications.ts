@@ -1,3 +1,4 @@
+import { summarizePeriod } from "@/lib/telegram-period-stats";
 import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
@@ -81,6 +82,7 @@ type PeriodClass = {
 };
 
 type PeriodAttendance = {
+  class_id: string | null;
   member_id: string;
   attended_on: string;
   members: {
@@ -91,12 +93,17 @@ type PeriodAttendance = {
 };
 
 type PeriodTechnique = {
+  class_id: string | null;
+  technique_id: string | null;
+  counts_for_stats: boolean | null;
+  classes: { class_group: "kids" | "adults" } | null;
   member_id: string;
   class_date: string;
   technique_name: string;
   technique_grade: string | null;
   category: string | null;
   members: {
+    class: "kids" | "adults";
     display_name: string;
     legacy_id: string | null;
   } | null;
@@ -251,9 +258,9 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
     "",
     formatExamStats(stats),
     "",
-    formatRanking("🏆 Top asistencia adultos", stats.topAdultAttendance),
+    formatPeriodAttendance("🏆 Asistencia adultos", stats.topAdultAttendance),
     "",
-    formatRanking("🌱 Top asistencia niños", stats.topKidsAttendance),
+    formatPeriodAttendance("🌱 Asistencia niños", stats.topKidsAttendance),
     "",
     formatExamReady(stats.readyForExam)
   ].join("\n").trim();
@@ -395,137 +402,143 @@ async function buildDailyDigest() {
   };
 }
 
-async function buildPeriodStats(period: { start: string; end: string }) {
+async function loadPeriodRows(period: { start: string; end: string }) {
   const supabase = createAdminClient();
-  const [
-    classesResult,
-    examsResult,
-    coursesResult,
-    membersResult
-  ] = await Promise.all([
-    supabase
-      .from("classes")
-      .select("id,name,class_date,class_group,closed")
-      .gte("class_date", period.start)
-      .lte("class_date", period.end)
-      .returns<PeriodClass[]>(),
-    supabase
-      .from("exams")
-      .select("exam_date,grade,members(display_name,class)")
-      .gte("exam_date", period.start)
-      .lte("exam_date", period.end)
-      .returns<PeriodExam[]>(),
-    supabase
-      .from("courses")
-      .select("member_id,kind,course_date,title,location,sensei")
-      .gte("course_date", period.start)
-      .lte("course_date", period.end)
-      .returns<Course[]>(),
-    supabase
-      .from("members")
-      .select("id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at")
-      .eq("status", "active")
-      .returns<Member[]>()
-  ]);
-
-  const [attendance, techniques] = await Promise.all([
-    loadAllPages<PeriodAttendance>((from, to) => supabase
-      .from("attendance_logs")
-      .select("member_id,attended_on,members(display_name,legacy_id,class)")
-      .gte("attended_on", period.start)
-      .lte("attended_on", period.end)
-      .order("attended_on", { ascending: false })
-      .range(from, to)
-      .returns<PeriodAttendance[]>()),
-    loadAllPages<PeriodTechnique>((from, to) => supabase
-      .from("member_technical_history")
-      .select("member_id,class_date,technique_name,technique_grade,category,members(display_name,legacy_id)")
-      .gte("class_date", period.start)
-      .lte("class_date", period.end)
-      .eq("completed", true)
-      .order("class_date", { ascending: false })
-      .range(from, to)
-      .returns<PeriodTechnique[]>())
-  ]);
-
-  if (classesResult.error) throw classesResult.error;
-  if (examsResult.error) throw examsResult.error;
-  if (coursesResult.error) throw coursesResult.error;
-  if (membersResult.error) throw membersResult.error;
-
-  const classes = classesResult.data ?? [];
-  const exams = examsResult.data ?? [];
-  const courses = coursesResult.data ?? [];
-  const members = membersResult.data ?? [];
-  const adultAttendance = attendance.filter((row) => row.members?.class === "adults");
-  const kidsAttendance = attendance.filter((row) => row.members?.class === "kids");
-  const nationalCourseRows = courses.filter((row) => row.kind === "national");
-  const internationalCourseRows = courses.filter((row) => row.kind === "international");
-  const taikaiCourseRows = courses.filter((row) => row.kind === "taikai");
+  const [classes, attendance, techniques, exams, courses, allMembers] =
+    await Promise.all([
+      loadAllPages<PeriodClass>((from, to) =>
+        supabase
+          .from("classes")
+          .select("id,name,class_date,class_group,closed")
+          .gte("class_date", period.start)
+          .lte("class_date", period.end)
+          .order("id")
+          .range(from, to)
+          .returns<PeriodClass[]>(),
+      ),
+      loadAllPages<PeriodAttendance>((from, to) =>
+        supabase
+          .from("attendance_logs")
+          .select(
+            "class_id,member_id,attended_on,members(display_name,legacy_id,class)",
+          )
+          .gte("attended_on", period.start)
+          .lte("attended_on", period.end)
+          .order("id")
+          .range(from, to)
+          .returns<PeriodAttendance[]>(),
+      ),
+      loadAllPages<PeriodTechnique>((from, to) =>
+        supabase
+          .from("member_technical_history")
+          .select(
+            "class_id,technique_id,counts_for_stats,member_id,class_date,technique_name,technique_grade,category,members(display_name,legacy_id,class),classes(class_group)",
+          )
+          .gte("class_date", period.start)
+          .lte("class_date", period.end)
+          .eq("completed", true)
+          .order("id")
+          .range(from, to)
+          .returns<PeriodTechnique[]>(),
+      ),
+      loadAllPages<PeriodExam>((from, to) =>
+        supabase
+          .from("exams")
+          .select("exam_date,grade,members(display_name,class)")
+          .gte("exam_date", period.start)
+          .lte("exam_date", period.end)
+          .order("id")
+          .range(from, to)
+          .returns<PeriodExam[]>(),
+      ),
+      loadAllPages<Course>((from, to) =>
+        supabase
+          .from("courses")
+          .select("member_id,kind,course_date,title,location,sensei")
+          .gte("course_date", period.start)
+          .lte("course_date", period.end)
+          .order("id")
+          .range(from, to)
+          .returns<Course[]>(),
+      ),
+      loadAllPages<Member>((from, to) =>
+        supabase
+          .from("members")
+          .select(
+            "id,legacy_id,display_name,class,grade,status,joined_on,semaphore,next_exam_on,attendance_count,minimum_attendance,missing_attendance,exam_notice",
+          )
+          .order("id")
+          .range(from, to)
+          .returns<Member[]>(),
+      ),
+    ]);
+  return { classes, attendance, techniques, exams, courses, allMembers };
+}
+async function buildPeriodStats(period: { start: string; end: string }) {
+  const { classes, attendance, techniques, exams, courses, allMembers } =
+    await loadPeriodRows(period);
+  const members = allMembers.filter((m) => m.status === "active");
+  const summary = summarizePeriod(classes, attendance, techniques, members);
+  const nationalCourseRows = courses.filter((r) => r.kind === "national");
+  const internationalCourseRows = courses.filter(
+    (r) => r.kind === "international",
+  );
+  const taikaiCourseRows = courses.filter((r) => r.kind === "taikai");
   const nationalCourseEvents = uniqueCourseEvents(nationalCourseRows);
   const internationalCourseEvents = uniqueCourseEvents(internationalCourseRows);
   const taikaiCourseEvents = uniqueCourseEvents(taikaiCourseRows);
-  const activeAdults = members.filter((member) => member.class === "adults").length;
-  const activeKids = members.filter((member) => member.class === "kids").length;
-  const registeredAdultClasses = classes.filter((row) => row.class_group === "adults").length;
-  const registeredKidsClasses = classes.filter((row) => row.class_group === "kids").length;
-  const inferredKidsClasses = distinctDates(kidsAttendance.map((row) => row.attended_on)).length;
-  const kidsClasses = Math.max(registeredKidsClasses, inferredKidsClasses);
-  const clubClassDays = distinctDates([
-    ...classes.map((row) => row.class_date),
-    ...kidsAttendance.map((row) => row.attended_on)
-  ]).length;
+  const newMembers = allMembers.filter(
+    (m) =>
+      m.joined_on && m.joined_on >= period.start && m.joined_on <= period.end,
+  ).length;
   const yearGrowth = await buildYearGrowthStats(period, {
-    classes: clubClassDays,
-    attendance: attendance.length,
-    adultAttendance: adultAttendance.length,
-    kidsAttendance: kidsAttendance.length,
+    classes: summary.classes,
+    attendance: summary.totalAttendance,
+    adultAttendance: summary.adultAttendance,
+    kidsAttendance: summary.kidsAttendance,
     exams: exams.length,
     nationalCourses: nationalCourseEvents.length,
     internationalCourses: internationalCourseEvents.length,
     taikaiCourses: taikaiCourseEvents.length,
-    newMembers: members.filter((member) => member.joined_on && member.joined_on >= period.start && member.joined_on <= period.end).length
+    newMembers,
   });
-
   return {
+    ...summary,
     activeMembers: members.length,
-    activeAdults,
-    activeKids,
-    activeGrades: activeGradeSummary(members),
-    classes: clubClassDays,
+    activeAdults: members.filter((m) => m.class === "adults").length,
+    activeKids: members.filter((m) => m.class === "kids").length,
+    activeAdultGrades: activeGradeSummary(
+      members.filter((m) => m.class === "adults"),
+    ),
+    activeKidsGrades: activeGradeSummary(
+      members.filter((m) => m.class === "kids"),
+    ),
     registeredClasses: classes.length,
-    adultClasses: registeredAdultClasses,
-    kidsClasses,
-    inferredKidsClasses,
-    closedClasses: classes.filter((row) => row.closed).length,
-    adultAttendance: adultAttendance.length,
-    kidsAttendance: kidsAttendance.length,
-    totalAttendance: attendance.length,
-    uniqueAttendees: new Set(attendance.map((row) => row.member_id)).size,
-    uniqueAdultAttendees: new Set(adultAttendance.map((row) => row.member_id)).size,
-    uniqueKidsAttendees: new Set(kidsAttendance.map((row) => row.member_id)).size,
-    averageAttendancePerClass: clubClassDays ? Math.round((attendance.length / clubClassDays) * 10) / 10 : 0,
-    averageAdultAttendancePerClass: registeredAdultClasses ? Math.round((adultAttendance.length / registeredAdultClasses) * 10) / 10 : 0,
-    averageKidsAttendancePerClass: kidsClasses ? Math.round((kidsAttendance.length / kidsClasses) * 10) / 10 : 0,
-    techniques: techniques.length,
-    uniqueTechniques: new Set(techniques.map((row) => normalizeKey(row.technique_name))).size,
-    topTechniques: topCounts(techniques.map((row) => row.technique_name), 5),
-    topTechnicalMembers: topCounts(techniques.filter((row) => !isSenseiLegacy(row.members?.legacy_id)).map((row) => row.members?.display_name ?? "Kenshi"), 5),
+    closedClasses: classes.filter((c) => c.closed).length,
+    newMembers,
     passedExams: exams.length,
-    examsByGrade: topCounts(exams.map((row) => row.grade), 8),
+    examsByGrade: topCounts(
+      exams.map((r) => r.grade),
+      8,
+    ),
     nationalCourses: nationalCourseEvents.length,
     internationalCourses: internationalCourseEvents.length,
     taikaiCourses: taikaiCourseEvents.length,
     nationalCourseParticipants: nationalCourseRows.length,
     internationalCourseParticipants: internationalCourseRows.length,
     taikaiCourseParticipants: taikaiCourseRows.length,
-    topCourses: [...nationalCourseEvents, ...internationalCourseEvents, ...taikaiCourseEvents]
-      .sort((a, b) => b.participants - a.participants || a.date.localeCompare(b.date))
+    topCourses: [
+      ...nationalCourseEvents,
+      ...internationalCourseEvents,
+      ...taikaiCourseEvents,
+    ]
+      .sort(
+        (a, b) =>
+          b.participants - a.participants || a.date.localeCompare(b.date),
+      )
       .slice(0, 6),
-    topAdultAttendance: topAttendanceRows(adultAttendance, 10),
-    topKidsAttendance: topAttendanceRows(kidsAttendance, 10),
     yearGrowth,
-    readyForExam: readyForExam(members)
+    readyForExam: readyForExam(members),
   };
 }
 
@@ -845,26 +858,6 @@ function topCounts(values: Array<string | null | undefined>, limit: number) {
     .slice(0, limit);
 }
 
-function topAttendanceRows(rows: PeriodAttendance[], limit: number) {
-  const byMember = new Map<string, { name: string; count: number }>();
-  for (const row of rows) {
-    if (isSenseiLegacy(row.members?.legacy_id)) continue;
-    const current = byMember.get(row.member_id) ?? { name: row.members?.display_name ?? "Kenshi", count: 0 };
-    current.count += 1;
-    byMember.set(row.member_id, current);
-  }
-  return Array.from(byMember.values())
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-    .slice(0, limit)
-    .map((row, index) => ({
-      name: row.name,
-      grade: "Asistencia",
-      score: row.count,
-      detail: "clases en el periodo",
-      position: index + 1
-    }));
-}
-
 function activeGradeSummary(members: Member[]) {
   const counts = new Map<string, number>();
   for (const member of members) {
@@ -876,55 +869,82 @@ function activeGradeSummary(members: Member[]) {
     .sort((a, b) => a.order - b.order || a.grade.localeCompare(b.grade));
 }
 
-async function buildYearGrowthStats(period: { start: string; end: string }, current: {
-  classes: number;
-  attendance: number;
-  adultAttendance: number;
-  kidsAttendance: number;
-  exams: number;
-  nationalCourses: number;
-  internationalCourses: number;
-  taikaiCourses: number;
-  newMembers: number;
-}) {
+async function buildYearGrowthStats(
+  period: { start: string; end: string },
+  current: {
+    classes: number;
+    attendance: number;
+    adultAttendance: number;
+    kidsAttendance: number;
+    exams: number;
+    nationalCourses: number;
+    internationalCourses: number;
+    taikaiCourses: number;
+    newMembers: number;
+  },
+) {
   const startYear = Number(period.start.slice(0, 4));
-  const isFullYear = period.start === `${startYear}-01-01` && period.end === `${startYear}-12-31`;
+  const isFullYear =
+    period.start === `${startYear}-01-01` &&
+    period.end === `${startYear}-12-31`;
   if (!isFullYear || !Number.isFinite(startYear)) return null;
 
   const previous = {
     start: `${startYear - 1}-01-01`,
-    end: `${startYear - 1}-12-31`
+    end: `${startYear - 1}-12-31`,
   };
-  const supabase = createAdminClient();
-  const [classesResult, attendanceResult, examsResult, coursesResult, membersResult] = await Promise.all([
-    supabase.from("classes").select("id", { count: "exact", head: true }).gte("class_date", previous.start).lte("class_date", previous.end),
-    supabase.from("attendance_logs").select("member_id,attended_on,members(class)", { count: "exact" }).gte("attended_on", previous.start).lte("attended_on", previous.end).returns<PeriodAttendance[]>(),
-    supabase.from("exams").select("exam_date", { count: "exact", head: true }).gte("exam_date", previous.start).lte("exam_date", previous.end),
-    supabase.from("courses").select("kind,course_date,title,location,sensei").gte("course_date", previous.start).lte("course_date", previous.end).returns<Course[]>(),
-    supabase.from("members").select("id", { count: "exact", head: true }).gte("joined_on", previous.start).lte("joined_on", previous.end)
-  ]);
-
-  const previousAttendance = attendanceResult.error ? [] : attendanceResult.data ?? [];
-  const previousCourses = coursesResult.error ? [] : coursesResult.data ?? [];
-  const previousClassRows = classesResult.count ?? 0;
-  const previousKidsClassDates = distinctDates(previousAttendance.filter((row) => row.members?.class === "kids").map((row) => row.attended_on));
-  const previousClubClassDays = Math.max(previousClassRows, previousKidsClassDates.length);
-  const previousNationalCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "national")).length;
-  const previousInternationalCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "international")).length;
-  const previousTaikaiCourses = uniqueCourseEvents(previousCourses.filter((row) => row.kind === "taikai")).length;
+  const rows = await loadPeriodRows(previous);
+  const previousSummary = summarizePeriod(
+    rows.classes,
+    rows.attendance,
+    rows.techniques,
+    [],
+  );
+  const previousAttendance = previousSummary.attendance;
+  const previousCourses = rows.courses;
+  const previousClubClassDays = previousSummary.classes;
+  const previousNationalCourses = uniqueCourseEvents(
+    previousCourses.filter((r) => r.kind === "national"),
+  ).length;
+  const previousInternationalCourses = uniqueCourseEvents(
+    previousCourses.filter((r) => r.kind === "international"),
+  ).length;
+  const previousTaikaiCourses = uniqueCourseEvents(
+    previousCourses.filter((r) => r.kind === "taikai"),
+  ).length;
 
   return {
     year: startYear,
     previousYear: startYear - 1,
     classes: compareNumber(current.classes, previousClubClassDays),
     attendance: compareNumber(current.attendance, previousAttendance.length),
-    adultAttendance: compareNumber(current.adultAttendance, previousAttendance.filter((row) => row.members?.class === "adults").length),
-    kidsAttendance: compareNumber(current.kidsAttendance, previousAttendance.filter((row) => row.members?.class === "kids").length),
-    exams: compareNumber(current.exams, examsResult.count ?? 0),
-    nationalCourses: compareNumber(current.nationalCourses, previousNationalCourses),
-    internationalCourses: compareNumber(current.internationalCourses, previousInternationalCourses),
+    adultAttendance: compareNumber(
+      current.adultAttendance,
+      previousSummary.adultAttendance,
+    ),
+    kidsAttendance: compareNumber(
+      current.kidsAttendance,
+      previousSummary.kidsAttendance,
+    ),
+    exams: compareNumber(current.exams, rows.exams.length),
+    nationalCourses: compareNumber(
+      current.nationalCourses,
+      previousNationalCourses,
+    ),
+    internationalCourses: compareNumber(
+      current.internationalCourses,
+      previousInternationalCourses,
+    ),
     taikaiCourses: compareNumber(current.taikaiCourses, previousTaikaiCourses),
-    newMembers: compareNumber(current.newMembers, membersResult.count ?? 0)
+    newMembers: compareNumber(
+      current.newMembers,
+      rows.allMembers.filter(
+        (m) =>
+          m.joined_on &&
+          m.joined_on >= previous.start &&
+          m.joined_on <= previous.end,
+      ).length,
+    ),
   };
 }
 
@@ -1004,14 +1024,62 @@ function formatExamUpcoming(rows: ReturnType<typeof upcomingForExam>) {
   ].join("\n");
 }
 
-function formatClubNumbers(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+function formatPeriodAttendance(
+  title: string,
+  groups: Array<{ count: number; names: string[] }>,
+) {
+  return [
+    "<b>" + html(title) + "</b>",
+    "<i>Personas con mayor asistencia; incluye todos los empates en el corte de 10 personas. Sin sensei.</i>",
+    ...groups.flatMap((g) => [
+      "Con " + g.count + " asistencias:",
+      ...g.names.map((name) => "• " + html(name)),
+    ]),
+    groups.length ? "" : "Sin datos.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+function formatClubNumbers(
+  stats: Awaited<ReturnType<typeof buildPeriodStats>>,
+) {
   return [
     "📌 <b>Club en numeros</b>",
-    `• Kenshis activos: <b>${stats.activeMembers}</b> (${stats.activeAdults} adultos · ${stats.activeKids} niños)`,
-    `• Dias de clase del club: <b>${stats.classes}</b>`,
-    `• Adultos registrados: <b>${stats.adultClasses}</b> · niños por asistencia: <b>${stats.kidsClasses}</b>`,
-    `• Clases cerradas: <b>${stats.closedClasses}/${stats.registeredClasses}</b>`,
-    `• Asistentes únicos: <b>${stats.uniqueAttendees}</b> (${stats.uniqueAdultAttendees} adultos · ${stats.uniqueKidsAttendees} niños)`
+    "• Plantilla activa actual: <b>" +
+      stats.activeMembers +
+      "</b> (" +
+      stats.activeAdults +
+      " adultos · " +
+      stats.activeKids +
+      " niños)",
+    "<i>La plantilla es la de hoy; la asistencia corresponde al periodo.</i>",
+    "• Fechas distintas con clase del club: <b>" + stats.classes + "</b>",
+    "• Sesiones adultos: <b>" +
+      stats.adultClasses +
+      "</b> · sesiones niños: <b>" +
+      stats.kidsClasses +
+      "</b>",
+    "• Sesiones inferidas por asistencia sin clase registrada: <b>" +
+      stats.inferredClasses +
+      "</b>",
+    "• Clases registradas cerradas: <b>" +
+      stats.closedClasses +
+      "/" +
+      stats.registeredClasses +
+      "</b>",
+    "• Personas asistentes únicas: <b>" +
+      stats.uniqueAttendees +
+      "</b> (" +
+      stats.uniqueAdultAttendees +
+      " adultos · " +
+      stats.uniqueKidsAttendees +
+      " niños)",
+    "• Asistentes históricos fuera de la plantilla activa actual: <b>" +
+      stats.historicalNonCurrentAttendees +
+      "</b>",
+    "• Altas con fecha de ingreso registrada en el periodo: <b>" +
+      stats.newMembers +
+      "</b>",
   ].join("\n");
 }
 
@@ -1030,32 +1098,101 @@ function formatYearGrowth(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
   ].join("\n");
 }
 
-function formatActiveGrades(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
-  if (!stats.activeGrades.length) return "";
+function formatActiveGrades(
+  stats: Awaited<ReturnType<typeof buildPeriodStats>>,
+) {
   return [
-    "🎖️ <b>Grados activos del club</b>",
-    ...stats.activeGrades.map((item) => `• ${html(item.grade)}: <b>${item.count}</b> kenshi${item.count === 1 ? "" : "s"}`)
+    "🎖️ <b>Grados de la plantilla activa actual</b>",
+    "Adultos:",
+    ...stats.activeAdultGrades.map(
+      (g) => "• " + html(g.grade) + ": <b>" + g.count + "</b>",
+    ),
+    "Niños:",
+    ...stats.activeKidsGrades.map(
+      (g) => "• " + html(g.grade) + ": <b>" + g.count + "</b>",
+    ),
   ].join("\n");
 }
-
-function formatAttendanceStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+function formatAttendanceStats(
+  stats: Awaited<ReturnType<typeof buildPeriodStats>>,
+) {
+  const peak = stats.busiestSession;
   return [
     "👥 <b>Asistencia</b>",
-    `• Total asistencias: <b>${stats.totalAttendance}</b>`,
-    `• Adultos: <b>${stats.adultAttendance}</b> · media <b>${stats.averageAdultAttendancePerClass}</b>`,
-    `• Niños: <b>${stats.kidsAttendance}</b> · media <b>${stats.averageKidsAttendancePerClass}</b>`,
-    `• Media global por dia de clase: <b>${stats.averageAttendancePerClass}</b>`
-  ].join("\n");
+    "• Participaciones acumuladas: <b>" +
+      stats.totalAttendance +
+      "</b> (una persona en varias clases suma varias asistencias; incluye instructor si está registrado)",
+    "• Adultos: <b>" +
+      stats.adultAttendance +
+      "</b> · media <b>" +
+      stats.averageAdultAttendancePerClass +
+      "</b> por sesión adulta (" +
+      stats.adultClasses +
+      " sesiones)",
+    "• Niños: <b>" +
+      stats.kidsAttendance +
+      "</b> · media <b>" +
+      stats.averageKidsAttendancePerClass +
+      "</b> por sesión infantil (" +
+      stats.kidsClasses +
+      " sesiones)",
+    "• Sin grupo identificable: <b>" + stats.unclassifiedAttendance + "</b>",
+    "• Media del club: <b>" +
+      stats.averageAttendancePerClass +
+      "</b> participaciones por fecha (" +
+      stats.classes +
+      " fechas)",
+    "• Asistencia completa a todas las sesiones del grupo (sin sensei): <b>" +
+      stats.fullAttendanceAdults +
+      "</b> adultos · <b>" +
+      stats.fullAttendanceKids +
+      "</b> niños",
+    peak
+      ? "• Sesión con mayor asistencia: " +
+        html(peak.session?.name || "Clase sin identificar") +
+        (peak.session ? " · " + formatHumanDate(peak.session.class_date) : "") +
+        " · <b>" +
+        peak.count +
+        "</b> participaciones"
+      : "",
+    stats.busiestDate
+      ? "• Fecha con mayor asistencia: " +
+        formatHumanDate(stats.busiestDate.date) +
+        " · <b>" +
+        stats.busiestDate.count +
+        "</b> participaciones"
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
-
-function formatTechnicalStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
+function formatTechnicalStats(
+  stats: Awaited<ReturnType<typeof buildPeriodStats>>,
+) {
   return [
     "🥋 <b>Trabajo tecnico adulto</b>",
-    `• Registros tecnicos: <b>${stats.techniques}</b>`,
-    `• Tecnicas diferentes trabajadas: <b>${stats.uniqueTechniques}</b>`,
-    stats.topTechniques.length ? "• Mas trabajadas:\n" + stats.topTechniques.map((item, index) => `  ${index + 1}. ${html(item.label)} · ${item.count}`).join("\n") : "• Mas trabajadas: sin datos",
-    stats.topTechnicalMembers.length ? "• Kenshis con mas registros:\n" + stats.topTechnicalMembers.map((item, index) => `  ${index + 1}. ${html(item.label)} · ${item.count}`).join("\n") : ""
-  ].filter(Boolean).join("\n");
+    "• Técnicas impartidas sumadas por clase: <b>" +
+      stats.techniques +
+      "</b> (una técnica en una clase cuenta una vez, aunque la practiquen varios alumnos)",
+    "• Tecnicas diferentes trabajadas: <b>" + stats.uniqueTechniques + "</b>",
+    stats.topTechniques.length
+      ? "• Técnicas con más sesiones:\n" +
+        stats.topTechniques
+          .map((t) => "  • " + html(t.label) + " · " + t.count + " sesiones")
+          .join("\n")
+      : "• Sin datos técnicos adultos.",
+    stats.topTechnicalMembers.length
+      ? "• Participación técnica registrada por alumno (clases distintas, sin sensei):\n" +
+        stats.topTechnicalMembers
+          .map((t) => "  • " + html(t.label) + " · " + t.count + " clases")
+          .join("\n")
+      : "",
+    stats.technicalLegacyRows
+      ? "<i>Registros históricos sin clase enlazada: agrupados por fecha adulta.</i>"
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function formatCourseStats(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {

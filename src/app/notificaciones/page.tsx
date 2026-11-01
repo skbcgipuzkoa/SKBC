@@ -124,6 +124,7 @@ export default async function NotificacionesPage({
             <p className="muted">
               El parte diario incluye rankings y kenshis listos para examen si los hay. Los resumenes mensuales, semestrales y anuales quedan preparados para Vercel Cron.
             </p>
+            <a className="secondary-link" href="/notificaciones/vista-previa">Revisar resumenes sin enviar a Telegram</a>
           </div>
         </section>
 
