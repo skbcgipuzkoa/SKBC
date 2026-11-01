@@ -135,7 +135,7 @@ assert.match(actionsSource, /formData\.getAll\("templateEventItemIds"\)/);
 assert.match(actionsSource, /childSyllabusItemIds\s*\n/);
 assert.match(integratedExamsSource, /childSyllabusItemIds\?: string\[\]/);
 assert.match(integratedExamsSource, /loadApprovedChildExamAssignments/);
-assert.match(integratedExamsSource, /loadApprovedChildExamAssignments\(childSyllabusItemIds \?\? \[\], targetGrades\)/);
+assert.match(integratedExamsSource, /loadApprovedChildExamAssignments\(\s*childSyllabusItemIds\s*\?\?\s*\[\],\s*targetGrades,?\s*\)/);
 assert.match(integratedExamsSource, /buildChildExamSnapshot/);
 assert.match(integratedExamsSource, /resolveChildExamTargetGrade/);
 assert.doesNotMatch(integratedExamsSource, /kidsTargetByCurrentGrade/);

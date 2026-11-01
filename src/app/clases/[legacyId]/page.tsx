@@ -1,3 +1,4 @@
+import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
 import { ArrowLeft, Check, FileText, LogOut, RefreshCcw, Wand2 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { ClosingClassButton } from "@/app/components/ClosingClassButton";
@@ -636,6 +637,7 @@ export default async function ClaseDetailPage({
                           <span>
                             <strong>{item.technique_name}</strong>
                             <small>{item.category ?? "tecnica"} · {item.proposal_type ?? item.focus ?? "programa"}</small>
+                            <ExamPreparationNotice focus={item.focus} />
                           </span>
                         </label>
                       ))}
@@ -1259,6 +1261,7 @@ export default async function ClaseDetailPage({
                           <div>
                             <strong>{item.technique_name}</strong>
                             <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
+                            <ExamPreparationNotice focus={item.focus} />
                             <small className="plan-reason">
                               Rep: {item.techniques?.repetitions ?? 0} - Ultima: {item.techniques?.last_trained_on ?? "nunca"} - Score: {item.techniques?.score ?? item.score_at_that_moment ?? 0}
                             </small>

@@ -1,3 +1,4 @@
+import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
 import { Check, ChevronDown, LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -40,6 +41,7 @@ type PlanRow = {
   technique_name: string;
   category: string | null;
   proposal_type: string | null;
+  focus: string | null;
   summary_es: string | null;
   completed: boolean;
 };
@@ -138,7 +140,7 @@ export default async function DojoClassPage({
     adultClass
       ? supabase
         .from("technical_plans")
-        .select("id,group_grade,target_grade,technique_name,category,proposal_type,summary_es,completed")
+        .select("id,group_grade,target_grade,technique_name,category,proposal_type,focus,summary_es,completed")
         .eq("class_id", adultClass.id)
         .order("group_grade")
         .order("suggested_order")
@@ -377,6 +379,7 @@ export default async function DojoClassPage({
                           <span>
                             <strong>{item.technique_name}</strong>
                             <small>{item.category ?? "tecnica"} · {item.proposal_type ?? "programa"}</small>
+                            <ExamPreparationNotice focus={item.focus} />
                             {item.summary_es ? <p>{item.summary_es}</p> : null}
                           </span>
                         </label>

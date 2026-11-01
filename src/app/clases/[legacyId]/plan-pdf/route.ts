@@ -1,3 +1,4 @@
+import { examPreparationDetail } from "@/lib/technical-progress-display";
 import { NextResponse } from "next/server";
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from "pdf-lib";
 import { hasInternalAccess } from "@/lib/auth";
@@ -101,6 +102,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ lega
     y -= rowHeight + rowGap;
   }
 
+  // Keep the full generation-time explanation on extra pages; plan cards stay compact.
+  const benefits = (plan ?? []).filter((item) => examPreparationDetail(item.focus) !== null);
+  if (benefits.length) {
+    let benefitPage = pdf.addPage(pageSize);
+    let benefitY = height - margin;
+    const drawBenefitLine = (text: string, heading = false) => {
+      if (benefitY < margin + 14) { benefitPage = pdf.addPage(pageSize); benefitY = height - margin; }
+      benefitPage.drawText(text, { x: margin, y: benefitY, size: heading ? 10 : 9, font: heading ? bold : font, color: rgb(0.08, 0.18, 0.32) });
+      benefitY -= 14;
+    };
+    drawBenefitLine("PREPARACION DE EXAMEN - beneficio previsto", true);
+    for (const item of benefits) {
+      benefitY -= 8;
+      for (const line of wrapText(item.technique_name, 130, 1000)) drawBenefitLine(line, true);
+      for (const line of wrapText(examPreparationDetail(item.focus) ?? "", 145, 10000)) drawBenefitLine(line);
+    }
+  }
   const bytes = await pdf.save();
   return new NextResponse(Buffer.from(bytes), {
     headers: {
@@ -339,6 +357,7 @@ function renderPrintGroup(grade: string, items: PlanRow[]) {
         <div>
           <strong>${escapeHtml(item.technique_name)}</strong>
           <small>${escapeHtml(item.category ?? "-")} - ${escapeHtml(item.proposal_type ?? item.focus ?? "-")}</small>
+          ${examPreparationDetail(item.focus) !== null ? `<p class="summary"><strong>Preparación de examen · beneficio previsto</strong><br>${escapeHtml(examPreparationDetail(item.focus) ?? "")}</p>` : ""}
           ${summary ? `<p class="summary">${escapeHtml(summary)}</p>` : ""}
         </div>
       </div>`;

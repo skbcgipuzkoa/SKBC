@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { loadAllPages } from "@/lib/load-all-pages";
+import { examPriorityBenefit, examPlanFocus, matchExamRequirement, type ExamPriorityPupil, type ExamPriorityRequirement } from "@/lib/adult-plan-exam-priority";
+
 const repeatBlockDays = 14;
 const kataSuggestionBlockDays = 28;
 
@@ -131,7 +134,8 @@ export async function generateAdultTechnicalPlan(classId: string) {
     throw new Error("La clase no tiene grupos tecnicos activos.");
   }
 
-  const enrichedTechniques = await addRecentPlanHistory(clase.id, techniques ?? []);
+  const enrichedTechniques = await addRecentPlanHistory(clase.id, techniques ?? [], clase.class_date);
+  const examContext = await loadExamPriorityContext(clase.id, clase.class_date);
   const legacyPrefix = `PLA_${Date.now().toString(36).toUpperCase()}`;
   let legacyCounter = 1;
 
@@ -139,7 +143,9 @@ export async function generateAdultTechnicalPlan(classId: string) {
     const gradeWork = resolveWorkGrade(group.grade);
     const targetGrade = resolveTargetGrade(group.grade);
     const programGrade = resolveProgramGrade(targetGrade);
-    const selected = selectTechniquesForGroup(programGrade, clase.class_type, enrichedTechniques, clase.class_date);
+    const pupils = examContext.pupils.filter(pupil => normalize(pupil.grade) === normalize(group.grade));
+    const selected = selectTechniquesForGroup(programGrade, clase.class_type, enrichedTechniques, clase.class_date, pupils);
+    if (pupils.length && normalize(clase.class_type) !== "CONJUNTA") for (const item of selected) item.focus += " | " + examPlanFocus(item.technique.id, selected.map(row => row.technique.id), pupils, examContext.attendanceKnown, item === selected[0]);
 
     return selected.map((item, index) => ({
       legacy_id: `${legacyPrefix}_${String(legacyCounter++).padStart(3, "0")}`,
@@ -187,17 +193,18 @@ export async function generateAdultTechnicalPlan(classId: string) {
   return inserts.length;
 }
 
-async function addRecentPlanHistory(currentClassId: string, techniques: Technique[]) {
+async function addRecentPlanHistory(currentClassId: string, techniques: Technique[], classDate: string) {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  const data = await loadAllPages<ExistingPlan>((from,to) => supabase
     .from("technical_plans")
     .select("legacy_id,class_id,class_date,technique_id,completed,used_for_history")
     .neq("class_id", currentClassId)
     .eq("completed", true)
     .eq("used_for_history", true)
-    .returns<ExistingPlan[]>();
-
-  if (error) throw error;
+    .lte("class_date", classDate)
+    .order("id")
+    .range(from,to)
+    .returns<ExistingPlan[]>());
 
   const seen = new Set<string>();
   const history = new Map<string, { repetitions: number; lastDate: string | null }>();
@@ -220,21 +227,28 @@ async function addRecentPlanHistory(currentClassId: string, techniques: Techniqu
     return {
       ...technique,
       plan_repetitions: (technique.repetitions ?? 0) + (recent?.repetitions ?? 0),
-      plan_last_trained_on: maxDate(technique.last_trained_on, recent?.lastDate ?? null)
+      plan_last_trained_on: maxDate(technique.last_trained_on && technique.last_trained_on <= classDate ? technique.last_trained_on : null, recent?.lastDate ?? null)
     };
   });
 }
 
-function selectTechniquesForGroup(
+export function selectTechniquesForGroup(
   gradeWork: string,
   sessionType: string | null,
   techniques: Technique[],
-  classDate: string
+  classDate: string,
+  pupils: ExamPriorityPupil[] = []
 ): SelectedTechnique[] {
+  const compare = (a: Technique, b: Technique) => {
+    if (a.force_next !== b.force_next) return a.force_next ? -1 : 1;
+    const benefit = examPriorityBenefit(b.id, pupils).score - examPriorityBenefit(a.id, pupils).score;
+    const cooldown = (wasRecentlyPlanned(a, classDate, repeatBlockDays) ? 30 : 0) - (wasRecentlyPlanned(b, classDate, repeatBlockDays) ? 30 : 0);
+    return cooldown + benefit || compareTechniques(a,b);
+  };
   if (normalize(sessionType) === "CONJUNTA" || normalize(gradeWork) === "CONJUNTA") {
     return techniques
       .filter((technique) => normalize(technique.grade) === "CONJUNTA")
-      .sort(compareTechniques)
+      .sort(compare)
       .slice(0, 5)
       .map((technique) => ({
         technique,
@@ -247,7 +261,7 @@ function selectTechniquesForGroup(
   const ownGohoJuho = techniques
     .filter((technique) => isProgramGradeMatch(technique.grade, gradeWork))
     .filter((technique) => ["GOHO", "JUHO"].includes(normalize(technique.category)))
-    .sort(compareTechniques);
+    .sort(compare);
 
   const groupOrder = ownGohoJuho.find((technique) => Number.isFinite(technique.curriculum_order ?? NaN))
     ?.curriculum_order;
@@ -260,11 +274,11 @@ function selectTechniquesForGroup(
       }
       return (technique.curriculum_order ?? Number.MAX_SAFE_INTEGER) < (groupOrder ?? 0);
     })
-    .sort(compareTechniques);
+    .sort(compare);
 
   const selected: SelectedTechnique[] = selectBalancedProgram(ownGohoJuho);
   const selectedIds = new Set(selected.map((item) => item.technique.id));
-  const kata = selectKataSuggestion(gradeWork, techniques, selectedIds, classDate);
+  const kata = selectKataSuggestion(gradeWork, techniques, selectedIds, classDate, compare);
   const review = reviewCandidates.find((technique) => !selectedIds.has(technique.id));
 
   if (kata) {
@@ -289,7 +303,7 @@ function selectTechniquesForGroup(
   fillSelection(
     selected,
     selectedIds,
-    techniques.filter((technique) => normalize(technique.grade) === normalize(gradeWork)).sort(compareTechniques),
+    techniques.filter((technique) => normalize(technique.grade) === normalize(gradeWork)).sort(compare),
     "REFUERZO",
     "REFUERZO",
     false
@@ -302,15 +316,16 @@ function selectKataSuggestion(
   gradeWork: string,
   techniques: Technique[],
   selectedIds: Set<string>,
-  classDate: string
+  classDate: string,
+  compare: (a: Technique, b: Technique) => number = compareTechniques
 ) {
   const candidates = techniques
     .filter((technique) => isKata(technique))
     .filter((technique) => isProgramGradeMatch(technique.grade, gradeWork))
     .filter((technique) => !selectedIds.has(technique.id))
-    .sort(compareTechniques);
+    .sort(compare);
 
-  return candidates.find((technique) => !wasRecentlyPlanned(technique, classDate, kataSuggestionBlockDays)) ?? null;
+  return candidates.find((technique) => (!wasRecentlyPlanned(technique, classDate, kataSuggestionBlockDays) || compare(technique, {...technique,id:"__no_exam_deficit__"}) < 0)) ?? null;
 }
 
 function selectBalancedProgram(candidates: Technique[]): SelectedTechnique[] {
@@ -460,4 +475,57 @@ function normalize(value: string | null | undefined) {
 function categoryForDb(value: string | null | undefined) {
   const normalized = normalize(value).toLowerCase();
   return normalized || null;
+}
+
+async function loadExamPriorityContext(classId: string, classDate: string) {
+    const supabase = createAdminClient();
+    type Member = {
+        id: string;
+        legacy_id: string | null;
+        display_name: string;
+        grade: string | null;
+        joined_on: string | null;
+        last_exam_on: string | null;
+        missing_attendance: number | null;
+    };
+    type History = {
+        member_id: string;
+        technique_id: string | null;
+        technique_name: string;
+    };
+    const [members, attendees, requirements, curriculum, history] = await Promise.all([
+        loadAllPages<Member>((from, to) => supabase.from("members").select("id,legacy_id,display_name,grade,joined_on,last_exam_on,missing_attendance").eq("class", "adults").eq("status", "active").order("id").range(from, to).returns<Member[]>()),
+        loadAllPages<{
+            member_id: string;
+            trained_grade: string | null;
+            official_grade: string | null;
+        }>((from, to) => supabase.from("attendance_logs").select("member_id,trained_grade,official_grade").eq("class_id", classId).order("id").range(from, to).returns<{
+            member_id: string;
+            trained_grade: string | null;
+            official_grade: string | null;
+        }[]>()),
+        loadAllPages<ExamPriorityRequirement>((from, to) => supabase.from("skbc_exam_requirements").select("grade_pattern,adult_required_repetitions,min_months").eq("member_class", "adults").eq("active", true).range(from, to).returns<ExamPriorityRequirement[]>()),
+        loadAllPages<Technique>((from, to) => supabase.from("techniques").select("id,name,grade,category,content_type").order("id").range(from, to).returns<Technique[]>()),
+        loadAllPages<History>((from, to) => supabase.from("member_technical_history").select("member_id,technique_id,technique_name").eq("completed", true).lte("class_date", classDate).order("id").range(from, to).returns<History[]>())
+    ]);
+    const attendanceKnown = attendees.length > 0, attendeeIds = new Set(attendees.map(row => row.member_id));
+    const counts = new Map<string, Map<string, number>>();
+    for (const row of history) {
+        const repetitions = counts.get(row.member_id) ?? new Map<string, number>();
+        const key = row.technique_id ?? normalize(row.technique_name);
+        repetitions.set(key, (repetitions.get(key) ?? 0) + 1);
+        counts.set(row.member_id, repetitions);
+    }
+    const pupils = members.filter(member => member.legacy_id !== "13" && member.grade && (!attendanceKnown || attendeeIds.has(member.id))).flatMap(member => {
+        const requirement = matchExamRequirement(member.grade!, requirements);
+        const memberCurriculum = curriculum.filter(item => normalize(item.grade) === normalize(resolveTargetGrade(member.grade!)));
+        if (!memberCurriculum.length || requirement.adult_required_repetitions <= 0)
+            return [];
+        const cycleStart = member.last_exam_on ?? member.joined_on;
+        const elapsed = cycleStart ? (Date.parse(classDate) - Date.parse(cycleStart)) / (86400000 * 30.4375) : 0;
+        const timeProximity = cycleStart ? Math.max(0, Math.min(1, elapsed / Math.max(1, requirement.min_months ?? 12))) : 0;
+        const attendanceProximity = member.missing_attendance === null ? 0 : 1 / (1 + Math.max(0, member.missing_attendance));
+        return [{ id: member.id, name: member.display_name || "Kenshi", grade: attendanceKnown ? (attendees.find(row => row.member_id === member.id)?.trained_grade ?? attendees.find(row => row.member_id === member.id)?.official_grade ?? member.grade!) : member.grade!, curriculum: memberCurriculum, repetitions: counts.get(member.id) ?? new Map<string, number>(), requiredRepetitions: requirement.adult_required_repetitions, proximity: (timeProximity + attendanceProximity) / 2 }];
+    });
+    return { pupils, attendanceKnown };
 }

@@ -1,3 +1,4 @@
+import { groupTechnicalProgress } from "@/lib/technical-progress-display";
 import { ExternalLink, Gamepad2, Library, NotebookTabs } from "lucide-react";
 import { notFound } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
@@ -672,26 +673,32 @@ function AdultFicha({
           </div>
           <div className="ficha-fields small-fields">
             <Field label="Objetivos técnicos" value={String(technicalProgress.total)} />
-            <Field label="Tecnicas iniciadas" value={String(technicalProgress.started)} />
-            <Field label="Tecnicas completadas" value={String(technicalProgress.completed)} />
+            <Field label="Objetivos iniciados" value={String(technicalProgress.started)} />
+            <Field label="Objetivos completados" value={String(technicalProgress.completed)} />
             <Field label="Katas objetivo" value={String(technicalProgress.kataTotal)} />
             <Field label="Katas iniciadas" value={String(technicalProgress.kataStarted)} />
             <Field label="Reps registradas" value={`${technicalProgress.totalRepetitionsCapped}/${technicalProgress.totalRepetitionTarget}`} />
             <Field label="Pendientes" value={String(technicalProgress.pending.length)} />
-            <Field label="Objetivo por técnica" value={`${REPETITION_GOAL} reps`} />
+            <Field label="Objetivo por contenido" value={`${REPETITION_GOAL} reps`} />
           </div>
         </div>
-        <ResponsiveTable
-          columns={["Técnica", "Categoría", "Progreso", "Faltan", "Estado"]}
-          rows={technicalProgress.details.map((technique) => [
-            technique.name,
-            technique.label,
-            `${technique.repetitions}/${REPETITION_GOAL}`,
-            String(technique.missing),
-            <StateBadge key={technique.id} state={technique.completed ? "COMPLETADA" : technique.repetitions > 0 ? "EN PROGRESO" : "PENDIENTE"} />
-          ])}
-          empty="Sin técnicas cargadas para el grado objetivo."
-        />
+        {groupTechnicalProgress(technicalProgress.details).map((group) => (
+          <section key={group.id} className={`technical-progress-group technical-progress-${group.id}`} aria-label={group.title}>
+            <h3>{group.title} <small>{group.items.length} contenidos</small></h3>
+            <ResponsiveTable
+              columns={["Contenido", "Categoría", "Progreso", "Faltan", "Estado"]}
+              rows={group.items.map((technique) => [
+                technique.name,
+                technique.label,
+                `${technique.repetitions}/${REPETITION_GOAL}`,
+                String(technique.missing),
+                <StateBadge key={technique.id} state={technique.completed ? "COMPLETADA" : technique.repetitions > 0 ? "EN PROGRESO" : "PENDIENTE"} />
+              ])}
+              empty="Sin técnicas cargadas para el grado objetivo."
+            />
+          </section>
+        ))}
+        {!technicalProgress.details.length ? <p className="ficha-card">Sin técnicas cargadas para el grado objetivo.</p> : null}
       </FoldableSection>
 
       <FoldableSection title="Historial tecnico global" meta={`${fullTechnicalHistory.totalRepetitions} practicas acumuladas · ${fullTechnicalHistory.techniques.length} tecnicas`}>
