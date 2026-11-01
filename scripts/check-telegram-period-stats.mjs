@@ -292,3 +292,44 @@ assert.match(
 console.log(
   "Telegram builder, pagination, annual comparison and error checks passed",
 );
+
+// An absent annual baseline is unavailable, not an observed year of zero activity.
+fixtures.classes = classes.map((c) => ({ ...c, name: c.id, closed: true }));
+fixtures.attendance_logs = attendance;
+const noBaseline = await module.exports.buildNotificationMessage(
+  "yearly_stats",
+  { start: "2026-01-01", end: "2026-12-31" },
+);
+assert.match(noBaseline, /sin registros del año anterior; no comparable/);
+assert.doesNotMatch(noBaseline, /Asistencias totales: <b>23<\/b> \(23 mas/);
+assert.match(noBaseline, /Periodo en curso; datos registrados a/);
+const overlap = summarizePeriod(
+  classes,
+  [
+    attendance[0],
+    {
+      ...attendance[0],
+      class_id: "k",
+      members: { ...members[0], class: "kids" },
+    },
+  ],
+  [],
+  [],
+);
+assert.equal(overlap.uniqueAttendees, 1);
+assert.equal(overlap.overlappingGroupAttendees, 1);
+fixtures.attendance_logs = [
+  attendance[0],
+  {
+    ...attendance[0],
+    class_id: "k",
+    members: { ...members[0], class: "kids" },
+  },
+];
+const overlapMessage = await module.exports.buildNotificationMessage(
+  "monthly_stats",
+  { start: "2026-10-01", end: "2026-10-31" },
+);
+assert.match(overlapMessage, /Personas registradas en ambos grupos: <b>1<\/b>/);
+assert.match(overlapMessage, /Los subtotales por grupo no se suman/);
+console.log("Missing baseline and overlapping attendee checks passed");

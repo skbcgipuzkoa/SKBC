@@ -131,6 +131,8 @@ export function summarizePeriod(
   const adults = attendance.filter((r) => r.members?.class === "adults");
   const kids = attendance.filter((r) => r.members?.class === "kids");
   const currentIds = new Set(activeMembers.map((m) => m.id));
+  const adultAttendeeIds = new Set(adults.map((row) => row.member_id));
+  const kidsAttendeeIds = new Set(kids.map((row) => row.member_id));
   const technical = history.filter(
     (r) =>
       r.counts_for_stats !== false &&
@@ -223,6 +225,9 @@ export function summarizePeriod(
     unclassifiedAttendance: attendance.length - adults.length - kids.length,
     totalAttendance: attendance.length,
     uniqueAttendees: new Set(attendance.map((r) => r.member_id)).size,
+    overlappingGroupAttendees: [...adultAttendeeIds].filter((id) =>
+      kidsAttendeeIds.has(id),
+    ).length,
     uniqueAdultAttendees: new Set(adults.map((r) => r.member_id)).size,
     uniqueKidsAttendees: new Set(kids.map((r) => r.member_id)).size,
     historicalNonCurrentAttendees: new Set(

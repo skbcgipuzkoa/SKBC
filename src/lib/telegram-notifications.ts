@@ -243,6 +243,7 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
   return [
     `🥋 <b>SKBC GIPUZKOA · ${html(title.toUpperCase())}</b>`,
     `<i>${formatHumanDate(period.start)} - ${formatHumanDate(period.end)}</i>`,
+    ...(period.end > todayIso() ? [`<i>Periodo en curso; datos registrados a ${formatHumanDate(todayIso())}. El balance no es el cierre definitivo del periodo.</i>`] : []),
     "",
     formatClubNumbers(stats),
     "",
@@ -916,6 +917,7 @@ async function buildYearGrowthStats(
   return {
     year: startYear,
     previousYear: startYear - 1,
+    hasAttendanceBaseline: previousSummary.totalAttendance > 0 || previousSummary.classes > 0,
     classes: compareNumber(current.classes, previousClubClassDays),
     attendance: compareNumber(current.attendance, previousAttendance.length),
     adultAttendance: compareNumber(
@@ -1074,6 +1076,10 @@ function formatClubNumbers(
       " adultos · " +
       stats.uniqueKidsAttendees +
       " niños)",
+    ...(stats.overlappingGroupAttendees ? [
+      "• Personas registradas en ambos grupos: <b>" + stats.overlappingGroupAttendees + "</b>",
+      "<i>Los subtotales por grupo no se suman: una misma persona puede asistir a adultos y niños en el periodo.</i>"
+    ] : []),
     "• Asistentes históricos fuera de la plantilla activa actual: <b>" +
       stats.historicalNonCurrentAttendees +
       "</b>",
@@ -1086,13 +1092,14 @@ function formatClubNumbers(
 function formatYearGrowth(stats: Awaited<ReturnType<typeof buildPeriodStats>>) {
   if (!stats.yearGrowth) return "";
   const growth = stats.yearGrowth;
+  const attendanceDelta = (delta: number) => growth.hasAttendanceBaseline ? formatDeltaWords(delta) : "sin registros del año anterior; no comparable";
   return [
     `📈 <b>Balance anual ${growth.year}</b>`,
     `<i>Comparado con ${growth.previousYear}; el paréntesis indica diferencia respecto al año anterior.</i>`,
     `• Nuevos kenshis: <b>${growth.newMembers.current}</b> (${formatDeltaWords(growth.newMembers.delta)})`,
-    `• Asistencias totales: <b>${growth.attendance.current}</b> (${formatDeltaWords(growth.attendance.delta)})`,
-    `• Adultos: <b>${growth.adultAttendance.current}</b> (${formatDeltaWords(growth.adultAttendance.delta)}) · niños: <b>${growth.kidsAttendance.current}</b> (${formatDeltaWords(growth.kidsAttendance.delta)})`,
-    `• Dias de clase del club: <b>${growth.classes.current}</b> (${formatDeltaWords(growth.classes.delta)})`,
+    `• Asistencias totales: <b>${growth.attendance.current}</b> (${attendanceDelta(growth.attendance.delta)})`,
+    `• Adultos: <b>${growth.adultAttendance.current}</b> (${attendanceDelta(growth.adultAttendance.delta)}) · niños: <b>${growth.kidsAttendance.current}</b> (${attendanceDelta(growth.kidsAttendance.delta)})`,
+    `• Dias de clase del club: <b>${growth.classes.current}</b> (${attendanceDelta(growth.classes.delta)})`,
     `• Examenes: <b>${growth.exams.current}</b> (${formatDeltaWords(growth.exams.delta)})`,
     `• Cursos: nacionales <b>${growth.nationalCourses.current}</b> (${formatDeltaWords(growth.nationalCourses.delta)}) · internacionales <b>${growth.internationalCourses.current}</b> (${formatDeltaWords(growth.internationalCourses.delta)}) · taikai <b>${growth.taikaiCourses.current}</b> (${formatDeltaWords(growth.taikaiCourses.delta)})`
   ].join("\n");
