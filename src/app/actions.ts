@@ -21,6 +21,7 @@ import { recalculateClassExamStatus, recalculateMemberExamStatus } from "@/lib/m
 import { uploadMemberPhoto } from "@/lib/member-photo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
+import { sameTechniqueVideoIdentity, type TechniqueVideoIdentity } from "@/lib/technique-video-identity";
 import { joinContactValues } from "@/lib/member-contacts";
 import { getFamilyUnitContext, upsertFamilyBillingTask } from "@/lib/family-units";
 import { sendTelegramDigest, updateTelegramNotificationSetting } from "@/lib/telegram-notifications";
@@ -572,6 +573,10 @@ export async function updateTechniqueAction(formData: FormData) {
   }
 
   const videoUrl = String(formData.get("videoUrl") ?? "").trim();
+  const applyVideoAllGrades = formData.get("applyVideoAllGrades") === "on";
+  if (applyVideoAllGrades && !videoUrl) {
+    redirect(addTechniqueParams(returnPath, { error: "technique-video-bulk-empty", edit: legacyId }));
+  }
   if (formData.has("videoUrl") && videoUrl) {
     let validVideoUrl = false;
     try {
@@ -590,9 +595,9 @@ export async function updateTechniqueAction(formData: FormData) {
   const supabase = createAdminClient();
   const { data: currentTechnique, error: currentTechniqueError } = await supabase
     .from("techniques")
-    .select("summary_es")
+    .select("id,summary_es,name,base_name,category,content_type,variant,variant_note")
     .eq("legacy_id", legacyId)
-    .maybeSingle<{ summary_es: string | null }>();
+    .maybeSingle<TechniqueVideoIdentity & { id: string; summary_es: string | null }>();
   if (currentTechniqueError || !currentTechnique) {
     redirect(addTechniqueParams(returnPath, { error: "technique", edit: legacyId }));
   }
@@ -620,6 +625,25 @@ export async function updateTechniqueAction(formData: FormData) {
     redirect(addTechniqueParams(returnPath, { error: "technique", edit: legacyId }));
   }
 
+  let siblingIds: string[] = [];
+  if (applyVideoAllGrades) {
+    if (!sameTechniqueVideoIdentity(currentTechnique, payload)) {
+      redirect(addTechniqueParams(returnPath, { error: "technique-video-identity", edit: legacyId }));
+    }
+    try {
+      const candidates = await loadAllPages<TechniqueVideoIdentity & { id: string }>((from, to) => supabase
+        .from("techniques")
+        .select("id,name,base_name,category,content_type,variant,variant_note")
+        .order("id", { ascending: true })
+        .range(from, to)
+        .returns<(TechniqueVideoIdentity & { id: string })[]>());
+      siblingIds = candidates.filter(row => row.id !== currentTechnique.id && sameTechniqueVideoIdentity(currentTechnique, row)).map(row => row.id);
+    } catch (error) {
+      console.error("Error loading matching technique videos", error);
+      redirect(addTechniqueParams(returnPath, { error: "technique-video-bulk", edit: legacyId }));
+    }
+  }
+
   const { error } = await supabase
     .from("techniques")
     .update(payload)
@@ -630,12 +654,35 @@ export async function updateTechniqueAction(formData: FormData) {
     redirect(addTechniqueParams(returnPath, { error: "technique", edit: legacyId }));
   }
 
+  let linkedRecords = 1;
+  for (let offset = 0; offset < siblingIds.length; offset += 100) {
+    const ids = siblingIds.slice(offset, offset + 100);
+    let videoError: unknown;
+    try {
+      const result = await supabase.from("techniques")
+        .update({ video_url: videoUrl, video_title: String(formData.get("videoTitle") ?? "").trim() || null, updated_at: now })
+        .in("id", ids);
+      videoError = result.error;
+    } catch (error) {
+      videoError = error;
+    }
+    if (videoError) {
+      console.error("Error applying matching technique videos", videoError);
+      revalidateTechniqueVideoPages();
+      redirect(addTechniqueParams(returnPath, { error: "technique-video-bulk-partial", edit: legacyId, videoLinked: String(linkedRecords) }));
+    }
+    linkedRecords += ids.length;
+  }
+  revalidateTechniqueVideoPages();
+  redirect(addTechniqueParams(returnPath, { saved: "technique", technique: legacyId, ...(applyVideoAllGrades ? { videoLinked: String(linkedRecords) } : {}) }));
+}
+
+function revalidateTechniqueVideoPages() {
   revalidatePath("/tecnicas");
   revalidatePath("/ficha/[token]", "page");
   revalidatePath("/clases/[legacyId]", "page");
   revalidatePath("/dojo/[legacyId]", "page");
   revalidatePath("/delegado/[token]", "page");
-  redirect(addTechniqueParams(returnPath, { saved: "technique", technique: legacyId }));
 }
 
 function safeTechniqueReturnPath(value: string) {
@@ -650,6 +697,7 @@ function addTechniqueParams(path: string, values: Record<string, string>) {
   url.searchParams.delete("saved");
   url.searchParams.delete("error");
   url.searchParams.delete("technique");
+  url.searchParams.delete("videoLinked");
   Object.entries(values).forEach(([key, value]) => url.searchParams.set(key, value));
   const query = url.searchParams.toString();
   return `${url.pathname}${query ? `?${query}` : ""}`;

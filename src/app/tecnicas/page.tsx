@@ -38,7 +38,7 @@ export const dynamic = "force-dynamic";
 export default async function TecnicasPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; grade?: string; category?: string; kind?: string; status?: string; edit?: string; saved?: string; error?: string; technique?: string }>;
+  searchParams: Promise<{ q?: string; grade?: string; category?: string; kind?: string; status?: string; edit?: string; saved?: string; error?: string; technique?: string; videoLinked?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -104,10 +104,15 @@ export default async function TecnicasPage({
           <p className="save-ok">
             Tecnica guardada correctamente
             {savedTechnique ? `: ${savedTechnique.name}` : ""}. Editor cerrado y datos actualizados.
+            {params.videoLinked && /^\d+$/.test(params.videoLinked) ? ` Vídeo aplicado a ${params.videoLinked} registros del catálogo por grados.` : ""}
           </p>
         ) : null}
         {params.error === "technique" ? <p className="form-error">No se ha podido guardar la tecnica.</p> : null}
         {params.error === "technique-video" ? <p className="form-error" role="alert">No se ha guardado el contenido. El enlace del vídeo debe ser una dirección completa que empiece por https:// o http://.</p> : null}
+        {params.error === "technique-video-bulk-empty" ? <p className="form-error" role="alert">Para aplicar el vídeo a todos los grados, introduce un enlace válido. Para quitar solo este enlace, desmarca la opción.</p> : null}
+        {params.error === "technique-video-identity" ? <p className="form-error" role="alert">Primero guarda los cambios de nombre, familia, categoría, tipo o variante sin aplicar el vídeo a todos los grados. Después vuelve a abrir el editor para compartir el vídeo.</p> : null}
+        {params.error === "technique-video-bulk" ? <p className="form-error" role="alert">No se han podido comprobar los contenidos de otros grados. No se ha guardado ningún cambio.</p> : null}
+        {params.error === "technique-video-bulk-partial" ? <p className="form-error" role="alert">Este contenido se ha guardado, pero no se ha podido completar la aplicación del vídeo a todos los grados. Revisa los enlaces y vuelve a intentarlo.</p> : null}
 
         <nav className="admin-catalog-nav" aria-label="Tipos de contenido técnico">
           <a href="/tecnicas#catalogo-tecnico" aria-current={!selectedKind ? "page" : undefined}>
@@ -411,6 +416,11 @@ function TechniqueAdminCard({
             Título del vídeo (opcional)
             <input name="videoTitle" defaultValue={tecnica.video_title ?? ""} placeholder="Ej. Tenchiken dai ikkei" />
           </label>
+          <label className="checkbox-field wide">
+            <input name="applyVideoAllGrades" type="checkbox" />
+            Aplicar el vídeo a todos los grados de esta misma técnica o kata
+          </label>
+          <p className="muted wide">Solo se aplicará a contenidos con el mismo nombre, familia, categoría, tipo y variante. Sustituye el enlace y el título existentes en esos grados; no mezcla variantes ni katas individuales y por parejas. Requiere un enlace y no elimina vídeos en otros grados.</p>
           <label className="checkbox-field">
             <input name="active" type="checkbox" defaultChecked={tecnica.active} />
             Activa
