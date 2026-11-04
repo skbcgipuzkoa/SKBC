@@ -571,14 +571,31 @@ export async function updateTechniqueAction(formData: FormData) {
     redirect("/tecnicas?error=technique");
   }
 
+  const videoUrl = String(formData.get("videoUrl") ?? "").trim();
+  if (formData.has("videoUrl") && videoUrl) {
+    let validVideoUrl = false;
+    try {
+      const parsed = new URL(videoUrl);
+      validVideoUrl = /^https?:\/\//i.test(videoUrl) && ["http:", "https:"].includes(parsed.protocol) && Boolean(parsed.hostname);
+    } catch {
+      validVideoUrl = false;
+    }
+    if (!validVideoUrl) {
+      redirect(addTechniqueParams(returnPath, { error: "technique-video", edit: legacyId }));
+    }
+  }
+
   const active = formData.get("active") === "on";
   const activeInPlanning = active && formData.get("activeInPlanning") === "on";
   const supabase = createAdminClient();
-  const { data: currentTechnique } = await supabase
+  const { data: currentTechnique, error: currentTechniqueError } = await supabase
     .from("techniques")
     .select("summary_es")
     .eq("legacy_id", legacyId)
     .maybeSingle<{ summary_es: string | null }>();
+  if (currentTechniqueError || !currentTechnique) {
+    redirect(addTechniqueParams(returnPath, { error: "technique", edit: legacyId }));
+  }
   const now = new Date().toISOString();
   const nextSummary = String(formData.get("summaryEs") ?? "").trim();
   const summaryChanged = (currentTechnique?.summary_es ?? "").trim() !== nextSummary;
@@ -590,6 +607,8 @@ export async function updateTechniqueAction(formData: FormData) {
     variant_note: String(formData.get("variantNote") ?? "").trim() || null,
     category: normalizeTechniqueCategoryInput(String(formData.get("category") ?? "")),
     content_type: String(formData.get("contentType") ?? "").trim() || null,
+    ...(formData.has("videoUrl") ? { video_url: videoUrl || null } : {}),
+    ...(formData.has("videoTitle") ? { video_title: String(formData.get("videoTitle") ?? "").trim() || null } : {}),
     summary_es: nextSummary,
     active,
     active_in_planning: activeInPlanning,
@@ -612,6 +631,10 @@ export async function updateTechniqueAction(formData: FormData) {
   }
 
   revalidatePath("/tecnicas");
+  revalidatePath("/ficha/[token]", "page");
+  revalidatePath("/clases/[legacyId]", "page");
+  revalidatePath("/dojo/[legacyId]", "page");
+  revalidatePath("/delegado/[token]", "page");
   redirect(addTechniqueParams(returnPath, { saved: "technique", technique: legacyId }));
 }
 

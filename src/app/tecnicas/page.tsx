@@ -107,6 +107,7 @@ export default async function TecnicasPage({
           </p>
         ) : null}
         {params.error === "technique" ? <p className="form-error">No se ha podido guardar la tecnica.</p> : null}
+        {params.error === "technique-video" ? <p className="form-error" role="alert">No se ha guardado el contenido. El enlace del vídeo debe ser una dirección completa que empiece por https:// o http://.</p> : null}
 
         <nav className="admin-catalog-nav" aria-label="Tipos de contenido técnico">
           <a href="/tecnicas#catalogo-tecnico" aria-current={!selectedKind ? "page" : undefined}>
@@ -400,6 +401,15 @@ function TechniqueAdminCard({
           <label>
             Tipo contenido
             <input name="contentType" defaultValue={tecnica.content_type ?? ""} />
+          </label>
+          <label className="wide">
+            Enlace del vídeo
+            <input name="videoUrl" type="url" defaultValue={tecnica.video_url ?? ""} placeholder="https://…" aria-describedby={`video-help-${tecnica.id}`} />
+            <small id={`video-help-${tecnica.id}`} className="muted">Pega la dirección completa del vídeo. Deja este campo vacío para quitar el enlace.</small>
+          </label>
+          <label className="wide">
+            Título del vídeo (opcional)
+            <input name="videoTitle" defaultValue={tecnica.video_title ?? ""} placeholder="Ej. Tenchiken dai ikkei" />
           </label>
           <label className="checkbox-field">
             <input name="active" type="checkbox" defaultChecked={tecnica.active} />
