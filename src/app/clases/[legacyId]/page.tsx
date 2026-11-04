@@ -898,7 +898,7 @@ export default async function ClaseDetailPage({
         {query.saved === "kids-work-review" ? <p className="save-ok">Ajuste tecnico infantil guardado.</p> : null}
         {query.saved === "attendance-removed" ? <p className="save-ok">Asistencia quitada.</p> : null}
         {query.saved === "plan-technique" ? <p className="save-ok">Tecnica actualizada.</p> : null}
-        {query.saved === "manual-technique" ? <p className="save-ok">Tecnica comun anadida al plan de clase.</p> : null}
+        {query.saved === "manual-technique" ? <p className="save-ok">Técnicas comunes añadidas al plan de clase.</p> : null}
         {query.saved === "manual-technique-remove" ? <p className="save-ok">Tecnica comun quitada de la clase.</p> : null}
         {query.saved === "kids-plan" ? <p className="save-ok">Plan infantil opcional guardado.</p> : null}
         {query.saved === "kids-plan-delete" ? <p className="save-ok">Trabajo infantil por grupo quitado.</p> : null}
@@ -931,7 +931,7 @@ export default async function ClaseDetailPage({
           <p className="form-error">No se ha podido actualizar la tecnica.</p>
         ) : null}
         {query.error === "manual-technique" ? (
-          <p className="form-error">No se ha podido anadir la tecnica comun{query.detail ? `: ${query.detail}` : "."}</p>
+          <p className="form-error">No se han podido añadir las técnicas comunes{query.detail ? `: ${query.detail}` : "."}</p>
         ) : null}
         {query.error === "manual-technique-remove" ? (
           <p className="form-error">No se ha podido quitar la tecnica comun{query.detail ? `: ${query.detail}` : "."}</p>
@@ -1221,7 +1221,7 @@ export default async function ClaseDetailPage({
               <h2 className="section-title" id="plan-tecnico">Plan tecnico</h2>
               <span className="status" data-plan-total-count data-plan-total-label=" realizadas">{completedPlan}/{(plan ?? []).length} realizadas</span>
             </div>
-            <PlanTechniqueForm action={updateClassPlanTechniquesAction}>
+            <PlanTechniqueForm action={updateClassPlanTechniquesAction} classId={clase.id} serverSelection={Object.fromEntries(groupedPlan.flatMap(([, items]) => items.map((item) => [item.id, item.completed])))}>
               {canEditClosedClass && groupedPlan.length ? <input type="hidden" data-class-primary-form="adult-technical" /> : null}
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />

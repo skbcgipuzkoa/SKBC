@@ -12,6 +12,7 @@ import {
   saveChildClassPlanAction,
   updateClassPlanTechniquesAction
 } from "@/app/actions";
+import { PlanTechniqueForm } from "@/app/clases/[legacyId]/PlanTechniqueForm";
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { ClosingClassButton } from "@/app/components/ClosingClassButton";
@@ -360,7 +361,7 @@ export default async function DojoClassPage({
                 groups={groupedPlan.map(([grade]) => ({ id: grade, grade }))}
               />
             </details>
-            <form action={updateClassPlanTechniquesAction} className="dojo-plan-form" data-class-primary-form={groupedPlan.length ? "adult-technical" : undefined}>
+            <PlanTechniqueForm action={updateClassPlanTechniquesAction} classId={adultClass.id} serverSelection={Object.fromEntries(groupedPlan.flatMap(([, items]) => items.map((item) => [item.id, item.completed])))} className="dojo-plan-form" primaryForm={groupedPlan.length ? "adult-technical" : undefined}>
               <input type="hidden" name="classId" value={adultClass.id} />
               <input type="hidden" name="legacyId" value={adultClass.legacy_id ?? legacyId} />
               <input type="hidden" name="returnTo" value={`/dojo/${adultClass.legacy_id ?? legacyId}?step=techniques&saved=techniques`} />
@@ -391,7 +392,7 @@ export default async function DojoClassPage({
                 );
               })}
               <DojoSubmitButton pendingLabel="Guardando técnicas...">Guardar técnicas</DojoSubmitButton>
-            </form>
+            </PlanTechniqueForm>
             </>
           ) : <p className="muted">No hay clase adulta en este día.</p>}
         </section>

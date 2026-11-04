@@ -1,6 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
+import { useFormStatus } from "react-dom";
 import { useMemo, useState, type FormEvent } from "react";
 
 type TechniqueOption = {
@@ -27,18 +28,19 @@ type ManualTechniqueFormProps = {
 
 export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techniques, groups }: ManualTechniqueFormProps) {
   const [query, setQuery] = useState("");
-  const [selectedTechniqueId, setSelectedTechniqueId] = useState("");
-  const selectedTechnique = techniques.find((technique) => technique.id === selectedTechniqueId) ?? null;
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedTechniques = techniques.filter((technique) => selectedIds.includes(technique.id));
+  function toggle(id: string) { setSelectedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : ids.length < 50 ? [...ids, id] : ids); }
   const visibleTechniques = useMemo(() => {
     const normalized = normalize(query);
     const filtered = normalized
       ? techniques.filter((technique) => normalize(`${technique.name} ${technique.grade} ${technique.category ?? ""} ${technique.content_type ?? ""}`).includes(normalized))
       : techniques;
-    return normalized ? filtered.slice(0, 40) : filtered;
+    return filtered;
   }, [query, techniques]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    if (!selectedTechniqueId) {
+    if (!selectedIds.length) {
       event.preventDefault();
     }
   }
@@ -47,9 +49,9 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
     <form action={action} className="manual-technique-form" onSubmit={handleSubmit}>
       <input type="hidden" name="classId" value={classId} />
       <input type="hidden" name="legacyId" value={legacyId} />
-      <input type="hidden" name="techniqueId" value={selectedTechniqueId} />
+      {selectedIds.map((id) => <input key={id} type="hidden" name="techniqueIds" value={id} />)}
       {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
-      <p className="muted">Usalo cuando toda la clase, o varios grados, trabajen una tecnica que no estaba en el plan automatico.</p>
+      <p className="muted">Selecciona una o varias técnicas o katas fuera del plan y añádelas juntas para toda la clase o los grados elegidos.</p>
       <label className="manual-technique-search">
         Buscar tecnica
         <span>
@@ -63,13 +65,15 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
         </span>
       </label>
       {query.trim() ? (
-        <div className="manual-technique-results" role="listbox" aria-label="Resultados de busqueda de tecnicas">
+        <div className="manual-technique-results" role="group" aria-label="Resultados de busqueda de tecnicas">
           {visibleTechniques.length ? (
             visibleTechniques.map((technique) => (
               <button
-                className={selectedTechniqueId === technique.id ? "selected" : ""}
+                className={selectedIds.includes(technique.id) ? "selected" : ""}
+                aria-pressed={selectedIds.includes(technique.id)}
+                disabled={!selectedIds.includes(technique.id) && selectedIds.length >= 50}
                 key={technique.id}
-                onClick={() => setSelectedTechniqueId(technique.id)}
+                onClick={() => toggle(technique.id)}
                 type="button"
               >
                 <strong>{technique.name}</strong>
@@ -81,26 +85,16 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
           )}
         </div>
       ) : null}
-      {selectedTechnique ? (
-        <div className="manual-technique-current">
-          <span>
-            Seleccionada: <strong>{selectedTechnique.name}</strong>
-            <small>{selectedTechnique.grade} - {formatTechniqueKind(selectedTechnique)}</small>
-          </span>
-          <button type="button" onClick={() => setSelectedTechniqueId("")}>Quitar</button>
-        </div>
-      ) : null}
-      <label>
-        Tecnica
-        <select value={selectedTechniqueId} onChange={(event) => setSelectedTechniqueId(event.target.value)} required>
-          <option value="">Seleccionar tecnica</option>
-          {visibleTechniques.map((technique) => (
-            <option key={technique.id} value={technique.id}>
-              {technique.grade} - {technique.name} - {formatTechniqueKind(technique)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <p aria-live="polite">{selectedIds.length}/50 seleccionadas · {query.trim() ? visibleTechniques.length : 0} resultados</p>
+      {selectedIds.length >= 50 ? <p role="status">Máximo 50 técnicas por vez. Quita alguna para seleccionar otra.</p> : null}
+      {query.trim() && visibleTechniques.length ? <button type="button" disabled={new Set([...selectedIds, ...visibleTechniques.map((item) => item.id)]).size > 50} onClick={() => setSelectedIds(Array.from(new Set([...selectedIds, ...visibleTechniques.map((item) => item.id)])))}>Seleccionar resultados</button> : null}
+      {selectedTechniques.length ? <div className="manual-technique-selected" aria-label="Técnicas seleccionadas">
+        {selectedTechniques.map((technique) => <div className="manual-technique-current" key={technique.id}>
+          <span><strong>{technique.name}</strong><small>{technique.grade} - {formatTechniqueKind(technique)}</small></span>
+          <button type="button" aria-label={"Quitar " + technique.name + " de la selección"} onClick={() => toggle(technique.id)}>Quitar</button>
+        </div>)}
+        <button type="button" onClick={() => setSelectedIds([])}>Limpiar selección</button>
+      </div> : null}
       <fieldset className="manual-technique-scope">
         <legend>Alcance</legend>
         <p className="muted">Si no marcas ningun grado, se aplicara a todos los adultos asistentes de la clase.</p>
@@ -113,7 +107,7 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
           ))}
         </div>
       </fieldset>
-      <button type="submit" disabled={!selectedTechniqueId}>Anadir tecnica comun hecha</button>
+      <ManualTechniqueSubmit disabled={!selectedIds.length} />
     </form>
   );
 }
@@ -136,4 +130,9 @@ function formatTechniqueKind(technique: TechniqueOption) {
   if (contentType === "KATA_TANEN") return "kata tanen";
   if (contentType === "KATA_SOTAI") return "kata sotai";
   return technique.category ?? "tecnica";
+}
+
+function ManualTechniqueSubmit({ disabled }: { disabled: boolean }) {
+  const { pending } = useFormStatus();
+  return <button type="submit" disabled={disabled || pending}>{pending ? "Añadiendo técnicas..." : "Añadir técnicas comunes hechas"}</button>;
 }

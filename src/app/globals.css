@@ -13095,3 +13095,18 @@ tbody tr:hover {
   color: inherit;
   font-size: inherit;
 }
+
+.manual-technique-selected {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.manual-technique-current > span,
+.manual-technique-results button > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.manual-technique-form button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}

@@ -1840,18 +1840,20 @@ export async function addManualClassTechniqueAction(formData: FormData) {
 
   const classId = String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
-  const techniqueId = String(formData.get("techniqueId") ?? "");
+  const techniqueIds = [...new Set((formData.getAll("techniqueIds").length
+    ? formData.getAll("techniqueIds")
+    : [formData.get("techniqueId")]).map((value) => String(value ?? "").trim()).filter(Boolean))];
   const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
   const selectedGrades = formData.getAll("grades").map((value) => String(value)).filter(Boolean);
 
-  if (!classId || !legacyId || !techniqueId) {
+  if (!classId || !legacyId || !techniqueIds.length || techniqueIds.length > 50) {
     redirect(`/clases/${legacyId || ""}?error=manual-technique`);
   }
 
   const supabase = createAdminClient();
 
   try {
-    const [{ data: clase, error: classError }, { data: technique, error: techniqueError }, { data: groups, error: groupsError }, { data: maxPlan }] =
+    const [{ data: clase, error: classError }, { data: techniques, error: techniqueError }, { data: groups, error: groupsError }, { data: maxPlan, error: maxPlanError }, { data: existingManual, error: existingError }] =
       await Promise.all([
         supabase
           .from("classes")
@@ -1860,9 +1862,10 @@ export async function addManualClassTechniqueAction(formData: FormData) {
           .single<{ id: string; class_date: string; class_group: "kids" | "adults"; class_type: string | null; closed: boolean; status: string }>(),
         supabase
           .from("techniques")
-          .select("id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,score")
-          .eq("id", techniqueId)
-          .single<{
+          .select("id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,score,active")
+          .in("id", techniqueIds)
+          .eq("active", true)
+          .returns<Array<{
             id: string;
             grade: string;
             base_name: string | null;
@@ -1873,7 +1876,7 @@ export async function addManualClassTechniqueAction(formData: FormData) {
             content_type: string | null;
             summary_es: string | null;
             score: number | null;
-          }>(),
+          }>>(),
         supabase
           .from("class_technical_groups")
           .select("id,grade,active")
@@ -1886,22 +1889,33 @@ export async function addManualClassTechniqueAction(formData: FormData) {
           .eq("class_id", classId)
           .order("suggested_order", { ascending: false })
           .limit(1)
-          .returns<Array<{ suggested_order: number | null }>>()
+          .returns<Array<{ suggested_order: number | null }>>(),
+        supabase.from("technical_plans").select("technique_id,technical_group_id")
+          .eq("class_id", classId).eq("proposal_type", "COMUN MANUAL")
+          .returns<Array<{ technique_id: string | null; technical_group_id: string | null }>>()
       ]);
 
     if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
-    if (techniqueError || !technique) throw techniqueError ?? new Error("Tecnica no encontrada.");
+    if (techniqueError || techniques?.length !== techniqueIds.length) throw techniqueError ?? new Error("Alguna tecnica no existe o no esta activa.");
     if (groupsError) throw groupsError;
+    if (maxPlanError) throw maxPlanError;
+    if (existingError) throw existingError;
     if ((clase.closed && clase.status !== "pending") || clase.class_group !== "adults") throw new Error("Solo se pueden anadir tecnicas manuales a clases adultas abiertas o en correccion.");
 
     const normalizedSelected = new Set(selectedGrades.map(normalizeActionGrade));
+    const allowedGrades = new Set((groups ?? []).map((group) => normalizeActionGrade(group.grade)));
+    if ([...normalizedSelected].some((grade) => !allowedGrades.has(grade))) throw new Error("El alcance contiene grados ajenos a la clase.");
     const targetGroups = (groups ?? []).filter((group) => !normalizedSelected.size || normalizedSelected.has(normalizeActionGrade(group.grade)));
     if (!targetGroups.length) throw new Error("No hay grupos tecnicos para ese alcance.");
 
     const baseOrder = (maxPlan?.[0]?.suggested_order ?? 0) + 1;
     const legacyPrefix = `PLA_MAN_${Date.now().toString(36).toUpperCase()}`;
     const now = new Date().toISOString();
-    const inserts = targetGroups.map((group, index) => ({
+    const existingPairs = new Set((existingManual ?? []).map((row) => `${row.technique_id}:${row.technical_group_id}`));
+    const pairs = techniques.flatMap((technique) => targetGroups
+      .filter((group) => !existingPairs.has(`${technique.id}:${group.id}`))
+      .map((group) => ({ technique, group })));
+    const inserts = pairs.map(({ technique, group }, index) => ({
       legacy_id: `${legacyPrefix}_${String(index + 1).padStart(3, "0")}`,
       class_id: clase.id,
       technical_group_id: group.id,
@@ -1929,8 +1943,10 @@ export async function addManualClassTechniqueAction(formData: FormData) {
       updated_at: now
     }));
 
-    const { error: insertError } = await supabase.from("technical_plans").insert(inserts);
-    if (insertError) throw insertError;
+    if (inserts.length) {
+      const { error: insertError } = await supabase.from("technical_plans").insert(inserts);
+      if (insertError) throw insertError;
+    }
   } catch (error) {
     console.error("Error adding manual class technique", error);
     redirect(`/clases/${legacyId}?error=manual-technique&detail=${encodeURIComponent(errorMessage(error))}`);
@@ -3114,12 +3130,15 @@ export async function updateClassPlanTechniquesAction(formData: FormData) {
       .single<{ closed: boolean; class_group: "kids" | "adults" }>();
     if (classError || !clase) throw classError ?? new Error("Clase no encontrada.");
 
-    const { error: resetError } = await supabase
+    const { data: regularPlans, error: plansError } = await supabase
       .from("technical_plans")
-      .update({ completed: false, updated_at: now })
-      .eq("class_id", classId);
-
-    if (resetError) throw resetError;
+      .select("id,proposal_type")
+      .eq("class_id", classId)
+      .returns<Array<{ id: string; proposal_type: string | null }>>();
+    if (plansError) throw plansError;
+    const regularIds = (regularPlans ?? []).filter((row) => row.proposal_type !== "COMUN MANUAL").map((row) => row.id);
+    const allowedIds = new Set(regularIds);
+    if (planIds.some((id) => !allowedIds.has(id))) throw new Error("El plan contiene propuestas ajenas a este formulario.");
 
     if (planIds.length) {
       const { error: updateError } = await supabase
@@ -3131,13 +3150,27 @@ export async function updateClassPlanTechniquesAction(formData: FormData) {
       if (updateError) throw updateError;
     }
 
+    const selectedIds = new Set(planIds);
+    const uncheckedIds = regularIds.filter((id) => !selectedIds.has(id));
+    if (uncheckedIds.length) {
+      const { error: resetError } = await supabase
+        .from("technical_plans")
+        .update({ completed: false, updated_at: now })
+        .eq("class_id", classId)
+        .in("id", uncheckedIds);
+      if (resetError) throw resetError;
+    }
+
     if (clase.class_group === "adults" && clase.closed) {
       await closeAdultClass(classId);
       await recalculateClassExamStatus(classId);
     }
   } catch (error) {
     console.error("Error updating class plan techniques", error);
-    redirect(returnTo || `/clases/${legacyId}?error=plan-technique`);
+    const failureUrl = new URL(returnTo || `/clases/${legacyId}`, "https://local.invalid");
+    failureUrl.searchParams.delete("saved");
+    failureUrl.searchParams.set("error", "plan-technique");
+    redirect(`${failureUrl.pathname}${failureUrl.search}${failureUrl.hash}`);
   }
 
   redirect(returnTo || `/clases/${legacyId}?saved=plan-technique${nextStep === "attendance" ? "&step=asistencia" : ""}`);

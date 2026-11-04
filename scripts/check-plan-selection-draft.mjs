@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { parsePlanDraft, mergePlanDraft, planSelectionsAgree, planDraftKey } from "../src/lib/plan-selection-draft.ts";
+const server = { grade1: false, grade2: true, grade3: false };
+const draft = { grade1: true, grade2: false, grade3: true, removed: true };
+assert.deepEqual(mergePlanDraft(server, draft), { grade1: true, grade2: false, grade3: true });
+assert.deepEqual(mergePlanDraft({ ...server, newRow: true }, draft), { grade1: true, grade2: false, grade3: true, newRow: true });
+assert.equal(planSelectionsAgree(server, draft), false, "failed save or manual redirect must keep draft");
+assert.equal(planSelectionsAgree({ grade1: true, grade2: false, grade3: true, newRow: false }, draft), true, "server acknowledgement agrees across all retained grades");
+assert.equal(planSelectionsAgree(server, { removed: true }), true, "removed rows do not retain stale drafts");
+assert.deepEqual(parsePlanDraft(JSON.stringify(draft)), draft);
+for (const corrupt of [null, "invalid", "[]", "null", '{"grade1":"true"}', '{"grade1":1}']) assert.equal(parsePlanDraft(corrupt), null);
+assert.notEqual(planDraftKey("class-a"), planDraftKey("class-b"));
+console.log("Plan draft merge, exact checked/unchecked restoration, acknowledgement and class isolation passed.");
