@@ -1,4 +1,5 @@
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
+import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { ArrowLeft, Check, FileText, LogOut, RefreshCcw, Wand2 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { ClosingClassButton } from "@/app/components/ClosingClassButton";
@@ -70,6 +71,7 @@ type PlanRow = {
   notes: string | null;
   score_at_that_moment: number | null;
   techniques: {
+    video_url: string | null;
     repetitions: number | null;
     last_trained_on: string | null;
     score: number | null;
@@ -193,7 +195,7 @@ export default async function ClaseDetailPage({
   const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }, { data: dayClasses }, { data: dayMembers }, { data: dayAttendance }, { data: techniqueOptions }] = await Promise.all([
     supabase
       .from("technical_plans")
-      .select("id,legacy_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score,summary_es)")
+      .select("id,legacy_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score,summary_es,video_url)")
       .eq("class_id", clase.id)
       .order("group_grade")
       .order("suggested_order")
@@ -635,7 +637,7 @@ export default async function ClaseDetailPage({
                             defaultChecked={selectedPlanIds.has(item.id)}
                           />
                           <span>
-                            <strong>{item.technique_name}</strong>
+                            <span className="plan-technique-heading"><strong>{item.technique_name}</strong><TechniqueVideoLink url={item.techniques?.video_url} name={item.technique_name} /></span>
                             <small>{item.category ?? "tecnica"} · {item.proposal_type ?? item.focus ?? "programa"}</small>
                             <ExamPreparationNotice focus={item.focus} />
                           </span>
@@ -1259,7 +1261,7 @@ export default async function ClaseDetailPage({
                       {items.map((item) => (
                         <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
                           <div>
-                            <strong>{item.technique_name}</strong>
+                            <span className="plan-technique-heading"><strong>{item.technique_name}</strong><TechniqueVideoLink url={item.techniques?.video_url} name={item.technique_name} /></span>
                             <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
                             <ExamPreparationNotice focus={item.focus} />
                             <small className="plan-reason">

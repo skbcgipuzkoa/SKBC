@@ -1,4 +1,5 @@
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
+import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { Check, ChevronDown, LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -35,6 +36,7 @@ type ClassRow = {
 };
 
 type PlanRow = {
+  techniques: { video_url: string | null } | null;
   id: string;
   group_grade: string | null;
   target_grade: string | null;
@@ -140,7 +142,7 @@ export default async function DojoClassPage({
     adultClass
       ? supabase
         .from("technical_plans")
-        .select("id,group_grade,target_grade,technique_name,category,proposal_type,focus,summary_es,completed")
+        .select("id,group_grade,target_grade,technique_name,category,proposal_type,focus,summary_es,completed,techniques(video_url)")
         .eq("class_id", adultClass.id)
         .order("group_grade")
         .order("suggested_order")
@@ -377,7 +379,7 @@ export default async function DojoClassPage({
                         <label className="dojo-technique" key={item.id}>
                           <input type="checkbox" name="planIds" value={item.id} defaultChecked={item.completed} />
                           <span>
-                            <strong>{item.technique_name}</strong>
+                            <span className="plan-technique-heading"><strong>{item.technique_name}</strong><TechniqueVideoLink url={item.techniques?.video_url} name={item.technique_name} /></span>
                             <small>{item.category ?? "tecnica"} · {item.proposal_type ?? "programa"}</small>
                             <ExamPreparationNotice focus={item.focus} />
                             {item.summary_es ? <p>{item.summary_es}</p> : null}

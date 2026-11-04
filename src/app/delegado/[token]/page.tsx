@@ -1,4 +1,5 @@
 import { ClipboardCheck, Play, Send } from "lucide-react";
+import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { notFound } from "next/navigation";
 import { saveDelegateChildPlanAction, saveDelegateTechnicalStepAction, startDelegateClassAction, submitDelegateClassAction } from "@/app/actions";
 import { ClosingClassButton } from "@/app/components/ClosingClassButton";
@@ -32,6 +33,7 @@ type ClassRow = {
 };
 
 type PlanRow = {
+  techniques: { video_url: string | null } | null;
   id: string;
   class_id: string;
   group_grade: string | null;
@@ -130,7 +132,7 @@ export default async function DelegateClassPage({
   const [{ data: plan }, { data: attendance }, { data: members }] = classIds.length ? await Promise.all([
     supabase
       .from("technical_plans")
-      .select("id,class_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,summary_es,completed")
+      .select("id,class_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,summary_es,completed,techniques(video_url)")
       .in("class_id", adultClasses.map((clase) => clase.id))
       .order("group_grade")
       .order("suggested_order")
@@ -334,7 +336,7 @@ export default async function DelegateClassPage({
                   <label className="delegate-check" key={item.id}>
                     <input name="planIds" type="checkbox" value={item.id} defaultChecked={item.completed} />
                     <span>
-                      <strong>{item.technique_name}</strong>
+                      <span className="plan-technique-heading"><strong>{item.technique_name}</strong><TechniqueVideoLink url={item.techniques?.video_url} name={item.technique_name} /></span>
                       {item.summary_es ? <em>{item.summary_es}</em> : null}
                       <small>{item.category ?? "-"} · {item.proposal_type ?? item.target_grade ?? "-"}</small>
                     </span>

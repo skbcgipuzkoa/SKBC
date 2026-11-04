@@ -13083,3 +13083,15 @@ tbody tr:hover {
 }
 .technical-progress-video-link:hover { background: #dbeafe; }
 .technical-progress-video-link:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
+.plan-card .plan-technique-heading,
+.dojo-technique .plan-technique-heading,
+.delegate-check .plan-technique-heading,
+.mini-check-row .plan-technique-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  color: inherit;
+  font-size: inherit;
+}
