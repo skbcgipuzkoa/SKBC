@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import * as jsx from 'react/jsx-runtime';
+const mod={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/components/technique-video-link.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports:mod.exports,URL,require:()=>jsx});
+const render=url=>renderToStaticMarkup(React.createElement(mod.exports.TechniqueVideoLink,{url,name:'Tenchi ken dai ichi'}));
+for(const url of [null,undefined,'','  ','javascript:alert(1)','data:text/html,test','/video','https://'])assert.equal(render(url),'');
+const valid=render(' https://www.youtube.com/watch?v=example ');
+assert(valid.includes('href="https://www.youtube.com/watch?v=example"'));
+assert(valid.includes('target="_blank"'));
+assert(valid.includes('rel="noopener noreferrer"'));
+assert(valid.includes('Ver vídeo de Tenchi ken dai ichi'));
+assert(valid.includes('Ver vídeo</a>'));
+console.log('Technique video links: present, absent, invalid and safe new-tab cases passed');

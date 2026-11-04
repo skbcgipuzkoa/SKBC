@@ -1,4 +1,5 @@
 import { groupTechnicalProgress } from "@/lib/technical-progress-display";
+import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { ExternalLink, Gamepad2, Library, NotebookTabs } from "lucide-react";
 import { notFound } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
@@ -119,6 +120,7 @@ type Course = {
 };
 
 type Technique = {
+  video_url: string | null;
   id: string;
   grade: string;
   base_name: string | null;
@@ -395,7 +397,7 @@ export default async function PublicFichaPage({
   const [{ data: techniques }, technicalHistory, { data: allAdults }, allAttendance, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
     supabase
       .from("techniques")
-      .select("id,grade,base_name,name,category,content_type,active,active_in_planning")
+      .select("id,grade,base_name,name,category,content_type,active,active_in_planning,video_url")
       .eq("grade", targetGrade)
       .eq("active", true)
       .returns<Technique[]>(),
@@ -692,7 +694,10 @@ function AdultFicha({
                 technique.label,
                 `${technique.repetitions}/${REPETITION_GOAL}`,
                 String(technique.missing),
-                <StateBadge key={technique.id} state={technique.completed ? "COMPLETADA" : technique.repetitions > 0 ? "EN PROGRESO" : "PENDIENTE"} />
+                <div className="technical-progress-actions" key={technique.id}>
+                  <StateBadge state={technique.completed ? "COMPLETADA" : technique.repetitions > 0 ? "EN PROGRESO" : "PENDIENTE"} />
+                  <TechniqueVideoLink url={technique.videoUrl} name={technique.name} />
+                </div>
               ])}
               empty="Sin técnicas cargadas para el grado objetivo."
             />
@@ -1547,6 +1552,7 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
       name: technique.name,
       category: technique.category.toUpperCase(),
       contentType: technique.content_type,
+      videoUrl: technique.video_url,
       isKata,
       label,
       repetitions: reps,
