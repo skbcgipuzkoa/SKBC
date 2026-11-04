@@ -1,3 +1,4 @@
+import { resolveExamEligibilityTime } from "@/lib/exam-eligibility-time";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
 import { evaluateExamTechnicalReadiness, type ExamCurriculumItem } from "@/lib/exam-technical-readiness";
@@ -121,14 +122,16 @@ async function calculateExamStatus(member: MemberRow) {
   }
 
   const today = startOfDay(new Date());
-  const cycleStartDate = parseDate(cycleStart);
-  if (!cycleStartDate) {
+  const initialTiming = resolveExamEligibilityTime(member, 12);
+  if (!initialTiming) {
     return emptyStatus("", "Fecha de ciclo no valida.");
   }
 
   const requirement = await getExamRequirement(member);
   const engagement = await calculateEngagementStatus(member, cycleStart);
-  const eligibilityDate = addEligibilityTime(cycleStartDate, member.grade, Math.max(0, requirement.min_months - engagement.internationalKyuAdvanceMonths));
+  const timing = resolveExamEligibilityTime(member, requirement.min_months, engagement.internationalKyuAdvanceMonths)!;
+  const { cycleStartDate, eligibilityDate } = timing;
+  const timingNotice = timing.isFirstExam ? "Primer examen: minimo 6 meses desde ingreso" : "";
   const [cycleAttendance, totalCycleSessions, recent, examCalls] = await Promise.all([
     countAttendance(member.id, cycleStart, formatDate(today)),
     countExpectedTrainingSessions(cycleStart, formatDate(eligibilityDate), member.class),
@@ -140,9 +143,9 @@ async function calculateExamStatus(member: MemberRow) {
     return {
       nextExamOn: null,
       semaphore: "INACTIVO",
-      notice: recent.lastAttendance
+      notice: [timingNotice, recent.lastAttendance
         ? `INACTIVO: sin asistencias desde hace ${daysBetween(parseDate(recent.lastAttendance) ?? today, today)} dias. Reactivacion: minimo 6 asistencias en 60 dias y 1 en 21 dias.`
-        : "INACTIVO: sin registros recientes de asistencia. Reactivacion: minimo 6 asistencias en 60 dias y 1 en 21 dias.",
+        : "INACTIVO: sin registros recientes de asistencia. Reactivacion: minimo 6 asistencias en 60 dias y 1 en 21 dias."].filter(Boolean).join(" | "),
       cycleAttendance,
       totalCycleSessions,
       minimumAttendance: null,
@@ -199,7 +202,7 @@ async function calculateExamStatus(member: MemberRow) {
   return {
     nextExamOn: formatDate(nextExam),
     semaphore,
-    notice,
+    notice: [timingNotice, notice].filter(Boolean).join(" | "),
     cycleAttendance,
     totalCycleSessions,
     minimumAttendance,
@@ -341,7 +344,7 @@ async function calculateEngagementStatus(member: MemberRow, cycleStart: string):
   const points180 = Math.max(0, coursePoints + bonusPoints + busenPoints + shakujoPoints);
   const attendanceCredit = Math.min(2, Math.floor(points180 / 6));
   const internationalSinceCycle = (courses ?? []).filter((row) => row.kind === "international" && row.course_date > cycleStart).length;
-  const internationalKyuAdvanceMonths = normalizeGrade(member.grade).endsWith(" KYU") ? Math.min(3, internationalSinceCycle * 2) : 0;
+  const internationalKyuAdvanceMonths = member.last_exam_on && normalizeGrade(member.grade).endsWith(" KYU") ? Math.min(3, internationalSinceCycle * 2) : 0;
 
   const parts = [];
   if (attendanceCredit > 0) parts.push(`implicacion +${attendanceCredit} asistencia virtual para minimo`);
@@ -515,13 +518,6 @@ function gradeMatches(grade: string | null, pattern: string) {
   return false;
 }
 
-function addEligibilityTime(date: Date, grade: string | null, minMonths?: number) {
-  const next = new Date(date);
-  const months = minMonths ?? (danYearsExact(grade) ? danYearsExact(grade)! * 12 : 12);
-  next.setMonth(next.getMonth() + months);
-  return startOfDay(next);
-}
-
 function danYearsExact(grade: string | null) {
   const match = String(grade ?? "").trim().toUpperCase().match(/^(\d{1,2})\s*DAN$/);
   return match ? Number(match[1]) : null;
@@ -605,7 +601,7 @@ function isExplicitlyClosed(date: Date, closures: CalendarClosure[]) {
 }
 
 function formatDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function daysBetween(from: Date, to: Date) {

@@ -226,6 +226,8 @@ export default async function ProximosExamenesPage({
             </div>
           </div>
           <div className="exam-rule-grid">
+            <span>Primer examen: minimo 6 meses desde el ingreso en el club</span>
+            <span>Siguientes examenes: plazo del grado desde el ultimo examen</span>
             <span>Convocatorias configurables: junio y diciembre</span>
             <span>Asistencia minima por defecto: 40%</span>
             <span>Adultos: tecnica necesaria para VERDE</span>

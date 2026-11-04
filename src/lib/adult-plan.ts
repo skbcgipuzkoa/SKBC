@@ -1,3 +1,4 @@
+import { resolveExamEligibilityTime } from "@/lib/exam-eligibility-time";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { loadAllPages } from "@/lib/load-all-pages";
@@ -521,9 +522,10 @@ async function loadExamPriorityContext(classId: string, classDate: string) {
         const memberCurriculum = curriculum.filter(item => normalize(item.grade) === normalize(resolveTargetGrade(member.grade!)));
         if (!memberCurriculum.length || requirement.adult_required_repetitions <= 0)
             return [];
-        const cycleStart = member.last_exam_on ?? member.joined_on;
-        const elapsed = cycleStart ? (Date.parse(classDate) - Date.parse(cycleStart)) / (86400000 * 30.4375) : 0;
-        const timeProximity = cycleStart ? Math.max(0, Math.min(1, elapsed / Math.max(1, requirement.min_months ?? 12))) : 0;
+        const timing = resolveExamEligibilityTime(member, requirement.min_months ?? 12);
+        const classTime = new Date(`${classDate}T00:00:00`).getTime();
+        const cycleDuration = timing ? timing.eligibilityDate.getTime() - timing.cycleStartDate.getTime() : 0;
+        const timeProximity = timing && Number.isFinite(classTime) ? Math.max(0, Math.min(1, (classTime - timing.cycleStartDate.getTime()) / Math.max(1, cycleDuration))) : 0;
         const attendanceProximity = member.missing_attendance === null ? 0 : 1 / (1 + Math.max(0, member.missing_attendance));
         return [{ id: member.id, name: member.display_name || "Kenshi", grade: attendanceKnown ? (attendees.find(row => row.member_id === member.id)?.trained_grade ?? attendees.find(row => row.member_id === member.id)?.official_grade ?? member.grade!) : member.grade!, curriculum: memberCurriculum, repetitions: counts.get(member.id) ?? new Map<string, number>(), requiredRepetitions: requirement.adult_required_repetitions, proximity: (timeProximity + attendanceProximity) / 2 }];
     });
