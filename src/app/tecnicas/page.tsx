@@ -4,12 +4,15 @@ import { SubmitButton } from "@/app/components/SubmitButton";
 import { logoutAction, updateTechniqueAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { adultGrades } from "@/lib/grades";
+import { catalogGrade, catalogGrades, catalogKinds, classifyCatalogContent, groupCatalogContent } from "@/lib/admin-technical-catalog";
+import { loadAllPages } from "@/lib/load-all-pages";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
 import { BookOpenCheck, CheckCircle2, ExternalLink, Filter, LogOut, RotateCcw } from "lucide-react";
 
 type Tecnica = {
+  id: string;
   legacy_id: string | null;
   grade: string;
   base_name: string | null;
@@ -35,7 +38,7 @@ export const dynamic = "force-dynamic";
 export default async function TecnicasPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; grade?: string; category?: string; status?: string; edit?: string; saved?: string; error?: string; technique?: string }>;
+  searchParams: Promise<{ q?: string; grade?: string; category?: string; kind?: string; status?: string; edit?: string; saved?: string; error?: string; technique?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -43,20 +46,18 @@ export default async function TecnicasPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  const techniques = (await loadAllPages<Tecnica>((from, to) => supabase
     .from("techniques")
-    .select("legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,summary_updated_at,summary_updated_by,updated_at,active,active_in_planning,repetitions,last_trained_on,video_url,video_title")
+    .select("id,legacy_id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,summary_updated_at,summary_updated_by,updated_at,active,active_in_planning,repetitions,last_trained_on,video_url,video_title")
     .order("name", { ascending: true })
-    .limit(900)
-    .returns<Tecnica[]>();
-
-  if (error) throw error;
-
-  const techniques = (data ?? []).sort(compareTechniques);
+    .order("id", { ascending: true })
+    .range(from, to)
+    .returns<Tecnica[]>())).sort(compareTechniques);
+  const selectedKind = catalogKinds.find(kind => kind.id === params.kind);
   const review = buildTechnicalReview(techniques);
   const visibleTechniques = techniques.filter((tecnica) => matchesFilters(tecnica, params, review));
   const categories = [...new Set(techniques.map((tecnica) => tecnica.category).filter(Boolean))].sort();
-  const grades = adultGrades.filter((grade) => techniques.some((tecnica) => normalize(tecnica.grade) === normalize(grade)));
+  const grades = catalogGrades(techniques, adultGrades);
   const activeCount = techniques.filter((tecnica) => tecnica.active).length;
   const planningCount = techniques.filter((tecnica) => tecnica.active_in_planning).length;
   const neverTrained = techniques.filter((tecnica) => !tecnica.last_trained_on || tecnica.repetitions === 0).length;
@@ -67,7 +68,7 @@ export default async function TecnicasPage({
     : null;
   const returnPath = buildTechniqueReturnPath(params);
   const gradeStats = grades.map((grade) => {
-    const rows = techniques.filter((tecnica) => normalize(tecnica.grade) === normalize(grade));
+    const rows = techniques.filter((tecnica) => catalogGrade(tecnica.grade) === grade);
     const totalRepetitions = rows.reduce((sum, tecnica) => sum + (tecnica.repetitions ?? 0), 0);
     return {
       grade,
@@ -79,7 +80,7 @@ export default async function TecnicasPage({
   const visibleByGrade = grades
     .map((grade) => ({
       grade,
-      rows: visibleTechniques.filter((tecnica) => normalize(tecnica.grade) === normalize(grade))
+      rows: visibleTechniques.filter((tecnica) => catalogGrade(tecnica.grade) === grade)
     }))
     .filter((group) => group.rows.length);
 
@@ -90,7 +91,7 @@ export default async function TecnicasPage({
         <div className="topbar">
           <div>
             <p className="eyebrow">Programa tecnico adulto</p>
-            <h1>Tecnicas</h1>
+            <h1>Catálogo técnico</h1>
           </div>
           <form action={logoutAction}>
             <button className="icon-button" type="submit" title="Salir" aria-label="Salir">
@@ -107,12 +108,25 @@ export default async function TecnicasPage({
         ) : null}
         {params.error === "technique" ? <p className="form-error">No se ha podido guardar la tecnica.</p> : null}
 
-        <section className="grid stats compact" aria-label="Resumen tecnicas">
+        <nav className="admin-catalog-nav" aria-label="Tipos de contenido técnico">
+          <a href="/tecnicas#catalogo-tecnico" aria-current={!selectedKind ? "page" : undefined}>
+            <strong>Todos los contenidos</strong><span>{techniques.length}</span>
+            <small>Catálogo técnico completo</small>
+          </a>
+          {catalogKinds.map(kind => (
+            <a key={kind.id} className={`catalog-kind-${kind.id}`} href={`/tecnicas?kind=${kind.id}#catalogo-tecnico`} aria-current={selectedKind?.id === kind.id ? "page" : undefined}>
+              <strong>{kind.label}</strong><span>{techniques.filter(row => classifyCatalogContent(row) === kind.id).length}</span>
+              <small>{kind.description}</small>
+            </a>
+          ))}
+        </nav>
+
+        <section className="grid stats compact" aria-label="Resumen del catálogo técnico">
           <article className="card">
             <BookOpenCheck aria-hidden="true" size={20} />
-            <h2>Total tecnicas</h2>
+            <h2>Total contenidos</h2>
             <div className="metric">{techniques.length}</div>
-            <p className="muted">Programa adulto importado y disponible.</p>
+            <p className="muted">Técnicas, katas y demás contenidos disponibles.</p>
           </article>
           <article className="card">
             <CheckCircle2 aria-hidden="true" size={20} />
@@ -148,17 +162,18 @@ export default async function TecnicasPage({
             </div>
             <Filter aria-hidden="true" size={20} />
           </div>
-          <form className="filters-form" action="/tecnicas">
-            <input name="q" placeholder="Buscar tecnica" defaultValue={params.q ?? ""} />
-            <select name="grade" defaultValue={params.grade ?? ""}>
+          <form className="filters-form" action="/tecnicas#catalogo-tecnico">
+            {selectedKind ? <input type="hidden" name="kind" value={selectedKind.id} /> : null}
+            <input name="q" placeholder="Buscar técnica, kata o contenido" aria-label="Buscar contenido técnico" defaultValue={params.q ?? ""} />
+            <select name="grade" aria-label="Grado" defaultValue={params.grade ?? ""}>
               <option value="">Todos los grados</option>
               {grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
             </select>
-            <select name="category" defaultValue={params.category ?? ""}>
+            <select name="category" aria-label="Categoría" defaultValue={params.category ?? ""}>
               <option value="">Todas las categorias</option>
               {categories.map((category) => <option key={category} value={category}>{category}</option>)}
             </select>
-            <select name="status" defaultValue={params.status ?? ""}>
+            <select name="status" aria-label="Estado" defaultValue={params.status ?? ""}>
               <option value="">Todos los estados</option>
               <option value="planning">En plan tecnico</option>
               <option value="inactive">Inactivas</option>
@@ -178,12 +193,51 @@ export default async function TecnicasPage({
           </form>
         </section>
 
+        <div className="section-heading-row">
+          <div>
+            <h2 className="section-title" id="catalogo-tecnico">{selectedKind ? `${selectedKind.label} por grado` : "Todos los contenidos por grado"}</h2>
+            <p className="muted">Despliega solo el grado que quieras revisar o editar.</p>
+          </div>
+          <span className="pill">{visibleTechniques.length} visibles</span>
+        </div>
+        <section className="technique-grade-list">
+          {visibleByGrade.length ? visibleByGrade.map((group) => (
+            <details className="technique-grade-panel" key={group.grade} open={params.grade === group.grade || Boolean(params.edit)}>
+              <summary>
+                <span className={`grade-chip grade-${slugGrade(group.grade)}`}>{group.grade}</span>
+                <strong>{group.rows.length} contenidos</strong>
+                <small>{group.rows.filter((tecnica) => tecnica.active_in_planning).length} en plan · {group.rows.filter((tecnica) => !tecnica.last_trained_on || tecnica.repetitions === 0).length} sin repetir</small>
+              </summary>
+              {groupCatalogContent(group.rows).map(section => (
+                <section className={`admin-catalog-group catalog-kind-${section.id}`} key={section.id} aria-label={`${section.label} · ${group.grade}`}>
+                  <h3>{section.label} <span className="pill">{section.rows.length}</span></h3>
+                  <div className="technique-card-grid">
+                {section.rows.map((tecnica) => (
+                  <TechniqueAdminCard
+                    key={`${tecnica.id}-${params.saved ?? ""}-${params.technique ?? ""}-${params.edit ?? ""}`}
+                    tecnica={tecnica}
+                    isSaved={params.technique === tecnica.legacy_id}
+                    isEditing={params.saved !== "technique" && params.edit === tecnica.legacy_id}
+                    returnPath={returnPath}
+                  />
+                ))}
+                  </div>
+                </section>
+              ))}
+            </details>
+          )) : (
+            <article className="card">
+              <p className="muted">No hay contenidos con estos filtros.</p>
+            </article>
+          )}
+        </section>
+
         <h2 className="section-title">Resumen por grado</h2>
         <section className="grade-summary-grid">
           {gradeStats.map((item) => (
             <a className={`grade-summary-card grade-${slugGrade(item.grade)}`} href={`/tecnicas?grade=${encodeURIComponent(item.grade)}`} key={item.grade}>
               <strong>{item.grade}</strong>
-              <span>{item.total} tecnicas</span>
+              <span>{item.total} contenidos</span>
               <small>{item.pending} sin repetir - media {item.average}</small>
             </a>
           ))}
@@ -257,39 +311,6 @@ export default async function TecnicasPage({
           </div>
         </section>
 
-        <div className="section-heading-row">
-          <div>
-            <h2 className="section-title">Programa por grados</h2>
-            <p className="muted">Despliega solo el grado que quieras revisar o editar.</p>
-          </div>
-          <span className="pill">{visibleTechniques.length} visibles</span>
-        </div>
-        <section className="technique-grade-list">
-          {visibleByGrade.length ? visibleByGrade.map((group) => (
-            <details className="technique-grade-panel" key={group.grade} open={params.grade === group.grade || Boolean(params.edit)}>
-              <summary>
-                <span className={`grade-chip grade-${slugGrade(group.grade)}`}>{group.grade}</span>
-                <strong>{group.rows.length} tecnicas</strong>
-                <small>{group.rows.filter((tecnica) => tecnica.active_in_planning).length} en plan · {group.rows.filter((tecnica) => !tecnica.last_trained_on || tecnica.repetitions === 0).length} sin repetir</small>
-              </summary>
-              <div className="technique-card-grid">
-                {group.rows.map((tecnica) => (
-                  <TechniqueAdminCard
-                    key={`${tecnica.legacy_id ?? tecnica.name}-${params.saved ?? ""}-${params.technique ?? ""}-${params.edit ?? ""}`}
-                    tecnica={tecnica}
-                    isSaved={params.technique === tecnica.legacy_id}
-                    isEditing={params.saved !== "technique" && params.edit === tecnica.legacy_id}
-                    returnPath={returnPath}
-                  />
-                ))}
-              </div>
-            </details>
-          )) : (
-            <article className="card">
-              <p className="muted">No hay tecnicas con estos filtros.</p>
-            </article>
-          )}
-        </section>
       </main>
     </div>
   );
@@ -401,10 +422,12 @@ function TechniqueAdminCard({
 
 type TechnicalReview = ReturnType<typeof buildTechnicalReview>;
 
-function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; category?: string; status?: string }, review: TechnicalReview) {
+function matchesFilters(tecnica: Tecnica, params: { q?: string; grade?: string; category?: string; kind?: string; status?: string }, review: TechnicalReview) {
+  const kind = catalogKinds.find(kind => kind.id === params.kind);
+  if (kind && classifyCatalogContent(tecnica) !== kind.id) return false;
   const q = normalize(params.q);
-  if (q && !normalize(`${tecnica.name} ${tecnica.legacy_id ?? ""} ${tecnica.category}`).includes(q)) return false;
-  if (params.grade && normalize(tecnica.grade) !== normalize(params.grade)) return false;
+  if (q && !normalize(`${tecnica.name} ${tecnica.legacy_id ?? ""} ${tecnica.category} ${tecnica.content_type ?? ""} ${tecnica.base_name ?? ""} ${catalogKinds.find(kind => kind.id === classifyCatalogContent(tecnica))?.label ?? ""}`).includes(q)) return false;
+  if (params.grade && normalize(catalogGrade(tecnica.grade)) !== normalize(params.grade)) return false;
   if (params.category && normalize(tecnica.category) !== normalize(params.category)) return false;
   if (params.status === "planning" && !tecnica.active_in_planning) return false;
   if (params.status === "inactive" && tecnica.active) return false;
@@ -426,8 +449,9 @@ function effectiveSummary(tecnica: Tecnica) {
   return adaptTechniqueSummary(getKamokuSummaryFallback(tecnica.name), tecnica);
 }
 
-function buildTechniqueReturnPath(params: { q?: string; grade?: string; category?: string; status?: string }) {
+function buildTechniqueReturnPath(params: { q?: string; grade?: string; category?: string; kind?: string; status?: string }) {
   const query = new URLSearchParams();
+  if (catalogKinds.some(kind => kind.id === params.kind)) query.set("kind", params.kind!);
   if (params.q) query.set("q", params.q);
   if (params.grade) query.set("grade", params.grade);
   if (params.category) query.set("category", params.category);

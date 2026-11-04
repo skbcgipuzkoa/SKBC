@@ -3280,6 +3280,36 @@ tbody tr:hover {
   margin-bottom: 24px;
 }
 
+.admin-catalog-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.admin-catalog-nav a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 16px;
+  border: 2px solid #d9e3ed;
+  border-radius: 14px;
+  color: #243449;
+  background: #fff;
+  text-decoration: none;
+  min-height: 96px;
+}
+
+.admin-catalog-nav a[aria-current="page"] { border-color: #315fa9; background: #eef5ff; }
+.admin-catalog-nav a:focus-visible { outline: 3px solid #315fa9; outline-offset: 3px; }
+.admin-catalog-nav small { grid-column: 1 / -1; }
+.admin-catalog-nav a > span { font-size: 1.3rem; font-weight: 800; }
+.admin-catalog-group { padding: 16px; border-left: 4px solid #4776b9; margin: 12px; background: #f4f8ff; border-radius: 10px; }
+.admin-catalog-group.catalog-kind-kata { border-color: #8653ad; background: #f8f2fd; }
+.admin-catalog-group.catalog-kind-other { border-color: #557b6c; background: #f2f8f5; }
+.admin-catalog-group h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+#catalogo-tecnico { scroll-margin-top: 24px; }
+
 .technique-grade-panel {
   background: var(--panel);
   border: 1px solid var(--line);
