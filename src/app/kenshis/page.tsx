@@ -20,7 +20,6 @@ type Kenshi = {
   student_phone: string | null;
   photo_url: string | null;
   ficha_token: string | null;
-  legacy_ficha_url: string | null;
 };
 
 type KenshiFilter = "active" | "kids" | "adults" | "inactive";
@@ -61,7 +60,7 @@ export default async function KenshisPage({
   let query = supabase
     .from("members")
     .select(
-      "legacy_id,ika_id,first_name,last_name,class,status,grade,family_email,guardian_phone,student_phone,photo_url,ficha_token,legacy_ficha_url"
+      "legacy_id,ika_id,first_name,last_name,class,status,grade,family_email,guardian_phone,student_phone,photo_url,ficha_token"
     )
     .order("status", { ascending: true })
     .order("class", { ascending: true })
@@ -194,8 +193,7 @@ export default async function KenshisPage({
                   <td data-label="Ficha">
                     <span className="link-stack">
                       {kenshi.ficha_token ? <a className="text-link" href={`/ficha/${kenshi.ficha_token}?admin=1&returnTo=${encodeURIComponent(currentListPath)}`} target="_blank" rel="noopener noreferrer external">Ficha</a> : null}
-                      {kenshi.legacy_ficha_url ? <a className="text-link" href={kenshi.legacy_ficha_url} target="_blank" rel="noopener noreferrer external">Ficha antigua</a> : null}
-                      {!kenshi.ficha_token && !kenshi.legacy_ficha_url ? <span className="muted">-</span> : null}
+                      {!kenshi.ficha_token ? <span className="muted">-</span> : null}
                     </span>
                   </td>
                 </tr>
