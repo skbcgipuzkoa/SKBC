@@ -3,9 +3,11 @@ import fs from "node:fs";
 import ts from "typescript";
 import { loadAllPages } from "../src/lib/load-all-pages.ts";
 import * as outlook from "../src/lib/exam-outlook.ts";
+import { examCallMonthEnd } from "../src/lib/exam-call.ts";
 let calls = [];
 let fail = false;
 let scheduledFixture = [];
+let callFixture = [];
 const evaluatedInputs = [];
 const roster = Array.from({ length: 1001 }, (_, i) => ({
   id: String(i),
@@ -35,7 +37,8 @@ const db = {
       lte() {
         return q;
       },
-      gte() {
+      gte(k, v) {
+        filters.push([k, v]);
         return q;
       },
       order(k) {
@@ -58,7 +61,7 @@ const db = {
             ? roster
             : table === "classes"
               ? scheduledFixture
-              : [];
+              : table === "skbc_exam_calls" ? callFixture : [];
         const ids = filters.find(([k]) => k === "id")?.[1];
         if (ids) data = data.filter((m) => ids.includes(m.id));
         return Promise.resolve({
@@ -73,6 +76,7 @@ const db = {
 globalThis.__outlookTest = {
   createAdminClient: () => db,
   loadAllPages,
+  examCallMonthEnd,
   ...outlook,
   evaluateExamOutlook: (input) => {
     evaluatedInputs.push(input);
@@ -84,6 +88,7 @@ let source = fs.readFileSync(
   "utf8",
 );
 source = source
+  .replace(/import[^;]*from "@\/lib\/exam-call";/, "const {examCallMonthEnd}=globalThis.__outlookTest;")
   .replace(
     /import[^;]*from "@\/lib\/exam-cycle-attribution";/,
     "const loadExamCycleAttributions = async () => new Map(); const withExamCycleAttribution = (member) => member;",
@@ -235,6 +240,16 @@ await assert.rejects(
   () => loadExamOutlooks({ memberIds: ["1"] }),
   /read failed/,
 );
+fail = false;
+callFixture = [{ id: "winter", call_date: "2026-12-05" }];
+roster[1].joined_on = "2020-01-01";
+roster[1].last_exam_on = "2025-12-10";
+const monthly = await loadExamOutlooks({ memberIds: ["1"], now: new Date("2026-12-10T12:00:00Z") });
+assert.equal(monthly.get("1").callDate, "2026-12-05", "Retain stable call key while the whole current month stays open");
+assert.deepEqual(evaluatedInputs.at(-1).calls, ["2026-12-31"], "Forecast month through its final day, not an invented exam day");
+assert.equal(calls.filter(x=>x.table === "skbc_exam_calls").at(-1).filters.find(([key])=>key === "call_date")[1], "2026-12-01");
+await loadExamOutlooks({ memberIds: ["1"], now: new Date("2026-11-05T12:00:00Z"), examDateOverride: "2026-12-05" });
+assert.deepEqual(evaluatedInputs.at(-1).calls, ["2026-12-05"], "Confirmed exact days must not inherit monthly leeway");
 delete globalThis.__outlookTest;
 console.log(
   "exam outlook provider: pagination, member scoping, chunking, empty roster and errors passed",

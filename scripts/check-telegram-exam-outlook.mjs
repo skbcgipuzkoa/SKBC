@@ -8,7 +8,7 @@ const row={memberId:'1',name:'Ana <script> & Luis',memberClass:'adults',currentG
 let message=formatTelegramExamOutlooks([row,{...row,memberId:'2',name:'Ready',classification:'ready',currentReady:true},{...row,memberId:'3',name:'Unknown',classification:'unknown',candidate:false,callDate:null,estimatedReadyOn:null,marginDays:null}]);
 assert.match(message,/hoy \(1\)/);assert.match(message,/ritmo actual \(1\)/);assert.match(message,/faltan datos o preparación \(1\)/);
 assert.match(message,/Ana &lt;script&gt; &amp; Luis/);assert.doesNotMatch(message,/<script>/);
-assert.match(message,/05\/12\/2026/);assert.match(message,/20\/11\/2026/);assert.match(message,/margen corto/);
+assert.match(message,/Diciembre de 2026/);assert.match(message,/día pendiente de confirmar/);assert.match(message,/20\/11\/2026/);assert.match(message,/margen corto/);
 assert.match(message,/Sin convocatoria futura calculable/);assert.match(message,/periodo anterior/);
 message=formatTelegramExamOutlooks(Array.from({length:15},(_,i)=>({...row,memberId:String(i),name:`Kenshi ${i}`})));
 assert.match(message,/ritmo actual \(15\)/);assert.match(message,/Y 3 más/);

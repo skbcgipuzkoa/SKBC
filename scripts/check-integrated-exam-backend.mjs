@@ -158,6 +158,26 @@ vm.runInNewContext(source, {
   Error,
 });
 const backend = module.exports;
+event.date_confirmed = false;
+const pendingDateWrites = writes.length;
+await assert.rejects(
+  () => backend.getExaminerExamByToken("secret"),
+  /pendiente de confirmar/,
+);
+await assert.rejects(
+  () => backend.submitIntegratedExamScores({ token: "secret", scores: [] }),
+  /pendiente de confirmar/,
+);
+await assert.rejects(
+  () => backend.finalizeIntegratedExamEvent("e"),
+  /Confirma el día real/,
+);
+assert.equal(
+  writes.length,
+  pendingDateWrites,
+  "An unconfirmed monthly event cannot be evaluated or finalized",
+);
+delete event.date_confirmed;
 let data = await backend.getIntegratedExamAdmin("e");
 assert.equal(data.summaries[0].percentage, 80);
 examiner.submitted_at = null;
@@ -809,13 +829,25 @@ assert.ok(
 );
 assert.equal(database.exam_event_scores.length, 2);
 // Teacher finalization also reconciles a failed global marker without an examiner retry.
-database.exam_event_examiners[0].submitted_at=null;
-const academicRecovery=await registrationModule.exports.getIntegratedExamAdmin("e");
-for(const summary of academicRecovery.summaries)await registrationModule.exports.saveIntegratedExamStudentReview({eventId:"e",studentId:summary.studentId,adjustments:{},decision:summary.automaticPassed?"pass":"fail",conclusion:"Reviewed",sourceSignature:summary.sourceSignature});
+database.exam_event_examiners[0].submitted_at = null;
+const academicRecovery =
+  await registrationModule.exports.getIntegratedExamAdmin("e");
+for (const summary of academicRecovery.summaries)
+  await registrationModule.exports.saveIntegratedExamStudentReview({
+    eventId: "e",
+    studentId: summary.studentId,
+    adjustments: {},
+    decision: summary.automaticPassed ? "pass" : "fail",
+    conclusion: "Reviewed",
+    sourceSignature: summary.sourceSignature,
+  });
 await registrationModule.exports.finalizeIntegratedExamEvent("e");
-assert.ok(database.exam_event_examiners[0].submitted_at,"teacher finalization repairs the marker before registration");
-assert.equal(database.exam_events[0].status,"completed");
-database.exam_events[0].status="active";
+assert.ok(
+  database.exam_event_examiners[0].submitted_at,
+  "teacher finalization repairs the marker before registration",
+);
+assert.equal(database.exam_events[0].status, "completed");
+database.exam_events[0].status = "active";
 // Group configuration rollback preserves identity, scopes and coverage.
 database.exam_event_scores = [];
 database.exam_event_reviews = [];

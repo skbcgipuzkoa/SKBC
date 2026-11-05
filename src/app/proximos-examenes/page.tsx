@@ -1,6 +1,8 @@
 import { getUpcomingExamCalls } from "@/lib/exam-calls-data";
-import { resolveCallFilter, madridCallToday } from "@/lib/exam-call";
+import { resolveCallFilter, madridCallToday, formatExamCallMonth } from "@/lib/exam-call";
 import { ApproveExamCall } from "./ApproveExamCall";
+import { PlanningApprovals } from "./PlanningApprovals";
+import { listPlanningExamApprovals } from "@/lib/exam-invitations";
 import { loadAllPages } from "@/lib/load-all-pages";
 import { loadExamOutlooks } from "@/lib/exam-outlook-data";
 import { ExamOutlookPanel } from "@/app/components/exam-outlook-panel";
@@ -36,7 +38,7 @@ const semaphoreOrder = ["VERDE", "ROJO", "GRIS", "AMARILLO", "AZUL", "INACTIVO"]
 export default async function ProximosExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string; call?: string; view?: string; approved?: string; examDate?: string }>;
+  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string; call?: string; view?: string; approved?: string; examDate?: string; confirmed?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -58,6 +60,8 @@ export default async function ProximosExamenesPage({
 
   const members = await loadAllPages<ExamCandidate>((from, to) => query.order("id").range(from, to).returns<ExamCandidate[]>());
   const calls = await getUpcomingExamCalls();
+  const approvals = await listPlanningExamApprovals();
+  const minDate = new Date(Date.parse(madridCallToday() + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
   const callFilter = resolveCallFilter(params.call, calls.map((call) => call.call_date));
   const candidateByMember = await loadExamOutlooks({ memberIds: members.map((member) => member.id) });
 
@@ -119,7 +123,13 @@ export default async function ProximosExamenesPage({
             </button>
           </form>
         </div>
-        {params.approved ? <p className="save-ok" role="status">Convocatoria aprobada para el {params.examDate}. Los alumnos seleccionados ya pueden inscribirse desde su ficha. No se han enviado correos.</p> : null}
+        <section className="card" aria-label="Acceso rápido a convocatorias" style={{ marginBottom: 18, border: "2px solid #005bbb", background: "#eef5ff" }}>
+          <h2>Gestionar convocatoria · {formatExamCallMonth(callFilter.callDate ?? calls[0]?.call_date)}</h2>
+          <p>Convoca por mes ahora y confirma el día cuando lo tengas definido.</p>
+          <div className="form-actions" style={{ flexWrap: "wrap" }}><a className="button" href="#convocar-alumnos" style={{ background: "#005bbb", color: "white", padding: "14px 20px", borderRadius: 8, fontWeight: 700 }}>Convocar alumnos</a><a className="text-link" href="#convocatorias-aprobadas">Confirmar día y ver inscritos</a></div>
+        </section>
+        {params.approved ? <p className="save-ok" role="status">Convocatoria aprobada{params.examDate ? ` para el ${params.examDate}` : " · día pendiente de confirmar"}. Los alumnos seleccionados ya pueden inscribirse desde su ficha. No se han enviado correos.</p> : null}
+        {params.confirmed ? <p className="save-ok" role="status">Día confirmado en las fichas. Se conservan las respuestas e inscripciones.</p> : null}
         {params.error ? <p className="form-error" role="alert">{params.error}</p> : null}
 
         {params.saved === "recalculate" ? <p className="save-ok">Semaforos recalculados con implicacion, cursos y calendario.</p> : null}
@@ -205,9 +215,9 @@ export default async function ProximosExamenesPage({
           </label>
           <label>Convocatoria
             <select name="call" defaultValue={callFilter.value}>
-              <option value="next">Proxima del club{calls[0] ? " · " + calls[0].call_date : " · sin fecha configurada"}</option>
+              <option value="next">Proxima del club{calls[0] ? " · " + formatExamCallMonth(calls[0].call_date) : " · sin mes configurado"}</option>
               <option value="all">Todas las futuras</option>
-              {calls.map((call) => <option key={call.id} value={call.call_date}>{call.title} · {call.call_date}</option>)}
+              {calls.map((call) => <option key={call.id} value={call.call_date}>{formatExamCallMonth(call.call_date)}</option>)}
             </select>
           </label>
           <label>
@@ -235,7 +245,8 @@ export default async function ProximosExamenesPage({
           <button type="submit"><Search aria-hidden="true" size={16} /> Filtrar</button>
         </form>
 
-        <ApproveExamCall key={`${callFilter.value}:${params.q ?? ""}:${params.class ?? ""}:${view}:${normalizedSemaphore}:${params.approved ?? ""}`} callDate={callFilter.callDate} minDate={new Date(Date.parse(madridCallToday() + "T12:00:00Z") + 86400000).toISOString().slice(0, 10)}>
+        <PlanningApprovals approvals={approvals} minDate={minDate} />
+        <ApproveExamCall key={`${callFilter.value}:${params.q ?? ""}:${params.class ?? ""}:${view}:${normalizedSemaphore}:${params.approved ?? ""}`} callDate={callFilter.callDate} minDate={minDate}>
         <section className="table-wrap">
           <table>
             <thead>
@@ -267,13 +278,13 @@ export default async function ProximosExamenesPage({
                     <td data-label="Clase">{item.class === "kids" ? "Ninos" : "Adultos"}</td>
                     <td data-label="Grado">{item.grade ?? "-"}</td>
                     <td data-label="Semaforo guardado"><span className={`semaphore-pill semaphore-${semaphore.toLowerCase().replace(/\s+/g, "-")}`}>{semaphore}</span></td>
-                    <td data-label="Proximo examen">{candidate?.callDate ?? <span className="muted">Sin convocatoria futura</span>}</td>
+                    <td data-label="Proximo examen">{candidate?.callDate ? formatExamCallMonth(candidate.callDate) : <span className="muted">Sin convocatoria futura</span>}</td>
                     <td data-label="Asistencia guardada">
                       {formatAttendance(item)}
                     </td>
                     <td data-label="Aviso" className="notice-cell">
                       <ExamOutlookPanel outlook={candidate} compact />
-                      <small>Aviso guardado: {item.exam_notice ?? "sin aviso calculado"}</small>
+                      <details><summary>Ver aviso histórico guardado</summary><small>Aviso guardado: {item.exam_notice ?? "sin aviso calculado"}</small></details>
                     </td>
                   </tr>
                 );

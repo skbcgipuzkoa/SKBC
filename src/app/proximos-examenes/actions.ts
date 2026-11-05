@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { approveExamCallFromPlanning } from "@/lib/exam-invitations";
+import { approveExamCallFromPlanning, confirmPlanningExamDate } from "@/lib/exam-invitations";
 
 export async function approvePlanningExamCallAction(form: FormData) {
   const callKey = String(form.get("callKey") ?? "");
@@ -16,5 +16,16 @@ export async function approvePlanningExamCallAction(form: FormData) {
   revalidatePath("/ficha/[token]", "page");
   revalidatePath("/notificaciones/examenes");
   revalidatePath("/examenes");
-  redirect("/proximos-examenes?" + new URLSearchParams({ call: callKey, approved: "1", examDate }));
+  redirect("/proximos-examenes?" + new URLSearchParams({ call: callKey, approved: "1", ...(examDate ? { examDate } : {}) }));
+}
+
+export async function confirmPlanningExamDateAction(form: FormData) {
+  try {
+    await confirmPlanningExamDate({ eventId: String(form.get("eventId") ?? ""), examDate: String(form.get("examDate") ?? "") });
+  } catch {
+    redirect("/proximos-examenes?error=" + encodeURIComponent("No se pudo confirmar el día. Debe ser una fecha futura del mes convocado y permitir cumplir los requisitos. Se conservan las respuestas y reservas anteriores."));
+  }
+  for (const path of ["/proximos-examenes", "/notificaciones/examenes", "/examenes"]) revalidatePath(path);
+  revalidatePath("/ficha/[token]", "page");
+  redirect("/proximos-examenes?confirmed=1");
 }

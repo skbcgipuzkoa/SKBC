@@ -61,6 +61,7 @@ type ExamEvent = {
   call_month?: string | null;
   call_date?: string | null;
   is_retake?: boolean | null;
+  date_confirmed?: boolean;
   program_type: IntegratedExamProgram;
   pass_percentage: number;
   status: string;
@@ -528,7 +529,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
   const { data: event, error: eventError } = await supabase
     .from("exam_events")
     .select(
-      "id,title,exam_date,call_date,call_month,is_retake,program_type,pass_percentage,status,notes,updated_at",
+      "id,title,exam_date,call_date,call_month,is_retake,date_confirmed,program_type,pass_percentage,status,notes,updated_at",
     )
     .eq("id", eventId)
     .single<ExamEvent>();
@@ -686,7 +687,7 @@ export async function getRecentIntegratedExamEvents(limit = 12) {
   const { data, error } = await supabase
     .from("exam_events")
     .select(
-      "id,title,exam_date,call_date,call_month,is_retake,program_type,status,pass_percentage,exam_event_students(id),exam_event_examiners(id,submitted_at)",
+      "id,title,exam_date,call_date,call_month,is_retake,date_confirmed,program_type,status,pass_percentage,exam_event_students(id),exam_event_examiners(id,submitted_at)",
     )
     .order("exam_date", { ascending: false })
     .limit(limit);
@@ -860,7 +861,7 @@ export async function getExaminerExamByToken(token: string, grade?: string) {
   const { data: examiner, error: examinerError } = await supabase
     .from("exam_event_examiners")
     .select(
-      "id,exam_event_id,name,email,access_token,submitted_at,revoked_at,exam_events(id,title,exam_date,program_type,pass_percentage,status,notes,updated_at)",
+      "id,exam_event_id,name,email,access_token,submitted_at,revoked_at,exam_events(id,title,exam_date,date_confirmed,program_type,pass_percentage,status,notes,updated_at)",
     )
     .eq("access_token", token)
     .maybeSingle<any>();
@@ -871,6 +872,10 @@ export async function getExaminerExamByToken(token: string, grade?: string) {
 
   const event = examiner.exam_events as ExamEvent | null;
   if (!event) throw new Error("Examen no encontrado.");
+  if (event.date_confirmed === false)
+    throw new Error(
+      "Día pendiente de confirmar. La evaluación aún no está disponible.",
+    );
 
   const [
     { data: students, error: studentsError },
@@ -1324,6 +1329,8 @@ export async function submitIntegratedExamScores(input: {
   grade?: string;
 }) {
   const payload = await getExaminerExamByToken(input.token, input.grade);
+  if (payload.event.date_confirmed === false)
+    throw new Error("Confirma el día real antes de evaluar este examen.");
   return withEventMutationLock(payload.event, async () => {
     if (payload.needsExaminerName)
       throw new Error("Indica tu nombre antes de enviar la evaluacion.");
@@ -1696,6 +1703,8 @@ export async function finalizeIntegratedExamEvent(
 
   let data = await getIntegratedExamAdmin(eventId);
   const { event } = data;
+  if (event.date_confirmed === false)
+    throw new Error("Confirma el día real antes de registrar este examen.");
   if (["completed", "archived"].includes(event.status))
     throw new Error("Este examen ya esta cerrado.");
   if (

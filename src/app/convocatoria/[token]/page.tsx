@@ -1,5 +1,6 @@
 import { getPublicExamInvitation } from "@/lib/exam-invitations";
 import { respondExamInvitationAction } from "@/app/notificaciones/examenes/actions";
+import { formatExamCallMonth } from "@/lib/exam-call";
 import "@/app/notificaciones/examenes/invitations.css";
 
 export const metadata = { robots: { index: false, follow: false }, referrer: "no-referrer" as const };
@@ -12,7 +13,7 @@ export default async function PublicInvitationPage({ params, searchParams }: { p
   return <main className="invitation-public"><section className="card"><p className="eyebrow">SKBC · invitación personal</p><h1>{invitation.snapshot.name}, tu convocatoria de examen</h1>
     {query.responded ? <p className="save-ok">Tu respuesta se ha registrado.</p> : null}
     {query.error ? <p className="form-error" role="alert">No se pudo registrar tu respuesta. Revisa si ya está registrada o consulta con el club antes de volver a intentarlo.</p> : null}
-    <p><strong>Fecha actual del examen: {invitation.currentExamDate}</strong> · grado {invitation.snapshot.targetGrade}</p>
+    <p><strong>{invitation.dateConfirmed === false ? `Convocatoria: ${formatExamCallMonth(invitation.callMonth)} · día pendiente de confirmar` : `Fecha actual del examen: ${invitation.currentExamDate}`}</strong> · grado {invitation.snapshot.targetGrade}</p>
     <p className="invitation-preview-body">{invitation.body}</p>
     <p><strong>Examen {invitation.exam_fee} € + cinturón {invitation.belt_fee} € = {invitation.exam_fee + invitation.belt_fee} €.</strong></p>
     <p>Presentarte es un derecho voluntario, no una obligación. Aceptar añade tu reserva al examen y no acredita el pago. La inscripción requiere el abono anticipado en mano. El profesor debe confirmar la preparación final.</p>

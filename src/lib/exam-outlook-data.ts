@@ -4,6 +4,7 @@ import {
 } from "@/lib/exam-cycle-attribution";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
+import { examCallMonthEnd } from "@/lib/exam-call";
 import {
   evaluateExamOutlook,
   madridToday,
@@ -114,7 +115,7 @@ export async function loadExamOutlooks(
         .from("skbc_exam_calls")
         .select("id,call_date")
         .eq("active", true)
-        .gte("call_date", today)
+        .gte("call_date", today.slice(0, 7) + "-01")
         .order("id")
         .range(f, t)
         .returns<Array<{ call_date: string }>>(),
@@ -148,7 +149,7 @@ export async function loadExamOutlooks(
   const scheduleEnd = [
     horizonEnd,
     options.examDateOverride ?? "",
-    ...calls.map((c) => c.call_date),
+    ...calls.map((c) => examCallMonthEnd(c.call_date) ?? c.call_date),
   ]
     .sort()
     .at(-1)!;
@@ -208,9 +209,7 @@ export async function loadExamOutlooks(
               ).length * 2,
             )
           : 0;
-      return [
-        member.id,
-        evaluateExamOutlook({
+      const outlook = evaluateExamOutlook({
           member: withExamCycleAttribution(member, cycleAttributions),
           today,
           horizonDays: options.horizonDays,
@@ -222,7 +221,7 @@ export async function loadExamOutlooks(
           requirements,
           calls: options.examDateOverride
             ? [options.examDateOverride]
-            : calls.map((c) => c.call_date),
+            : calls.map((c) => examCallMonthEnd(c.call_date) ?? c.call_date),
           closures,
           advanceMonths,
           scheduledTrainingDates: groupClasses
@@ -232,8 +231,12 @@ export async function loadExamOutlooks(
           todayClassClosed: activeToday.length
             ? activeToday.every((c) => c.closed)
             : undefined,
-        }),
-      ];
+        });
+      // Keep the stable configured call key for filters; end-of-month is only a forecast boundary.
+      if (!options.examDateOverride && outlook.callDate) {
+        outlook.callDate = calls.find((c) => examCallMonthEnd(c.call_date) === outlook.callDate)?.call_date ?? outlook.callDate;
+      }
+      return [member.id, outlook];
     }),
   );
 }

@@ -26,6 +26,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { IntegratedExamCreateForm } from "./IntegratedExamCreateForm";
 import { listExamInvitationResponses } from "@/lib/exam-invitations";
 import { ExamCallAttribution } from "./components/ExamCallAttribution";
+import { formatExamCallMonth } from "@/lib/exam-call";
 
 type MemberOption = {
   id: string;
@@ -227,7 +228,7 @@ export default async function ExamenesPage({
               <tbody>
                 {integratedEvents.map((event) => (
                   <tr key={event.id}>
-                    <td data-label="Fecha">{event.exam_date}<ExamCallAttribution event={event} /></td>
+                    <td data-label="Fecha">{event.date_confirmed === false ? `${formatExamCallMonth(event.exam_date)} · día pendiente` : event.exam_date}<ExamCallAttribution event={event} /></td>
                     <td data-label="Examen">
                       <strong>{event.title}</strong>
                     </td>

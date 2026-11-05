@@ -25,6 +25,7 @@ import { InvitationResponses } from "@/app/notificaciones/examenes/responses";
 import { updateExamInvitationEventAction } from "@/app/notificaciones/examenes/actions";
 import "@/app/notificaciones/examenes/invitations.css";
 import { ExamCallAttribution } from "@/app/examenes/components/ExamCallAttribution";
+import { formatExamCallMonth } from "@/lib/exam-call";
 
 export default async function IntegratedExamPage({
   params,
@@ -169,14 +170,14 @@ export default async function IntegratedExamPage({
         ) : null}
 
         {invitationResponses.length ? <>
-          <section className="card"><h2>Datos del examen convocado</h2><p className="muted">Los emails enviados conservan su copia original. Comunica a las familias cualquier cambio de fecha.</p><form action={updateExamInvitationEventAction} className="invitation-form"><input type="hidden" name="eventId" value={eventId} /><label>Título<input name="title" defaultValue={event.title} required /></label><label>Fecha real del examen<input name="examDate" type="date" defaultValue={event.exam_date} required /></label><button type="submit">Guardar datos del examen</button></form></section>
+          <section className="card"><h2>Datos del examen convocado</h2><p className="muted">Los emails enviados conservan su copia original. Comunica a las familias cualquier cambio de fecha.</p>{event.date_confirmed === false ? <p>{formatExamCallMonth(event.exam_date)} · día pendiente de confirmar.</p> : <form action={updateExamInvitationEventAction} className="invitation-form"><input type="hidden" name="eventId" value={eventId} /><label>Título<input name="title" defaultValue={event.title} required /></label><label>Fecha real del examen<input name="examDate" type="date" defaultValue={event.exam_date} required /></label><button type="submit">Guardar datos del examen</button></form>}<a className="text-link" href="/proximos-examenes#convocatorias-aprobadas">Confirmar día y revisar inscritos</a></section>
           <InvitationResponses invitations={invitationResponses} />
         </> : null}
 
         <section className="grid stats compact">
           <article className="card">
             <h2>Fecha</h2>
-            <div className="metric">{event.exam_date}</div>
+            <div className="metric">{event.date_confirmed === false ? `${formatExamCallMonth(event.exam_date)} · día pendiente` : event.exam_date}</div>
           </article>
           <article className="card">
             <h2>Tipo</h2>

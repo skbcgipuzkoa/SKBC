@@ -1,4 +1,8 @@
-import { madridCallToday } from "@/lib/exam-call";
+import {
+  madridCallToday,
+  examCallMonthEnd,
+  formatExamCallMonth,
+} from "@/lib/exam-call";
 import {
   decodeExamAssignments,
   encodeExamAssignments,
@@ -10,6 +14,9 @@ import { loadExamOutlooks } from "@/lib/exam-outlook-data";
 import { createIntegratedExamEvent } from "@/lib/integrated-exams";
 import { createTransporter } from "@/lib/email-notifications";
 export type InvitationSnapshot = {
+  additionalMessage?: string;
+  dateConfirmed?: boolean;
+  callMonth?: string;
   name: string;
   memberClass: "kids" | "adults";
   currentGrade: string | null;
@@ -102,7 +109,7 @@ export async function getPublicExamInvitation(token: string) {
   const { data, error } = await createAdminClient()
     .from("exam_invitations")
     .select(
-      "id,snapshot,subject,body,response,message,exam_fee,belt_fee,expires_at,revoked_at,delivery_status,teacher_approved_at,teacher_approved_by,teacher_approved_exam_date,exam_events(exam_date,title,status),members(grade,class,status)",
+      "id,snapshot,subject,body,response,message,exam_fee,belt_fee,expires_at,revoked_at,delivery_status,teacher_approved_at,teacher_approved_by,teacher_approved_exam_date,exam_events(exam_date,title,status,date_confirmed,call_month),members(grade,class,status)",
     )
     .eq("token_hash", hashInvitationToken(token))
     .maybeSingle();
@@ -120,6 +127,14 @@ export async function getPublicExamInvitation(token: string) {
       (data.exam_events as unknown as { exam_date: string } | null)
         ?.exam_date ?? data.snapshot.examDate,
     expired: Date.parse(data.expires_at) <= Date.now(),
+    dateConfirmed:
+      (data.exam_events as unknown as { date_confirmed?: boolean } | null)
+        ?.date_confirmed !== false,
+    callMonth:
+      (data.exam_events as unknown as { call_month?: string } | null)
+        ?.call_month ??
+      data.snapshot.callMonth ??
+      data.snapshot.callKey.slice(0, 7),
   } as Pick<
     ExamInvitation,
     | "id"
@@ -131,7 +146,12 @@ export async function getPublicExamInvitation(token: string) {
     | "exam_fee"
     | "belt_fee"
     | "expires_at"
-  > & { expired: boolean; currentExamDate: string };
+  > & {
+    expired: boolean;
+    currentExamDate: string;
+    dateConfirmed: boolean;
+    callMonth: string;
+  };
 }
 export async function loadExamInvitationCandidates() {
   await requireInvitationAdmin();
@@ -166,15 +186,18 @@ function validDate(value: string) {
     new Date(value + "T12:00:00Z").toISOString().slice(0, 10) === value
   );
 }
-export async function createExamInvitationDraft(input: {
-  memberIds: string[];
-  callKey: string;
-  examDate: string;
-  instructions: string;
-  subject?: string;
-  body?: string;
-  title?: string;
-}, options: { fichaOnly?: boolean } = {}) {
+export async function createExamInvitationDraft(
+  input: {
+    memberIds: string[];
+    callKey: string;
+    examDate: string;
+    instructions: string;
+    subject?: string;
+    body?: string;
+    title?: string;
+  },
+  options: { fichaOnly?: boolean; dateConfirmed?: boolean } = {},
+) {
   await requireInvitationAdmin();
   if (
     !validDate(input.examDate) ||
@@ -238,15 +261,26 @@ export async function createExamInvitationDraft(input: {
       events.push(event.eventId);
       const meta = await db
         .from("exam_events")
-        .update({ call_date: input.callKey, is_retake: false })
+        .update({
+          call_date: input.callKey,
+          is_retake: false,
+          date_confirmed: options.dateConfirmed !== false,
+          ...(options.dateConfirmed === false
+            ? { call_month: input.callKey.slice(0, 7) }
+            : {}),
+        })
         .eq("id", event.eventId);
       if (meta.error) throw meta.error;
       for (const m of members) {
         const emails = (m!.email ?? "").split(/[;,\s]+/).filter(Boolean);
-        const validEmail = emails.length === 1 && isBareInvitationEmail(emails[0]);
+        const validEmail =
+          emails.length === 1 && isBareInvitationEmail(emails[0]);
         if (!options.fichaOnly && !validEmail)
           throw new Error(`Revisa el email único de ${m!.name}.`);
         const snapshot: InvitationSnapshot = {
+          dateConfirmed: options.dateConfirmed !== false,
+          additionalMessage: input.body ?? "",
+          callMonth: input.callKey.slice(0, 7),
           name: m!.name,
           memberClass: cls,
           currentGrade: m!.currentGrade,
@@ -264,7 +298,7 @@ export async function createExamInvitationDraft(input: {
           instructions: input.instructions,
         };
         const fee = cls === "kids" ? 10 : 15;
-        const body = `Hola ${snapshot.name},\n\nTe invitamos voluntariamente al examen de ${snapshot.targetGrade}, convocatoria ${input.callKey}, el ${input.examDate}.\n${snapshot.reason}\nPendiente de revisión final del profesor; esta invitación no garantiza la aptitud.\n${snapshot.deficits.join("\n")}\nPuedes aceptar o aplazar esta convocatoria y dejar un mensaje. No es una obligación.\nPago anticipado: examen ${fee} EUR + cinturón 5 EUR = ${fee + 5} EUR. Aceptar reserva plaza; el pago anticipado en mano completa la inscripción; el club lo controla por su procedimiento habitual.\n${input.instructions}\n${input.body ?? ""}`;
+        const body = invitationBody(snapshot, fee);
         rows.push({
           batch_id: batch.id,
           call_key: input.callKey,
@@ -281,12 +315,24 @@ export async function createExamInvitationDraft(input: {
         });
       }
     }
-    const saved = await db.rpc(options.fichaOnly ? "replace_and_approve_exam_invitation_drafts" : "replace_exam_invitation_drafts", {
-      p_call: input.callKey,
-      p_member_ids: ids,
-      p_rows: rows,
-      ...(options.fichaOnly ? { p_actor: "Profesor · WEB SKBC", p_event_dates: Object.fromEntries(events.map((id) => [id, input.examDate])) } : {}),
-    });
+    const saved = await db.rpc(
+      options.fichaOnly
+        ? "replace_and_approve_exam_invitation_drafts"
+        : "replace_exam_invitation_drafts",
+      {
+        p_call: input.callKey,
+        p_member_ids: ids,
+        p_rows: rows,
+        ...(options.fichaOnly
+          ? {
+              p_actor: "Profesor · WEB SKBC",
+              p_event_dates: Object.fromEntries(
+                events.map((id) => [id, input.examDate]),
+              ),
+            }
+          : {}),
+      },
+    );
     if (saved.error) throw saved.error;
     return batch.id as string;
   } catch (e) {
@@ -296,9 +342,27 @@ export async function createExamInvitationDraft(input: {
   }
 }
 /** Explicit teacher action from planning: reuse scoped approval, never dispatch mail. */
-export async function approveExamCallFromPlanning(input: { memberIds: string[]; callKey: string; examDate: string }) {
+export async function approveExamCallFromPlanning(input: {
+  memberIds: string[];
+  callKey: string;
+  examDate: string;
+}) {
   await requireInvitationAdmin();
-  return createExamInvitationDraft({ ...input, instructions: "", title: `Examen SKBC · ${input.examDate}` }, { fichaOnly: true });
+  if (!validDate(input.callKey)) throw new Error("Convocatoria inválida.");
+  const dateConfirmed = Boolean(input.examDate.trim());
+  const callMonth = input.callKey.slice(0, 7);
+  const examDate = dateConfirmed
+    ? input.examDate
+    : planningMonthCutoff(callMonth);
+  return createExamInvitationDraft(
+    {
+      ...input,
+      examDate,
+      instructions: "",
+      title: `Examen SKBC · ${dateConfirmed ? examDate : callMonth}`,
+    },
+    { fichaOnly: true, dateConfirmed },
+  );
 }
 
 export async function sendExamInvitationBatch(
@@ -324,7 +388,7 @@ export async function sendExamInvitationBatch(
   const events = eventIds.length
     ? await db
         .from("exam_events")
-        .select("id,exam_date,status")
+        .select("id,exam_date,status,date_confirmed,call_month")
         .in("id", eventIds)
     : { data: [], error: null };
   if (events.error) throw events.error;
@@ -343,7 +407,17 @@ export async function sendExamInvitationBatch(
   const eventStates = new Map(
     (events.data ?? []).map((event) => [event.id, event.status]),
   );
+  const eventConfirmed = new Map(
+    (events.data ?? []).map((event) => [
+      event.id,
+      event.date_confirmed !== false,
+    ]),
+  );
   for (const inv of sendable) {
+    if (!eventConfirmed.get(inv.exam_event_id))
+      throw new Error(
+        "Confirma el día real del examen antes de enviar emails.",
+      );
     if (!["active", "draft"].includes(eventStates.get(inv.exam_event_id) ?? ""))
       throw new Error("El examen ya no está abierto.");
     const actual = actualOutlooks.get(inv.member_id);
@@ -539,9 +613,17 @@ export type StudentExamInvitation = {
   teacherApprovedAt: string;
   teacherApprovedBy: string;
   registrationClosed: boolean;
+  dateConfirmed: boolean;
+  callMonth: string;
 };
 type ApprovalScope = ExamInvitation & {
-  exam_events: { exam_date: string; status: string; title: string } | null;
+  exam_events: {
+    exam_date: string;
+    status: string;
+    title: string;
+    date_confirmed?: boolean;
+    call_month?: string | null;
+  } | null;
   members: { grade: string | null; class: string; status: string } | null;
 };
 export function isExamInvitationApprovalValid(
@@ -580,7 +662,9 @@ export async function getStudentExamInvitation(
 ): Promise<StudentExamInvitation | null> {
   const { data, error } = await createAdminClient()
     .from("exam_invitations")
-    .select("*,exam_events(exam_date,status,title),members(grade,class,status)")
+    .select(
+      "*,exam_events(exam_date,status,title,date_confirmed,call_month),members(grade,class,status)",
+    )
     .eq("member_id", memberId)
     .order("teacher_approved_exam_date", { ascending: true });
   if (error) throw error;
@@ -603,6 +687,11 @@ export async function getStudentExamInvitation(
     teacherApprovedAt: inv.teacher_approved_at!,
     teacherApprovedBy: inv.teacher_approved_by!,
     registrationClosed: !isExamInvitationRegistrationOpen(inv),
+    dateConfirmed: inv.exam_events!.date_confirmed !== false,
+    callMonth:
+      inv.exam_events!.call_month ??
+      inv.snapshot.callMonth ??
+      inv.snapshot.callKey.slice(0, 7),
   };
 }
 export async function approveExamInvitationBatch(batchId: string) {
@@ -715,4 +804,166 @@ export async function respondExamInvitationFromFicha(input: {
     throw new Error(
       "La autorización no está vigente o la respuesta ya está registrada.",
     );
+}
+
+function planningMonthCutoff(month: string) {
+  const date = examCallMonthEnd(month);
+  if (!date) throw new Error("Mes de convocatoria inválido.");
+  return date;
+}
+function invitationBody(snapshot: InvitationSnapshot, fee: number) {
+  const date =
+    snapshot.dateConfirmed === false
+      ? "día pendiente de confirmar"
+      : "el " + snapshot.examDate;
+  return `Hola ${snapshot.name},\n\nTe invitamos voluntariamente al examen de ${snapshot.targetGrade}, convocatoria ${formatExamCallMonth(snapshot.callMonth ?? snapshot.callKey)}, ${date}.\n${snapshot.reason}\nPendiente de revisión final del profesor; esta invitación no garantiza la aptitud.\n${snapshot.deficits.join("\n")}\nPuedes aceptar o aplazar esta convocatoria y dejar un mensaje. No es una obligación.\nPago anticipado: examen ${fee} EUR + cinturón 5 EUR = ${fee + 5} EUR. Aceptar reserva plaza; el pago anticipado en mano completa la inscripción; el club lo controla por su procedimiento habitual.\n${snapshot.instructions}\n${snapshot.additionalMessage ?? ""}`;
+}
+export async function confirmPlanningExamDate(input: {
+  eventId: string;
+  examDate: string;
+}) {
+  await requireInvitationAdmin();
+  if (!validDate(input.examDate) || input.examDate < madridCallToday())
+    throw new Error("Indica un día vigente del mes de convocatoria.");
+  const db = createAdminClient();
+  const event = await db
+    .from("exam_events")
+    .select("id,exam_date,call_month,date_confirmed,status")
+    .eq("id", input.eventId)
+    .single();
+  if (event.error) throw event.error;
+  if (!event.data || !["active", "draft"].includes(event.data.status))
+    throw new Error(
+      "Esta convocatoria no tiene un día pendiente de confirmar.",
+    );
+  const month = event.data.call_month ?? event.data.exam_date.slice(0, 7);
+  if (input.examDate.slice(0, 7) !== month)
+    throw new Error("El día debe pertenecer al mes autorizado.");
+  const invitations = await db
+    .from("exam_invitations")
+    .select("*")
+    .eq("exam_event_id", input.eventId);
+  if (invitations.error) throw invitations.error;
+  const rows = (invitations.data ?? []) as ExamInvitation[];
+  if (!rows.length) throw new Error("Convocatoria sin participantes.");
+  const actual = await loadExamOutlooks({
+    memberIds: [...new Set(rows.map((inv) => inv.member_id))],
+    examDateOverride: input.examDate,
+  });
+  const updates: Record<
+    string,
+    { reason: string; deficits: string[]; body: string }
+  > = {};
+  for (const inv of rows) {
+    const outlook = actual.get(inv.member_id);
+    if (
+      !outlook?.callDate ||
+      outlook.callDate !== input.examDate ||
+      outlook.feasibility === "impossible" ||
+      outlook.currentGrade !== inv.snapshot.currentGrade ||
+      outlook.targetGrade !== inv.snapshot.targetGrade
+    )
+      throw new Error(
+        "La preparación actual no cabe antes del día elegido; revisa la convocatoria.",
+      );
+    const reason = outlook.currentReady
+      ? "Los requisitos actuales constan cubiertos, pendientes de revisión final del profesor."
+      : outlook.classification === "projected"
+        ? "Proyección favorable para la fecha real elegida si se mantiene la trayectoria de preparación, pendiente de revisión final del profesor."
+        : "La preparación necesita refuerzo antes de esta convocatoria.";
+    updates[inv.id] = {
+      reason,
+      deficits: outlook.deficits,
+      body: invitationBody(
+        {
+          ...inv.snapshot,
+          examDate: input.examDate,
+          dateConfirmed: true,
+          reason,
+          deficits: outlook.deficits,
+        },
+        inv.exam_fee,
+      ),
+    };
+  }
+  const result = await db.rpc("confirm_planning_exam_date", {
+    p_event_id: input.eventId,
+    p_exam_date: input.examDate,
+    p_expected_date: event.data.exam_date,
+    p_expected_month: month,
+    p_updates: updates,
+  });
+  if (result.error) throw result.error;
+}
+export type PlanningExamApproval = {
+  eventId: string;
+  title: string;
+  callMonth: string;
+  dateConfirmed: boolean;
+  examDate: string | null;
+  participants: Array<{
+    invitationId: string;
+    memberId: string;
+    name: string;
+    response: "accepted" | "deferred" | null;
+  }>;
+  acceptedCount: number;
+  deferredCount: number;
+  pendingCount: number;
+};
+export async function listPlanningExamApprovals(): Promise<
+  PlanningExamApproval[]
+> {
+  await requireInvitationAdmin();
+  const result = await createAdminClient()
+    .from("exam_invitations")
+    .select(
+      "id,member_id,exam_event_id,response,snapshot,revoked_at,teacher_approved_at,exam_events(id,title,exam_date,call_month,date_confirmed,status)",
+    )
+    .order("teacher_approved_at", { ascending: false });
+  if (result.error) throw result.error;
+  const groups = new Map<string, PlanningExamApproval>();
+  for (const row of result.data ?? []) {
+    const event = row.exam_events as unknown as {
+      id: string;
+      title: string;
+      exam_date: string;
+      call_month: string | null;
+      date_confirmed?: boolean;
+      status: string;
+    } | null;
+    if (
+      !row.teacher_approved_at ||
+      row.revoked_at ||
+      !event ||
+      !["active", "draft"].includes(event.status) ||
+      event.exam_date < madridCallToday()
+    )
+      continue;
+    const group: PlanningExamApproval = groups.get(row.exam_event_id) ?? {
+      eventId: row.exam_event_id,
+      title: event.title,
+      callMonth:
+        event.call_month ??
+        row.snapshot.callMonth ??
+        row.snapshot.callKey.slice(0, 7),
+      dateConfirmed: event.date_confirmed !== false,
+      examDate: event.date_confirmed === false ? null : event.exam_date,
+      participants: [],
+      acceptedCount: 0,
+      deferredCount: 0,
+      pendingCount: 0,
+    };
+    group.participants.push({
+      invitationId: row.id,
+      memberId: row.member_id,
+      name: row.snapshot.name,
+      response: row.response,
+    });
+    if (row.response === "accepted") group.acceptedCount++;
+    else if (row.response === "deferred") group.deferredCount++;
+    else group.pendingCount++;
+    groups.set(row.exam_event_id, group);
+  }
+  return [...groups.values()];
 }

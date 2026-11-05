@@ -152,7 +152,7 @@ export function ExamEvaluationForm({
         <p className="eyebrow">SKBC Gipuzkoa</p>
         <h1>{payload.event.title}</h1>
         <p>
-          {payload.event.exam_date} - Examinador:{" "}
+          {payload.event.date_confirmed === false ? "Día pendiente de confirmar" : payload.event.exam_date} - Examinador:{" "}
           <strong>{payload.examiner.name}</strong>
         </p>
       </section>

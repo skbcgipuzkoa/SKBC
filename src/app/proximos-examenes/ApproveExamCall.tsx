@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { approvePlanningExamCallAction } from "./actions";
+import { formatExamCallMonth, examCallMonthEnd } from "@/lib/exam-call";
 
 export function ApproveExamCall({ callDate, minDate, children }: { callDate: string | null; minDate: string; children: ReactNode }) {
   const form = useRef<HTMLFormElement>(null);
@@ -13,16 +14,16 @@ export function ApproveExamCall({ callDate, minDate, children }: { callDate: str
     setSelected(checked ? boxes?.length ?? 0 : 0);
   }
   return <form ref={form} action={approvePlanningExamCallAction} onChange={() => setSelected(form.current?.querySelectorAll('input[name="memberIds"]:checked').length ?? 0)}>
-    <section className="card" style={{ marginBottom: 16 }} aria-label="Aprobar convocatoria desde próximos exámenes">
-      <h2>Aprobar convocatoria en las fichas</h2>
-      <p>Selecciona los kenshis en la tabla y elige el día real. La fecha de referencia es orientativa; los requisitos se comprobarán para el día que indiques.</p>
+    <section id="convocar-alumnos" className="card" style={{ marginBottom: 16, borderTop: "5px solid #005bbb", scrollMarginTop: 180 }} aria-label="Aprobar convocatoria desde próximos exámenes">
+      <h2>Convocar alumnos</h2>
+      <p>Selecciona los kenshis en la tabla y aprueba su convocatoria mensual. Puedes confirmar el día más adelante.</p>
       {callDate ? <>
         <input type="hidden" name="callKey" value={callDate} />
-        <p>Convocatoria de referencia: <strong>{callDate.split("-").reverse().join("/")}</strong></p>
-        <label style={{ display: "grid", gap: 6, maxWidth: 340 }}>Fecha real del examen<input type="date" name="examDate" required min={minDate} defaultValue={callDate} /></label>
+        <p>Convocatoria: <strong>{formatExamCallMonth(callDate)}</strong></p>
+        <details><summary>Ya tengo el día definido (opcional)</summary><label style={{ display: "grid", gap: 6, maxWidth: 340 }}>Fecha real del examen<input type="date" name="examDate" min={[minDate, callDate.slice(0, 7) + "-01"].sort().at(-1)} max={examCallMonthEnd(callDate) ?? undefined} /></label></details>
         <ApprovalControls selected={selected} selectAll={selectAll} />
       </> : <p>Elige una convocatoria concreta en el filtro para aprobar alumnos.</p>}
-      <p className="muted">Activa «Apto para presentarse» y la inscripción en sus fichas. No envía correos, no aprueba el examen y conserva los cuatro indicadores de progreso.</p>
+      <p className="muted">Sin día definido, verán «Convocado · día pendiente de confirmar» y podrán inscribirse. No envía correos, no aprueba el examen y conserva los cuatro indicadores de progreso.</p>
     </section>
     {children}
   </form>;

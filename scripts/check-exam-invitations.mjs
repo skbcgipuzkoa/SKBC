@@ -3,7 +3,11 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import ts from "typescript";
-import { madridCallToday } from "../src/lib/exam-call.ts";
+import {
+  madridCallToday,
+  examCallMonthEnd,
+  formatExamCallMonth,
+} from "../src/lib/exam-call.ts";
 const require = createRequire(import.meta.url);
 let admin = true,
   sends = 0,
@@ -18,6 +22,7 @@ let admin = true,
   eventCreates = 0,
   batchWrites = 0,
   eventDate = "2099-12-20",
+  eventConfirmed = true,
   overrideCalls = [];
 const candidate = {
   feasibility: "possible",
@@ -75,7 +80,17 @@ function query(table) {
     },
     async single() {
       return {
-        data: table === "exam_events" ? { notes: "" } : { id: "batch" },
+        data:
+          table === "exam_events"
+            ? {
+                id: "event",
+                notes: "",
+                exam_date: eventDate,
+                call_month: "2099-12",
+                date_confirmed: eventConfirmed,
+                status: "active",
+              }
+            : { id: "batch" },
         error: null,
       };
     },
@@ -100,7 +115,15 @@ function query(table) {
         };
       else if (table === "exam_events" && op === "read")
         result = {
-          data: [{ id: "event", exam_date: eventDate, status: "active" }],
+          data: [
+            {
+              id: "event",
+              exam_date: eventDate,
+              status: "active",
+              date_confirmed: eventConfirmed,
+              call_month: "2099-12",
+            },
+          ],
           error: null,
         };
       else if (op === "update" && patch.delivery_status === "sent" && auditFail)
@@ -123,7 +146,7 @@ const db = {
   },
 };
 const deps = {
-  "@/lib/exam-call": { madridCallToday },
+  "@/lib/exam-call": { madridCallToday, examCallMonthEnd, formatExamCallMonth },
   "@/lib/auth": { hasInternalAccess: async () => admin },
   "@/lib/supabase/admin": { createAdminClient: () => db },
   "@/lib/exam-outlook-data": {
@@ -555,18 +578,128 @@ assert.equal(
 );
 
 // Planning uses the chosen actual date and explicit scoped approval without email.
-outlooks = [{ ...candidate, currentGrade: rows[0].snapshot.currentGrade, targetGrade: rows[0].snapshot.targetGrade, memberClass: rows[0].snapshot.memberClass }];
+outlooks = [
+  {
+    ...candidate,
+    currentGrade: rows[0].snapshot.currentGrade,
+    targetGrade: rows[0].snapshot.targetGrade,
+    memberClass: rows[0].snapshot.memberClass,
+  },
+];
 actualOverride = null;
 const planningSends = sends;
 const planningStart = rpcCalls.length;
 assert.equal(await api.approveExamCallFromPlanning(input), "batch");
-assert.deepEqual(rpcCalls.slice(planningStart).map(x => x.name), ["replace_and_approve_exam_invitation_drafts"]);
-assert.equal(rpcCalls[planningStart].args.p_rows[0].snapshot.examDate, input.examDate);
-assert.equal(rpcCalls[planningStart].args.p_rows[0].snapshot.callKey, input.callKey);
+assert.deepEqual(
+  rpcCalls.slice(planningStart).map((x) => x.name),
+  ["replace_and_approve_exam_invitation_drafts"],
+);
+assert.equal(
+  rpcCalls[planningStart].args.p_rows[0].snapshot.examDate,
+  input.examDate,
+);
+assert.equal(
+  rpcCalls[planningStart].args.p_rows[0].snapshot.callKey,
+  input.callKey,
+);
 assert.equal(rpcCalls[planningStart].args.p_event_dates.event, input.examDate);
 assert.equal(sends, planningSends);
 actualOverride = { ...outlooks[0], callDate: null };
 const beforeRejectedPlanning = rpcCalls.length;
-await assert.rejects(() => api.approveExamCallFromPlanning(input), /tiempo mínimo/);
-assert.equal(rpcCalls.length, beforeRejectedPlanning, "Invalid actual date cannot create or approve");
-console.log("Direct planning approval reuses actual-date validation and scoped authorisation; no SMTP.");
+await assert.rejects(
+  () => api.approveExamCallFromPlanning(input),
+  /tiempo mínimo/,
+);
+assert.equal(
+  rpcCalls.length,
+  beforeRejectedPlanning,
+  "Invalid actual date cannot create or approve",
+);
+console.log(
+  "Direct planning approval reuses actual-date validation and scoped authorisation; no SMTP.",
+);
+
+// A month-only planning approval must never claim its computational cutoff is an actual day.
+actualOverride = null;
+const monthOnlyStart = rpcCalls.length;
+await api.approveExamCallFromPlanning({ ...input, examDate: "" });
+const monthSaved = rpcCalls[monthOnlyStart].args;
+assert.equal(monthSaved.p_rows[0].snapshot.dateConfirmed, false);
+assert.equal(monthSaved.p_rows[0].snapshot.callMonth, "2099-12");
+assert.equal(monthSaved.p_rows[0].snapshot.examDate, "2099-12-31");
+assert.equal(monthSaved.p_event_dates.event, "2099-12-31");
+assert.equal(
+  updates.some((x) => x.date_confirmed === false),
+  true,
+);
+const dateGuardWrites = rpcCalls.length;
+await assert.rejects(
+  () =>
+    api.confirmPlanningExamDate({ eventId: "event", examDate: "2099-11-20" }),
+  /mes/,
+);
+assert.equal(rpcCalls.length, dateGuardWrites);
+assert.equal(
+  monthSaved.p_rows[0].body.includes("2099-12-31"),
+  false,
+  "Provisional cutoff never appears as an actual day in mail text",
+);
+assert.match(monthSaved.p_rows[0].body, /día pendiente de confirmar/);
+rows[0].response = "accepted";
+rows[0].message = "Keep accepted message";
+const confirmationStart = rpcCalls.length;
+await api.confirmPlanningExamDate({ eventId: "event", examDate: "2099-12-15" });
+assert.equal(rpcCalls[confirmationStart].name, "confirm_planning_exam_date");
+assert.equal(rpcCalls[confirmationStart].args.p_exam_date, "2099-12-15");
+assert.equal(rpcCalls[confirmationStart].args.p_expected_date, eventDate);
+assert.match(
+  rpcCalls[confirmationStart].args.p_updates.invite.body,
+  /2099-12-15/,
+);
+assert.equal(rows[0].response, "accepted");
+assert.equal(rows[0].message, "Keep accepted message");
+actualOverride = {
+  ...outlooks[0],
+  callDate: "2099-12-15",
+  feasibility: "impossible",
+};
+const badDayBefore = rpcCalls.length;
+await assert.rejects(
+  () =>
+    api.confirmPlanningExamDate({ eventId: "event", examDate: "2099-12-15" }),
+  /no cabe/,
+);
+assert.equal(rpcCalls.length, badDayBefore);
+actualOverride = null;
+eventConfirmed = false;
+rows[0].delivery_status = "draft";
+const monthSendBefore = sends;
+await assert.rejects(
+  () => api.sendExamInvitationBatch("batch"),
+  /Confirma el día real/,
+);
+assert.equal(sends, monthSendBefore);
+rows[0].exam_events = {
+  ...rows[0].exam_events,
+  date_confirmed: false,
+  call_month: "2099-12",
+};
+const monthlyDto = await api.getStudentExamInvitation("member");
+assert.equal(monthlyDto.dateConfirmed, false);
+assert.equal(monthlyDto.callMonth, "2099-12");
+const plannedList = await api.listPlanningExamApprovals();
+assert.equal(plannedList[0].dateConfirmed, false);
+assert.equal(plannedList[0].examDate, null);
+assert.equal(plannedList[0].acceptedCount, 1);
+eventConfirmed = true;
+console.log(
+  "Month-only planning, hidden cutoff, exact-day feasibility/confirmation and preserved responses checks passed.",
+);
+admin = false;
+await assert.rejects(
+  () =>
+    api.confirmPlanningExamDate({ eventId: "event", examDate: "2099-12-15" }),
+  /Acceso interno/,
+);
+await assert.rejects(() => api.listPlanningExamApprovals(), /Acceso interno/);
+admin = true;

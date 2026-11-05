@@ -9,7 +9,7 @@ export async function getUpcomingExamCalls(options: { now?: Date } = {}): Promis
   const db = createAdminClient();
   const calls = await loadAllPages<UpcomingExamCall>((from, to) => db
     .from("skbc_exam_calls").select("id,call_date,title").eq("active", true)
-    .gte("call_date", madridCallToday(options.now)).order("call_date").order("id")
+    .gte("call_date", madridCallToday(options.now).slice(0, 7) + "-01").order("call_date").order("id")
     .range(from, to).returns<UpcomingExamCall[]>());
   return calls.filter((call) => isIsoDate(call.call_date));
 }

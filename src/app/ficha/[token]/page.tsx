@@ -539,6 +539,8 @@ function AdultFicha({
   const examPanel = buildAdultExamStatusPanel({
     configuredCallDates,
     approvedExamOn: studentInvitation?.teacherApprovedAt && studentInvitation.teacherApprovedBy ? studentInvitation.currentExamDate : null,
+    approvedDateConfirmed: studentInvitation?.dateConfirmed,
+    approvedCallMonth: studentInvitation?.callMonth,
     semaphore: member.semaphore,
     nextExamOn: member.next_exam_on,
     cycleStartOn: member.last_exam_on ?? member.joined_on,

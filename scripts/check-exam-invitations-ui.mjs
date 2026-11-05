@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import * as examCall from '../src/lib/exam-call.ts';
 const require = createRequire(import.meta.url);
 let admin = true, sends = 0, reads = 0, publicInvitation;
 const action = () => { sends++; };
@@ -20,7 +21,7 @@ const mocks = {
   '@/lib/supabase/admin': { createAdminClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ returns: async () => ({ data: [{ id: 'one', family_email: snapshot.email }], error: null }) }) }) }) }) },
   '@/lib/exam-outlook-data': { loadExamOutlooks: async () => new Map([['one', { memberId: 'one', name: snapshot.name, memberClass: 'kids', targetGrade: 'AMARILLO', callDate: snapshot.callKey, candidate: true, preparationCandidate: true, currentReady: false, classification: 'notyet', deficits: ['Synthetic deficit'] }]]) },
   '@/lib/exam-calls-data': { getUpcomingExamCalls: async () => [{ id: 'call', call_date: snapshot.callKey, title: 'Invierno' }] },
-  '@/lib/exam-call': { resolveCallFilter: () => ({ value: 'next', callDate: snapshot.callKey, all: false }) },
+  '@/lib/exam-call': { ...examCall, resolveCallFilter: () => ({ value: 'next', callDate: snapshot.callKey, all: false }) },
   './actions': new Proxy({}, { get: () => action }),
   '@/app/notificaciones/examenes/actions': new Proxy({}, { get: () => action }),
 };

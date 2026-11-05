@@ -5,8 +5,8 @@ import { resolveStudentExamCall, studentExamCallLabel } from "@/lib/student-exam
 export function StudentExamRegistration({ invitation, fichaToken, error, responded }: { invitation: StudentExamInvitation | null; fichaToken: string; error?: string; responded?: string }) {
   if (!invitation?.teacherApprovedAt || !invitation.teacherApprovedBy || !resolveStudentExamCall({ approvedExamOn: invitation.currentExamDate }).approved) return null;
   return <section className="ficha-section" id="inscripcion-examen" style={{ borderTop: "4px solid #178644" }}>
-    <h2 style={{ color: "#178644" }}>Apto para presentarse</h2>
-    <p>{studentExamCallLabel(invitation.currentExamDate, true)} · {invitation.targetGrade}</p>
+    <h2 style={{ color: "#178644" }}>{invitation.dateConfirmed === false ? "Convocado · día pendiente de confirmar" : "Apto para presentarse"}</h2>
+    <p>{studentExamCallLabel(invitation.currentExamDate, true, { dateConfirmed: invitation.dateConfirmed, callMonth: invitation.callMonth })} · {invitation.targetGrade}</p>
     <p>El profesor ha autorizado tu participación. Presentarte es un derecho voluntario, no una obligación.</p>
     <p>Examen {invitation.examFee} € + cinturón {invitation.beltFee} € = <strong>{invitation.examFee + invitation.beltFee} €</strong>. Abono anticipado en mano; la aceptación añade una reserva al examen y no acredita el pago.</p>
     {error ? <p className="form-error" role="alert">No se pudo registrar tu respuesta. Comprueba si ya está registrada o consulta con el club.</p> : null}

@@ -20,7 +20,7 @@ const blue = buildAdultExamStatusPanel({
   examNotice: "AZUL: por tiempo no puede hasta 05/12/2026. Convocatoria objetivo 05/12/2026."
 });
 assert.equal(blue.semaphore, "AZUL");
-assert.equal(blue.nextExamLabel, "Próxima convocatoria prevista si se cumplen todos los requisitos: 05/12/2026");
+assert.equal(blue.nextExamLabel, "Próxima convocatoria prevista si se cumplen todos los requisitos: Diciembre de 2026");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.tone, "waiting");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.value, "284 de 329 dias");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.progress, 86);

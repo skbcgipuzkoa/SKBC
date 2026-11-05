@@ -29,6 +29,8 @@ export type AdultExamStatusPanel = {
 
 export type AdultExamStatusPanelInput = {
   approvedExamOn?: string | null;
+  approvedDateConfirmed?: boolean;
+  approvedCallMonth?: string | null;
   configuredCallDates?: string[];
   semaphore: string | null | undefined;
   nextExamOn: string | null | undefined;
@@ -120,8 +122,8 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
 
   return {
     semaphore: call.approved ? "VERDE" : semaphore,
-    title: call.approved ? "Apto para presentarse" : timeKnown && !timePending && attendanceReady && programRepetitionsReady && activityReady ? "Requisitos completos · pendiente de valoración del profesor" : copy.title,
-    nextExamLabel: studentExamCallLabel(call.date, call.approved),
+    title: call.approved ? input.approvedDateConfirmed === false ? "Convocado · día pendiente de confirmar" : "Apto para presentarse" : timeKnown && !timePending && attendanceReady && programRepetitionsReady && activityReady ? "Requisitos completos · pendiente de valoración del profesor" : copy.title,
+    nextExamLabel: studentExamCallLabel(call.date, call.approved, { dateConfirmed: input.approvedDateConfirmed, callMonth: input.approvedCallMonth }),
     summary: call.approved ? "El profesor ha autorizado esta convocatoria. La aceptación reserva plaza y no acredita el pago." : copy.summary,
     reactivationNotice: needsReactivation
       ? buildReactivationNotice(input.recentAttendance60, input.recentAttendance21)

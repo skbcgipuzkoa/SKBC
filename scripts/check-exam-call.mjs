@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { isIsoDate, madridCallToday, attributeExamCall, resolveCallFilter } from '../src/lib/exam-call.ts';
+import { isIsoDate, madridCallToday, attributeExamCall, resolveCallFilter, formatExamCallMonth, examCallMonthEnd } from '../src/lib/exam-call.ts';
+assert.equal(formatExamCallMonth('2026-12-05'),'Diciembre de 2026');
+assert.equal(formatExamCallMonth('2026-12'),'Diciembre de 2026');
+assert.equal(formatExamCallMonth('2026-02-31'),'Sin mes definido');
+assert.equal(examCallMonthEnd('2026-12-05'),'2026-12-31');
+assert.equal(examCallMonthEnd('2024-02'),'2024-02-29');
+assert.equal(examCallMonthEnd('2026-13'),null);
 for (const date of ['2024-02-29','2000-02-29','2026-12-05']) assert.equal(isIsoDate(date),true);
 for (const date of ['1900-02-29','2025-02-29','2026-04-31','2026-1-01','0000-01-01','2026-01-01T00:00:00Z']) assert.equal(isIsoDate(date),false);
 assert.equal(madridCallToday(new Date('2026-12-31T23:30:00Z')),'2027-01-01');

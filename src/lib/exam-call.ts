@@ -13,6 +13,29 @@ export function madridCallToday(now = new Date()): string {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
+function validCallMonth(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(value) && Number(value.slice(0, 4)) > 0) return value;
+  return isIsoDate(value) ? value.slice(0, 7) : null;
+}
+
+export function formatExamCallMonth(value: string | null | undefined): string {
+  const month = validCallMonth(value);
+  if (!month) return "Sin mes definido";
+  const names = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  return `${names[Number(month.slice(5, 7)) - 1]} de ${month.slice(0, 4)}`;
+}
+
+/** Planning boundary only. This is never a confirmed exam day. */
+export function examCallMonthEnd(value: string | null | undefined): string | null {
+  const month = validCallMonth(value);
+  if (!month) return null;
+  const year = Number(month.slice(0, 4)), number = Number(month.slice(5, 7));
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][number - 1];
+  return `${month}-${days}`;
+}
+
 /** Club rule: January/February belong to the previous December unless marked as a retake. */
 export function attributeExamCall(actualDate: string, options: { isRetake?: boolean } = {}) {
   if (!isIsoDate(actualDate)) return null;
