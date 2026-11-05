@@ -104,11 +104,12 @@ type ExamEventItem = {
   active: boolean;
 };
 
-/** Keep the technical application block last, and seat each child only after all their content. */
+/** Adult exams finish with techniques; children's progressive sequence stays untouched. */
 export function orderIntegratedExamItems<T extends {
   source: string; section?: string | null; category?: string | null;
   name?: string; grade?: string | null; cut_grade?: string | null;
 }>(items: readonly T[], programType: IntegratedExamProgram): T[] {
+  if (programType !== "adults" && programType !== "dan_tribunal") return items.slice();
   const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
   const isTechnique = (item: T) => {
     const metadata = normalized(`${item.section ?? ""} ${item.category ?? ""}`);
@@ -120,17 +121,7 @@ export function orderIntegratedExamItems<T extends {
   };
   const ordered = items.filter(item => item.source !== "cut").sort((left, right) => Number(isTechnique(left)) - Number(isTechnique(right)));
   const cuts = items.filter(item => item.source === "cut");
-  if (programType !== "kids" && programType !== "kids_progressive") return ordered.concat(cuts);
-  const after = new Map<number, T[]>();
-  for (const cut of cuts) {
-    const target = kidsGradeIndex(cut.cut_grade ?? cut.grade ?? null);
-    let last = -1;
-    ordered.forEach((item, index) => {
-      if (!item.grade || kidsGradeIndex(item.grade) <= target) last = index;
-    });
-    after.set(last, [...(after.get(last) ?? []), cut]);
-  }
-  return items.filter(() => false).concat(after.get(-1) ?? [], ordered.flatMap((item, index) => [item, ...(after.get(index) ?? [])]));
+  return ordered.concat(cuts);
 }
 
 type ExamEventExaminer = {

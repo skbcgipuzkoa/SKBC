@@ -171,7 +171,8 @@ const orderingFixture = [
 ];
 assert.equal(typeof backend.orderIntegratedExamItems, 'function', 'Exam ordering must enforce techniques last');
 const orderedFixture = backend.orderIntegratedExamItems(orderingFixture, 'kids_progressive');
-assert.deepEqual(Array.from(orderedFixture, x => x.id), ['umpo','ukemi','kata','gakka','keimyaku','goho','cut-white','juho','cut-yellow']);
+assert.deepEqual(Array.from(orderedFixture, x => x.id), orderingFixture.map(x=>x.id), 'Progressive children keep the original exercises and seating markers unchanged');
+assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderingFixture,'kids'),x=>x.id),orderingFixture.map(x=>x.id),'Standard children also retain their original order');
 assert.equal(orderingFixture[0].id, 'goho', 'Do not mutate the original snapshot');
 assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderedFixture,'kids_progressive'), x=>x.id), Array.from(orderedFixture,x=>x.id), 'Ordering must be idempotent');
 assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderingFixture.filter(x=>x.source!=='cut'),'adults'),x=>x.id), ['umpo','ukemi','kata','gakka','keimyaku','goho','juho']);
