@@ -16,6 +16,7 @@ import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturn
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
+import { memberTenure } from "@/lib/member-tenure";
 
 const LOGO_IKA_URL = "https://lh3.googleusercontent.com/d/1F1VTa2ygk4PRG4wEukoeRWkBAt_vKORy=w300";
 const LOGO_SKBC_URL = "https://lh3.googleusercontent.com/d/1HL7qwSkhxFsHdwg6lpidBe5EjGE-W1GI=w300";
@@ -572,7 +573,7 @@ function AdultFicha({
           <Field label="Grado objetivo" value={technicalProgress.targetGrade} />
           <Field label="Fecha ingreso" value={formatDate(member.joined_on)} />
           <Field label="Fecha nacimiento" value={formatDate(member.birth_date)} />
-          <Field label="Antigüedad" value={ageText(member.joined_on)} />
+          <Field label="Antigüedad" value={memberTenure(member.joined_on)} />
           <Field label="Exámenes" value={String(exams.length)} />
           <Field label="Cursos" value={String(courses.length)} />
           <Field label="Último entreno" value={formatDate(activity.lastAttendance)} />
@@ -824,7 +825,7 @@ function KidsFicha({
       <section className="kid-badges">
         <KidBadge label="Grado" value={member.grade ?? "-"} tone={kidGradeTone(member.grade)} />
         <KidBadge label="Objetivo" value={objective} tone={kidGradeTone(objective)} />
-        <KidBadge label="Antiguedad" value={ageText(member.joined_on) || "-"} tone="blue" />
+        <KidBadge label="Antiguedad" value={memberTenure(member.joined_on)} tone="blue" />
         {member.birth_date ? <KidBadge label="Nacimiento" value={formatDate(member.birth_date)} tone="blue" /> : null}
       </section>
 
@@ -2072,21 +2073,6 @@ function latestByMember(rows: Array<{ member_id: string; attended_on: string }>)
     if (!current || row.attended_on > current) latest.set(row.member_id, row.attended_on);
   });
   return latest;
-}
-
-function ageText(value: string | null) {
-  const date = parseDate(value);
-  if (!date) return "";
-  const today = new Date();
-  let years = today.getFullYear() - date.getFullYear();
-  let months = today.getMonth() - date.getMonth();
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
-  if (years <= 0) return `${months} meses`;
-  if (months === 0) return `${years} años`;
-  return `${years} años y ${months} meses`;
 }
 
 function formatDate(value: string | null | undefined) {

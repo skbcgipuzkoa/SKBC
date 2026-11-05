@@ -39,7 +39,6 @@ type Member = {
   address: string | null;
   photo_url: string | null;
   ficha_token: string | null;
-  legacy_ficha_url: string | null;
   free_trial_enabled: boolean | null;
   free_trial_started_on: string | null;
   free_trial_ends_on: string | null;
@@ -213,7 +212,7 @@ export default async function KenshiDetailPage({
   const { data: member, error } = await supabase
     .from("members")
     .select(
-      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,birth_date,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,ficha_token,legacy_ficha_url,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at,created_at,updated_at"
+      "id,legacy_id,ika_id,first_name,last_name,class,status,grade,joined_on,birth_date,last_exam_on,next_exam_on,exam_notice,exam_history,attendance_history,site_url,semaphore,family_email,guardian_name,guardian_phone,student_phone,address,photo_url,ficha_token,free_trial_enabled,free_trial_started_on,free_trial_ends_on,free_trial_notice_read_at,created_at,updated_at"
     )
     .eq("legacy_id", legacyId)
     .single<Member>();
@@ -429,7 +428,6 @@ export default async function KenshiDetailPage({
                 </form>
               )}
               {member.ficha_token ? <CopyFichaLinkButton token={member.ficha_token} /> : null}
-              {member.legacy_ficha_url ? <a className="text-link" href={member.legacy_ficha_url} target="_blank" rel="noopener noreferrer external">Abrir ficha antigua</a> : null}
             </div>
           </article>
         </section>
