@@ -23,8 +23,9 @@ begin
  insert into members(id,first_name,class,status,grade,ficha_token,joined_on)
  values(mid,'Synthetic rollback owner','adults','active','MINARAI',ficha,'2020-01-01'),
        (other_mid,'Synthetic rollback other owner','adults','active','MINARAI',other_ficha,'2020-01-01');
- insert into exam_events(id,title,exam_date,program_type,status,notes)
- values(eid,'Synthetic rollback exam','2099-12-05','adults','active','Keep exam notes');
+ insert into exam_events(id,title,exam_date,program_type,status,notes,target_grade)
+ values(eid,'Synthetic rollback exam','2099-12-05','adults','active','Keep exam notes','5 KYU');
+ insert into exam_event_items(exam_event_id,name,grade) values(eid,'Synthetic target syllabus','5 KYU');
  insert into exam_invitation_batches(id,call_key,exam_date)
  values(bid,'2099-12-05','2099-12-05'),(expired_bid,'2099-06-05','2099-12-05');
  insert into exam_invitations(id,batch_id,call_key,member_id,exam_event_id,snapshot,subject,body,delivery_status,expires_at,exam_fee)

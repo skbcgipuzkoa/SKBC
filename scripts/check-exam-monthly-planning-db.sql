@@ -14,8 +14,9 @@ begin
  has_function_privilege('authenticated','public.confirm_planning_exam_date(uuid,date,date,text,jsonb)','EXECUTE') then raise exception 'Unexpected confirmation access'; end if;
  insert into members(id,first_name,class,status,grade,ficha_token) values
  (mid,'Synthetic monthly owner','adults','active','MINARAI',ficha),(other_mid,'Synthetic monthly deferred','adults','active','MINARAI',other_ficha);
- insert into exam_events(id,title,exam_date,program_type,status,call_month,date_confirmed)
- values(eid,'Synthetic month only','2099-12-31','adults','active','2099-12',false);
+ insert into exam_events(id,title,exam_date,program_type,status,call_month,date_confirmed,target_grade)
+ values(eid,'Synthetic month only','2099-12-31','adults','active','2099-12',false,'5 KYU');
+ insert into exam_event_items(exam_event_id,name,grade) values(eid,'Synthetic target syllabus','5 KYU');
  insert into exam_events(id,title,exam_date,program_type,status) values(legacy_eid,'Synthetic existing-style exam','2099-12-01','adults','active');
  if not(select date_confirmed from exam_events where id=legacy_eid) then raise exception 'Existing exam default changed'; end if;
  insert into exam_invitation_batches(id,call_key,exam_date) values(bid,'2099-12-05','2099-12-31');

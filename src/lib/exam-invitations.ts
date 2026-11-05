@@ -244,75 +244,134 @@ export async function createExamInvitationDraft(
     .single();
   if (error) throw error;
   const events: string[] = [];
+  const canonicalEvents = new Set<string>();
+  const eventDates: Record<string, string> = {};
   const rows: Record<string, unknown>[] = [];
   try {
     for (const cls of ["kids", "adults"] as const) {
-      const members = selected.filter((x) => x!.memberClass === cls);
-      if (!members.length) continue;
-      const event = await createIntegratedExamEvent({
-        title: input.title || `Convocatoria ${input.callKey} · ${cls}`,
-        examDate: input.examDate,
-        programType: cls,
-        memberIds: members.map((x) => x!.memberId),
-        examinerNames: [],
-        enrollStudents: false,
-        passPercentage: 70,
-      });
-      events.push(event.eventId);
-      const meta = await db
-        .from("exam_events")
-        .update({
-          call_date: input.callKey,
-          is_retake: false,
-          date_confirmed: options.dateConfirmed !== false,
-          ...(options.dateConfirmed === false
-            ? { call_month: input.callKey.slice(0, 7) }
-            : {}),
-        })
-        .eq("id", event.eventId);
-      if (meta.error) throw meta.error;
-      for (const m of members) {
-        const emails = (m!.email ?? "").split(/[;,\s]+/).filter(Boolean);
-        const validEmail =
-          emails.length === 1 && isBareInvitationEmail(emails[0]);
-        if (!options.fichaOnly && !validEmail)
-          throw new Error(`Revisa el email único de ${m!.name}.`);
-        const snapshot: InvitationSnapshot = {
-          dateConfirmed: options.dateConfirmed !== false,
-          additionalMessage: input.body ?? "",
-          callMonth: input.callKey.slice(0, 7),
-          name: m!.name,
-          memberClass: cls,
-          currentGrade: m!.currentGrade,
-          targetGrade: m!.targetGrade,
-          callKey: input.callKey,
+      const classMembers = selected.filter((x) => x!.memberClass === cls);
+      for (const targetGrade of [
+        ...new Set(classMembers.map((member) => member!.targetGrade)),
+      ]) {
+        let members = classMembers.filter(
+          (member) => member!.targetGrade === targetGrade,
+        );
+        const event = await createIntegratedExamEvent({
+          title: input.title || `Convocatoria ${input.callKey} · ${cls}`,
           examDate: input.examDate,
-          email: validEmail ? emails[0] : "",
-          reason:
-            m!.classification === "projected" || m!.currentReady
-              ? m!.currentReady
-                ? "Los requisitos actuales constan cubiertos, pendientes de revisión final del profesor."
-                : "Proyección favorable para la fecha real elegida si se mantiene la trayectoria de preparación, pendiente de revisión final del profesor."
-              : "La preparación necesita refuerzo antes de esta convocatoria.",
-          deficits: m!.deficits,
-          instructions: input.instructions,
-        };
-        const fee = cls === "kids" ? 10 : 15;
-        const body = invitationBody(snapshot, fee);
-        rows.push({
-          batch_id: batch.id,
-          call_key: input.callKey,
-          member_id: m!.memberId,
-          exam_event_id: event.eventId,
-          snapshot,
-          subject:
-            input.subject?.trim() || `Invitación al examen · ${snapshot.name}`,
-          body,
-          exam_fee: fee,
-          expires_at: new Date(
-            Date.parse(input.examDate + "T00:00:00Z") - 2 * 60 * 60 * 1000,
-          ).toISOString(),
+          programType: cls,
+          memberIds: members.map((x) => x!.memberId),
+          examinerNames: [],
+          enrollStudents: false,
+          passPercentage: 70,
         });
+        events.push(event.eventId);
+        const meta = await db
+          .from("exam_events")
+          .update({
+            call_date: input.callKey,
+            target_grade: targetGrade,
+            is_retake: false,
+            date_confirmed: options.dateConfirmed !== false,
+            ...(options.dateConfirmed === false
+              ? { call_month: input.callKey.slice(0, 7) }
+              : {}),
+          })
+          .eq("id", event.eventId);
+        if (meta.error) throw meta.error;
+        const claimed = await db.rpc("claim_prepared_exam_grade_group", {
+          p_event_id: event.eventId,
+          p_call_month: input.callKey.slice(0, 7),
+          p_program: cls,
+          p_target: targetGrade,
+          p_exam_date: input.examDate,
+          p_date_confirmed: options.dateConfirmed !== false,
+        });
+        if (claimed.error) throw claimed.error;
+        const canonical = claimed.data as {
+          eventId: string;
+          examDate: string;
+          dateConfirmed: boolean;
+        };
+        if (!canonical?.eventId)
+          throw new Error(
+            "No se pudo preparar el examen compartido del grado.",
+          );
+        if (canonical.eventId !== event.eventId) {
+          const removed = await db.rpc("discard_unclaimed_exam_preparation", {
+            p_event_id: event.eventId,
+          });
+          if (removed.error) throw removed.error;
+        }
+        canonicalEvents.add(canonical.eventId);
+        event.eventId = canonical.eventId;
+        eventDates[event.eventId] = canonical.examDate;
+        if (canonical.examDate !== input.examDate) {
+          const actual = await loadExamOutlooks({
+            memberIds: members.map((member) => member!.memberId),
+            examDateOverride: canonical.examDate,
+          });
+          members = members.map((member) => {
+            const outlook = actual.get(member!.memberId);
+            if (
+              !outlook?.callDate ||
+              outlook.callDate !== canonical.examDate ||
+              outlook.feasibility === "impossible" ||
+              outlook.targetGrade !== targetGrade ||
+              outlook.currentGrade !== member!.currentGrade
+            )
+              throw new Error(
+                "La preparación no permite incorporarse al día del examen compartido; revisa la convocatoria.",
+              );
+            return { ...outlook, email: member!.email };
+          });
+        }
+
+        for (const m of members) {
+          const emails = (m!.email ?? "").split(/[;,\s]+/).filter(Boolean);
+          const validEmail =
+            emails.length === 1 && isBareInvitationEmail(emails[0]);
+          if (!options.fichaOnly && !validEmail)
+            throw new Error(`Revisa el email único de ${m!.name}.`);
+          const snapshot: InvitationSnapshot = {
+            dateConfirmed: canonical.dateConfirmed,
+            additionalMessage: input.body ?? "",
+            callMonth: input.callKey.slice(0, 7),
+            name: m!.name,
+            memberClass: cls,
+            currentGrade: m!.currentGrade,
+            targetGrade: m!.targetGrade,
+            callKey: input.callKey,
+            examDate: canonical.examDate,
+            email: validEmail ? emails[0] : "",
+            reason:
+              m!.classification === "projected" || m!.currentReady
+                ? m!.currentReady
+                  ? "Los requisitos actuales constan cubiertos, pendientes de revisión final del profesor."
+                  : "Proyección favorable para la fecha real elegida si se mantiene la trayectoria de preparación, pendiente de revisión final del profesor."
+                : "La preparación necesita refuerzo antes de esta convocatoria.",
+            deficits: m!.deficits,
+            instructions: input.instructions,
+          };
+          const fee = cls === "kids" ? 10 : 15;
+          const body = invitationBody(snapshot, fee);
+          rows.push({
+            batch_id: batch.id,
+            call_key: input.callKey,
+            member_id: m!.memberId,
+            exam_event_id: event.eventId,
+            snapshot,
+            subject:
+              input.subject?.trim() ||
+              `Invitación al examen · ${snapshot.name}`,
+            body,
+            exam_fee: fee,
+            expires_at: new Date(
+              Date.parse(canonical.examDate + "T00:00:00Z") -
+                2 * 60 * 60 * 1000,
+            ).toISOString(),
+          });
+        }
       }
     }
     const saved = await db.rpc(
@@ -326,9 +385,7 @@ export async function createExamInvitationDraft(
         ...(options.fichaOnly
           ? {
               p_actor: "Profesor · WEB SKBC",
-              p_event_dates: Object.fromEntries(
-                events.map((id) => [id, input.examDate]),
-              ),
+              p_event_dates: eventDates,
             }
           : {}),
       },
@@ -337,7 +394,9 @@ export async function createExamInvitationDraft(
     return batch.id as string;
   } catch (e) {
     await db.from("exam_invitation_batches").delete().eq("id", batch.id);
-    for (const id of events) await db.from("exam_events").delete().eq("id", id);
+    for (const id of events)
+      if (!canonicalEvents.has(id))
+        await db.rpc("discard_unclaimed_exam_preparation", { p_event_id: id });
     throw e;
   }
 }
@@ -413,12 +472,25 @@ export async function sendExamInvitationBatch(
       x.delivery_status === (options.retryFailed ? "failed" : "draft") &&
       x.response !== "deferred",
   );
-  const actualOutlooks = sendable.length
-    ? await loadExamOutlooks({
-        memberIds: [...new Set(sendable.map((inv) => inv.member_id))],
-        examDateOverride: batch.exam_date,
-      })
-    : new Map();
+  const actualOutlooks = new Map<
+    string,
+    { callDate: string | null; feasibility: string }
+  >();
+  for (const date of [
+    ...new Set(sendable.map((inv) => inv.snapshot.examDate)),
+  ]) {
+    const actual = await loadExamOutlooks({
+      memberIds: [
+        ...new Set(
+          sendable
+            .filter((inv) => inv.snapshot.examDate === date)
+            .map((inv) => inv.member_id),
+        ),
+      ],
+      examDateOverride: date,
+    });
+    for (const [id, outlook] of actual) actualOutlooks.set(id, outlook);
+  }
   const eventStates = new Map(
     (events.data ?? []).map((event) => [event.id, event.status]),
   );
@@ -936,6 +1008,8 @@ export async function confirmPlanningExamDate(input: {
 }
 export type PlanningExamApproval = {
   eventId: string;
+  targetGrade?: string | null;
+  programType?: string;
   title: string;
   callMonth: string;
   dateConfirmed: boolean;
@@ -957,7 +1031,7 @@ export async function listPlanningExamApprovals(): Promise<
   const result = await createAdminClient()
     .from("exam_invitations")
     .select(
-      "id,member_id,exam_event_id,response,snapshot,revoked_at,teacher_approved_at,exam_events(id,title,exam_date,call_month,date_confirmed,status)",
+      "id,member_id,exam_event_id,response,snapshot,revoked_at,teacher_approved_at,exam_events(id,title,exam_date,call_month,date_confirmed,status,target_grade,program_type)",
     )
     .order("teacher_approved_at", { ascending: false });
   if (result.error) throw result.error;
@@ -970,6 +1044,8 @@ export async function listPlanningExamApprovals(): Promise<
       call_month: string | null;
       date_confirmed?: boolean;
       status: string;
+      target_grade?: string | null;
+      program_type?: string;
     } | null;
     if (
       !row.teacher_approved_at ||
@@ -981,6 +1057,8 @@ export async function listPlanningExamApprovals(): Promise<
       continue;
     const group: PlanningExamApproval = groups.get(row.exam_event_id) ?? {
       eventId: row.exam_event_id,
+      targetGrade: event.target_grade,
+      programType: event.program_type,
       title: event.title,
       callMonth:
         event.call_month ??

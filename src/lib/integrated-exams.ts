@@ -62,6 +62,7 @@ type ExamEvent = {
   call_date?: string | null;
   is_retake?: boolean | null;
   date_confirmed?: boolean;
+  target_grade?: string | null;
   program_type: IntegratedExamProgram;
   pass_percentage: number;
   status: string;
@@ -529,7 +530,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
   const { data: event, error: eventError } = await supabase
     .from("exam_events")
     .select(
-      "id,title,exam_date,call_date,call_month,is_retake,date_confirmed,program_type,pass_percentage,status,notes,updated_at",
+      "id,title,exam_date,target_grade,call_date,call_month,is_retake,date_confirmed,program_type,pass_percentage,status,notes,updated_at",
     )
     .eq("id", eventId)
     .single<ExamEvent>();
@@ -861,15 +862,33 @@ export async function getExaminerExamByToken(token: string, grade?: string) {
   const { data: examiner, error: examinerError } = await supabase
     .from("exam_event_examiners")
     .select(
-      "id,exam_event_id,name,email,access_token,submitted_at,revoked_at,exam_events(id,title,exam_date,date_confirmed,program_type,pass_percentage,status,notes,updated_at)",
+      "id,exam_event_id,name,email,access_token,submitted_at,revoked_at,source_examiner_id,source_examiner:exam_event_examiners!exam_event_examiners_source_examiner_id_fkey(id,revoked_at,exam_events(notes)),exam_events(id,title,exam_date,target_grade,date_confirmed,program_type,pass_percentage,status,notes,updated_at)",
     )
     .eq("access_token", token)
     .maybeSingle<any>();
 
   if (examinerError) throw examinerError;
-  if (!examiner || examiner.revoked_at)
+  if (
+    !examiner ||
+    examiner.revoked_at ||
+    (examiner.source_examiner_id &&
+      (!examiner.source_examiner || examiner.source_examiner.revoked_at))
+  )
     throw new Error("Enlace de examen no valido.");
 
+  if (examiner.source_examiner_id) {
+    const parent = examiner.source_examiner;
+    const childTarget = examiner.exam_events?.target_grade;
+    if (!parent?.exam_events || !childTarget)
+      throw new Error("Enlace de examen no valido.");
+    const permission = decodeExamAssignments(parent.exam_events.notes);
+    if (
+      permission.pendingExaminerIds?.includes(examiner.source_examiner_id) ||
+      (permission.scopes !== null &&
+        !permission.scopes[examiner.source_examiner_id]?.includes(childTarget))
+    )
+      throw new Error("Enlace de examen no valido.");
+  }
   const event = examiner.exam_events as ExamEvent | null;
   if (!event) throw new Error("Examen no encontrado.");
   if (event.date_confirmed === false)

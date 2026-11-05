@@ -16,7 +16,7 @@ export async function approvePlanningExamCallAction(form: FormData) {
   revalidatePath("/ficha/[token]", "page");
   revalidatePath("/notificaciones/examenes");
   revalidatePath("/examenes");
-  redirect("/proximos-examenes?" + new URLSearchParams({ call: callKey, approved: "1", ...(examDate ? { examDate } : {}) }));
+  redirect("/proximos-examenes?" + new URLSearchParams({ call: callKey, approved: "1" }));
 }
 
 export async function confirmPlanningExamDateAction(form: FormData) {

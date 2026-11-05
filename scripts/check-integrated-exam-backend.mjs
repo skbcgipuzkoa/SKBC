@@ -158,6 +158,46 @@ vm.runInNewContext(source, {
   Error,
 });
 const backend = module.exports;
+examiner.source_examiner_id = "old-parent";
+examiner.source_examiner = { revoked_at: "2026-01-01" };
+await assert.rejects(
+  () => backend.getExaminerExamByToken("secret"),
+  /Enlace de examen no valido/,
+);
+examiner.source_examiner = {
+  id: "old-parent",
+  revoked_at: null,
+  exam_events: {
+    notes: assignmentHelpers.encodeExamAssignments("", {
+      "old-parent": ["2 KYU"],
+    }),
+  },
+};
+event.target_grade = "1 KYU";
+await assert.rejects(
+  () => backend.getExaminerExamByToken("secret"),
+  /Enlace de examen no valido/,
+);
+examiner.source_examiner.exam_events.notes =
+  assignmentHelpers.encodeExamAssignments(
+    "",
+    { "old-parent": ["1 KYU"] },
+    { pendingExaminerIds: ["old-parent"] },
+  );
+await assert.rejects(
+  () => backend.getExaminerExamByToken("secret"),
+  /Enlace de examen no valido/,
+);
+examiner.source_examiner.exam_events.notes =
+  assignmentHelpers.encodeExamAssignments(
+    "",
+    { "old-parent": ["1 KYU"] },
+    { pendingExaminerIds: [] },
+  );
+assert.equal((await backend.getExaminerExamByToken("secret")).examiner.id, "x");
+delete event.target_grade;
+delete examiner.source_examiner_id;
+delete examiner.source_examiner;
 event.date_confirmed = false;
 const pendingDateWrites = writes.length;
 await assert.rejects(

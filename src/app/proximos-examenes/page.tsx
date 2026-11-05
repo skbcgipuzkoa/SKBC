@@ -116,7 +116,7 @@ export default async function ProximosExamenesPage({
   })}{!visible.length ? <p className="muted">No hay alumnos con estos filtros.</p> : null}</div>;
   return <div className="shell"><SidebarNav current="/proximos-examenes" /><main className="main exam-planning-main">
     <div className="topbar"><div><p className="eyebrow">Planificación y respuestas</p><h1>Próximos exámenes</h1></div><form action={logoutAction}><button className="icon-button" type="submit" aria-label="Salir"><LogOut size={18} /></button></form></div>
-    {params.approved ? <p className="save-ok" role="status">Convocatoria aprobada{params.examDate ? ` para el ${params.examDate}` : " · día pendiente de confirmar"}. Los alumnos ya pueden responder desde su ficha. No se han enviado correos.</p> : null}
+    {params.approved ? <p className="save-ok" role="status">Convocatoria aprobada. Consulta en «Convocados y respuestas» el día confirmado o pendiente de cada grado. Los alumnos ya pueden responder desde su ficha. No se han enviado correos.</p> : null}
     {params.confirmed ? <p className="save-ok">Día confirmado. Se conservan las respuestas e inscripciones.</p> : null}
     {params.error ? <p className="form-error" role="alert">{params.error === "recalculate" ? "No se pudieron recalcular los semáforos." : params.error}</p> : null}
     {params.saved === "recalculate" ? <p className="save-ok">Semáforos recalculados.</p> : null}

@@ -218,6 +218,7 @@ export default async function ExamenesPage({
                 <tr>
                   <th>Fecha</th>
                   <th>Examen</th>
+                  <th>Grado objetivo</th>
                   <th>Tipo</th>
                   <th>Estado</th>
                   <th>Kenshis</th>
@@ -232,16 +233,19 @@ export default async function ExamenesPage({
                     <td data-label="Examen">
                       <strong>{event.title}</strong>
                     </td>
+                    <td data-label="Grado objetivo">{event.target_grade || "Varios grados / por revisar"}</td>
                     <td data-label="Tipo">
                       {event.program_type === "kids_progressive"
                         ? "Ninos progresivo"
-                        : "Adultos"}
+                        : event.program_type === "kids" ? "Niños" : "Adultos"}
                     </td>
                     <td data-label="Estado">
                       <span className="state-badge">
-                        {event.status === "completed" ||
-                        event.status === "archived"
+                        {event.status === "completed"
                           ? "Registrado"
+                          : event.status === "archived" ? "Archivado"
+                          : !(event.exam_event_students ?? []).length
+                            ? "Esperando inscripciones"
                           : !(event.exam_event_examiners ?? []).some(
                                 (examiner) => examiner.submitted_at,
                               )
@@ -294,7 +298,7 @@ export default async function ExamenesPage({
                 ))}
                 {!integratedEvents.length ? (
                   <tr>
-                    <td colSpan={7} className="muted">
+                    <td colSpan={8} className="muted">
                       Aun no hay examenes integrados.
                     </td>
                   </tr>

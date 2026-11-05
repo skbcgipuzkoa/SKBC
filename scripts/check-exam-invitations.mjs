@@ -23,7 +23,10 @@ let admin = true,
   batchWrites = 0,
   eventDate = "2099-12-20",
   eventConfirmed = true,
-  overrideCalls = [];
+  overrideCalls = [],
+  groupClaims = new Map(),
+  createdExamInputs = [],
+  nextEventIds = [];
 let planningListVisible = false;
 const candidate = {
   feasibility: "possible",
@@ -153,6 +156,16 @@ const db = {
   from: query,
   async rpc(name, args) {
     rpcCalls.push({ name, args });
+    if (name === "claim_prepared_exam_grade_group") {
+      const key = [args.p_call_month, args.p_program, args.p_target].join(":");
+      const existing = groupClaims.get(key);
+      const claimed = existing ?? {
+        eventId: args.p_event_id,
+        examDate: args.p_exam_date,
+        dateConfirmed: args.p_date_confirmed,
+      };
+      return { data: claimed, error: null };
+    }
     return { data: "invite", error: null };
   },
 };
@@ -177,8 +190,9 @@ const deps = {
   "@/lib/integrated-exams": {
     createIntegratedExamEvent: async (x) => {
       eventCreates++;
+      createdExamInputs.push(x);
       assert.equal(x.enrollStudents, false);
-      return { eventId: "event" };
+      return { eventId: nextEventIds.shift() ?? "event" };
     },
   },
   "@/lib/integrated-exam-assignments": {
@@ -603,17 +617,17 @@ const planningStart = rpcCalls.length;
 assert.equal(await api.approveExamCallFromPlanning(input), "batch");
 assert.deepEqual(
   rpcCalls.slice(planningStart).map((x) => x.name),
-  ["replace_and_approve_exam_invitation_drafts"],
+  [
+    "claim_prepared_exam_grade_group",
+    "replace_and_approve_exam_invitation_drafts",
+  ],
 );
-assert.equal(
-  rpcCalls[planningStart].args.p_rows[0].snapshot.examDate,
-  input.examDate,
-);
-assert.equal(
-  rpcCalls[planningStart].args.p_rows[0].snapshot.callKey,
-  input.callKey,
-);
-assert.equal(rpcCalls[planningStart].args.p_event_dates.event, input.examDate);
+const planningSaved = rpcCalls
+  .slice(planningStart)
+  .find((x) => x.name === "replace_and_approve_exam_invitation_drafts");
+assert.equal(planningSaved.args.p_rows[0].snapshot.examDate, input.examDate);
+assert.equal(planningSaved.args.p_rows[0].snapshot.callKey, input.callKey);
+assert.equal(planningSaved.args.p_event_dates.event, input.examDate);
 assert.equal(sends, planningSends);
 actualOverride = { ...outlooks[0], callDate: null };
 const beforeRejectedPlanning = rpcCalls.length;
@@ -634,7 +648,9 @@ console.log(
 actualOverride = null;
 const monthOnlyStart = rpcCalls.length;
 await api.approveExamCallFromPlanning({ ...input, examDate: "" });
-const monthSaved = rpcCalls[monthOnlyStart].args;
+const monthSaved = rpcCalls
+  .slice(monthOnlyStart)
+  .find((x) => x.name === "replace_and_approve_exam_invitation_drafts").args;
 assert.equal(monthSaved.p_rows[0].snapshot.dateConfirmed, false);
 assert.equal(monthSaved.p_rows[0].snapshot.callMonth, "2099-12");
 assert.equal(monthSaved.p_rows[0].snapshot.examDate, "2099-12-31");
@@ -760,4 +776,66 @@ assert.equal(
   (await api.getStudentExamInvitation("member")).invitationId,
   "invite",
   "Keep own deferred history when no newer approval exists",
+);
+// Prepare one canonical syllabus per target, reuse known days and never discard shared exams.
+outlooks = [
+  {
+    ...candidate,
+    memberClass: "adults",
+    currentGrade: "MINARAI",
+    targetGrade: "5 KYU",
+  },
+  {
+    ...candidate,
+    memberId: "second",
+    memberClass: "adults",
+    currentGrade: "3 KYU",
+    targetGrade: "2 KYU",
+  },
+];
+rows = [];
+actualOverride = null;
+nextEventIds = ["prepared-five", "prepared-two"];
+groupClaims.set("2099-12:adults:5 KYU", {
+  eventId: "shared-five",
+  examDate: "2099-12-15",
+  dateConfirmed: true,
+});
+const targetsBefore = createdExamInputs.length;
+const targetSaveBefore = rpcCalls.length;
+await api.approveExamCallFromPlanning({
+  memberIds: ["member", "second"],
+  callKey: input.callKey,
+  examDate: "",
+});
+const targetCreated = createdExamInputs.slice(targetsBefore);
+assert.equal(targetCreated.length, 2);
+assert.deepEqual(Array.from(targetCreated[0].memberIds), ["member"]);
+assert.deepEqual(Array.from(targetCreated[1].memberIds), ["second"]);
+const targetSaved = rpcCalls
+  .slice(targetSaveBefore)
+  .find(
+    (row) => row.name === "replace_and_approve_exam_invitation_drafts",
+  ).args;
+assert.equal(targetSaved.p_rows[0].exam_event_id, "shared-five");
+assert.equal(targetSaved.p_rows[0].snapshot.examDate, "2099-12-15");
+assert.equal(targetSaved.p_rows[0].snapshot.dateConfirmed, true);
+assert.equal(targetSaved.p_rows[1].exam_event_id, "prepared-two");
+assert.equal(targetSaved.p_rows[1].snapshot.targetGrade, "2 KYU");
+assert.equal(targetSaved.p_rows[1].snapshot.dateConfirmed, false);
+assert.equal(targetSaved.p_event_dates["shared-five"], "2099-12-15");
+assert.equal(targetSaved.p_event_dates["prepared-two"], "2099-12-31");
+assert.equal(
+  rpcCalls
+    .slice(targetSaveBefore)
+    .some(
+      (row) =>
+        row.name === "discard_unclaimed_exam_preparation" &&
+        row.args.p_event_id === "shared-five",
+    ),
+  false,
+);
+assert.equal(sends, noOldMail, "Preparing target groups sends no mail");
+console.log(
+  "Target-group preparation isolates grades and reuses canonical dates without replacing shared curricula.",
 );

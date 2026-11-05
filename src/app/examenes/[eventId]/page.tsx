@@ -111,6 +111,7 @@ export default async function IntegratedExamPage({
           <div>
             <p className="eyebrow">Examen integrado</p>
             <h1>{event.title}</h1>
+            {event.target_grade ? <p>Grado objetivo: <strong>{event.target_grade}</strong></p> : null}
             <ExamCallAttribution event={event} />
           </div>
           <form action={logoutAction}>

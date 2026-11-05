@@ -1,15 +1,17 @@
+-- Isolated draft-replacement RPC transaction check; canonical claim/reuse is covered in check-exam-grade-groups-db.sql.
 -- Synthetic records only; never approve a real student. Roll back the entire check.
 begin;
 do $$
 declare
  mid uuid:=gen_random_uuid(); b1 uuid:=gen_random_uuid(); b2 uuid:=gen_random_uuid();
  e1 uuid:=gen_random_uuid(); e2 uuid:=gen_random_uuid(); old_id uuid; replacement jsonb; first_rows jsonb;
- snap jsonb:=jsonb_build_object('name','Synthetic planning check','currentGrade','MINARAI','targetGrade','5 KYU','memberClass','adults','examDate','2099-12-05');
+ snap jsonb:=jsonb_build_object('name','Synthetic planning check','currentGrade','MINARAI','targetGrade','5 KYU','memberClass','adults','examDate','2099-12-05','callKey','2099-12-05','callMonth','2099-12','dateConfirmed',true);
 begin
  if has_function_privilege('anon','public.replace_and_approve_exam_invitation_drafts(date,uuid[],jsonb,text,jsonb)','execute') or
     has_function_privilege('authenticated','public.replace_and_approve_exam_invitation_drafts(date,uuid[],jsonb,text,jsonb)','execute') then raise exception 'Unexpected public execution'; end if;
  insert into members(id,first_name,class,status,grade,joined_on) values(mid,'Synthetic planning check','adults','active','MINARAI','2020-01-01');
- insert into exam_events(id,title,exam_date,program_type,status) values(e1,'Synthetic old','2099-12-05','adults','active'),(e2,'Synthetic replacement','2099-12-20','adults','active');
+ insert into exam_events(id,title,exam_date,program_type,status,target_grade,call_month,date_confirmed) values(e1,'Synthetic old','2099-12-05','adults','active','5 KYU','2099-12',true),(e2,'Synthetic replacement','2099-12-20','adults','active','5 KYU','2099-12',true);
+ insert into exam_event_items(exam_event_id,name,grade) values(e1,'Synthetic target syllabus','5 KYU'),(e2,'Synthetic replacement syllabus','5 KYU');
  insert into exam_invitation_batches(id,call_key,exam_date) values(b1,'2099-12-05','2099-12-05'),(b2,'2099-12-05','2099-12-20');
  first_rows:=jsonb_build_array(jsonb_build_object('batch_id',b1,'call_key','2099-12-05','member_id',mid,'exam_event_id',e1,'snapshot',snap,'subject','Not sent','body','Not sent','exam_fee',15,'expires_at','2099-12-04T22:00:00Z'));
  perform replace_and_approve_exam_invitation_drafts('2099-12-05',array[mid],first_rows,'Synthetic teacher',jsonb_build_object(e1::text,'2099-12-05'));
