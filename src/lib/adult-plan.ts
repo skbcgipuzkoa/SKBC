@@ -1,3 +1,4 @@
+import { loadExamCycleAttributions, withExamCycleAttribution } from "@/lib/exam-cycle-attribution";
 import { resolveExamEligibilityTime } from "@/lib/exam-eligibility-time";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -509,6 +510,7 @@ async function loadExamPriorityContext(classId: string, classDate: string) {
         loadAllPages<Technique>((from, to) => supabase.from("techniques").select("id,name,grade,category,content_type").order("id").range(from, to).returns<Technique[]>()),
         loadAllPages<History>((from, to) => supabase.from("member_technical_history").select("member_id,technique_id,technique_name").eq("completed", true).lte("class_date", classDate).order("id").range(from, to).returns<History[]>())
     ]);
+    const cycleAttributions = await loadExamCycleAttributions(members.map((member) => member.id));
     const attendanceKnown = attendees.length > 0, attendeeIds = new Set(attendees.map(row => row.member_id));
     const counts = new Map<string, Map<string, number>>();
     for (const row of history) {
@@ -522,7 +524,7 @@ async function loadExamPriorityContext(classId: string, classDate: string) {
         const memberCurriculum = curriculum.filter(item => normalize(item.grade) === normalize(resolveTargetGrade(member.grade!)));
         if (!memberCurriculum.length || requirement.adult_required_repetitions <= 0)
             return [];
-        const timing = resolveExamEligibilityTime(member, requirement.min_months ?? 12);
+        const timing = resolveExamEligibilityTime(withExamCycleAttribution(member, cycleAttributions), requirement.min_months ?? 12);
         const classTime = new Date(`${classDate}T00:00:00`).getTime();
         const cycleDuration = timing ? timing.eligibilityDate.getTime() - timing.cycleStartDate.getTime() : 0;
         const timeProximity = timing && Number.isFinite(classTime) ? Math.max(0, Math.min(1, (classTime - timing.cycleStartDate.getTime()) / Math.max(1, cycleDuration))) : 0;

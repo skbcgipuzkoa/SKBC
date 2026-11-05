@@ -27,7 +27,7 @@ export default async function ExamInvitationsPage({ searchParams }: { searchPara
     group: outlook.memberClass === "kids" ? "Niños" : "Adultos", grade: outlook.targetGrade,
     callKey: outlook.callDate ?? "", reason: `${outlook.currentReady || outlook.classification === "projected" ? "Previsión favorable" : "Preparación con refuerzo necesario"}${outlook.deficits.length ? ` · ${outlook.deficits.join("; ")}` : ""}`,
   }));
-  return <div className="shell"><SidebarNav current="/notificaciones" /><main className="main">
+  return <div className="shell"><SidebarNav current="/notificaciones" /><main className="main exam-invitations-main">
     <div className="topbar"><div><p className="eyebrow">Convocatoria voluntaria</p><h1>Invitaciones de examen</h1></div></div>
     {params.saved ? <p className="save-ok">Operación registrada.</p> : null}
     {params.sent !== undefined ? <p className={Number(params.failed) || Number(params.unconfirmed) ? "form-error" : "save-ok"}>Enviados confirmados: {params.sent}. Fallidos: {params.failed ?? "0"}. Entregas sin confirmar: {params.unconfirmed ?? "0"}. Consulta el estado individual abajo; revisa manualmente las entregas sin confirmar antes de cualquier reenvío.</p> : null}

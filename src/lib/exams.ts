@@ -1,3 +1,5 @@
+import { recordExamCycleAttribution } from "@/lib/exam-cycle-attribution";
+import { attributeExamCall } from "@/lib/exam-call";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { syncLegacyExam } from "@/lib/legacy-sheet-sync";
 import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
@@ -46,12 +48,16 @@ export async function registerExam({
   grade,
   examiner,
   registeredBy,
+  callMonth,
+  isRetake,
 }: {
   memberId: string;
   examDate: string;
   grade: string;
   examiner: string | null;
   registeredBy: string;
+  callMonth?: string | null;
+  isRetake?: boolean | null;
 }) {
   const supabase = createAdminClient();
   const { data: member, error: memberError } = await supabase
@@ -100,6 +106,16 @@ export async function registerExam({
     };
   }
 
+  if (
+    typeof isRetake === "boolean" &&
+    callMonth &&
+    attributeExamCall(examDate, { isRetake })?.callMonth !== callMonth
+  ) {
+    throw new Error(
+      "La convocatoria no coincide con la fecha y el tipo de examen.",
+    );
+  }
+
   let examId = existingExam?.id ?? null;
   if (!examId) {
     const { data: insertedExam, error: examError } = await supabase
@@ -133,6 +149,14 @@ export async function registerExam({
 
   if (updateError) throw updateError;
 
+  if (typeof isRetake === "boolean") {
+    await recordExamCycleAttribution({
+      memberId: member.id,
+      actualExamOn: examDate,
+      isRetake,
+      source: callMonth ? "integrated-exam:" + callMonth : "exam-registration",
+    });
+  }
   await recalculateMemberExamStatus(member.id);
 
   try {

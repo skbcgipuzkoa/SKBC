@@ -14,6 +14,7 @@ export type OutlookMember = {
   grade: string | null;
   joined_on: string | null;
   last_exam_on: string | null;
+  last_exam_cycle_on?: string | null;
 };
 export type OutlookRequirement = {
   member_class: "kids" | "adults";

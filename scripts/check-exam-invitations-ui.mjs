@@ -106,3 +106,10 @@ const resultHtml = renderToStaticMarkup(await page({ searchParams: Promise.resol
 assert.match(resultHtml, /Enviados confirmados: 1. Fallidos: 0. Entregas sin confirmar: 2/);
 assert.equal(sends, 0);
 console.log('Safe response errors, exact response labels and unconfirmed-delivery summary regressions passed.');
+const invitationCss = fs.readFileSync('src/app/notificaciones/examenes/invitations.css', 'utf8');
+assert.match(preview, /main exam-invitations-main/);
+assert.match(invitationCss, /\.exam-invitations-main \.filters\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/);
+assert.match(invitationCss, /\.exam-invitations-main \.filters select\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0/);
+assert.match(invitationCss, /\.exam-invitations-main \.filters label\s*\{[^}]*min-width:\s*0/);
+assert.match(invitationCss, /@media \(max-width: 600px\)[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+console.log('Scoped mobile invitation-filter layout regressions passed.');

@@ -1,3 +1,4 @@
+import { loadExamCycleAttributions, withExamCycleAttribution } from "@/lib/exam-cycle-attribution";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
 import {
@@ -35,6 +36,7 @@ export async function loadExamOutlooks(
     return q.order("id").range(from, to).returns<OutlookMember[]>();
   });
   if (!members.length) return new Map();
+  const cycleAttributions = await loadExamCycleAttributions(members.map((member) => member.id));
   // All bounded sources exclude future records. These scans are intentionally independent of roster size.
   const memberIds = members.map((m) => m.id);
   async function loadScoped<T>(
@@ -162,7 +164,7 @@ export async function loadExamOutlooks(
       return [
         member.id,
         evaluateExamOutlook({
-          member,
+          member: withExamCycleAttribution(member, cycleAttributions),
           today,
           horizonDays: options.horizonDays,
           attendance: (attendanceByMember.get(member.id) ?? []).map(

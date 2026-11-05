@@ -73,6 +73,7 @@ let source = fs.readFileSync(
   "utf8",
 );
 source = source
+  .replace(/import[^;]*from "@\/lib\/exam-cycle-attribution";/, "const loadExamCycleAttributions = async () => new Map(); const withExamCycleAttribution = (member) => member;")
   .replace(
     /import[\s\S]*?from "@\/lib\/supabase\/admin";/,
     "const {createAdminClient}=globalThis.__outlookTest;",

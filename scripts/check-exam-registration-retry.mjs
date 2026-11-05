@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { attributeExamCall } from "../src/lib/exam-call.ts";
+const attributionCalls = [];
+const ordering = [];
 
 const member = {
   id: "member",
@@ -74,10 +77,24 @@ vm.runInNewContext(compiled, {
       : name.endsWith("/legacy-sheet-sync")
         ? { syncLegacyExam: async () => {} }
         : name.endsWith("/member-exam-status")
-          ? { recalculateMemberExamStatus: async () => {} }
-          : name.endsWith("/exam-belt-orders")
-            ? { ensureExamBeltOrder: async () => {} }
-            : {},
+          ? {
+              recalculateMemberExamStatus: async () => {
+                ordering.push("recalculate");
+              },
+            }
+          : name.endsWith("/exam-cycle-attribution")
+            ? {
+                recordExamCycleAttribution: async (input) => {
+                  ordering.push("attribution");
+                  attributionCalls.push({ ...input });
+                  assert.equal(member.last_exam_on, input.actualExamOn);
+                },
+              }
+            : name.endsWith("/exam-call")
+              ? { attributeExamCall }
+              : name.endsWith("/exam-belt-orders")
+                ? { ensureExamBeltOrder: async () => {} }
+                : {},
 });
 const input = {
   memberId: "member",
@@ -105,12 +122,63 @@ assert.equal(
   afterFirst.attendance_history,
   "Retries do not duplicate attendance history",
 );
+assert.equal(
+  attributionCalls.length,
+  0,
+  "Legacy callers do not invent provenance",
+);
+ordering.length = 0;
+await module.exports.registerExam({
+  ...input,
+  callMonth: "2026-10",
+  isRetake: false,
+});
+assert.deepEqual(ordering, ["attribution", "recalculate"]);
+assert.equal(attributionCalls.at(-1).actualExamOn, input.examDate);
+const beforeOlderRetry = attributionCalls.length;
 member.grade = "1 DAN";
 member.last_exam_on = "2027-06-01";
-await module.exports.registerExam(input);
+await module.exports.registerExam({
+  ...input,
+  callMonth: "2026-10",
+  isRetake: false,
+});
+assert.equal(
+  attributionCalls.length,
+  beforeOlderRetry,
+  "Older retry cannot rewrite cycle provenance",
+);
 assert.equal(
   member.grade,
   "1 DAN",
   "Retrying an old event cannot reverse a later promotion",
 );
-console.log("Official exam registration retry checks passed.");
+member.last_exam_on = "2026-01-01";
+exams.length = 0;
+ordering.length = 0;
+await module.exports.registerExam({
+  ...input,
+  examDate: "2027-02-10",
+  callMonth: "2026-12",
+  isRetake: false,
+});
+assert.equal(
+  member.last_exam_on,
+  "2027-02-10",
+  "Historical actual date is not rewritten to December",
+);
+assert.equal(exams[0].exam_date, "2027-02-10");
+assert.equal(attributionCalls.at(-1).actualExamOn, "2027-02-10");
+assert.equal(attributionCalls.at(-1).isRetake, false);
+assert.deepEqual(ordering, ["attribution", "recalculate"]);
+await module.exports.registerExam({
+  ...input,
+  examDate: "2027-02-10",
+  callMonth: "2027-02",
+  isRetake: true,
+});
+assert.equal(attributionCalls.at(-1).isRetake, true);
+assert.equal(member.last_exam_on, "2027-02-10");
+console.log(
+  "Official exam registration retry and explicit cycle attribution checks passed.",
+);

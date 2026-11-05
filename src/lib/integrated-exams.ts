@@ -1796,6 +1796,8 @@ export async function finalizeIntegratedExamEvent(
               .map((row) => row.name)
               .join(", "),
             registeredBy: finalizedBy,
+            callMonth: data.event.call_month,
+            isRetake: data.event.is_retake,
           });
           review.registeredExamId = result.examId;
           await writeReview(
