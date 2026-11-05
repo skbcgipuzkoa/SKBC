@@ -161,7 +161,7 @@ assert.equal(
   }).classification,
   "notyet",
 );
-console.log("exam outlook: core scenarios passed");
+
 
 assert.equal(
   evaluateExamOutlook({ ...base, member: { ...member, grade: "UNKNOWN" } })
@@ -240,3 +240,77 @@ assert.equal(
   }).targetGrade,
   "Unknown",
 );
+
+// Preparation candidacy is distinct from a favorable forecast.
+const nearCurriculum = Array.from({ length: 8 }, (_, i) => ({
+  ...item,
+  id: "near" + i,
+  name: "Required " + i,
+}));
+const nearHistory = nearCurriculum
+  .slice(0, 6)
+  .map((t) => h("2026-08-01", t.id, t.name));
+const nearInput = { ...base, curriculum: nearCurriculum, history: nearHistory };
+const near = evaluateExamOutlook(nearInput);
+assert.equal(near.preparationCandidate, true);
+assert.equal(near.candidate, true);
+assert.equal(near.classification, "unknown");
+assert.equal(near.evidence.usefulTechnicalGain, 0);
+assert.equal(near.estimatedReadyOn, null);
+assert.ok(near.planningReasons.some((r) => r.includes("6/8")));
+const annualNear = evaluateExamOutlook({ ...nearInput, calls: ["2027-06-26"] });
+assert.equal(annualNear.preparationCandidate, true);
+assert.equal(annualNear.candidate, true);
+assert.equal(
+  evaluateExamOutlook({ ...nearInput, calls: ["2027-06-26"], horizonDays: 180 })
+    .preparationCandidate,
+  false,
+);
+assert.equal(
+  evaluateExamOutlook({ ...nearInput, history: nearHistory.slice(0, 5) })
+    .preparationCandidate,
+  false,
+);
+assert.equal(
+  evaluateExamOutlook({ ...nearInput, attendance: base.attendance.slice(0, 5) })
+    .preparationCandidate,
+  false,
+);
+assert.equal(
+  evaluateExamOutlook({
+    ...nearInput,
+    attendance: base.attendance.filter((d) => d < "2026-10-15"),
+  }).preparationCandidate,
+  false,
+);
+assert.equal(
+  evaluateExamOutlook({
+    ...nearInput,
+    attendance: base.attendance.slice(-6),
+    requirements: [{ ...base.requirements[0], attendance_ratio: 1 }],
+  }).preparationCandidate,
+  false,
+);
+assert.equal(
+  evaluateExamOutlook({ ...nearInput, curriculum: [] }).preparationCandidate,
+  false,
+);
+assert.equal(
+  evaluateExamOutlook({ ...nearInput, calls: ["2026-01-01"] })
+    .preparationCandidate,
+  false,
+);
+assert.equal(
+  evaluateExamOutlook({
+    ...nearInput,
+    member: { ...member, status: "inactive" },
+  }).preparationCandidate,
+  false,
+);
+assert.equal(
+  evaluateExamOutlook({ ...nearInput, member: { ...member, class: "kids" } })
+    .preparationCandidate,
+  false,
+);
+
+console.log("exam outlook: core and preparation-candidate scenarios passed");

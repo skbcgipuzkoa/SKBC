@@ -268,7 +268,7 @@ export async function AdminDashboard() {
             </div>
             <div>
               <h3>Candidatos a examen · {examCandidates.length}</h3>
-              <p className="muted">Actuales y proyectados a 180 dias. Pendientes de valoracion del profesor.</p>
+              <p className="muted">Preparacion y proyecciones a 365 dias. Preparar una convocatoria no implica llegar al ritmo actual; requiere valoracion del profesor.</p>
               <div className="home-class-list">
                 {urgentExamMembers.length ? urgentExamMembers.map((outlook) => (
                   <a className={`home-class-row ${outlook.currentReady ? "ready" : "warning"}`} href={outlook.legacyId ? `/kenshis/${outlook.legacyId}` : "/proximos-examenes?semaforo=POSIBLES"} key={outlook.memberId}>
@@ -276,9 +276,9 @@ export async function AdminDashboard() {
                       <strong>{outlook.name}</strong>
                       <small>{formatExamOutlookSummary(outlook)}</small>
                     </span>
-                    <b>{outlook.currentReady ? "Requisitos medidos" : "Proyectado"}</b>
+                    <b>{outlook.currentReady ? "Requisitos medidos" : outlook.classification === "projected" ? "Proyectado" : "Para preparar"}</b>
                   </a>
-                )) : <p className="muted">No hay candidatos actuales o proyectados con datos suficientes.</p>}
+                )) : <p className="muted">No hay candidatos para preparar o proyectados con los datos disponibles.</p>}
                 {examCandidates.length > urgentExamMembers.length ? <a className="text-link" href="/proximos-examenes?semaforo=POSIBLES">Ver {examCandidates.length - urgentExamMembers.length} candidatos restantes</a> : null}
               </div>
             </div>

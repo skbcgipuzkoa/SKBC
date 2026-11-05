@@ -21,7 +21,15 @@ assert.ok(ready.includes("No concede aptitud"));
 assert.ok(!ready.includes("Observacion:"));
 const unknown = renderToStaticMarkup(React.createElement(ExamOutlookPanel, { outlook: { ...outlook, classification: "unknown", estimatedReadyOn: null, marginDays: null } }));
 assert.ok(unknown.includes("sin estimacion fiable"));
-assert.ok(unknown.includes("Prevision incierta"));
+assert.ok(unknown.includes("Sin estimacion fiable"));
+for (const classification of ["notyet", "unknown"]) {
+ const preparation = renderToStaticMarkup(React.createElement(ExamOutlookPanel, { outlook: { ...outlook, preparationCandidate: true, planningReasons: ["Preparar convocatoria de junio"], classification, estimatedReadyOn: null, marginDays: null } }));
+ assert.ok(preparation.includes("Candidato para preparar"));
+ assert.ok(preparation.includes("Preparar convocatoria de junio"));
+ assert.ok(preparation.includes(classification === "notyet" ? "No se preve llegar al ritmo actual" : "Sin estimacion fiable"));
+ assert.ok(!preparation.includes("Posible candidato proyectado"));
+ assert.ok(!preparation.includes("2026-11-20"));
+}
 for (const page of ["proximos-examenes/page.tsx", "avisos/page.tsx", "page.tsx", "ficha/[token]/page.tsx", "kenshis/[legacyId]/page.tsx"]) {
  const text = fs.readFileSync(`src/app/${page}`, "utf8");
  assert.equal((text.match(/loadExamOutlooks\(/g) ?? []).length, 1, `${page}: one batched loader call`);

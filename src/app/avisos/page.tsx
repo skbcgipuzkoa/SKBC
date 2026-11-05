@@ -359,7 +359,7 @@ export default async function AvisosPage({
             <div>
               <p className="eyebrow">Convocatorias</p>
               <h2>Proximos a examen · {upcomingExamNotices.length} candidatos</h2>
-              <p className="muted">Candidatos actuales y proyectados a 180 dias, con el mismo calculo que Proximos examenes. La proyeccion requiere revision del profesor.</p>
+              <p className="muted">Candidatos para preparar y proyecciones a 365 dias, con el mismo calculo que Proximos examenes. La preparacion no implica llegar al ritmo actual; requiere revision del profesor.</p>
             </div>
             <a className="secondary-button" href="/proximos-examenes">Ver semaforos</a>
           </div>

@@ -49,6 +49,8 @@ export type ExamOutlook = {
   callDate: string | null;
   classification: "ready" | "projected" | "notyet" | "unknown";
   candidate: boolean;
+  preparationCandidate: boolean;
+  planningReasons: string[];
   currentReady: boolean;
   estimatedReadyOn: string | null;
   marginDays: number | null;
@@ -213,6 +215,8 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     callDate: null,
     classification: "unknown",
     candidate: false,
+    preparationCandidate: false,
+    planningReasons: [],
     currentReady: false,
     estimatedReadyOn: null,
     marginDays: null,
@@ -363,6 +367,29 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     );
   if (!engaged180)
     result.uncertainty.push("Sin asistencia en 180 dias; revisar reactivacion");
+  const worked = fundamental.filter((t) => (counts.get(t.id) ?? 0) > 0).length;
+  const attendanceCoverage = minimum > 0 ? attendance.length / minimum : 0;
+  const technicalCoverage =
+    fundamental.length > 0 ? worked / fundamental.length : 0;
+  const active21 = attendance.filter((d) => d >= plus(today, -21)).length;
+  result.preparationCandidate =
+    m.class === "adults" &&
+    days(today, call) <= (input.horizonDays ?? 365) &&
+    observedDays >= 28 &&
+    recent.length >= 6 &&
+    active21 >= 1 &&
+    connected90 &&
+    attendanceCoverage >= 0.75 &&
+    technicalCoverage >= 0.75;
+  if (result.preparationCandidate) {
+    result.planningReasons = [
+      "En preparacion: revisar los requisitos pendientes con el profesor",
+      `Asistencia ${attendance.length}/${minimum} (${Math.round(attendanceCoverage * 100)}% del minimo)`,
+      `Temario Goho/Juho trabajado ${worked}/${fundamental.length} (${Math.round(technicalCoverage * 100)}%)`,
+      `Actividad reciente: ${recent.length}/6 en 60 dias y ${active21}/1 en 21 dias`,
+    ];
+  }
+  result.candidate = result.preparationCandidate;
   result.currentReady =
     eligible <= today &&
     missingAttendance === 0 &&
@@ -373,11 +400,11 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     (m.class === "kids" || curriculum.length > 0 || !technicalBlocks);
   // Children can meet attendance/time; their technical approval is always explicitly pending.
   if (m.class === "kids") result.currentReady = false;
-  if (days(today, call) > (input.horizonDays ?? 180))
+  if (days(today, call) > (input.horizonDays ?? 365))
     result.uncertainty.push(
       "Convocatoria fuera del horizonte de planificacion",
     );
-  if (result.currentReady && days(today, call) <= (input.horizonDays ?? 180)) {
+  if (result.currentReady && days(today, call) <= (input.horizonDays ?? 365)) {
     result.classification = "ready";
     result.estimatedReadyOn = today;
     result.marginDays = days(today, call);
@@ -418,7 +445,7 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
   result.classification = estimated ? "projected" : "notyet";
   result.estimatedReadyOn = estimated;
   result.marginDays = estimated ? days(estimated, call) : null;
-  result.candidate = Boolean(estimated);
+  result.candidate = result.preparationCandidate || Boolean(estimated);
   if (estimated && technicalBlocks && missingReps)
     result.uncertainty.push(
       "Proyeccion condicionada a trabajar las tecnicas pendientes, con el ritmo util observado",
@@ -442,6 +469,7 @@ export function formatExamOutlookSummary(o: ExamOutlook) {
     o.estimatedReadyOn
       ? `estimado ${o.estimatedReadyOn}${o.marginDays !== null ? ` (${o.marginDays} dias de margen)` : ""}`
       : "",
+    ...o.planningReasons,
     ...o.deficits,
     ...o.uncertainty,
     "Pendiente de valoracion del profesor",

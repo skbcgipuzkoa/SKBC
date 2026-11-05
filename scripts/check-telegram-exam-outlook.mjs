@@ -15,6 +15,9 @@ assert.match(message,/ritmo actual \(15\)/);assert.match(message,/Y 3 más/);
 assert.match(formatTelegramExamOutlooks([]),/Ninguno ahora mismo/);
 const outsideWindow=formatTelegramExamOutlooks([{...row,currentReady:true,candidate:false,classification:'unknown',uncertainty:['Convocatoria fuera del horizonte de planificacion']}]);
 assert.match(outsideWindow,/hoy \(0\)/);assert.match(outsideWindow,/faltan datos \(1\)/);
+const preparing=formatTelegramExamOutlooks([{...row,currentReady:false,candidate:true,classification:'notyet',estimatedReadyOn:null,marginDays:null,preparationCandidate:true,planningReasons:['Temario trabajado al 90%']}]);
+assert.match(preparing,/ritmo actual \(0\)/);assert.match(preparing,/necesitan refuerzo o revisión \(1\)/);
+assert.match(preparing,/Temario trabajado al 90%/);assert.match(preparing,/no se prevé completar/);
 
 // Exercise the actual dispatch function: every scheduled report includes the same new outlook.
 const source=readFileSync('src/lib/telegram-notifications.ts','utf8');
