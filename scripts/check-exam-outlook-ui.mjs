@@ -30,7 +30,7 @@ for (const classification of ["notyet", "unknown"]) {
  assert.ok(!preparation.includes("Posible candidato proyectado"));
  assert.ok(!preparation.includes("2026-11-20"));
 }
-for (const page of ["proximos-examenes/page.tsx", "avisos/page.tsx", "page.tsx", "ficha/[token]/page.tsx", "kenshis/[legacyId]/page.tsx"]) {
+for (const page of ["proximos-examenes/page.tsx", "avisos/page.tsx", "page.tsx", "kenshis/[legacyId]/page.tsx"]) {
  const text = fs.readFileSync(`src/app/${page}`, "utf8");
  assert.equal((text.match(/loadExamOutlooks\(/g) ?? []).length, 1, `${page}: one batched loader call`);
  assert.ok(!text.includes("evaluateExamCandidate"), `${page}: no old candidate heuristic`);
@@ -46,3 +46,63 @@ assert.ok(examPage.includes("Semaforo guardado"));
 assert.ok(examPage.includes("Asistencia guardada"));
 assert.ok(examPage.includes("La prevision se calcula ahora"));
 console.log("Exam outlook UI SSR and shared-consumer regressions passed");
+const impossible = renderToStaticMarkup(React.createElement(ExamOutlookPanel, { outlook: { ...outlook, feasibility: "impossible", impossibilityReasons: ["Faltan 9 asistencias y quedan 8 clases"], evidence: { ...outlook.evidence, remainingSessions: 8 } } }));
+assert.ok(impossible.includes("No llega con las clases previstas"));
+assert.ok(impossible.includes("9 asistencias y quedan 8 clases"));
+assert.ok(!impossible.includes("2026-11-20"));
+const records = ["Candidate Alpha", "Impossible Beta", "Followup Gamma"].map((name, index) => ({ id: String(index), display_name: name, status: "active", class: "adults", semaphore: "ROJO", legacy_id: String(index), attendance_count: 0, minimum_attendance: 10, attendance_percentage: 0, total_cycle_sessions: 20 }));
+const pageOutlooks = new Map(records.map((record, i) => [record.id, { ...outlook, candidate: i === 0, memberId: record.id, feasibility: i === 1 ? "impossible" : "unknown", classification: i === 0 ? "projected" : "unknown", estimatedReadyOn: i === 0 ? outlook.estimatedReadyOn : null, impossibilityReasons: i === 1 ? ["Faltan 9 asistencias y quedan 8 clases"] : [], evidence: { ...outlook.evidence, remainingSessions: 8 } }]));
+const pageSource = fs.readFileSync("src/app/proximos-examenes/page.tsx", "utf8");
+const compiledPage = ts.transpileModule(pageSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+const pageModule = { exports: {} };
+const query = { select() { return this; }, order() { return this; }, eq() { return this; } };
+vm.runInNewContext(compiledPage, { module: pageModule, exports: pageModule.exports, URLSearchParams, require: (id) => {
+ if (id === "@/lib/exam-calls-data") return { getUpcomingExamCalls: async () => [{ id: "call", call_date: "2026-12-05", title: "Diciembre" }] };
+ if (id === "@/lib/exam-call") return { resolveCallFilter: () => ({ all: false, callDate: "2026-12-05", value: "next" }) };
+ if (id === "@/lib/load-all-pages") return { loadAllPages: async () => records };
+ if (id === "@/lib/exam-outlook-data") return { loadExamOutlooks: async () => pageOutlooks };
+ if (id === "@/app/components/exam-outlook-panel") return { ExamOutlookPanel };
+ if (id === "@/app/components/SidebarNav") return { SidebarNav: () => null };
+ if (id === "@/app/actions") return {};
+ if (id === "@/lib/auth") return { hasInternalAccess: async () => true };
+ if (id === "@/lib/supabase/admin") return { createAdminClient: () => ({ from: () => query }) };
+ return require(id);
+} });
+async function pageHtml(params = {}) { return renderToStaticMarkup(await pageModule.exports.default({ searchParams: Promise.resolve(params) })); }
+const defaultPage = await pageHtml();
+assert.ok(defaultPage.includes('Mostrando</h2><div class="metric">1</div>'));
+assert.ok(defaultPage.includes("Candidate Alpha"));
+assert.ok(!defaultPage.includes("Impossible Beta"));
+assert.ok(!defaultPage.includes("Followup Gamma"));
+assert.ok(defaultPage.includes('value="candidates" selected=""'));
+assert.ok(defaultPage.includes('call=next&amp;view=impossible'));
+assert.ok(defaultPage.includes('semaforo=POSIBLES&amp;call=next&amp;view=candidates'));
+const impossiblePage = await pageHtml({ view: "impossible" });
+assert.ok(impossiblePage.includes("Impossible Beta"));
+assert.ok(!impossiblePage.includes("Candidate Alpha"));
+assert.ok(impossiblePage.includes("9 asistencias y quedan 8 clases"));
+assert.ok(impossiblePage.includes('semaforo=ROJO&amp;call=next&amp;view=impossible'));
+const followupPage = await pageHtml({ view: "followup" });
+assert.ok(followupPage.includes("Followup Gamma"));
+assert.ok(!followupPage.includes("Impossible Beta"));
+const allPage = await pageHtml({ view: "all" });
+assert.ok(allPage.includes('Mostrando</h2><div class="metric">3</div>'));
+for (const record of records) assert.ok(allPage.includes(record.display_name));
+console.log("Candidate default / impossible / followup / all page SSR regressions passed");
+
+assert.ok((await pageHtml({ view: "impossible", semaforo: "POSIBLES" })).includes("Impossible Beta"));
+
+const publicFicha = fs.readFileSync("src/app/ficha/[token]/page.tsx", "utf8");
+for (const privateDependency of ["exam-outlook-data", "ExamOutlookPanel", "loadExamOutlooks", "examOutlook"]) assert.ok(!publicFicha.includes(privateDependency), privateDependency + " must stay outside public ficha");
+assert.ok(publicFicha.includes("<AdultExamStatusPanel panel={examPanel} />"));
+const { buildAdultExamStatusPanel } = await import("../src/lib/adult-exam-status-panel.ts");
+const originalPanelModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/app/ficha/[token]/AdultExamStatusPanel.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, { module: originalPanelModule, exports: originalPanelModule.exports, require });
+const originalPanel = buildAdultExamStatusPanel({ semaphore: "VERDE", nextExamOn: "2026-12-05", cycleStartOn: "2026-01-10", currentOn: "2026-11-05", attendanceCount: 42, minimumAttendance: 38, totalCycleSessions: 94, fundamentalRepetitions: [3, 3, 3], progressRepetitionGoal: 3, recentAttendance60: 12, recentAttendance21: 4, examNotice: "VERDE: cumple los requisitos" });
+assert.equal(originalPanel.criteria.length, 4);
+const originalHtml = renderToStaticMarkup(React.createElement(originalPanelModule.exports.AdultExamStatusPanel, { panel: originalPanel }));
+assert.equal((originalHtml.match(/class="adult-exam-criterion /g) ?? []).length, 4);
+assert.ok(originalHtml.includes("adult-exam-panel ficha-verde"));
+assert.ok(!originalHtml.includes("Candidato para preparar"));
+assert.ok(!originalHtml.includes("No llega con las clases previstas"));
+console.log("Public ficha isolation and original four-metric panel SSR passed");

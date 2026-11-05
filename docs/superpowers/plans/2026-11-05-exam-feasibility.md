@@ -1,0 +1,13 @@
+# Feasible candidates, not merely dated members
+
+User asks to exclude mathematically impossible cases from upcoming candidates everywhere. Preserve near candidates who can still complete deficits with targeted work; do not revert to positive-forecast-only candidacy.
+
+User clarification: planning is private administrative information only. Public student fichas are restored exactly to pre-forecast commit 1efc147 with the original four criteria and semaphore; the academic status engine is restored to 5e34716. Administrative cycle attributions and forecast bounds must not enter student status calculations. Commit b900ecd publishes this restoration separately.
+
+- Shared pure feasibility: known future call, actual configured training dates, missing real attendance and per-technique repetition deficits. If attendance missing exceeds remaining class opportunities, or any individual technique needs more distinct class repetitions than opportunities, impossible. Never compare total repetitions across all techniques to class count: multiple techniques may be trained together. No fabricated technical-per-class throughput. Explicit label "No llega con las clases previstas" with numerical reasons.
+- Impossible => candidate=false, preparationCandidate=false, currentReady=false, no favorable ETA. Retain underlying history and requirements, no automatic postponement or grade/payment changes. Unknown data remains uncertain rather than invented mathematical impossibility.
+- Default upcoming list candidates only, with explicit separate views for impossible cases, uncertain/follow-up, and all administrative records. Keep next-call filter, class/search/semaphore and consistent counters/links. People with only a date do not appear in default candidate list.
+- Panels/Telegram/private notification picker use the same shared guard. Show impossible reasons and available opportunities; email draft and send cannot invite an impossible snapshot. No real emails during tests.
+- Meaningful failing-first tests exact boundary attendance, one over, per-technique bound, several techniques in same class, closures, child attendance vs unmeasured technical, missing inputs, old preparation coverage cannot bypass impossibility; all existing timing/call/attribution/registration/invitation regressions. Independent review/build/deploy/live proof.
+
+- Capacity includes a still-unused possible class today and explicitly scheduled extra classes. Already-used attendance/item slots cannot be counted twice. Canceled dates are removed from regular and extra opportunities, unless an active replacement exists on the same date for the same group.

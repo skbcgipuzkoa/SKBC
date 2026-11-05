@@ -50,6 +50,8 @@ export type ExamOutlook = {
   callDate: string | null;
   classification: "ready" | "projected" | "notyet" | "unknown";
   candidate: boolean;
+  feasibility: "possible" | "impossible" | "unknown";
+  impossibilityReasons: string[];
   preparationCandidate: boolean;
   planningReasons: string[];
   currentReady: boolean;
@@ -66,6 +68,7 @@ export type ExamOutlook = {
     availableSessions: number;
     remainingSessions: number;
     usefulTechnicalGain: number;
+    missingAttendance: number | null;
   };
 };
 export type ExamOutlookInput = {
@@ -80,6 +83,9 @@ export type ExamOutlookInput = {
   closures: OutlookClosure[];
   advanceMonths?: number;
   attendanceCredit?: number;
+  scheduledTrainingDates?: string[];
+  todayClassClosed?: boolean;
+  cancelledTrainingDates?: string[];
 };
 const grades = [
   "MINARAI",
@@ -216,6 +222,8 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     callDate: null,
     classification: "unknown",
     candidate: false,
+    feasibility: "unknown",
+    impossibilityReasons: [],
     preparationCandidate: false,
     planningReasons: [],
     currentReady: false,
@@ -232,6 +240,7 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
       availableSessions: available,
       remainingSessions: 0,
       usefulTechnicalGain: 0,
+      missingAttendance: null,
     },
   };
   if (m.status !== "active") {
@@ -254,6 +263,22 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     adult_required_repetitions: m.class === "adults" ? 2 : 0,
     technical_blocks_exam: m.class === "adults",
   };
+  if (
+    ![
+      req.min_months,
+      req.attendance_ratio,
+      req.adult_required_repetitions,
+    ].every(Number.isFinite) ||
+    req.min_months < 0 ||
+    req.attendance_ratio < 0 ||
+    req.attendance_ratio > 1 ||
+    req.adult_required_repetitions < 0
+  ) {
+    result.uncertainty.push(
+      "Configuracion de requisitos no valida; revisar con el profesor",
+    );
+    return result;
+  }
   const timing = resolveExamEligibilityTime(
     m,
     req.min_months,
@@ -277,14 +302,38 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     return result;
   }
   result.callDate = call;
-  const future = outlookTrainingDates(today, call, m.class, input.closures);
-  result.evidence.remainingSessions = future.length;
+  const cancelledDates = new Set(input.cancelledTrainingDates ?? []);
+  const scheduledDates = (input.scheduledTrainingDates ?? []).filter(
+    (d) => validDate(d) && d >= today && d <= call,
+  );
+  const future = [
+    ...new Set([
+      ...outlookTrainingDates(today, call, m.class, input.closures),
+      ...scheduledDates.filter((d) => d > today),
+    ]),
+  ]
+    .filter((d) => !cancelledDates.has(d))
+    .sort();
+  const potentialToday =
+    !cancelledDates.has(today) &&
+    input.todayClassClosed !== true &&
+    (scheduledDates.includes(today) ||
+      outlookTrainingDates(
+        plus(today, -1),
+        today,
+        m.class,
+        input.closures,
+      ).includes(today));
+  const attendanceCapacity =
+    future.length + Number(potentialToday && !attendance.includes(today));
+  result.evidence.remainingSessions = future.length + Number(potentialToday);
   const minimum = Math.ceil(
     outlookTrainingDates(cycle, eligible, m.class, input.closures).length *
       req.attendance_ratio,
   );
   // The authoritative readiness gate uses real attendance; engagement credit is informational only.
   const missingAttendance = Math.max(0, minimum - attendance.length);
+  result.evidence.missingAttendance = missingAttendance;
   if (missingAttendance)
     result.deficits.push(
       `${missingAttendance} asistencias para el minimo de ${minimum}`,
@@ -297,6 +346,7 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     oldCounts = new Map<string, number>();
   const seenHistory = new Set<string>();
   const recentProgression = new Map<string, number>();
+  const practicedToday = new Set<string>();
   for (const h of input.history) {
     if (!h.completed || !validDate(h.class_date) || h.class_date > today)
       continue;
@@ -314,6 +364,7 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     if (seenHistory.has(key)) continue;
     seenHistory.add(key);
     counts.set(item.id, (counts.get(item.id) ?? 0) + 1);
+    if (h.class_date === today) practicedToday.add(item.id);
     if (h.class_date <= windowStart)
       oldCounts.set(item.id, (oldCounts.get(item.id) ?? 0) + 1);
     else if (h.counts_as_progression)
@@ -360,6 +411,34 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
     result.deficits.push(
       `Revision del profesor: ${special.map((t) => t.name).join(", ")}`,
     );
+  // Absolute upper bounds use available dates, not the observed pace. Multiple
+  // techniques can be practiced together, so only individual item deficits bound capacity.
+  if (missingAttendance > attendanceCapacity) {
+    result.impossibilityReasons.push(
+      `Faltan ${missingAttendance} asistencias y quedan ${attendanceCapacity} clases previstas disponibles antes de la convocatoria`,
+    );
+  }
+  if (technicalBlocks) {
+    for (const item of fundamental) {
+      const missing = Math.max(0, repetitions - (counts.get(item.id) ?? 0));
+      const itemCapacity =
+        future.length + Number(potentialToday && !practicedToday.has(item.id));
+      if (missing > itemCapacity) {
+        result.impossibilityReasons.push(
+          `${item.name}: faltan ${missing} repeticiones en clases distintas y quedan ${itemCapacity} clases previstas disponibles`,
+        );
+      }
+    }
+  }
+  if (result.impossibilityReasons.length > 0) {
+    result.feasibility = "impossible";
+    result.classification = "notyet";
+    return result;
+  }
+  // Unknown adult curriculum cannot establish technical feasibility. Child
+  // feasibility covers measured attendance/time; teacher technical review remains explicit.
+  result.feasibility =
+    technicalBlocks && curriculum.length === 0 ? "unknown" : "possible";
   const engaged180 = attendance.some((d) => d >= plus(today, -180));
   const connected90 = attendance.some((d) => d >= plus(today, -90));
   if (!connected90)
@@ -458,18 +537,22 @@ export function evaluateExamOutlook(input: ExamOutlookInput): ExamOutlook {
   return result;
 }
 export function formatExamOutlookSummary(o: ExamOutlook) {
-  const label = {
-    ready: "Requisitos registrados",
-    projected: "Llega al ritmo actual",
-    notyet: "Aun no llega al ritmo actual",
-    unknown: "Prevision insuficiente",
-  }[o.classification];
+  const label =
+    o.feasibility === "impossible"
+      ? "No llega con las clases previstas"
+      : {
+          ready: "Requisitos registrados",
+          projected: "Llega al ritmo actual",
+          notyet: "Aun no llega al ritmo actual",
+          unknown: "Prevision insuficiente",
+        }[o.classification];
   return [
     label,
     o.callDate ? `convocatoria ${o.callDate}` : "",
     o.estimatedReadyOn
       ? `estimado ${o.estimatedReadyOn}${o.marginDays !== null ? ` (${o.marginDays} dias de margen)` : ""}`
       : "",
+    ...o.impossibilityReasons,
     ...o.planningReasons,
     ...o.deficits,
     ...o.uncertainty,

@@ -3,10 +3,12 @@ import type { ExamOutlook } from "@/lib/exam-outlook";
 /** Telegram HTML: never render user-controlled names or projection details as markup. */
 export function formatTelegramExamOutlooks(outlooks: ExamOutlook[]) {
   const ordered = [...outlooks].sort((a, b) => (a.callDate ?? "9999").localeCompare(b.callDate ?? "9999") || a.name.localeCompare(b.name, "es"));
-  const ready = ordered.filter(row => row.currentReady && row.candidate);
-  const projected = ordered.filter(row => !row.currentReady && row.candidate && row.classification === "projected");
-  const preparation = ordered.filter(row => !row.currentReady && row.candidate && row.classification !== "projected");
-  const followUp = ordered.filter(row => !row.candidate);
+  const eligible = ordered.filter(row => row.feasibility !== "impossible");
+  const ready = eligible.filter(row => row.currentReady && row.candidate);
+  const projected = eligible.filter(row => !row.currentReady && row.candidate && row.classification === "projected");
+  const preparation = eligible.filter(row => !row.currentReady && row.candidate && row.classification !== "projected");
+  const followUp = eligible.filter(row => !row.candidate);
+  const impossible = ordered.filter(row => row.feasibility === "impossible");
   const section = (title: string, rows: ExamOutlook[], empty: string) => [
     `<b>${title} (${rows.length})</b>`,
     ...(rows.length ? rows.slice(0, 12).map(formatRow) : [empty]),
@@ -19,7 +21,8 @@ export function formatTelegramExamOutlooks(outlooks: ExamOutlook[]) {
     section("🟢 Cumplen requisitos registrados hoy", ready, "Ninguno ahora mismo."),
     section("🔵 Posibles candidatos · podrían llegar con su ritmo actual", projected, "Ninguno con una proyección favorable respaldada por datos."),
     section("🟣 Candidatos para preparar · necesitan refuerzo o revisión", preparation, "Sin otros candidatos cercanos a preparar."),
-    section("🟠 Seguimiento · no llegan o faltan datos", followUp, "Sin otros casos en seguimiento."),
+    section("⛔ No llegan con las clases previstas", impossible, "Ningún caso matemáticamente bloqueado con el calendario actual."),
+    section("🟠 Seguimiento · faltan datos o preparación", followUp, "Sin otros casos en seguimiento."),
     "Las estimaciones dependen de mantener la asistencia y trabajar los contenidos pendientes. Revisa los casos con poco margen antes de avisar."
   ].join("\n\n");
 }
@@ -29,9 +32,10 @@ function formatRow(row: ExamOutlook) {
   return [
     `• <b>${escape(row.name)}</b> (${row.memberClass === "kids" ? "niños" : "adultos"} · objetivo ${escape(row.targetGrade || "por revisar")})`,
     row.callDate ? `  Convocatoria prevista: ${date(row.callDate)}.` : "  Sin convocatoria futura calculable.",
-    row.preparationCandidate && row.planningReasons?.length ? `  Para preparar: ${escape(row.planningReasons.join("; "))}.` : "",
-    row.classification === "notyet" ? "  Previsión: no se prevé completar los requisitos al ritmo actual; necesita refuerzo." : row.classification === "unknown" ? "  Previsión: faltan datos para asegurar si llegará." : "",
-    row.estimatedReadyOn ? `  Requisitos estimados para ${date(row.estimatedReadyOn)}${row.marginDays !== null ? ` · margen ${row.marginDays} días${row.marginDays < 30 ? " (margen corto para preparar el examen)" : ""}` : ""}.` : "",
+    row.feasibility === "impossible" ? `  No es candidato a esta convocatoria con las clases previstas: ${escape((row.impossibilityReasons ?? []).join("; "))}.` : "",
+    row.feasibility !== "impossible" && row.preparationCandidate && row.planningReasons?.length ? `  Para preparar: ${escape(row.planningReasons.join("; "))}.` : "",
+    row.feasibility !== "impossible" && row.classification === "notyet" ? "  Previsión: no se prevé completar los requisitos al ritmo actual; necesita refuerzo." : row.feasibility !== "impossible" && row.classification === "unknown" ? "  Previsión: faltan datos para asegurar si llegará." : "",
+    row.feasibility !== "impossible" && row.estimatedReadyOn ? `  Requisitos estimados para ${date(row.estimatedReadyOn)}${row.marginDays !== null ? ` · margen ${row.marginDays} días${row.marginDays < 30 ? " (margen corto para preparar el examen)" : ""}` : ""}.` : "",
     row.deficits.length ? `  Pendiente hoy: ${escape(row.deficits.join("; "))}.` : "  Sin déficits registrados en los requisitos calculables.",
     row.uncertainty.length ? `  Atención: ${escape(row.uncertainty.join("; "))}.` : "",
     "  Revisión final del profesor pendiente."

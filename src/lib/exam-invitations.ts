@@ -140,7 +140,11 @@ export async function loadExamInvitationCandidates() {
     (data ?? []).map((x) => [x.id, x.family_email as string | null]),
   );
   return [...outlooks.values()]
-    .filter((x) => x.candidate || x.preparationCandidate)
+    .filter(
+      (x) =>
+        x.feasibility !== "impossible" &&
+        (x.candidate || x.preparationCandidate),
+    )
     .map((x) => ({ ...x, email: emails.get(x.memberId) ?? null }));
 }
 export function isBareInvitationEmail(value: string) {
@@ -193,6 +197,10 @@ export async function createExamInvitationDraft(input: {
     if (!actual?.callDate || actual.callDate !== input.examDate)
       throw new Error(
         "La fecha real no permite cumplir el tiempo mínimo o requiere revisar los datos del ciclo.",
+      );
+    if (actual.feasibility === "impossible")
+      throw new Error(
+        "La preparación necesaria no cabe en las clases disponibles antes de la fecha real del examen.",
       );
     return { ...actual, email: member!.email };
   });
@@ -307,9 +315,21 @@ export async function sendExamInvitationBatch(
   const eventDates = new Map(
     (events.data ?? []).map((event) => [event.id, event.exam_date]),
   );
-  for (const inv of batch.invitations.filter(
+  const sendable = batch.invitations.filter(
     (x) => x.delivery_status === (options.retryFailed ? "failed" : "draft"),
-  )) {
+  );
+  const actualOutlooks = sendable.length
+    ? await loadExamOutlooks({
+        memberIds: [...new Set(sendable.map((inv) => inv.member_id))],
+        examDateOverride: batch.exam_date,
+      })
+    : new Map();
+  for (const inv of sendable) {
+    const actual = actualOutlooks.get(inv.member_id);
+    if (!actual || !actual.callDate || actual.feasibility === "impossible")
+      throw new Error(
+        "La preparación ya no cabe en las clases disponibles para la fecha real; revisa la convocatoria antes de enviar.",
+      );
     if (eventDates.get(inv.exam_event_id) !== inv.snapshot.examDate)
       throw new Error(
         "La fecha del examen ha cambiado; prepara un borrador actualizado antes de enviar.",

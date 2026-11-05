@@ -1,4 +1,7 @@
-import { loadExamCycleAttributions, withExamCycleAttribution } from "@/lib/exam-cycle-attribution";
+import {
+  loadExamCycleAttributions,
+  withExamCycleAttribution,
+} from "@/lib/exam-cycle-attribution";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
 import {
@@ -36,7 +39,9 @@ export async function loadExamOutlooks(
     return q.order("id").range(from, to).returns<OutlookMember[]>();
   });
   if (!members.length) return new Map();
-  const cycleAttributions = await loadExamCycleAttributions(members.map((member) => member.id));
+  const cycleAttributions = await loadExamCycleAttributions(
+    members.map((member) => member.id),
+  );
   // All bounded sources exclude future records. These scans are intentionally independent of roster size.
   const memberIds = members.map((m) => m.id);
   async function loadScoped<T>(
@@ -134,6 +139,35 @@ export async function loadExamOutlooks(
         .returns<Course[]>(),
     ),
   ]);
+  const horizonEnd = new Date(
+    new Date(today + "T00:00:00Z").getTime() +
+      (options.horizonDays ?? 365) * 86400000,
+  )
+    .toISOString()
+    .slice(0, 10);
+  const scheduleEnd = [
+    horizonEnd,
+    options.examDateOverride ?? "",
+    ...calls.map((c) => c.call_date),
+  ]
+    .sort()
+    .at(-1)!;
+  type ScheduledClass = {
+    class_date: string;
+    class_group: "kids" | "adults";
+    closed: boolean;
+    status: string;
+  };
+  const scheduledClasses = await loadAllPages<ScheduledClass>((from, to) =>
+    db
+      .from("classes")
+      .select("id,class_date,class_group,closed,status")
+      .gte("class_date", today)
+      .lte("class_date", scheduleEnd)
+      .order("id")
+      .range(from, to)
+      .returns<ScheduledClass[]>(),
+  );
   const byMember = <T extends { member_id: string }>(rows: T[]) => {
     const map = new Map<string, T[]>();
     for (const r of rows) {
@@ -148,6 +182,19 @@ export async function loadExamOutlooks(
     coursesByMember = byMember(courses);
   return new Map(
     members.map((member) => {
+      const groupClasses = scheduledClasses.filter(
+        (c) => c.class_group === member.class,
+      );
+      const cancelledTrainingDates = [
+        ...new Set(groupClasses.map((c) => c.class_date)),
+      ].filter((d) =>
+        groupClasses
+          .filter((c) => c.class_date === d)
+          .every((c) => c.status === "cancelled"),
+      );
+      const activeToday = groupClasses.filter(
+        (c) => c.class_date === today && c.status !== "cancelled",
+      );
       const advanceMonths =
         member.class === "adults" &&
         member.last_exam_on &&
@@ -178,6 +225,13 @@ export async function loadExamOutlooks(
             : calls.map((c) => c.call_date),
           closures,
           advanceMonths,
+          scheduledTrainingDates: groupClasses
+            .filter((c) => c.status !== "cancelled")
+            .map((c) => c.class_date),
+          cancelledTrainingDates,
+          todayClassClosed: activeToday.length
+            ? activeToday.every((c) => c.closed)
+            : undefined,
         }),
       ];
     }),

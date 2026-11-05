@@ -35,7 +35,7 @@ const semaphoreOrder = ["VERDE", "ROJO", "GRIS", "AMARILLO", "AZUL", "INACTIVO"]
 export default async function ProximosExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string; call?: string }>;
+  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string; call?: string; view?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -61,7 +61,15 @@ export default async function ProximosExamenesPage({
   const candidateByMember = await loadExamOutlooks({ memberIds: members.map((member) => member.id) });
 
   const normalizedSemaphore = params.semaforo ? normalizeSemaphore(params.semaforo) : "";
-  const candidatesOnly = normalizedSemaphore === "POSIBLES";
+  const view = ["impossible", "followup", "all"].includes(params.view ?? "") ? params.view! : "candidates";
+  const candidatesOnly = normalizedSemaphore === "POSIBLES" && view !== "impossible" && view !== "followup";
+  const matchesView = (id: string) => {
+    const outlook = candidateByMember.get(id);
+    if (view === "all") return true;
+    if (view === "impossible") return outlook?.feasibility === "impossible";
+    if (view === "followup") return !outlook?.candidate && outlook?.feasibility !== "impossible";
+    return Boolean(outlook?.candidate);
+  };
   const search = (params.q ?? "").trim().toLowerCase();
   const scoped = members
     .filter((item) => callFilter.all ? Boolean(candidateByMember.get(item.id)?.callDate) : Boolean(callFilter.callDate) && candidateByMember.get(item.id)?.callDate === callFilter.callDate)
@@ -76,18 +84,20 @@ export default async function ProximosExamenesPage({
         : true
     );
 
-  const filtered = scoped.filter((item) => candidatesOnly ? candidateByMember.get(item.id)?.candidate : !normalizedSemaphore || normalizeSemaphore(item.semaphore) === normalizedSemaphore);
+  const viewScoped = scoped.filter((item) => matchesView(item.id));
+  const filtered = viewScoped.filter((item) => candidatesOnly ? candidateByMember.get(item.id)?.candidate : !normalizedSemaphore || normalizedSemaphore === "POSIBLES" || normalizeSemaphore(item.semaphore) === normalizedSemaphore);
   const counters = semaphoreOrder.map((semaphore) => ({
     semaphore,
-    total: scoped.filter((item) => item.status === "active" && normalizeSemaphore(item.semaphore) === semaphore).length
+    total: viewScoped.filter((item) => item.status === "active" && normalizeSemaphore(item.semaphore) === semaphore).length
   }));
   const candidateTotal = scoped.filter((item) => candidateByMember.get(item.id)?.candidate).length;
-  const ready = scoped.filter((item) => candidateByMember.get(item.id)?.currentReady).length;
+  const impossibleTotal = scoped.filter((item) => candidateByMember.get(item.id)?.feasibility === "impossible").length;
+  const ready = viewScoped.filter((item) => candidateByMember.get(item.id)?.currentReady).length;
   const blocked = ["ROJO", "GRIS"].reduce((sum, semaphore) => sum + (counters.find((item) => item.semaphore === semaphore)?.total ?? 0), 0);
   const upcoming = filtered.filter((item) => candidateByMember.get(item.id)?.callDate).length;
 
   const semaphoreHref = (semaphore: string) => {
-    const query = new URLSearchParams({ semaforo: semaphore, call: callFilter.value });
+    const query = new URLSearchParams({ semaforo: semaphore, call: callFilter.value, view: semaphore === "POSIBLES" ? "candidates" : view });
     if (params.class) query.set("class", params.class);
     if (params.q) query.set("q", params.q);
     return "/proximos-examenes?" + query;
@@ -180,7 +190,16 @@ export default async function ProximosExamenesPage({
           </a>
         </section>
 
+        <p className="muted">La vista inicial muestra candidatos para preparar, no todas las personas con fecha. <a className="text-link" href={(() => { const query = new URLSearchParams({ call: callFilter.value, view: "impossible" }); if (params.class) query.set("class", params.class); if (params.q) query.set("q", params.q); return "/proximos-examenes?" + query; })()}>No llegan con las clases previstas: {impossibleTotal}</a></p>
         <form className="filters exam-filters">
+          <label>Vista
+            <select name="view" defaultValue={view}>
+              <option value="candidates">Candidatos para preparar</option>
+              <option value="impossible">No llegan con las clases previstas</option>
+              <option value="followup">Seguimiento pendiente</option>
+              <option value="all">Todos (administracion)</option>
+            </select>
+          </label>
           <label>Convocatoria
             <select name="call" defaultValue={callFilter.value}>
               <option value="next">Proxima del club{calls[0] ? " · " + calls[0].call_date : " · sin fecha configurada"}</option>
@@ -194,7 +213,7 @@ export default async function ProximosExamenesPage({
           </label>
           <label>
             Semaforo
-            <select name="semaforo" defaultValue={params.semaforo ?? ""}>
+            <select name="semaforo" defaultValue={!candidatesOnly && normalizedSemaphore === "POSIBLES" ? "" : params.semaforo ?? ""}>
               <option value="">Todos</option>
               {semaphoreOrder.map((item) => (
                 <option value={item} key={item}>{item}</option>

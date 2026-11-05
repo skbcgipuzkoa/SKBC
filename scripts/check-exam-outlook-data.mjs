@@ -5,6 +5,8 @@ import { loadAllPages } from "../src/lib/load-all-pages.ts";
 import * as outlook from "../src/lib/exam-outlook.ts";
 let calls = [];
 let fail = false;
+let scheduledFixture = [];
+const evaluatedInputs = [];
 const roster = Array.from({ length: 1001 }, (_, i) => ({
   id: String(i),
   display_name: "Test",
@@ -51,7 +53,12 @@ const db = {
             data: null,
             error: new Error("read failed"),
           });
-        let data = table === "members" ? roster : [];
+        let data =
+          table === "members"
+            ? roster
+            : table === "classes"
+              ? scheduledFixture
+              : [];
         const ids = filters.find(([k]) => k === "id")?.[1];
         if (ids) data = data.filter((m) => ids.includes(m.id));
         return Promise.resolve({
@@ -67,13 +74,20 @@ globalThis.__outlookTest = {
   createAdminClient: () => db,
   loadAllPages,
   ...outlook,
+  evaluateExamOutlook: (input) => {
+    evaluatedInputs.push(input);
+    return outlook.evaluateExamOutlook(input);
+  },
 };
 let source = fs.readFileSync(
   new URL("../src/lib/exam-outlook-data.ts", import.meta.url),
   "utf8",
 );
 source = source
-  .replace(/import[^;]*from "@\/lib\/exam-cycle-attribution";/, "const loadExamCycleAttributions = async () => new Map(); const withExamCycleAttribution = (member) => member;")
+  .replace(
+    /import[^;]*from "@\/lib\/exam-cycle-attribution";/,
+    "const loadExamCycleAttributions = async () => new Map(); const withExamCycleAttribution = (member) => member;",
+  )
   .replace(
     /import[\s\S]*?from "@\/lib\/supabase\/admin";/,
     "const {createAdminClient}=globalThis.__outlookTest;",
@@ -121,6 +135,101 @@ for (const c of calls.filter((c) =>
   ["attendance_logs", "member_technical_history", "courses"].includes(c.table),
 ))
   assert.ok(c.filters.find(([k]) => k === "member_id")[1].length <= 100);
+scheduledFixture = [
+  {
+    class_date: "2026-11-05",
+    class_group: "adults",
+    closed: true,
+    status: "completed",
+  },
+  {
+    class_date: "2026-11-05",
+    class_group: "adults",
+    closed: false,
+    status: "pending",
+  },
+  {
+    class_date: "2026-11-07",
+    class_group: "adults",
+    closed: false,
+    status: "pending",
+  },
+  {
+    class_date: "2026-11-08",
+    class_group: "adults",
+    closed: false,
+    status: "cancelled",
+  },
+  {
+    class_date: "2026-11-06",
+    class_group: "kids",
+    closed: false,
+    status: "pending",
+  },
+];
+let before = calls.length;
+await loadExamOutlooks({
+  memberIds: ["1"],
+  now: new Date("2026-11-05T12:00:00Z"),
+});
+assert.equal(
+  calls.slice(before).filter((c) => c.table === "classes").length,
+  1,
+);
+assert.equal(evaluatedInputs.at(-1).todayClassClosed, false);
+assert.deepEqual(evaluatedInputs.at(-1).scheduledTrainingDates, [
+  "2026-11-05",
+  "2026-11-05",
+  "2026-11-07",
+]);
+scheduledFixture = scheduledFixture.filter(
+  (c) => c.class_date !== "2026-11-05" || c.closed,
+);
+await loadExamOutlooks({
+  memberIds: ["1"],
+  now: new Date("2026-11-05T12:00:00Z"),
+});
+assert.equal(evaluatedInputs.at(-1).todayClassClosed, true);
+scheduledFixture = [];
+await loadExamOutlooks({
+  memberIds: ["1"],
+  now: new Date("2026-11-05T12:00:00Z"),
+});
+assert.equal(evaluatedInputs.at(-1).todayClassClosed, undefined);
+scheduledFixture = [
+  {
+    class_date: "2026-11-05",
+    class_group: "adults",
+    closed: false,
+    status: "cancelled",
+  },
+  {
+    class_date: "2026-11-10",
+    class_group: "adults",
+    closed: false,
+    status: "cancelled",
+  },
+];
+await loadExamOutlooks({
+  memberIds: ["1"],
+  now: new Date("2026-11-05T12:00:00Z"),
+});
+assert.deepEqual(evaluatedInputs.at(-1).cancelledTrainingDates, [
+  "2026-11-05",
+  "2026-11-10",
+]);
+scheduledFixture.push({
+  class_date: "2026-11-10",
+  class_group: "adults",
+  closed: false,
+  status: "pending",
+});
+await loadExamOutlooks({
+  memberIds: ["1"],
+  now: new Date("2026-11-05T12:00:00Z"),
+});
+assert.deepEqual(evaluatedInputs.at(-1).cancelledTrainingDates, ["2026-11-05"]);
+assert.deepEqual(evaluatedInputs.at(-1).scheduledTrainingDates, ["2026-11-10"]);
 fail = true;
 await assert.rejects(
   () => loadExamOutlooks({ memberIds: ["1"] }),

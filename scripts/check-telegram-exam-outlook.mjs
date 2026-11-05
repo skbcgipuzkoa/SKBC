@@ -6,7 +6,7 @@ import {formatTelegramExamOutlooks} from '../src/lib/telegram-exam-outlook.ts';
 
 const row={memberId:'1',name:'Ana <script> & Luis',memberClass:'adults',currentGrade:'5 KYU',targetGrade:'4 KYU',callDate:'2026-12-05',classification:'projected',candidate:true,currentReady:false,estimatedReadyOn:'2026-11-20',marginDays:15,deficits:['2 asistencias','Técnica <pendiente>'],uncertainty:['Mantener ritmo'],teacherReviewRequired:true,evidence:{windowStart:'2026-09-06',windowEnd:'2026-11-05'}};
 let message=formatTelegramExamOutlooks([row,{...row,memberId:'2',name:'Ready',classification:'ready',currentReady:true},{...row,memberId:'3',name:'Unknown',classification:'unknown',candidate:false,callDate:null,estimatedReadyOn:null,marginDays:null}]);
-assert.match(message,/hoy \(1\)/);assert.match(message,/ritmo actual \(1\)/);assert.match(message,/faltan datos \(1\)/);
+assert.match(message,/hoy \(1\)/);assert.match(message,/ritmo actual \(1\)/);assert.match(message,/faltan datos o preparación \(1\)/);
 assert.match(message,/Ana &lt;script&gt; &amp; Luis/);assert.doesNotMatch(message,/<script>/);
 assert.match(message,/05\/12\/2026/);assert.match(message,/20\/11\/2026/);assert.match(message,/margen corto/);
 assert.match(message,/Sin convocatoria futura calculable/);assert.match(message,/periodo anterior/);
@@ -14,10 +14,15 @@ message=formatTelegramExamOutlooks(Array.from({length:15},(_,i)=>({...row,member
 assert.match(message,/ritmo actual \(15\)/);assert.match(message,/Y 3 más/);
 assert.match(formatTelegramExamOutlooks([]),/Ninguno ahora mismo/);
 const outsideWindow=formatTelegramExamOutlooks([{...row,currentReady:true,candidate:false,classification:'unknown',uncertainty:['Convocatoria fuera del horizonte de planificacion']}]);
-assert.match(outsideWindow,/hoy \(0\)/);assert.match(outsideWindow,/faltan datos \(1\)/);
+assert.match(outsideWindow,/hoy \(0\)/);assert.match(outsideWindow,/faltan datos o preparación \(1\)/);
 const preparing=formatTelegramExamOutlooks([{...row,currentReady:false,candidate:true,classification:'notyet',estimatedReadyOn:null,marginDays:null,preparationCandidate:true,planningReasons:['Temario trabajado al 90%']}]);
 assert.match(preparing,/ritmo actual \(0\)/);assert.match(preparing,/necesitan refuerzo o revisión \(1\)/);
 assert.match(preparing,/Temario trabajado al 90%/);assert.match(preparing,/no se prevé completar/);
+const impossible=formatTelegramExamOutlooks([{...row,feasibility:'impossible',impossibilityReasons:['Faltan 12 asistencias y quedan 8 clases'],candidate:true,currentReady:false,preparationCandidate:true,estimatedReadyOn:null,marginDays:null}]);
+assert.match(impossible,/No llegan con las clases previstas \(1\)/);
+assert.match(impossible,/ritmo actual \(0\)/);assert.match(impossible,/necesitan refuerzo o revisión \(0\)/);
+assert.match(impossible,/Faltan 12 asistencias y quedan 8 clases/);
+assert.doesNotMatch(impossible,/necesita refuerzo\./);
 
 // Exercise the actual dispatch function: every scheduled report includes the same new outlook.
 const source=readFileSync('src/lib/telegram-notifications.ts','utf8');

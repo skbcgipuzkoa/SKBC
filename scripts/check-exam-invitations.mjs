@@ -14,9 +14,13 @@ let admin = true,
   rpcCalls = [],
   outlooks = [],
   actualOverride = null,
+  eventCreates = 0,
+  batchWrites = 0,
   eventDate = "2099-12-20",
   overrideCalls = [];
 const candidate = {
+  feasibility: "possible",
+  impossibilityReasons: [],
   memberId: "member",
   name: "Synthetic Child",
   memberClass: "kids",
@@ -53,6 +57,7 @@ function query(table) {
       return q;
     },
     insert(v) {
+      if (table === "exam_invitation_batches") batchWrites++;
       op = "insert";
       patch = v;
       return q;
@@ -131,6 +136,7 @@ const deps = {
   },
   "@/lib/integrated-exams": {
     createIntegratedExamEvent: async (x) => {
+      eventCreates++;
       assert.equal(x.enrollStudents, false);
       return { eventId: "event" };
     },
@@ -252,6 +258,38 @@ await assert.rejects(
   /tiempo mínimo/,
 );
 assert.equal(rpcCalls.length, callsBeforeIneligible);
+
+actualOverride = {
+  ...candidate,
+  callDate: input.examDate,
+  feasibility: "impossible",
+  candidate: true,
+  preparationCandidate: true,
+};
+const beforeImpossible = {
+  events: eventCreates,
+  batches: batchWrites,
+  rpcs: rpcCalls.length,
+};
+await assert.rejects(() => api.createExamInvitationDraft(input), /no cabe/);
+assert.equal(eventCreates, beforeImpossible.events);
+assert.equal(batchWrites, beforeImpossible.batches);
+assert.equal(rpcCalls.length, beforeImpossible.rpcs);
+actualOverride = null;
+outlooks = [
+  {
+    ...candidate,
+    feasibility: "impossible",
+    candidate: true,
+    preparationCandidate: true,
+  },
+];
+assert.equal(
+  (await api.loadExamInvitationCandidates()).length,
+  0,
+  "Stale candidate flags cannot bypass hard infeasibility",
+);
+await assert.rejects(() => api.createExamInvitationDraft(input), /selección/);
 actualOverride = null;
 outlooks = [{ ...candidate, memberClass: "adults" }];
 await api.createExamInvitationDraft(input);
@@ -273,9 +311,35 @@ rows = [
   },
 ];
 outlooks = [];
-await assert.rejects(() => api.sendExamInvitationBatch("batch"), /selección/);
+await assert.rejects(
+  () => api.sendExamInvitationBatch("batch"),
+  /selección|preparación/,
+);
 assert.equal(sends, 0);
 outlooks = [candidate];
+
+actualOverride = {
+  ...candidate,
+  callDate: input.examDate,
+  feasibility: "impossible",
+  candidate: true,
+  preparationCandidate: true,
+};
+const updatesBeforeImpossible = updates.length;
+await assert.rejects(() => api.sendExamInvitationBatch("batch"), /ya no cabe/);
+rows[0].delivery_status = "failed";
+await assert.rejects(
+  () => api.sendExamInvitationBatch("batch", { retryFailed: true }),
+  /ya no cabe/,
+);
+rows[0].delivery_status = "draft";
+assert.equal(sends, 0);
+assert.equal(
+  updates.length,
+  updatesBeforeImpossible,
+  "Impossible draft never claims SMTP delivery",
+);
+actualOverride = null;
 eventDate = "2099-12-21";
 await assert.rejects(
   () => api.sendExamInvitationBatch("batch"),
