@@ -98,16 +98,16 @@ export default async function ProximosExamenesPage({
   const filtered = viewScoped.filter((item) => candidatesOnly ? candidateByMember.get(item.id)?.candidate : !normalizedSemaphore || normalizedSemaphore === "POSIBLES" || normalizeSemaphore(item.semaphore) === normalizedSemaphore);
   const counters = semaphoreOrder.map((semaphore) => ({
     semaphore,
-    total: viewScoped.filter((item) => item.status === "active" && normalizeSemaphore(item.semaphore) === semaphore).length
+    total: scoped.filter((item) => normalizeSemaphore(item.semaphore) === semaphore).length
   }));
   const candidateTotal = scoped.filter((item) => candidateByMember.get(item.id)?.candidate && !existingCall(item.id)).length;
   const calledTotal = scoped.filter((item) => existingCall(item.id)).length;
   const impossibleTotal = scoped.filter((item) => candidateByMember.get(item.id)?.feasibility === "impossible").length;
-  const ready = viewScoped.filter((item) => candidateByMember.get(item.id)?.currentReady).length;
+  const ready = scoped.filter((item) => candidateByMember.get(item.id)?.currentReady).length;
   const blocked = ["ROJO", "GRIS"].reduce((sum, semaphore) => sum + (counters.find((item) => item.semaphore === semaphore)?.total ?? 0), 0);
 
   const semaphoreHref = (semaphore: string) => {
-    const query = new URLSearchParams({ semaforo: semaphore, call: callFilter.value, view: semaphore === "POSIBLES" ? "candidates" : view });
+    const query = new URLSearchParams({ semaforo: semaphore, call: callFilter.value, view: semaphore === "POSIBLES" ? "candidates" : "all" });
     if (params.class) query.set("class", params.class);
     if (params.q) query.set("q", params.q);
     return "/proximos-examenes?" + query;
@@ -161,6 +161,11 @@ export default async function ProximosExamenesPage({
             <h2>Mostrando</h2>
             <div className="metric">{filtered.length}</div>
           </article>
+          <article className="card">
+            <CheckCircle2 aria-hidden="true" size={19} />
+            <h2>Ya convocados</h2>
+            <div className="metric">{calledTotal}</div>
+          </article>
         </section>
 
         <section className="card">
@@ -187,7 +192,7 @@ export default async function ProximosExamenesPage({
           </form>
         </section>
 
-        <p className="muted">Los semaforos y la asistencia mostrados son datos guardados. La prevision se calcula ahora con el historial y el calendario; no modifica la aptitud ni los requisitos academicos.</p>
+        <p className="muted">Los semáforos resumen a todos los kenshis de la convocatoria y los filtros de búsqueda/clase, incluidos los ya convocados. «Pendientes de convocar» cuenta solo a quienes faltan. Los semaforos y la asistencia mostrados son datos guardados. La prevision se calcula ahora con el historial y el calendario; no modifica la aptitud ni los requisitos academicos.</p>
         <section className="semaphore-strip" aria-label="Semaforos guardados">
           {counters.map((item) => (
             <a

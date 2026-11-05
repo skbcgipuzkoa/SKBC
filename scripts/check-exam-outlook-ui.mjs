@@ -105,7 +105,7 @@ assert.ok(impossiblePage.includes("Impossible Beta"));
 assert.ok(!impossiblePage.includes("Candidate Alpha"));
 assert.match(impossiblePage, /<input(?=[^>]*name="memberIds")(?=[^>]*value="1")(?=[^>]*disabled="")[^>]*>/);
 assert.ok(impossiblePage.includes("9 asistencias y quedan 8 clases"));
-assert.ok(impossiblePage.includes('semaforo=ROJO&amp;call=next&amp;view=impossible'));
+assert.ok(impossiblePage.includes('semaforo=ROJO&amp;call=next&amp;view=all'));
 const followupPage = await pageHtml({ view: "followup" });
 assert.ok(followupPage.includes("Followup Gamma"));
 assert.ok(!followupPage.includes("Impossible Beta"));
@@ -118,6 +118,9 @@ existingApprovals = [{ eventId:'existing',callMonth:'2026-12',dateConfirmed:fals
 const alreadyCalledPage = await pageHtml();
 assert.ok(alreadyCalledPage.includes('Mostrando</h2><div class="metric">0</div>'), 'Already called students leave the default pending list');
 assert.ok(alreadyCalledPage.includes('Ver convocados y respuestas'));
+assert.match(alreadyCalledPage, /<span>ROJO<\/span><strong>3<\/strong>/, 'Global progress counters include already called students and all other scoped kenshis');
+assert.ok(alreadyCalledPage.includes('Ya convocados</h2><div class="metric">1</div>'));
+assert.ok(alreadyCalledPage.includes('semaforo=ROJO&amp;call=next&amp;view=all'));
 assert.ok(!alreadyCalledPage.includes('name="memberIds" value="0"'), 'Cannot select an already called student again');
 const allWithCalled = await pageHtml({view:'all'});
 assert.match(allWithCalled, /<input(?=[^>]*name="memberIds")(?=[^>]*value="0")(?=[^>]*disabled="")[^>]*>/);
