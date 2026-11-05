@@ -158,6 +158,24 @@ vm.runInNewContext(source, {
   Error,
 });
 const backend = module.exports;
+const orderingFixture = [
+  { id: 'goho', source: 'technique', section: 'PROGRAMA', category: 'goho', name: 'Tenshin geri', grade: 'BLANCO' },
+  { id: 'cut-white', source: 'cut', cut_grade: 'BLANCO' },
+  { id: 'umpo', source: 'technique', section: 'UMPO_HO', category: 'goho', name: 'Um po ho', grade: 'AMARILLO' },
+  { id: 'juho', source: 'child_syllabus', section: 'Técnicas', category: 'juho', name: 'Kote nuki', grade: 'AMARILLO' },
+  { id: 'ukemi', source: 'technique', section: 'UKEMI', category: 'goho', name: 'Mae ukemi', grade: 'BLANCO' },
+  { id: 'kata', source: 'technique', section: 'KATA_TANEN', category: 'hokei', name: 'Tenchi ken dai ichi', grade: 'AMARILLO' },
+  { id: 'gakka', source: 'manual', section: 'GAKKA', name: 'Preguntas', grade: null },
+  { id: 'keimyaku', source: 'manual', section: 'KEIMYAKU', name: 'Keimyaku', grade: 'BLANCO' },
+  { id: 'cut-yellow', source: 'cut', cut_grade: 'AMARILLO' },
+];
+assert.equal(typeof backend.orderIntegratedExamItems, 'function', 'Exam ordering must enforce techniques last');
+const orderedFixture = backend.orderIntegratedExamItems(orderingFixture, 'kids_progressive');
+assert.deepEqual(Array.from(orderedFixture, x => x.id), ['umpo','ukemi','kata','gakka','keimyaku','goho','cut-white','juho','cut-yellow']);
+assert.equal(orderingFixture[0].id, 'goho', 'Do not mutate the original snapshot');
+assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderedFixture,'kids_progressive'), x=>x.id), Array.from(orderedFixture,x=>x.id), 'Ordering must be idempotent');
+assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderingFixture.filter(x=>x.source!=='cut'),'adults'),x=>x.id), ['umpo','ukemi','kata','gakka','keimyaku','goho','juho']);
+assert.equal(backend.orderIntegratedExamItems([{id:'shoulder',source:'technique',section:'PROGRAMA',category:'juho',name:'Kata muna otoshi'},{id:'theory',source:'manual',section:'GAKKA'}],'adults')[1].id,'shoulder','Kata in a technique name must not turn it into a kata');
 examiner.source_examiner_id = "old-parent";
 examiner.source_examiner = { revoked_at: "2026-01-01" };
 await assert.rejects(
@@ -731,6 +749,15 @@ assert.equal(assigned.examiner.exam_events, undefined);
 assert.equal(assigned.event.notes, "Teacher event notes");
 assert.equal(assigned.assignedGrades.join(","), "1 KYU");
 assert.ok(!JSON.stringify(assigned).includes("other-secret"));
+const beforeOrderingItems = database.exam_event_items.map(row=>({...row}));
+database.exam_event_items.find(row=>row.id==='i').category='goho';
+database.exam_event_items.push({...item,id:'theory-last-in-catalog',exam_event_id:'e',section:'GAKKA',order_index:999});
+const reorderedRoute = await registrationModule.exports.getExaminerExamByToken('secret','1 KYU');
+assert.deepEqual(Array.from(reorderedRoute.items,row=>row.id),['theory-last-in-catalog','i'],'Examiner opens theory before techniques regardless of stored order');
+const reorderedAdmin = await registrationModule.exports.getIntegratedExamAdmin('e');
+assert.ok(reorderedAdmin.items.findIndex(row=>row.id==='theory-last-in-catalog')<reorderedAdmin.items.findIndex(row=>row.id==='i'),'Teacher and examiner share the techniques-last rule');
+assert.deepEqual(Array.from(reorderedAdmin.summaries.find(row=>row.studentId==='s').items,row=>row.id),['theory-last-in-catalog','i'],'Individual review/report also keeps techniques last');
+database.exam_event_items=beforeOrderingItems;
 await assert.rejects(
   () =>
     registrationModule.exports.submitIntegratedExamScores({
@@ -1012,6 +1039,7 @@ database.techniques = [
     category: "technique",
   },
 ];
+database.techniques.push({id:'basic-1',grade:'1 KYU',name:'Mae ukemi',active:true,category:'goho',content_type:'UKEMI'});
 const created = await registrationModule.exports.createIntegratedExamEvent({
   title: "Adult groups",
   examDate: "2026-11-01",
@@ -1040,6 +1068,9 @@ assert.ok(
   ),
 );
 assert.equal(created.ownExaminerId, undefined);
+const createdItems = database.exam_event_items.filter(row=>row.exam_event_id===created.eventId);
+assert.equal(createdItems[0].technique_id,'basic-1','New exam stores fundamentals before techniques');
+assert.deepEqual(Array.from(createdItems,row=>row.order_index),[1,2,3],'Stored order indices match the execution order');
 console.log(
   "Adult grade-group creation, partial submission and recovery checks passed",
 );

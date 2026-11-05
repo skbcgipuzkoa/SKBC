@@ -104,6 +104,35 @@ type ExamEventItem = {
   active: boolean;
 };
 
+/** Keep the technical application block last, and seat each child only after all their content. */
+export function orderIntegratedExamItems<T extends {
+  source: string; section?: string | null; category?: string | null;
+  name?: string; grade?: string | null; cut_grade?: string | null;
+}>(items: readonly T[], programType: IntegratedExamProgram): T[] {
+  const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+  const isTechnique = (item: T) => {
+    const metadata = normalized(`${item.section ?? ""} ${item.category ?? ""}`);
+    const label = normalized(`${metadata} ${item.name ?? ""}`);
+    // Imported fundamentals can share the goho/hokei category with actual techniques.
+    if (/\b(KATA|TANEN|TAN EN|SOTAI|SO TAI|EMBU|RANDORI)\b/.test(metadata)) return false;
+    if (/\b(UMPO|UNPO|UMPOHO|UNPOHO|UKEMI|GAKKA|KEIMYAKU|KEIMIAKU|KEI MYAKU|KIHON|CHINKON|SEIHO)\b/.test(label) || /\bUM PO HO\b/.test(label)) return false;
+    return /\b(GOHO|GO HO|JUHO|JU HO|HOKEI|TECNICA|TECNICAS|TECHNIQUE|TECHNIQUES)\b/.test(metadata);
+  };
+  const ordered = items.filter(item => item.source !== "cut").sort((left, right) => Number(isTechnique(left)) - Number(isTechnique(right)));
+  const cuts = items.filter(item => item.source === "cut");
+  if (programType !== "kids" && programType !== "kids_progressive") return ordered.concat(cuts);
+  const after = new Map<number, T[]>();
+  for (const cut of cuts) {
+    const target = kidsGradeIndex(cut.cut_grade ?? cut.grade ?? null);
+    let last = -1;
+    ordered.forEach((item, index) => {
+      if (!item.grade || kidsGradeIndex(item.grade) <= target) last = index;
+    });
+    after.set(last, [...(after.get(last) ?? []), cut]);
+  }
+  return items.filter(() => false).concat(after.get(-1) ?? [], ordered.flatMap((item, index) => [item, ...(after.get(index) ?? [])]));
+}
+
 type ExamEventExaminer = {
   id: string;
   exam_event_id: string;
@@ -348,7 +377,7 @@ export async function createIntegratedExamEvent(input: {
 
     const { error: itemsError } = await supabase
       .from("exam_event_items")
-      .insert(items);
+      .insert(orderIntegratedExamItems<(typeof items)[number]>(items, input.programType).map((item, index) => ({ ...item, order_index: index + 1 })));
     if (itemsError) {
       await supabase.from("exam_events").delete().eq("id", event.id);
       throw itemsError;
@@ -521,7 +550,7 @@ export async function getIntegratedExamDuplicationTemplate(eventId: string) {
     notes: decodeExamAssignments(event.notes).text,
     memberIds: (students ?? []).map((student) => student.member_id),
     examinerNames: (examiners ?? []).map((examiner) => examiner.name),
-    items: items ?? [],
+    items: orderIntegratedExamItems(items ?? [], event.program_type),
   };
 }
 
@@ -640,6 +669,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
           assignmentStudents.get(row.event_student_id)?.target_grade ?? "",
         )),
   );
+  const orderedItems = orderIntegratedExamItems(items ?? [], event.program_type);
   const summaries = (students ?? []).map((student) => {
     const review = parseReviewEnvelope(
       (reviews ?? []).find((row) => row.event_student_id === student.id)
@@ -647,7 +677,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
     );
     const summary = buildStudentReview({
       studentId: student.id,
-      items: (items ?? []).filter(
+      items: orderedItems.filter(
         (item) =>
           item.active &&
           item.source !== "cut" &&
@@ -675,7 +705,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
     hasSubmittedScores: Boolean(scores?.length),
     rawScores: scores ?? [],
     students: students ?? [],
-    items: items ?? [],
+    items: orderedItems,
     examiners: examiners ?? [],
     scores: validScores,
     reviews: reviews ?? [],
@@ -998,7 +1028,7 @@ export async function getExaminerExamByToken(token: string, grade?: string) {
     completedGrades,
     needsExaminerName,
     students: assignedStudents,
-    items: assignedItems,
+    items: orderIntegratedExamItems(assignedItems, event.program_type),
     existingScores: (existingScores ?? []).filter(
       (score) =>
         studentIds.has(score.event_student_id) &&
@@ -2162,7 +2192,7 @@ async function buildKidsItems(eventId: string, targetGrades: string[]) {
 
   if (error) throw error;
 
-  const rows: Array<Record<string, unknown>> = [];
+  const rows: Array<Omit<ExamEventItem, "id" | "active" | "cut_grade"> & { cut_grade?: string | null }> = [];
   let order = 1;
   for (const grade of grades) {
     const gradeItems = (data ?? []).filter(
