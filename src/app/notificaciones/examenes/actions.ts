@@ -2,6 +2,9 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
+  approveExamInvitationBatch,
+  revokeExamInvitationApproval,
+  respondExamInvitationFromFicha,
   createExamInvitationDraft,
   sendExamInvitationBatch,
   respondExamInvitation,
@@ -76,4 +79,46 @@ export async function updateExamInvitationEventAction(f: FormData) {
   revalidatePath(`/examenes/${eventId}`);
   revalidatePath("/notificaciones/examenes");
   revalidatePath("/examenes");
+}
+
+export async function approveExamInvitationBatchAction(f: FormData) {
+  const id = field(f, "batchId");
+  try {
+    await approveExamInvitationBatch(id);
+  } catch {
+    redirect(adminError);
+  }
+  revalidatePath("/notificaciones/examenes");
+  revalidatePath("/ficha/[token]", "page");
+  redirect(
+    "/notificaciones/examenes?batch=" + encodeURIComponent(id) + "&approved=1",
+  );
+}
+export async function revokeExamInvitationApprovalAction(f: FormData) {
+  try {
+    await revokeExamInvitationApproval(field(f, "invitationId"));
+  } catch {
+    redirect(adminError);
+  }
+  revalidatePath("/notificaciones/examenes");
+  revalidatePath("/ficha/[token]", "page");
+}
+export async function respondExamInvitationFromFichaAction(f: FormData) {
+  const token = field(f, "fichaToken");
+  if (!/^[A-Za-z0-9_-]{16,256}$/.test(token))
+    redirect("/ficha/invalida?examError=1");
+  try {
+    await respondExamInvitationFromFicha({
+      fichaToken: token,
+      invitationId: field(f, "invitationId"),
+      response: field(f, "response"),
+      message: field(f, "message"),
+    });
+  } catch {
+    redirect("/ficha/" + encodeURIComponent(token) + "?examError=1");
+  }
+  revalidatePath("/notificaciones/examenes");
+  revalidatePath("/examenes");
+  revalidatePath("/ficha/" + token);
+  redirect("/ficha/" + encodeURIComponent(token) + "?examResponded=1");
 }

@@ -17,6 +17,9 @@ import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
 import { memberTenure } from "@/lib/member-tenure";
+import { getStudentExamInvitation, type StudentExamInvitation } from "@/lib/exam-invitations";
+import { getUpcomingExamCalls } from "@/lib/exam-calls-data";
+import { StudentExamRegistration } from "./StudentExamRegistration";
 
 const LOGO_IKA_URL = "https://lh3.googleusercontent.com/d/1F1VTa2ygk4PRG4wEukoeRWkBAt_vKORy=w300";
 const LOGO_SKBC_URL = "https://lh3.googleusercontent.com/d/1HL7qwSkhxFsHdwg6lpidBe5EjGE-W1GI=w300";
@@ -282,7 +285,7 @@ export default async function PublicFichaPage({
   searchParams
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ admin?: string; returnTo?: string }>;
+  searchParams: Promise<{ admin?: string; returnTo?: string; examError?: string; examResponded?: string; error?: string; responded?: string }>;
 }) {
   noStore();
   const [{ token }, queryParams, isInternalAccess] = await Promise.all([params, searchParams, hasInternalAccess()]);
@@ -297,6 +300,8 @@ export default async function PublicFichaPage({
 
   if (error || !member) notFound();
   if (member.status !== "active") return <InactiveFichaNotice />;
+  const [studentInvitation, upcomingCalls] = await Promise.all([getStudentExamInvitation(member.id), getUpcomingExamCalls()]);
+  const examRegistration = <StudentExamRegistration invitation={studentInvitation} fichaToken={token} error={queryParams.examError ?? queryParams.error} responded={queryParams.examResponded ?? queryParams.responded} />;
 
   const { data: technicalAreaLink } = await supabase
     .from("technical_area_links")
@@ -388,7 +393,7 @@ export default async function PublicFichaPage({
       <>
         {!isInternalAccess ? <FichaAccessTracker token={token} /> : null}
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-        <KidsFicha member={member} attendance={attendance} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
+        <KidsFicha examRegistration={examRegistration} member={member} attendance={attendance} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
     );
   }
@@ -482,12 +487,13 @@ export default async function PublicFichaPage({
     <>
       {!isInternalAccess ? <FichaAccessTracker token={token} /> : null}
       <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-      <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} fichaToken={token} />
+      <AdultFicha examRegistration={examRegistration} studentInvitation={studentInvitation} configuredCallDates={upcomingCalls.map((call) => call.call_date)} member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} fichaToken={token} />
     </>
   );
 }
 
 function AdultFicha({
+  examRegistration, studentInvitation, configuredCallDates,
   member,
   attendance,
   exams,
@@ -505,6 +511,7 @@ function AdultFicha({
   fichaUrl,
   fichaToken
 }: {
+  examRegistration: ReactNode;
   member: Member;
   attendance: Attendance[];
   exams: Exam[];
@@ -520,6 +527,8 @@ function AdultFicha({
   technicalArea: { url: string; label: string };
   adminBackUrl: string | null;
   fichaUrl: string;
+  studentInvitation: StudentExamInvitation | null;
+  configuredCallDates: string[];
   fichaToken: string;
 }) {
   const photoSrc = driveImageUrl(member.photo_url);
@@ -528,6 +537,8 @@ function AdultFicha({
   const taikai = courses.filter((course) => course.kind === "taikai");
   const recentAttendance = recentAttendanceCounts(attendance);
   const examPanel = buildAdultExamStatusPanel({
+    configuredCallDates,
+    approvedExamOn: studentInvitation?.teacherApprovedAt && studentInvitation.teacherApprovedBy ? studentInvitation.currentExamDate : null,
     semaphore: member.semaphore,
     nextExamOn: member.next_exam_on,
     cycleStartOn: member.last_exam_on ?? member.joined_on,
@@ -550,6 +561,7 @@ function AdultFicha({
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="FICHA PRO · SKBC GIPUZKOA" />
 
       <AdultExamStatusPanel panel={examPanel} />
+      {examRegistration}
 
       <section className="ficha-actions">
         <a href={`/alumno/area-tecnica/${encodeURIComponent(fichaToken)}`} target="_blank"><NotebookTabs aria-hidden="true" size={18} />AREA TECNICA PERSONAL<ExternalLink aria-hidden="true" size={15} /></a>
@@ -781,6 +793,7 @@ function AdultFicha({
 }
 
 function KidsFicha({
+  examRegistration,
   member,
   attendance,
   exams,
@@ -794,6 +807,7 @@ function KidsFicha({
   adminBackUrl,
   fichaToken
 }: {
+  examRegistration: ReactNode;
   member: Member;
   attendance: Attendance[];
   exams: Exam[];
@@ -821,6 +835,7 @@ function KidsFicha({
       <BirthdayCelebration birthDate={member.birth_date} name={member.first_name} active={member.status === "active"} />
       <AdminBackLink href={adminBackUrl} />
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="SKBC Gipuzkoa · Ficha infantil" />
+      {examRegistration}
 
       <section className="kid-badges">
         <KidBadge label="Grado" value={member.grade ?? "-"} tone={kidGradeTone(member.grade)} />

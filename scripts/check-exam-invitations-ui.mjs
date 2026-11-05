@@ -47,6 +47,8 @@ assert.match(preview, /family@example.test/);
 assert.match(preview, /Preparación con refuerzo necesario/);
 assert.match(preview, /<input(?=[^>]*name="examDate")(?=[^>]*required)[^>]*>/);
 assert.match(preview, /Enviar ahora/);
+assert.match(preview, /Aprobar convocatoria y activar inscripción en las fichas/);
+assert.match(preview, /<button(?=[^>]*disabled)[^>]*>Enviar ahora los emails de este borrador<\/button>/);
 assert.equal(sends, 0, 'GET preview must never invoke any action');
 assert.doesNotMatch(preview, /Registrar pago|payment_status/);
 const publicModule = load('src/app/convocatoria/[token]/page.tsx');

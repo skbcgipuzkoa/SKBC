@@ -1,3 +1,4 @@
+import { madridCallToday } from "@/lib/exam-call";
 import {
   decodeExamAssignments,
   encodeExamAssignments,
@@ -21,6 +22,9 @@ export type InvitationSnapshot = {
   instructions: string;
 };
 export type ExamInvitation = {
+  teacher_approved_at: string | null;
+  teacher_approved_by: string | null;
+  teacher_approved_exam_date: string | null;
   id: string;
   batch_id: string;
   member_id: string;
@@ -98,7 +102,7 @@ export async function getPublicExamInvitation(token: string) {
   const { data, error } = await createAdminClient()
     .from("exam_invitations")
     .select(
-      "id,snapshot,subject,body,response,message,exam_fee,belt_fee,expires_at,revoked_at,delivery_status,exam_events(exam_date,title)",
+      "id,snapshot,subject,body,response,message,exam_fee,belt_fee,expires_at,revoked_at,delivery_status,teacher_approved_at,teacher_approved_by,teacher_approved_exam_date,exam_events(exam_date,title,status),members(grade,class,status)",
     )
     .eq("token_hash", hashInvitationToken(token))
     .maybeSingle();
@@ -106,7 +110,8 @@ export async function getPublicExamInvitation(token: string) {
   if (
     !data ||
     data.revoked_at ||
-    !["sending", "sent"].includes(data.delivery_status)
+    !["sending", "sent"].includes(data.delivery_status) ||
+    !isExamInvitationApprovalValid(data as unknown as ApprovalScope)
   )
     return null;
   return {
@@ -309,7 +314,10 @@ export async function sendExamInvitationBatch(
     ...new Set(batch.invitations.map((inv) => inv.exam_event_id)),
   ];
   const events = eventIds.length
-    ? await db.from("exam_events").select("id,exam_date").in("id", eventIds)
+    ? await db
+        .from("exam_events")
+        .select("id,exam_date,status")
+        .in("id", eventIds)
     : { data: [], error: null };
   if (events.error) throw events.error;
   const eventDates = new Map(
@@ -324,11 +332,27 @@ export async function sendExamInvitationBatch(
         examDateOverride: batch.exam_date,
       })
     : new Map();
+  const eventStates = new Map(
+    (events.data ?? []).map((event) => [event.id, event.status]),
+  );
   for (const inv of sendable) {
+    if (!["active", "draft"].includes(eventStates.get(inv.exam_event_id) ?? ""))
+      throw new Error("El examen ya no está abierto.");
     const actual = actualOutlooks.get(inv.member_id);
     if (!actual || !actual.callDate || actual.feasibility === "impossible")
       throw new Error(
         "La preparación ya no cabe en las clases disponibles para la fecha real; revisa la convocatoria antes de enviar.",
+      );
+    if (
+      !inv.teacher_approved_at ||
+      !inv.teacher_approved_by?.trim() ||
+      !inv.teacher_approved_exam_date ||
+      inv.teacher_approved_exam_date !== eventDates.get(inv.exam_event_id) ||
+      inv.revoked_at ||
+      inv.teacher_approved_exam_date <= madridCallToday()
+    )
+      throw new Error(
+        "La convocatoria requiere autorización expresa y vigente del profesor antes de enviar.",
       );
     if (eventDates.get(inv.exam_event_id) !== inv.snapshot.examDate)
       throw new Error(
@@ -338,6 +362,7 @@ export async function sendExamInvitationBatch(
     if (
       !m ||
       m.callDate !== batch.call_key ||
+      m.memberClass !== inv.snapshot.memberClass ||
       m.targetGrade !== inv.snapshot.targetGrade ||
       m.currentGrade !== inv.snapshot.currentGrade ||
       m.email?.trim() !== inv.snapshot.email ||
@@ -489,4 +514,197 @@ export async function updateExamInvitationEvent(input: {
     ).toISOString(),
   });
   if (error) throw error;
+}
+
+export type StudentExamInvitation = {
+  invitationId: string;
+  memberId: string;
+  currentExamDate: string;
+  targetGrade: string;
+  currentGrade: string | null;
+  callKey: string;
+  eventTitle: string;
+  response: "accepted" | "deferred" | null;
+  message: string | null;
+  examFee: number;
+  beltFee: number;
+  teacherApprovedAt: string;
+  teacherApprovedBy: string;
+  registrationClosed: boolean;
+};
+type ApprovalScope = ExamInvitation & {
+  exam_events: { exam_date: string; status: string; title: string } | null;
+  members: { grade: string | null; class: string; status: string } | null;
+};
+export function isExamInvitationApprovalValid(
+  inv: ApprovalScope,
+  now = new Date(),
+) {
+  const event = inv.exam_events,
+    member = inv.members;
+  return Boolean(
+    inv.teacher_approved_at &&
+    inv.teacher_approved_by?.trim() &&
+    !inv.revoked_at &&
+    event &&
+    member &&
+    event.exam_date >= madridCallToday(now) &&
+    ["active", "draft"].includes(event.status) &&
+    event.exam_date === inv.teacher_approved_exam_date &&
+    member.status === "active" &&
+    member.grade === inv.snapshot.currentGrade &&
+    member.class === inv.snapshot.memberClass,
+  );
+}
+export function isExamInvitationRegistrationOpen(
+  inv: ApprovalScope,
+  now = new Date(),
+) {
+  return (
+    isExamInvitationApprovalValid(inv, now) &&
+    Date.parse(inv.expires_at) > now.getTime() &&
+    inv.exam_events!.exam_date > madridCallToday(now)
+  );
+}
+/** Trusted server lookup after the ficha has resolved its own member. Never returns bearer secrets. */
+export async function getStudentExamInvitation(
+  memberId: string,
+): Promise<StudentExamInvitation | null> {
+  const { data, error } = await createAdminClient()
+    .from("exam_invitations")
+    .select("*,exam_events(exam_date,status,title),members(grade,class,status)")
+    .eq("member_id", memberId)
+    .order("teacher_approved_exam_date", { ascending: true });
+  if (error) throw error;
+  const inv = (data as ApprovalScope[] | null)?.find(
+    (row) => row.member_id === memberId && isExamInvitationApprovalValid(row),
+  );
+  if (!inv) return null;
+  return {
+    invitationId: inv.id,
+    memberId: inv.member_id,
+    currentExamDate: inv.exam_events!.exam_date,
+    targetGrade: inv.snapshot.targetGrade,
+    currentGrade: inv.snapshot.currentGrade,
+    callKey: inv.snapshot.callKey,
+    eventTitle: inv.exam_events!.title,
+    response: inv.response,
+    message: inv.message,
+    examFee: inv.exam_fee,
+    beltFee: inv.belt_fee,
+    teacherApprovedAt: inv.teacher_approved_at!,
+    teacherApprovedBy: inv.teacher_approved_by!,
+    registrationClosed: !isExamInvitationRegistrationOpen(inv),
+  };
+}
+export async function approveExamInvitationBatch(batchId: string) {
+  await requireInvitationAdmin();
+  const batch = await getExamInvitationBatch(batchId);
+  if (!batch?.invitations.length) throw new Error("Convocatoria vacía.");
+  const db = createAdminClient();
+  const events = await db
+    .from("exam_events")
+    .select("id,exam_date,status")
+    .in("id", [...new Set(batch.invitations.map((inv) => inv.exam_event_id))]);
+  if (events.error) throw events.error;
+  const dates = new Map(
+    (events.data ?? []).map((event) => [event.id, event.exam_date as string]),
+  );
+  const grouped = new Map<string, string[]>();
+  for (const inv of batch.invitations) {
+    const date = dates.get(inv.exam_event_id);
+    if (
+      !date ||
+      date <= madridCallToday() ||
+      inv.revoked_at ||
+      Date.parse(inv.expires_at) <= Date.now()
+    )
+      throw new Error("Convocatoria no autorizable.");
+    grouped.set(date, [...(grouped.get(date) ?? []), inv.member_id]);
+  }
+  for (const [date, memberIds] of grouped) {
+    const actual = await loadExamOutlooks({
+      memberIds: [...new Set(memberIds)],
+      examDateOverride: date,
+    });
+    for (const inv of batch.invitations.filter(
+      (row) => dates.get(row.exam_event_id) === date,
+    )) {
+      const outlook = actual.get(inv.member_id);
+      if (
+        !outlook?.callDate ||
+        outlook.callDate !== date ||
+        outlook.feasibility === "impossible" ||
+        outlook.currentGrade !== inv.snapshot.currentGrade ||
+        outlook.targetGrade !== inv.snapshot.targetGrade
+      )
+        throw new Error(
+          "La preparación o los datos actuales no permiten autorizar esta convocatoria.",
+        );
+    }
+  }
+  const hashes = Object.fromEntries(
+    batch.invitations.map((inv) => [
+      inv.id,
+      hashInvitationToken(createInvitationToken()),
+    ]),
+  );
+  const { error } = await db.rpc("approve_exam_invitation_batch", {
+    p_batch_id: batchId,
+    p_actor: "Profesor · WEB SKBC",
+    p_hashes: hashes,
+    p_event_dates: Object.fromEntries(dates),
+  });
+  if (error) throw error;
+}
+export async function revokeExamInvitationApproval(invitationId: string) {
+  await requireInvitationAdmin();
+  const { error } = await createAdminClient()
+    .from("exam_invitations")
+    .update({
+      teacher_approved_at: null,
+      teacher_approved_by: null,
+      teacher_approved_exam_date: null,
+    })
+    .eq("id", invitationId);
+  if (error) throw error;
+}
+export async function respondExamInvitationFromFicha(input: {
+  fichaToken: string;
+  invitationId: string;
+  response: string;
+  message: string;
+}) {
+  if (
+    !/^[A-Za-z0-9_-]{16,256}$/.test(input.fichaToken) ||
+    !["accepted", "deferred"].includes(input.response) ||
+    input.message.length > 2000
+  )
+    throw new Error("Respuesta inválida.");
+  const db = createAdminClient();
+  const member = await db
+    .from("members")
+    .select("id")
+    .eq("ficha_token", input.fichaToken)
+    .eq("status", "active")
+    .maybeSingle();
+  if (member.error || !member.data) throw new Error("Ficha no disponible.");
+  const inv = await db
+    .from("exam_invitations")
+    .select("id,member_id")
+    .eq("id", input.invitationId)
+    .eq("member_id", member.data.id)
+    .maybeSingle();
+  if (inv.error || !inv.data || inv.data.member_id !== member.data.id)
+    throw new Error("Invitación no disponible.");
+  const result = await db.rpc("respond_exam_invitation_from_ficha", {
+    p_ficha_token: input.fichaToken,
+    p_invitation_id: input.invitationId,
+    p_response: input.response,
+    p_message: input.message.trim(),
+  });
+  if (result.error)
+    throw new Error(
+      "La autorización no está vigente o la respuesta ya está registrada.",
+    );
 }

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import ts from "typescript";
+import { madridCallToday } from "../src/lib/exam-call.ts";
 const require = createRequire(import.meta.url);
 let admin = true,
   sends = 0,
@@ -79,6 +80,7 @@ function query(table) {
       };
     },
     async maybeSingle() {
+      if (table === "members") return { data: { id: "member" }, error: null };
       if (op === "update") {
         if (claimed) return { data: null, error: null };
         claimed = true;
@@ -97,7 +99,10 @@ function query(table) {
           error: null,
         };
       else if (table === "exam_events" && op === "read")
-        result = { data: [{ id: "event", exam_date: eventDate }], error: null };
+        result = {
+          data: [{ id: "event", exam_date: eventDate, status: "active" }],
+          error: null,
+        };
       else if (op === "update" && patch.delivery_status === "sent" && auditFail)
         result = { data: null, error: new Error("audit unavailable") };
       else
@@ -118,6 +123,7 @@ const db = {
   },
 };
 const deps = {
+  "@/lib/exam-call": { madridCallToday },
   "@/lib/auth": { hasInternalAccess: async () => admin },
   "@/lib/supabase/admin": { createAdminClient: () => db },
   "@/lib/exam-outlook-data": {
@@ -192,6 +198,8 @@ for (const name of [
   "createExamInvitationDraft",
   "sendExamInvitationBatch",
   "updateExamInvitationEvent",
+  "approveExamInvitationBatch",
+  "revokeExamInvitationApproval",
 ])
   await assert.rejects(() => api[name]({}), /Acceso interno/);
 admin = true;
@@ -303,6 +311,16 @@ rows = [
     id: "invite",
     member_id: "member",
     delivery_status: "draft",
+    teacher_approved_at: "2099-11-01T00:00:00Z",
+    teacher_approved_by: "Synthetic teacher",
+    teacher_approved_exam_date: "2099-12-20",
+    revoked_at: null,
+    exam_events: {
+      exam_date: "2099-12-20",
+      status: "active",
+      title: "Synthetic event",
+    },
+    members: { grade: candidate.currentGrade, class: "kids", status: "active" },
     snapshot: {
       ...drafted.snapshot,
       ...{ memberClass: "kids", email: candidate.email },
@@ -343,7 +361,7 @@ actualOverride = null;
 eventDate = "2099-12-21";
 await assert.rejects(
   () => api.sendExamInvitationBatch("batch"),
-  /fecha del examen ha cambiado/,
+  /fecha del examen ha cambiado|autorización expresa/,
 );
 assert.equal(sends, 0);
 eventDate = "2099-12-20";
@@ -419,4 +437,111 @@ assert.equal(rpcCalls.at(-1).args.p_response, "accepted");
 assert.match(rpcCalls.at(-1).args.p_hash, /^[a-f0-9]{64}$/);
 console.log(
   "Exam invitation actual-module checks passed: admin auth, token security, recipient safety, draft validation, immutable fees/reason, no GET/send-on-preview, preflight, concurrent CAS, accepted SMTP/audit failure, explicit response payload. No SMTP connection was made.",
+);
+
+// Approval is explicit and remains scoped to the exact member, grade, future date and open event.
+rows[0].teacher_approved_at = null;
+assert.equal(await api.getStudentExamInvitation("member"), null);
+const noApprovalSends = sends;
+rows[0].delivery_status = "draft";
+await assert.rejects(
+  () => api.sendExamInvitationBatch("batch"),
+  /autorización expresa/,
+);
+assert.equal(sends, noApprovalSends);
+actualOverride = {
+  ...candidate,
+  callDate: input.examDate,
+  feasibility: "impossible",
+};
+const beforeBadApproval = rpcCalls.length;
+await assert.rejects(
+  () => api.approveExamInvitationBatch("batch"),
+  /no permiten autorizar/,
+);
+assert.equal(rpcCalls.length, beforeBadApproval);
+actualOverride = null;
+await api.approveExamInvitationBatch("batch");
+assert.equal(rpcCalls.at(-1).name, "approve_exam_invitation_batch");
+assert.match(rpcCalls.at(-1).args.p_hashes.invite, /^[a-f0-9]{64}$/);
+rows[0].teacher_approved_at = "2099-11-01T00:00:00Z";
+assert.equal(api.isExamInvitationApprovalValid(rows[0]), true);
+for (const invalid of [
+  { ...rows[0], teacher_approved_at: null },
+  { ...rows[0], teacher_approved_by: null },
+  { ...rows[0], revoked_at: "2099-11-01" },
+  { ...rows[0], teacher_approved_exam_date: "2099-12-19" },
+  { ...rows[0], exam_events: { ...rows[0].exam_events, status: "completed" } },
+  { ...rows[0], members: { ...rows[0].members, grade: "VERDE" } },
+  { ...rows[0], members: { ...rows[0].members, status: "inactive" } },
+])
+  assert.equal(api.isExamInvitationApprovalValid(invalid), false);
+const dtoReadBefore = rpcCalls.length;
+const dto = await api.getStudentExamInvitation("member");
+assert.equal(dto.invitationId, "invite");
+for (const secret of ["token_hash", "snapshot", "email", "body", "subject"])
+  assert.equal(secret in dto, false);
+assert.equal(rpcCalls.length, dtoReadBefore, "Approval GET never mutates");
+rows[0].member_id = "another-member";
+const bindingBefore = rpcCalls.length;
+await assert.rejects(
+  () =>
+    api.respondExamInvitationFromFicha({
+      fichaToken: "a".repeat(32),
+      invitationId: "invite",
+      response: "accepted",
+      message: "Synthetic",
+    }),
+  /no disponible/,
+);
+assert.equal(rpcCalls.length, bindingBefore);
+rows[0].member_id = "member";
+await api.respondExamInvitationFromFicha({
+  fichaToken: "a".repeat(32),
+  invitationId: "invite",
+  response: "accepted",
+  message: "Synthetic",
+});
+assert.equal(rpcCalls.at(-1).name, "respond_exam_invitation_from_ficha");
+assert.equal(rpcCalls.at(-1).args.p_ficha_token, "a".repeat(32));
+await api.revokeExamInvitationApproval("invite");
+assert.equal(updates.at(-1).teacher_approved_at, null);
+assert.equal(updates.at(-1).teacher_approved_exam_date, null);
+console.log(
+  "Teacher approval scope, auth, actual-date feasibility, safe DTO and ficha binding checks passed.",
+);
+
+const examMorning = new Date("2099-12-20T10:00:00Z");
+assert.equal(
+  api.isExamInvitationApprovalValid(
+    { ...rows[0], response: "accepted" },
+    examMorning,
+  ),
+  true,
+);
+assert.equal(
+  api.isExamInvitationRegistrationOpen(
+    { ...rows[0], response: "accepted" },
+    examMorning,
+  ),
+  false,
+);
+assert.equal(
+  api.isExamInvitationApprovalValid(rows[0], new Date("2099-12-21T10:00:00Z")),
+  false,
+);
+const expiredBeforeExam = { ...rows[0], expires_at: "2099-12-18T00:00:00Z" };
+assert.equal(
+  api.isExamInvitationApprovalValid(
+    expiredBeforeExam,
+    new Date("2099-12-19T10:00:00Z"),
+  ),
+  true,
+);
+assert.equal(
+  api.isExamInvitationRegistrationOpen(
+    expiredBeforeExam,
+    new Date("2099-12-19T10:00:00Z"),
+  ),
+  false,
 );

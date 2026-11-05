@@ -20,7 +20,7 @@ const blue = buildAdultExamStatusPanel({
   examNotice: "AZUL: por tiempo no puede hasta 05/12/2026. Convocatoria objetivo 05/12/2026."
 });
 assert.equal(blue.semaphore, "AZUL");
-assert.equal(blue.nextExamLabel, "Proxima convocatoria prevista: 05/12/2026");
+assert.equal(blue.nextExamLabel, "Próxima convocatoria prevista si se cumplen todos los requisitos: 05/12/2026");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.tone, "waiting");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.value, "284 de 329 dias");
 assert.equal(blue.criteria.find((item) => item.id === "time")?.progress, 86);
@@ -95,7 +95,7 @@ const green = buildAdultExamStatusPanel({
   examNotice: "VERDE: apto para valoracion. | Tecnico fundamental: Goho/Juho completos con 2+ reps.",
   fundamentalRepetitions: [3, 3, 3, 3]
 });
-assert.equal(green.title, "Preparado para valorar");
+assert.equal(green.title, "Requisitos completos · pendiente de valoración del profesor");
 assert.equal(green.criteria.every((item) => item.tone === "complete"), true);
 
 const grey = buildAdultExamStatusPanel({

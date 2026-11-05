@@ -8,7 +8,7 @@ import { resolveCallFilter } from "@/lib/exam-call";
 import { CandidatePicker } from "./CandidatePicker";
 import { getExamInvitationBatch, listExamInvitationBatches, listExamInvitationResponses } from "@/lib/exam-invitations";
 import { InvitationResponses } from "./responses";
-import { createExamInvitationDraftAction, sendExamInvitationBatchAction } from "./actions";
+import { approveExamInvitationBatchAction, createExamInvitationDraftAction, sendExamInvitationBatchAction } from "./actions";
 import "./invitations.css";
 
 export default async function ExamInvitationsPage({ searchParams }: { searchParams: Promise<{ call?: string; batch?: string; saved?: string; error?: string; detail?: string; sent?: string; failed?: string; unconfirmed?: string }> }) {
@@ -27,6 +27,7 @@ export default async function ExamInvitationsPage({ searchParams }: { searchPara
     group: outlook.memberClass === "kids" ? "Niños" : "Adultos", grade: outlook.targetGrade,
     callKey: outlook.callDate ?? "", reason: `${outlook.currentReady || outlook.classification === "projected" ? "Previsión favorable" : "Preparación con refuerzo necesario"}${outlook.deficits.length ? ` · ${outlook.deficits.join("; ")}` : ""}`,
   }));
+  const allApproved = Boolean(batch?.invitations.length) && batch!.invitations.every((invitation) => Boolean(invitation.teacher_approved_at) && !invitation.revoked_at && invitation.teacher_approved_exam_date === invitation.snapshot.examDate && Date.parse(invitation.expires_at) > Date.now());
   return <div className="shell"><SidebarNav current="/notificaciones" /><main className="main exam-invitations-main">
     <div className="topbar"><div><p className="eyebrow">Convocatoria voluntaria</p><h1>Invitaciones de examen</h1></div></div>
     {params.saved ? <p className="save-ok">Operación registrada.</p> : null}
@@ -45,9 +46,11 @@ export default async function ExamInvitationsPage({ searchParams }: { searchPara
       </form>
     </section>
     {batch ? <section className="card"><h2>2. Vista previa guardada · {batch.exam_date}</h2><p className="muted">Estos textos son la copia guardada para cada destinatario. Para cambiarlos, prepara otro borrador. Abrir esta página no envía emails.</p>
+      <form action={approveExamInvitationBatchAction}><input type="hidden" name="batchId" value={batch.id} /><button type="submit" style={{ minHeight: 44 }}>Aprobar convocatoria y activar inscripción en las fichas</button></form>
+      <p className="muted">Solo esta aprobación expresa autoriza la convocatoria en la ficha del alumno. Sus cuatro bloques de progreso se conservan. Autorizar la convocatoria no aprueba el examen ni acredita el pago.</p>
       {batch.invitations.map((invitation) => <article key={invitation.id} className="invitation-response"><h3>{invitation.snapshot.name} · {invitation.snapshot.email}</h3><p><strong>{invitation.subject}</strong></p><p className="invitation-preview-body">{invitation.body}</p><p>Al enviar se añade un enlace privado para aceptar, aplazar y dejar un mensaje.</p><span className="invitation-status">{invitation.delivery_status === "sending" ? "Entrega sin confirmar · revisar manualmente, no reenviar" : invitation.delivery_status === "failed" ? "Envío fallido · se puede reintentar" : invitation.delivery_status === "sent" ? "Enviado" : "Borrador sin enviar"}</span>{invitation.delivery_error ? <p className="form-error">{invitation.delivery_error}</p> : null}</article>)}
-      {batch.invitations.some((invitation) => invitation.delivery_status === "draft") ? <form action={sendExamInvitationBatchAction}><input type="hidden" name="batchId" value={batch.id} /><button type="submit" style={{ minHeight: 44 }}>Enviar ahora los emails de este borrador</button></form> : <p className="muted">No quedan invitaciones pendientes de envío en este borrador.</p>}
-      {batch.invitations.some((invitation) => invitation.delivery_status === "failed") ? <form action={sendExamInvitationBatchAction}><input type="hidden" name="batchId" value={batch.id} /><input type="hidden" name="retryFailed" value="true" /><button type="submit" className="secondary-button" style={{ minHeight: 44 }}>Reintentar solo los envíos fallidos</button></form> : null}
+      {batch.invitations.some((invitation) => invitation.delivery_status === "draft") ? <form action={sendExamInvitationBatchAction}><input type="hidden" name="batchId" value={batch.id} /><button type="submit" disabled={!allApproved} style={{ minHeight: 44 }}>Enviar ahora los emails de este borrador</button></form> : <p className="muted">No quedan invitaciones pendientes de envío en este borrador.</p>}
+      {batch.invitations.some((invitation) => invitation.delivery_status === "failed") ? <form action={sendExamInvitationBatchAction}><input type="hidden" name="batchId" value={batch.id} /><input type="hidden" name="retryFailed" value="true" /><button type="submit" disabled={!allApproved} className="secondary-button" style={{ minHeight: 44 }}>Reintentar solo los envíos fallidos</button></form> : null}
     </section> : null}
     <section className="card"><h2>Borradores y envíos</h2>{batches.map((item) => <p key={item.id}><a className="text-link" href={`/notificaciones/examenes?batch=${item.id}`}>{item.call_key} · examen {item.exam_date} · {new Date(item.created_at).toLocaleDateString("es-ES")}</a></p>)}{!batches.length ? <p className="muted">Todavía no hay invitaciones preparadas.</p> : null}</section>
     <InvitationResponses invitations={responses} />

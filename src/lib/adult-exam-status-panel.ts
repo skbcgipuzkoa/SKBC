@@ -1,4 +1,5 @@
 import { parseExamNotice } from "./exam-notice.ts";
+import { resolveStudentExamCall, studentExamCallLabel } from "./student-exam-call.ts";
 
 export type AdultExamCriterion = {
   id: "time" | "attendance" | "fundamentals" | "activity";
@@ -27,6 +28,8 @@ export type AdultExamStatusPanel = {
 };
 
 export type AdultExamStatusPanelInput = {
+  approvedExamOn?: string | null;
+  configuredCallDates?: string[];
   semaphore: string | null | undefined;
   nextExamOn: string | null | undefined;
   cycleStartOn?: string | null | undefined;
@@ -113,14 +116,13 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
     percentage(input.recentAttendance60, 6),
     percentage(input.recentAttendance21, 1)
   );
+  const call = resolveStudentExamCall({ storedNextExamOn: input.nextExamOn, configuredDates: input.configuredCallDates, approvedExamOn: input.approvedExamOn, today: input.currentOn ?? undefined });
 
   return {
-    semaphore,
-    title: copy.title,
-    nextExamLabel: input.nextExamOn
-      ? `Proxima convocatoria prevista: ${formatDate(input.nextExamOn)}`
-      : "Convocatoria pendiente de definir",
-    summary: copy.summary,
+    semaphore: call.approved ? "VERDE" : semaphore,
+    title: call.approved ? "Apto para presentarse" : timeKnown && !timePending && attendanceReady && programRepetitionsReady && activityReady ? "Requisitos completos · pendiente de valoración del profesor" : copy.title,
+    nextExamLabel: studentExamCallLabel(call.date, call.approved),
+    summary: call.approved ? "El profesor ha autorizado esta convocatoria. La aceptación reserva plaza y no acredita el pago." : copy.summary,
     reactivationNotice: needsReactivation
       ? buildReactivationNotice(input.recentAttendance60, input.recentAttendance21)
       : null,
