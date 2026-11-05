@@ -391,7 +391,13 @@ vm.runInNewContext(
     exports: admin.exports,
     process: { env: {} },
     require: (name) =>
-      name === "react/jsx-runtime"
+      name === "@/lib/exam-invitations"
+        ? { listExamInvitationResponses: async () => [] }
+        : name.includes("ExamCallAttribution")
+          ? { ExamCallAttribution: () => null }
+          : name.includes("notificaciones/examenes/responses")
+            ? { InvitationResponses: () => null }
+            : name === "react/jsx-runtime"
         ? jsx
         : name === "@/lib/integrated-exams"
           ? { getIntegratedExamAdmin: async () => adminData }

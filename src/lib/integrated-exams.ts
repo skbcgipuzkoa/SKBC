@@ -1,3 +1,4 @@
+import { attributeExamCall } from "@/lib/exam-call";
 import {
   completedExaminerGrades,
   decodeExamAssignments,
@@ -57,6 +58,9 @@ type ExamEvent = {
   id: string;
   title: string;
   exam_date: string;
+  call_month?: string | null;
+  call_date?: string | null;
+  is_retake?: boolean | null;
   program_type: IntegratedExamProgram;
   pass_percentage: number;
   status: string;
@@ -179,6 +183,8 @@ export async function createIntegratedExamEvent(input: {
   programType: IntegratedExamProgram;
   passPercentage: number;
   memberIds: string[];
+  enrollStudents?: boolean;
+  isRetake?: boolean;
   examinerNames: string[];
   examineMyself?: boolean;
   maxKidsGrade?: string | null;
@@ -243,6 +249,10 @@ export async function createIntegratedExamEvent(input: {
     .insert({
       title,
       exam_date: input.examDate,
+      call_month:
+        attributeExamCall(input.examDate, { isRetake: input.isRetake ?? false })
+          ?.callMonth ?? null,
+      is_retake: input.isRetake ?? false,
       program_type: input.programType,
       pass_percentage: input.passPercentage || 70,
       status: "active",
@@ -255,147 +265,153 @@ export async function createIntegratedExamEvent(input: {
   if (eventError || !event)
     throw eventError ?? new Error("No se pudo crear el examen.");
 
-  const students = filteredMembers.map((member, index) => ({
-    exam_event_id: event.id,
-    member_id: member.id,
-    display_order: index + 1,
-    current_grade: member.grade,
-    target_grade: resolveTargetGrade(member.class, member.grade),
-  }));
-
-  const { data: insertedStudents, error: studentsError } = await supabase
-    .from("exam_event_students")
-    .insert(students)
-    .select("id,member_id,current_grade,target_grade")
-    .returns<
-      Array<{
-        id: string;
-        member_id: string;
-        current_grade: string | null;
-        target_grade: string | null;
-      }>
-    >();
-
-  if (studentsError) throw studentsError;
-
-  let items;
   try {
-    items = input.templateEventId
-      ? await copyExamItems(
-          input.templateEventId,
-          event.id,
-          input.programType,
-          input.templateEventItemIds ?? [],
-          input.programType === "kids_progressive"
-            ? scopeTargets
-            : (students
-                .map((student) => student.target_grade)
-                .filter(Boolean) as string[]),
-        )
-      : await buildExamItems(
-          event.id,
-          input.programType,
-          input.programType === "kids_progressive"
-            ? scopeTargets
-            : (students
-                .map((student) => student.target_grade)
-                .filter(Boolean) as string[]),
-          input.childSyllabusItemIds,
+    const students = filteredMembers.map((member, index) => ({
+      exam_event_id: event.id,
+      member_id: member.id,
+      display_order: index + 1,
+      current_grade: member.grade,
+      target_grade: resolveTargetGrade(member.class, member.grade),
+    }));
+
+    let insertedStudents: Array<{ id: string }> | null = null;
+    if (input.enrollStudents !== false) {
+      const result = await supabase
+        .from("exam_event_students")
+        .insert(students)
+        .select("id");
+      if (result.error) {
+        await supabase.from("exam_events").delete().eq("id", event.id);
+        throw result.error;
+      }
+      insertedStudents = result.data;
+    }
+
+    let items;
+    try {
+      items = input.templateEventId
+        ? await copyExamItems(
+            input.templateEventId,
+            event.id,
+            input.programType,
+            input.templateEventItemIds ?? [],
+            input.programType === "kids_progressive"
+              ? scopeTargets
+              : (students
+                  .map((student) => student.target_grade)
+                  .filter(Boolean) as string[]),
+          )
+        : await buildExamItems(
+            event.id,
+            input.programType,
+            input.programType === "kids_progressive"
+              ? scopeTargets
+              : (students
+                  .map((student) => student.target_grade)
+                  .filter(Boolean) as string[]),
+            input.childSyllabusItemIds,
+          );
+    } catch (error) {
+      await supabase.from("exam_events").delete().eq("id", event.id);
+      throw error;
+    }
+    if (input.programType === "kids_progressive") {
+      const targetGrades = students
+        .map((student) => student.target_grade)
+        .filter(Boolean) as string[];
+      const uncoveredTargetGrades = progressiveTargetGradesWithoutScorableItems(
+        items.map((item) => ({
+          grade: typeof item.grade === "string" ? item.grade : null,
+          scorable:
+            item.source !== "cut" &&
+            (!("active" in item) || item.active !== false),
+        })),
+        targetGrades,
+      );
+      if (uncoveredTargetGrades.length) {
+        await supabase.from("exam_events").delete().eq("id", event.id);
+        throw new Error(
+          `Los grados objetivo ${uncoveredTargetGrades.join(", ")} no tienen contenido evaluable seleccionado.`,
         );
+      }
+    }
+    if (!items.length) {
+      await supabase.from("exam_events").delete().eq("id", event.id);
+      throw new Error(
+        input.programType === "kids" || input.programType === "kids_progressive"
+          ? "No hay temario infantil activo ni un examen infantil anterior que pueda usarse como plantilla."
+          : "No hay temario disponible para crear este examen.",
+      );
+    }
+
+    const { error: itemsError } = await supabase
+      .from("exam_event_items")
+      .insert(items);
+    if (itemsError) {
+      await supabase.from("exam_events").delete().eq("id", event.id);
+      throw itemsError;
+    }
+
+    const creationTargets = resolveExamAssignments({
+      programType: input.programType,
+      notes: null,
+      examiners: [],
+      students,
+    }).adultTargetGrades;
+    const creationNames = isAdultCreation
+      ? creationTargets.map((grade) => "Pendiente · " + grade)
+      : names;
+    const { data: assigned, error: examinersError } = await supabase
+      .from("exam_event_examiners")
+      .insert(creationNames.map((name) => ({ exam_event_id: event.id, name })))
+      .select("id,name");
+    if (examinersError) throw examinersError;
+    const initialAssignments = resolveExamAssignments({
+      programType: input.programType,
+      notes: null,
+      examiners: (assigned ?? []).map((row) => ({ ...row, revoked_at: null })),
+      students,
+    });
+    const { error: settingsError } = await supabase
+      .from("exam_events")
+      .update({
+        notes: encodeExamAssignments(
+          input.notes ?? "",
+          isAdultCreation
+            ? Object.fromEntries(
+                (assigned ?? []).map((row) => [
+                  row.id,
+                  [creationTargets[creationNames.indexOf(row.name)]],
+                ]),
+              )
+            : initialAssignments.examinerGradeScopes,
+          isAdultCreation
+            ? {
+                gradeGroupMode: true,
+                pendingExaminerIds: (assigned ?? []).map((row) => row.id),
+              }
+            : undefined,
+        ),
+      })
+      .eq("id", event.id);
+    if (settingsError) throw settingsError;
+    await refreshIntegratedExamReview(event.id);
+    return {
+      eventId: event.id,
+      ownExaminerId:
+        !isAdultCreation && input.examineMyself !== false
+          ? assigned?.find((row) => row.name === "Alvaro Calvo")?.id
+          : undefined,
+      studentCount:
+        input.enrollStudents === false
+          ? 0
+          : (insertedStudents?.length ?? students.length),
+      itemCount: items.length,
+    };
   } catch (error) {
     await supabase.from("exam_events").delete().eq("id", event.id);
     throw error;
   }
-  if (input.programType === "kids_progressive") {
-    const targetGrades = students
-      .map((student) => student.target_grade)
-      .filter(Boolean) as string[];
-    const uncoveredTargetGrades = progressiveTargetGradesWithoutScorableItems(
-      items.map((item) => ({
-        grade: typeof item.grade === "string" ? item.grade : null,
-        scorable:
-          item.source !== "cut" &&
-          (!("active" in item) || item.active !== false),
-      })),
-      targetGrades,
-    );
-    if (uncoveredTargetGrades.length) {
-      await supabase.from("exam_events").delete().eq("id", event.id);
-      throw new Error(
-        `Los grados objetivo ${uncoveredTargetGrades.join(", ")} no tienen contenido evaluable seleccionado.`,
-      );
-    }
-  }
-  if (!items.length) {
-    await supabase.from("exam_events").delete().eq("id", event.id);
-    throw new Error(
-      input.programType === "kids" || input.programType === "kids_progressive"
-        ? "No hay temario infantil activo ni un examen infantil anterior que pueda usarse como plantilla."
-        : "No hay temario disponible para crear este examen.",
-    );
-  }
-
-  const { error: itemsError } = await supabase
-    .from("exam_event_items")
-    .insert(items);
-  if (itemsError) {
-    await supabase.from("exam_events").delete().eq("id", event.id);
-    throw itemsError;
-  }
-
-  const creationTargets = resolveExamAssignments({
-    programType: input.programType,
-    notes: null,
-    examiners: [],
-    students,
-  }).adultTargetGrades;
-  const creationNames = isAdultCreation
-    ? creationTargets.map((grade) => "Pendiente · " + grade)
-    : names;
-  const { data: assigned, error: examinersError } = await supabase
-    .from("exam_event_examiners")
-    .insert(creationNames.map((name) => ({ exam_event_id: event.id, name })))
-    .select("id,name");
-  if (examinersError) throw examinersError;
-  const initialAssignments = resolveExamAssignments({
-    programType: input.programType,
-    notes: null,
-    examiners: (assigned ?? []).map((row) => ({ ...row, revoked_at: null })),
-    students,
-  });
-  const { error: settingsError } = await supabase
-    .from("exam_events")
-    .update({
-      notes: encodeExamAssignments(
-        input.notes ?? "",
-        isAdultCreation
-          ? Object.fromEntries(
-              (assigned ?? []).map((row) => [
-                row.id,
-                [creationTargets[creationNames.indexOf(row.name)]],
-              ]),
-            )
-          : initialAssignments.examinerGradeScopes,
-        isAdultCreation
-          ? {
-              gradeGroupMode: true,
-              pendingExaminerIds: (assigned ?? []).map((row) => row.id),
-            }
-          : undefined,
-      ),
-    })
-    .eq("id", event.id);
-  if (settingsError) throw settingsError;
-  await refreshIntegratedExamReview(event.id);
-  return {
-    eventId: event.id,
-    ownExaminerId:
-      !isAdultCreation && input.examineMyself !== false
-        ? assigned?.find((row) => row.name === "Alvaro Calvo")?.id
-        : undefined,
-    studentCount: insertedStudents?.length ?? students.length,
-    itemCount: items.length,
-  };
 }
 
 async function copyExamItems(
@@ -512,7 +528,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
   const { data: event, error: eventError } = await supabase
     .from("exam_events")
     .select(
-      "id,title,exam_date,program_type,pass_percentage,status,notes,updated_at",
+      "id,title,exam_date,call_date,call_month,is_retake,program_type,pass_percentage,status,notes,updated_at",
     )
     .eq("id", eventId)
     .single<ExamEvent>();
@@ -670,7 +686,7 @@ export async function getRecentIntegratedExamEvents(limit = 12) {
   const { data, error } = await supabase
     .from("exam_events")
     .select(
-      "id,title,exam_date,program_type,status,pass_percentage,exam_event_students(id),exam_event_examiners(id,submitted_at)",
+      "id,title,exam_date,call_date,call_month,is_retake,program_type,status,pass_percentage,exam_event_students(id),exam_event_examiners(id,submitted_at)",
     )
     .order("exam_date", { ascending: false })
     .limit(limit);
@@ -1677,6 +1693,7 @@ export async function finalizeIntegratedExamEvent(
   finalizedBy = "WEB SKBC",
 ) {
   const supabase = createAdminClient();
+
   let data = await getIntegratedExamAdmin(eventId);
   const { event } = data;
   if (["completed", "archived"].includes(event.status))

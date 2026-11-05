@@ -1,3 +1,6 @@
+import { getUpcomingExamCalls } from "@/lib/exam-calls-data";
+import { resolveCallFilter } from "@/lib/exam-call";
+import { loadAllPages } from "@/lib/load-all-pages";
 import { loadExamOutlooks } from "@/lib/exam-outlook-data";
 import { ExamOutlookPanel } from "@/app/components/exam-outlook-panel";
 import { AlertTriangle, CheckCircle2, Clock, LogOut, Search, ShieldCheck } from "lucide-react";
@@ -32,7 +35,7 @@ const semaphoreOrder = ["VERDE", "ROJO", "GRIS", "AMARILLO", "AZUL", "INACTIVO"]
 export default async function ProximosExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string; call?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -52,20 +55,17 @@ export default async function ProximosExamenesPage({
     query = query.eq("class", params.class);
   }
 
-  const { data, error } = await query.returns<ExamCandidate[]>();
-  if (error) throw error;
-
-  const members = data ?? [];
+  const members = await loadAllPages<ExamCandidate>((from, to) => query.order("id").range(from, to).returns<ExamCandidate[]>());
+  const calls = await getUpcomingExamCalls();
+  const callFilter = resolveCallFilter(params.call, calls.map((call) => call.call_date));
   const candidateByMember = await loadExamOutlooks({ memberIds: members.map((member) => member.id) });
 
   const normalizedSemaphore = params.semaforo ? normalizeSemaphore(params.semaforo) : "";
   const candidatesOnly = normalizedSemaphore === "POSIBLES";
   const search = (params.q ?? "").trim().toLowerCase();
-  const filtered = members
+  const scoped = members
+    .filter((item) => callFilter.all ? Boolean(candidateByMember.get(item.id)?.callDate) : Boolean(callFilter.callDate) && candidateByMember.get(item.id)?.callDate === callFilter.callDate)
     .filter((item) => item.status === "active")
-    .filter((item) => candidatesOnly
-      ? candidateByMember.get(item.id)?.candidate
-      : !normalizedSemaphore || normalizeSemaphore(item.semaphore) === normalizedSemaphore)
     .filter((item) =>
       search
         ? [item.legacy_id, item.ika_id, item.display_name, item.grade, item.exam_notice]
@@ -76,14 +76,22 @@ export default async function ProximosExamenesPage({
         : true
     );
 
+  const filtered = scoped.filter((item) => candidatesOnly ? candidateByMember.get(item.id)?.candidate : !normalizedSemaphore || normalizeSemaphore(item.semaphore) === normalizedSemaphore);
   const counters = semaphoreOrder.map((semaphore) => ({
     semaphore,
-    total: members.filter((item) => item.status === "active" && normalizeSemaphore(item.semaphore) === semaphore).length
+    total: scoped.filter((item) => item.status === "active" && normalizeSemaphore(item.semaphore) === semaphore).length
   }));
-  const candidateTotal = Array.from(candidateByMember.values()).filter((item) => item.candidate).length;
-  const ready = Array.from(candidateByMember.values()).filter((item) => item.currentReady).length;
+  const candidateTotal = scoped.filter((item) => candidateByMember.get(item.id)?.candidate).length;
+  const ready = scoped.filter((item) => candidateByMember.get(item.id)?.currentReady).length;
   const blocked = ["ROJO", "GRIS"].reduce((sum, semaphore) => sum + (counters.find((item) => item.semaphore === semaphore)?.total ?? 0), 0);
   const upcoming = filtered.filter((item) => candidateByMember.get(item.id)?.callDate).length;
+
+  const semaphoreHref = (semaphore: string) => {
+    const query = new URLSearchParams({ semaforo: semaphore, call: callFilter.value });
+    if (params.class) query.set("class", params.class);
+    if (params.q) query.set("q", params.q);
+    return "/proximos-examenes?" + query;
+  };
 
   return (
     <div className="shell">
@@ -156,7 +164,7 @@ export default async function ProximosExamenesPage({
           {counters.map((item) => (
             <a
               className={`semaphore-card semaphore-${item.semaphore.toLowerCase().replace(/\s+/g, "-")}`}
-              href={`/proximos-examenes?semaforo=${encodeURIComponent(item.semaphore)}${params.class ? `&class=${params.class}` : ""}`}
+              href={semaphoreHref(item.semaphore)}
               key={item.semaphore}
             >
               <span>{item.semaphore}</span>
@@ -165,7 +173,7 @@ export default async function ProximosExamenesPage({
           ))}
           <a
             className="semaphore-card semaphore-posibles"
-            href={`/proximos-examenes?semaforo=POSIBLES${params.class ? `&class=${params.class}` : ""}`}
+            href={semaphoreHref("POSIBLES")}
           >
             <span>POSIBLES CANDIDATOS</span>
             <strong>{candidateTotal}</strong>
@@ -173,6 +181,13 @@ export default async function ProximosExamenesPage({
         </section>
 
         <form className="filters exam-filters">
+          <label>Convocatoria
+            <select name="call" defaultValue={callFilter.value}>
+              <option value="next">Proxima del club{calls[0] ? " · " + calls[0].call_date : " · sin fecha configurada"}</option>
+              <option value="all">Todas las futuras</option>
+              {calls.map((call) => <option key={call.id} value={call.call_date}>{call.title} · {call.call_date}</option>)}
+            </select>
+          </label>
           <label>
             Buscar
             <input name="q" defaultValue={params.q ?? ""} placeholder="Nombre, ID SKBC, ID IKA, grado..." />

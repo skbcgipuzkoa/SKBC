@@ -24,6 +24,8 @@ import {
 } from "@/lib/integrated-exams";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { IntegratedExamCreateForm } from "./IntegratedExamCreateForm";
+import { listExamInvitationResponses } from "@/lib/exam-invitations";
+import { ExamCallAttribution } from "./components/ExamCallAttribution";
 
 type MemberOption = {
   id: string;
@@ -73,6 +75,7 @@ export default async function ExamenesPage({
 
   const params = await searchParams;
   const supabase = createAdminClient();
+  const invitationResponses = await listExamInvitationResponses();
   let examsQuery = supabase
     .from("exams")
     .select(
@@ -193,6 +196,12 @@ export default async function ExamenesPage({
           </p>
         ) : null}
 
+        <section className="card">
+          <h2>Invitaciones y reservas</h2>
+          <p className="muted">La aceptación añade una reserva al examen y no acredita el pago. Abono anticipado en mano: niños 10 € de examen + 5 € de cinturón; adultos 15 € + 5 €.</p>
+          <a className="secondary-link" href="/notificaciones/examenes">Ver respuestas y reservas</a>
+        </section>
+
         <section className="card" id="examenes-creados">
           <div className="section-heading-row">
             <div>
@@ -218,7 +227,7 @@ export default async function ExamenesPage({
               <tbody>
                 {integratedEvents.map((event) => (
                   <tr key={event.id}>
-                    <td data-label="Fecha">{event.exam_date}</td>
+                    <td data-label="Fecha">{event.exam_date}<ExamCallAttribution event={event} /></td>
                     <td data-label="Examen">
                       <strong>{event.title}</strong>
                     </td>
@@ -245,6 +254,9 @@ export default async function ExamenesPage({
                     </td>
                     <td data-label="Kenshis">
                       {event.exam_event_students?.length ?? 0}
+                      {invitationResponses.some((invitation) => invitation.exam_event_id === event.id) ? <small style={{ display: "block" }}>
+                        {invitationResponses.filter((invitation) => invitation.exam_event_id === event.id && invitation.response === "accepted").length} reservas aceptadas
+                      </small> : null}
                     </td>
                     <td data-label="Examinadores">
                       {

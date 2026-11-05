@@ -117,6 +117,12 @@ export default async function NotificacionesPage({
           </p>
         ) : null}
 
+        <section className="card">
+          <h2>Convocatorias de examen</h2>
+          <p className="muted">Selecciona candidatos, revisa cada email personalizado y consulta las respuestas y reservas. La vista previa no envía mensajes.</p>
+          <a className="secondary-link" href="/notificaciones/examenes">Preparar invitaciones y revisar respuestas</a>
+        </section>
+
         <section className="card notifications-hero">
           <Bell aria-hidden="true" size={24} />
           <div>

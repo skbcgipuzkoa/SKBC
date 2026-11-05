@@ -1,4 +1,5 @@
 import * as gradeHelpers from "../src/lib/grades.ts";
+import * as examCallHelpers from "../src/lib/exam-call.ts";
 import * as childProgramHelpers from "../src/lib/child-program.ts";
 import * as assignmentHelpers from "../src/lib/integrated-exam-assignments.ts";
 import * as sessionHelpers from "../src/lib/integrated-exam-session.ts";
@@ -127,6 +128,7 @@ vm.runInNewContext(source, {
   module,
   exports: module.exports,
   require(name) {
+    if (name.endsWith("/exam-call")) return examCallHelpers;
     if (name.endsWith("/grades")) return gradeHelpers;
     if (name.endsWith("/child-program")) return childProgramHelpers;
     if (name.endsWith("integrated-exam-assignments")) return assignmentHelpers;
@@ -505,6 +507,7 @@ vm.runInNewContext(source, {
   JSON,
   Error,
   require(name) {
+    if (name.endsWith("/exam-call")) return examCallHelpers;
     if (name.endsWith("/grades")) return gradeHelpers;
     if (name.endsWith("/child-program")) return childProgramHelpers;
     if (name.endsWith("integrated-exam-assignments")) return assignmentHelpers;

@@ -14,7 +14,12 @@ import {
 type Course = { member_id: string; kind: string; course_date: string };
 /** Read-only: one stable paginated scan per source, never a member-by-member query loop. */
 export async function loadExamOutlooks(
-  options: { memberIds?: string[]; now?: Date; horizonDays?: number } = {},
+  options: {
+    memberIds?: string[];
+    now?: Date;
+    horizonDays?: number;
+    examDateOverride?: string;
+  } = {},
 ): Promise<Map<string, ExamOutlook>> {
   const db = createAdminClient(),
     today = madridToday(options.now);
@@ -166,7 +171,9 @@ export async function loadExamOutlooks(
           history: historyByMember.get(member.id) ?? [],
           curriculum,
           requirements,
-          calls: calls.map((c) => c.call_date),
+          calls: options.examDateOverride
+            ? [options.examDateOverride]
+            : calls.map((c) => c.call_date),
           closures,
           advanceMonths,
         }),

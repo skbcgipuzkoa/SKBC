@@ -306,7 +306,7 @@ export async function sendStudentEmailNotification(input: {
   };
 }
 
-function createTransporter() {
+export function createTransporter() {
   const user = cleanEnv(process.env.SKBC_EMAIL_USER) ?? "skbcgipuzkoa@gmail.com";
   const pass = cleanEnv(process.env.SKBC_EMAIL_APP_PASSWORD);
   if (!pass) {

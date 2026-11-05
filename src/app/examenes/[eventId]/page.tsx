@@ -20,6 +20,11 @@ import { SidebarNav } from "@/app/components/SidebarNav";
 import { hasInternalAccess } from "@/lib/auth";
 import { getIntegratedExamAdmin } from "@/lib/integrated-exams";
 import { redirect } from "next/navigation";
+import { listExamInvitationResponses } from "@/lib/exam-invitations";
+import { InvitationResponses } from "@/app/notificaciones/examenes/responses";
+import { updateExamInvitationEventAction } from "@/app/notificaciones/examenes/actions";
+import "@/app/notificaciones/examenes/invitations.css";
+import { ExamCallAttribution } from "@/app/examenes/components/ExamCallAttribution";
 
 export default async function IntegratedExamPage({
   params,
@@ -39,6 +44,7 @@ export default async function IntegratedExamPage({
 
   const { eventId } = await params;
   const query = await searchParams;
+  const invitationResponses = await listExamInvitationResponses(eventId);
   const {
     event,
     students,
@@ -104,6 +110,7 @@ export default async function IntegratedExamPage({
           <div>
             <p className="eyebrow">Examen integrado</p>
             <h1>{event.title}</h1>
+            <ExamCallAttribution event={event} />
           </div>
           <form action={logoutAction}>
             <button
@@ -160,6 +167,11 @@ export default async function IntegratedExamPage({
             Ha ocurrido un error{query.detail ? `: ${query.detail}` : "."}
           </p>
         ) : null}
+
+        {invitationResponses.length ? <>
+          <section className="card"><h2>Datos del examen convocado</h2><p className="muted">Los emails enviados conservan su copia original. Comunica a las familias cualquier cambio de fecha.</p><form action={updateExamInvitationEventAction} className="invitation-form"><input type="hidden" name="eventId" value={eventId} /><label>Título<input name="title" defaultValue={event.title} required /></label><label>Fecha real del examen<input name="examDate" type="date" defaultValue={event.exam_date} required /></label><button type="submit">Guardar datos del examen</button></form></section>
+          <InvitationResponses invitations={invitationResponses} />
+        </> : null}
 
         <section className="grid stats compact">
           <article className="card">

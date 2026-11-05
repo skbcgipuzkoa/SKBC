@@ -276,6 +276,14 @@ export function IntegratedExamCreateForm({
           Fecha
           <input name="examDate" type="date" required />
         </label>
+        <label>
+          <span><input name="isRetake" type="checkbox" value="true" /> Es una recuperacion</span>
+          <small>
+            Los examenes ordinarios de enero y febrero pertenecen a la convocatoria
+            de diciembre anterior. Una recuperacion conserva su convocatoria separada
+            y su fecha real.
+          </small>
+        </label>
         {programType === "kids_progressive" ? (
           <label>
             Recorrido infantil hasta

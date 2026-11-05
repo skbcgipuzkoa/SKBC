@@ -1,0 +1,15 @@
+.invitation-form { display: grid; gap: 1rem; }
+.invitation-form label { display: grid; gap: .4rem; }
+.invitation-form input,.invitation-form select,.invitation-form button,.invitation-public button,.invitation-responses button { min-height: 44px; }
+.invitation-form textarea { width: 100%; }
+.invitation-candidates { border: 1px solid var(--border,#ddd); border-radius: 12px; padding: 1rem; display: grid; gap: .7rem; min-width: 0; }
+.invitation-candidate { display: flex!important; align-items: center; gap: .8rem!important; min-height: 64px; padding: .7rem; background: var(--surface,#f5f5f5); border-radius: 8px; }
+.invitation-candidate input { flex-shrink: 0; width: 24px; height: 24px; }
+.invitation-candidate span,.invitation-candidate small { display: block; overflow-wrap: anywhere; }
+.invitation-preview-body { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.invitation-public { max-width: 720px; margin: 2rem auto; padding: 1rem; }
+.invitation-public form,.invitation-responses form { display: grid; gap: .7rem; }
+.invitation-public textarea { width: 100%; }
+.invitation-responses { display: grid; gap: 1rem; }
+.invitation-response { padding: 1rem 0; border-bottom: 1px solid #ddd; overflow-wrap: anywhere; }
+.invitation-status { font-weight: 700; display: inline-block; padding: .4rem .6rem; border-radius: 6px; background: #edf3ff; }

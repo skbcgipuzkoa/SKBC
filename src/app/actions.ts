@@ -3809,6 +3809,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
 
   const memberIds = Array.from(new Set(formData.getAll("memberIds").map((value) => String(value).trim()).filter(Boolean)));
   const examDate = parseDateInput(String(formData.get("examDate") ?? ""));
+  const isRetake = formData.get("isRetake") === "true";
   const title = String(formData.get("title") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const rawProgramType = String(formData.get("programType") ?? "").trim();
@@ -3830,6 +3831,7 @@ export async function createIntegratedExamEventAction(formData: FormData) {
     await createIntegratedExamEvent({
       title,
       examDate,
+      isRetake,
       programType,
         maxKidsGrade: String(formData.get("maxKidsGrade") ?? "").trim() || null,
       passPercentage: Number.isFinite(passPercentage) ? passPercentage : 70,
