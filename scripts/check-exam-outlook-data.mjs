@@ -1,0 +1,131 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import ts from "typescript";
+import { loadAllPages } from "../src/lib/load-all-pages.ts";
+import * as outlook from "../src/lib/exam-outlook.ts";
+let calls = [];
+let fail = false;
+const roster = Array.from({ length: 1001 }, (_, i) => ({
+  id: String(i),
+  display_name: "Test",
+  legacy_id: null,
+  class: "adults",
+  status: "active",
+  grade: "5 KYU",
+  joined_on: null,
+  last_exam_on: null,
+}));
+const db = {
+  from(table) {
+    const filters = [];
+    const q = {
+      select() {
+        return q;
+      },
+      eq(k, v) {
+        filters.push([k, v]);
+        return q;
+      },
+      in(k, v) {
+        filters.push([k, v]);
+        return q;
+      },
+      lte() {
+        return q;
+      },
+      gte() {
+        return q;
+      },
+      order(k) {
+        assert.equal(k, "id");
+        return q;
+      },
+      range(from, to) {
+        q.bounds = [from, to];
+        return q;
+      },
+      returns() {
+        calls.push({ table, filters, bounds: q.bounds });
+        if (fail && table === "attendance_logs")
+          return Promise.resolve({
+            data: null,
+            error: new Error("read failed"),
+          });
+        let data = table === "members" ? roster : [];
+        const ids = filters.find(([k]) => k === "id")?.[1];
+        if (ids) data = data.filter((m) => ids.includes(m.id));
+        return Promise.resolve({
+          data: data.slice(q.bounds[0], q.bounds[1] + 1),
+          error: null,
+        });
+      },
+    };
+    return q;
+  },
+};
+globalThis.__outlookTest = {
+  createAdminClient: () => db,
+  loadAllPages,
+  ...outlook,
+};
+let source = fs.readFileSync(
+  new URL("../src/lib/exam-outlook-data.ts", import.meta.url),
+  "utf8",
+);
+source = source
+  .replace(
+    /import[\s\S]*?from "@\/lib\/supabase\/admin";/,
+    "const {createAdminClient}=globalThis.__outlookTest;",
+  )
+  .replace(
+    /import[\s\S]*?from "@\/lib\/load-all-pages";/,
+    "const {loadAllPages}=globalThis.__outlookTest;",
+  )
+  .replace(
+    /import[\s\S]*?from "@\/lib\/exam-outlook";/,
+    "const {evaluateExamOutlook,madridToday}=globalThis.__outlookTest;",
+  );
+const js = ts.transpileModule(source, {
+  compilerOptions: {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ES2022,
+  },
+}).outputText;
+const { loadExamOutlooks } = await import(
+  "data:text/javascript;base64," + Buffer.from(js).toString("base64")
+);
+assert.equal((await loadExamOutlooks({ memberIds: [] })).size, 0);
+assert.equal(calls.length, 0);
+assert.equal(
+  (
+    await loadExamOutlooks({
+      memberIds: ["1"],
+      now: new Date("2026-11-05T12:00:00Z"),
+    })
+  ).size,
+  1,
+);
+for (const name of ["attendance_logs", "member_technical_history", "courses"])
+  assert.deepEqual(
+    calls
+      .find((c) => c.table === name)
+      .filters.find(([k]) => k === "member_id")[1],
+    ["1"],
+  );
+calls = [];
+assert.equal((await loadExamOutlooks()).size, 1001);
+assert.equal(calls.filter((c) => c.table === "members").length, 2);
+assert.equal(calls.filter((c) => c.table === "attendance_logs").length, 11);
+for (const c of calls.filter((c) =>
+  ["attendance_logs", "member_technical_history", "courses"].includes(c.table),
+))
+  assert.ok(c.filters.find(([k]) => k === "member_id")[1].length <= 100);
+fail = true;
+await assert.rejects(
+  () => loadExamOutlooks({ memberIds: ["1"] }),
+  /read failed/,
+);
+delete globalThis.__outlookTest;
+console.log(
+  "exam outlook provider: pagination, member scoping, chunking, empty roster and errors passed",
+);

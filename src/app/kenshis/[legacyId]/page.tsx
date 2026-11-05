@@ -1,3 +1,5 @@
+import { loadExamOutlooks } from "@/lib/exam-outlook-data";
+import { ExamOutlookPanel } from "@/app/components/exam-outlook-panel";
 import { BirthdayCelebration } from "@/components/birthday-celebration";
 import { ArrowLeft, LogOut } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
@@ -337,6 +339,7 @@ export default async function KenshiDetailPage({
   const childTechnicalHistory = childTechnicalHistoryResult.error ? [] : childTechnicalHistoryResult.data ?? [];
   const auditTechniques = buildAuditTechniqueRows(member.class, technicalHistory, childTechnicalHistory);
   const latestTechnique = auditTechniques[0] ?? null;
+  const examOutlook = (await loadExamOutlooks({ memberIds: [member.id] })).get(member.id);
   const latestExam = exams?.[0] ?? null;
   const latestCourse = courses?.[0] ?? null;
   const hasConfiguredTechnicalArea = hasTechnicalAreaForGrade(technicalAreaResult.data ?? [], member.grade);
@@ -519,6 +522,7 @@ export default async function KenshiDetailPage({
           </section>
         ) : null}
 
+        <ExamOutlookPanel outlook={examOutlook} />
         <h2 className="section-title">Datos calculados</h2>
         <section className="grid stats compact">
           <article className="card"><h2>Ultimo examen</h2><div className="metric small">{member.last_exam_on ?? "-"}</div></article>

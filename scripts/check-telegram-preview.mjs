@@ -20,7 +20,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/notificaciones/vi
   },
 });
 const page=loaded.exports.default;
-for(const tipo of ['monthly_stats','semester_stats','yearly_stats']){
+for(const tipo of ['daily_ranking','monthly_stats','semester_stats','yearly_stats']){
   const rendered=renderToStaticMarkup(await page({searchParams:Promise.resolve({tipo})}));
   assert(rendered.includes('Ana &lt;script&gt; &amp; Luis'));
   assert(!rendered.includes('<script>'));
@@ -28,7 +28,7 @@ for(const tipo of ['monthly_stats','semester_stats','yearly_stats']){
   assert.equal(calls.at(-1),tipo);
 }
 const count=calls.length;
-await page({searchParams:Promise.resolve({tipo:'daily_ranking'})});
+await page({searchParams:Promise.resolve({tipo:'invalid'})});
 assert.equal(calls.length,count,'only approved summary types may render');
 allowed=false;
 await assert.rejects(()=>page({searchParams:Promise.resolve({})}),/redirect:\/skbc-interno/);

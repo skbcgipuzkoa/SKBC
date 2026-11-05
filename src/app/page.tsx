@@ -1,3 +1,5 @@
+import { loadExamOutlooks } from "@/lib/exam-outlook-data";
+import { formatExamOutlookSummary } from "@/lib/exam-outlook";
 import {
   BarChart3,
   CalendarCheck,
@@ -31,15 +33,6 @@ type ClassPreview = {
   class_group: "kids" | "adults";
   closed: boolean;
   plan_generated: boolean;
-};
-
-type ExamAlert = {
-  legacy_id: string | null;
-  display_name: string;
-  class: "kids" | "adults";
-  grade: string | null;
-  semaphore: string | null;
-  exam_notice: string | null;
 };
 
 type ModuleLink = {
@@ -113,7 +106,7 @@ export async function AdminDashboard() {
     { data: todayClasses },
     { data: nextClasses },
     { data: pendingPlanClasses },
-    { data: urgentExamMembers }
+    examOutlooks
   ] = await Promise.all([
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults"),
@@ -146,17 +139,12 @@ export async function AdminDashboard() {
       .order("class_date")
       .limit(5)
       .returns<ClassPreview[]>(),
-    supabase
-      .from("members")
-      .select("legacy_id,display_name,class,grade,semaphore,exam_notice")
-      .eq("status", "active")
-      .in("semaphore", ["ROJO", "VERDE"])
-      .order("class")
-      .order("display_name")
-      .limit(6)
-      .returns<ExamAlert[]>()
+    loadExamOutlooks()
   ]);
 
+  const examCandidates = Array.from(examOutlooks.values()).filter((outlook) => outlook.candidate)
+    .sort((a, b) => (a.callDate ?? "").localeCompare(b.callDate ?? "") || a.name.localeCompare(b.name));
+  const urgentExamMembers = examCandidates.slice(0, 6);
   const todayDisplayClasses = mergeCombinedClassPreviews(todayClasses ?? []);
   const nextDisplayClasses = mergeCombinedClassPreviews(nextClasses ?? []);
   const openDisplayClasses = mergeCombinedClassPreviews(openClasses ?? []);
@@ -279,17 +267,19 @@ export async function AdminDashboard() {
               </div>
             </div>
             <div>
-              <h3>Examenes con aviso</h3>
+              <h3>Candidatos a examen · {examCandidates.length}</h3>
+              <p className="muted">Actuales y proyectados a 180 dias. Pendientes de valoracion del profesor.</p>
               <div className="home-class-list">
-                {urgentExamMembers?.length ? urgentExamMembers.map((member) => (
-                  <a className={`home-class-row ${member.semaphore === "ROJO" ? "danger" : "ready"}`} href={member.legacy_id ? `/kenshis/${member.legacy_id}` : "/proximos-examenes"} key={`exam-${member.legacy_id ?? member.display_name}`}>
+                {urgentExamMembers.length ? urgentExamMembers.map((outlook) => (
+                  <a className={`home-class-row ${outlook.currentReady ? "ready" : "warning"}`} href={outlook.legacyId ? `/kenshis/${outlook.legacyId}` : "/proximos-examenes?semaforo=POSIBLES"} key={outlook.memberId}>
                     <span>
-                      <strong>{member.display_name}</strong>
-                      <small>{member.class === "kids" ? "Ninos" : "Adultos"} - {member.grade ?? "Sin grado"}</small>
+                      <strong>{outlook.name}</strong>
+                      <small>{formatExamOutlookSummary(outlook)}</small>
                     </span>
-                    <b>{member.semaphore ?? "-"}</b>
+                    <b>{outlook.currentReady ? "Requisitos medidos" : "Proyectado"}</b>
                   </a>
-                )) : <p className="muted">No hay avisos urgentes.</p>}
+                )) : <p className="muted">No hay candidatos actuales o proyectados con datos suficientes.</p>}
+                {examCandidates.length > urgentExamMembers.length ? <a className="text-link" href="/proximos-examenes?semaforo=POSIBLES">Ver {examCandidates.length - urgentExamMembers.length} candidatos restantes</a> : null}
               </div>
             </div>
           </div>

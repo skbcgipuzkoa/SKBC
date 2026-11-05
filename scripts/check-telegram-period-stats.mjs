@@ -210,6 +210,8 @@ runInNewContext(compiled, {
   Map,
   Set,
   require(name) {
+    if (name === "@/lib/exam-outlook-data") return { loadExamOutlooks: async () => new Map() };
+    if (name === "@/lib/telegram-exam-outlook") return { formatTelegramExamOutlooks: () => "Previsión de examen sin candidatos en esta prueba de estadísticas." };
     if (name === "@/lib/supabase/admin") return { createAdminClient };
     if (name === "@/lib/load-all-pages") return { loadAllPages };
     if (name === "@/lib/telegram-period-stats") return { summarizePeriod };

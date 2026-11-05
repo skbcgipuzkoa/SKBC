@@ -1,10 +1,10 @@
+import { loadExamOutlooks } from "@/lib/exam-outlook-data";
+import { ExamOutlookPanel } from "@/app/components/exam-outlook-panel";
 import { AlertTriangle, CheckCircle2, Clock, LogOut, Search, ShieldCheck } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
 import { logoutAction, recalculateAllExamStatusesAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
-import { evaluateExamCandidate, type ExamCandidateEvaluation } from "@/lib/exam-candidate";
-import { loadAllPages } from "@/lib/load-all-pages";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ExamCandidate = {
@@ -27,32 +27,7 @@ type ExamCandidate = {
   missing_attendance: number | null;
 };
 
-type RecentAttendance = {
-  member_id: string;
-  attended_on: string;
-};
-
-type TechnicalHistory = {
-  member_id: string;
-  technique_id: string | null;
-  technique_name: string;
-};
-
-type Technique = {
-  id: string;
-  name: string;
-  grade: string;
-  category: string | null;
-};
-
-type ExamRequirement = {
-  member_class: "kids" | "adults";
-  grade_pattern: string;
-  adult_required_repetitions: number;
-};
-
 const semaphoreOrder = ["VERDE", "ROJO", "GRIS", "AMARILLO", "AZUL", "INACTIVO"];
-const ADULT_GRADES = ["MINARAI", "5 KYU", "4 KYU", "3 KYU", "2 KYU", "1 KYU", "1 DAN", "2 DAN", "3 DAN", "4 DAN", "5 DAN", "6 DAN", "7 DAN", "8 DAN", "9 DAN"];
 
 export default async function ProximosExamenesPage({
   searchParams
@@ -81,71 +56,7 @@ export default async function ProximosExamenesPage({
   if (error) throw error;
 
   const members = data ?? [];
-  const activeMemberIds = members.filter((item) => item.status === "active").map((item) => item.id);
-  const adultMemberIds = members.filter((item) => item.status === "active" && item.class === "adults").map((item) => item.id);
-  const today = formatLocalDate(new Date());
-  const sixtyDaysAgo = formatLocalDate(addDays(new Date(), -60));
-  const [recentAttendance, techniquesResult, technicalHistory, requirementsResult] = await Promise.all([
-    activeMemberIds.length
-      ? loadAllPages<RecentAttendance>((from, to) => supabase
-          .from("attendance_logs")
-          .select("member_id,attended_on")
-          .in("member_id", activeMemberIds)
-          .gte("attended_on", sixtyDaysAgo)
-          .lte("attended_on", today)
-          .order("attended_on", { ascending: true })
-          .range(from, to)
-          .returns<RecentAttendance[]>())
-      : Promise.resolve([]),
-    supabase.from("techniques").select("id,name,grade,category").returns<Technique[]>(),
-    adultMemberIds.length
-      ? loadAllPages<TechnicalHistory>((from, to) => supabase
-          .from("member_technical_history")
-          .select("member_id,technique_id,technique_name")
-          .in("member_id", adultMemberIds)
-          .eq("completed", true)
-          .eq("counts_as_progression", true)
-          .order("class_date", { ascending: true })
-          .range(from, to)
-          .returns<TechnicalHistory[]>())
-      : Promise.resolve([]),
-    supabase
-      .from("skbc_exam_requirements")
-      .select("member_class,grade_pattern,adult_required_repetitions")
-      .eq("active", true)
-      .returns<ExamRequirement[]>()
-  ]);
-
-  if (techniquesResult.error) throw techniquesResult.error;
-  if (requirementsResult.error) throw requirementsResult.error;
-
-  const recentByMember = summarizeRecentAttendance(recentAttendance, today);
-  const technicalByMember = summarizeTechnicalProgress(
-    members,
-    techniquesResult.data ?? [],
-    technicalHistory,
-    requirementsResult.data ?? []
-  );
-  const candidateByMember = new Map<string, ExamCandidateEvaluation>();
-  for (const member of members) {
-    const recent = recentByMember.get(member.id) ?? { total60: 0, total21: 0 };
-    const technical = technicalByMember.get(member.id);
-    candidateByMember.set(member.id, evaluateExamCandidate({
-      status: member.status,
-      semaphore: member.semaphore,
-      memberClass: member.class,
-      nextExamOn: member.next_exam_on,
-      today,
-      attendanceCount: member.attendance_count,
-      minimumAttendance: member.minimum_attendance,
-      recentAttendance60: recent.total60,
-      recentAttendance21: recent.total21,
-      technicalWorked: technical?.worked ?? null,
-      technicalTotal: technical?.total ?? null,
-      repetitionCount: technical?.repetitions ?? null,
-      repetitionGoal: technical?.repetitionGoal ?? null
-    }));
-  }
+  const candidateByMember = await loadExamOutlooks({ memberIds: members.map((member) => member.id) });
 
   const normalizedSemaphore = params.semaforo ? normalizeSemaphore(params.semaforo) : "";
   const candidatesOnly = normalizedSemaphore === "POSIBLES";
@@ -153,7 +64,7 @@ export default async function ProximosExamenesPage({
   const filtered = members
     .filter((item) => item.status === "active")
     .filter((item) => candidatesOnly
-      ? candidateByMember.get(item.id)?.isCandidate
+      ? candidateByMember.get(item.id)?.candidate
       : !normalizedSemaphore || normalizeSemaphore(item.semaphore) === normalizedSemaphore)
     .filter((item) =>
       search
@@ -169,10 +80,10 @@ export default async function ProximosExamenesPage({
     semaphore,
     total: members.filter((item) => item.status === "active" && normalizeSemaphore(item.semaphore) === semaphore).length
   }));
-  const candidateTotal = Array.from(candidateByMember.values()).filter((item) => item.isCandidate).length;
-  const ready = counters.find((item) => item.semaphore === "VERDE")?.total ?? 0;
+  const candidateTotal = Array.from(candidateByMember.values()).filter((item) => item.candidate).length;
+  const ready = Array.from(candidateByMember.values()).filter((item) => item.currentReady).length;
   const blocked = ["ROJO", "GRIS"].reduce((sum, semaphore) => sum + (counters.find((item) => item.semaphore === semaphore)?.total ?? 0), 0);
-  const upcoming = filtered.filter((item) => item.next_exam_on).length;
+  const upcoming = filtered.filter((item) => candidateByMember.get(item.id)?.callDate).length;
 
   return (
     <div className="shell">
@@ -196,7 +107,7 @@ export default async function ProximosExamenesPage({
         <section className="grid stats compact" aria-label="Resumen proximos examenes">
           <article className="card">
             <CheckCircle2 aria-hidden="true" size={19} />
-            <h2>Verdes</h2>
+            <h2>Requisitos medidos completos</h2>
             <div className="metric">{ready}</div>
           </article>
           <article className="card">
@@ -240,7 +151,8 @@ export default async function ProximosExamenesPage({
           </form>
         </section>
 
-        <section className="semaphore-strip" aria-label="Semaforos">
+        <p className="muted">Los semaforos y la asistencia mostrados son datos guardados. La prevision se calcula ahora con el historial y el calendario; no modifica la aptitud ni los requisitos academicos.</p>
+        <section className="semaphore-strip" aria-label="Semaforos guardados">
           {counters.map((item) => (
             <a
               className={`semaphore-card semaphore-${item.semaphore.toLowerCase().replace(/\s+/g, "-")}`}
@@ -295,9 +207,9 @@ export default async function ProximosExamenesPage({
                 <th>ID IKA</th>
                 <th>Clase</th>
                 <th>Grado</th>
-                <th>Semaforo</th>
+                <th>Semaforo guardado</th>
                 <th>Proximo examen</th>
-                <th>Asistencia</th>
+                <th>Asistencia guardada</th>
                 <th>Aviso</th>
               </tr>
             </thead>
@@ -314,20 +226,14 @@ export default async function ProximosExamenesPage({
                     <td data-label="ID IKA">{item.ika_id || <span className="muted">Pendiente</span>}</td>
                     <td data-label="Clase">{item.class === "kids" ? "Ninos" : "Adultos"}</td>
                     <td data-label="Grado">{item.grade ?? "-"}</td>
-                    <td data-label="Semaforo"><span className={`semaphore-pill semaphore-${semaphore.toLowerCase().replace(/\s+/g, "-")}`}>{semaphore}</span></td>
-                    <td data-label="Proximo examen">{item.next_exam_on ?? <span className="muted">Sin fecha</span>}</td>
-                    <td data-label="Asistencia">
+                    <td data-label="Semaforo guardado"><span className={`semaphore-pill semaphore-${semaphore.toLowerCase().replace(/\s+/g, "-")}`}>{semaphore}</span></td>
+                    <td data-label="Proximo examen">{candidate?.callDate ?? <span className="muted">Sin convocatoria futura</span>}</td>
+                    <td data-label="Asistencia guardada">
                       {formatAttendance(item)}
                     </td>
                     <td data-label="Aviso" className="notice-cell">
-                      {candidate?.isCandidate ? (
-                        <div className="exam-candidate-summary">
-                          <strong>Posible candidato</strong>
-                          <span>{candidate.reasons.join(" · ")}</span>
-                          <small>{candidate.details.join(" · ")}</small>
-                        </div>
-                      ) : null}
-                      <span>{item.exam_notice ?? <span className="muted">Sin aviso calculado</span>}</span>
+                      <ExamOutlookPanel outlook={candidate} compact />
+                      <small>Aviso guardado: {item.exam_notice ?? "sin aviso calculado"}</small>
                     </td>
                   </tr>
                 );
@@ -365,102 +271,4 @@ function formatAttendance(item: ExamCandidate) {
       {item.attendance_count ?? 0} asist. · {percent} · {minimum} · {missing}
     </span>
   );
-}
-
-function summarizeRecentAttendance(rows: RecentAttendance[], today: string) {
-  const result = new Map<string, { total60: number; total21: number }>();
-  const todayDate = parseIsoDate(today);
-  if (!todayDate) return result;
-
-  for (const row of rows) {
-    const date = parseIsoDate(row.attended_on);
-    if (!date) continue;
-    const days = Math.floor((todayDate.getTime() - date.getTime()) / 86400000);
-    const current = result.get(row.member_id) ?? { total60: 0, total21: 0 };
-    if (days <= 60) current.total60 += 1;
-    if (days <= 21) current.total21 += 1;
-    result.set(row.member_id, current);
-  }
-
-  return result;
-}
-
-function summarizeTechnicalProgress(
-  members: ExamCandidate[],
-  techniques: Technique[],
-  history: TechnicalHistory[],
-  requirements: ExamRequirement[]
-) {
-  const historyByMember = new Map<string, Map<string, number>>();
-  for (const row of history) {
-    const repetitions = historyByMember.get(row.member_id) ?? new Map<string, number>();
-    const key = row.technique_id ?? normalizeText(row.technique_name);
-    repetitions.set(key, (repetitions.get(key) ?? 0) + 1);
-    historyByMember.set(row.member_id, repetitions);
-  }
-
-  const result = new Map<string, { worked: number; total: number; repetitions: number; repetitionGoal: number }>();
-  for (const member of members) {
-    if (member.class !== "adults" || member.status !== "active") continue;
-    const targetGrade = nextAdultGrade(member.grade);
-    const curriculum = techniques.filter((item) => normalizeText(item.grade) === targetGrade && isFundamental(item.category));
-    if (!curriculum.length) continue;
-    const repetitions = historyByMember.get(member.id) ?? new Map<string, number>();
-    const counts = curriculum.map((item) => repetitions.get(item.id) ?? repetitions.get(normalizeText(item.name)) ?? 0);
-    const required = requirementFor(member, requirements)?.adult_required_repetitions ?? 2;
-    result.set(member.id, {
-      worked: counts.filter((count) => count > 0).length,
-      total: counts.length,
-      repetitions: counts.reduce((sum, count) => sum + Math.min(count, required), 0),
-      repetitionGoal: counts.length * required
-    });
-  }
-  return result;
-}
-
-function requirementFor(member: ExamCandidate, requirements: ExamRequirement[]) {
-  return requirements.find((row) => row.member_class === member.class && gradeMatches(member.grade, row.grade_pattern));
-}
-
-function gradeMatches(grade: string | null, pattern: string) {
-  const value = normalizeText(grade);
-  const normalizedPattern = normalizeText(pattern);
-  if (normalizedPattern === "*" || normalizedPattern === value) return true;
-  if (normalizedPattern === "* KYU") return value.endsWith(" KYU");
-  if (normalizedPattern === "* DAN") return value.endsWith(" DAN");
-  return false;
-}
-
-function nextAdultGrade(grade: string | null) {
-  const normalized = normalizeText(grade);
-  const index = ADULT_GRADES.indexOf(normalized);
-  if (index === -1) return normalized;
-  return ADULT_GRADES[Math.min(index + 1, ADULT_GRADES.length - 1)];
-}
-
-function isFundamental(category: string | null) {
-  const normalized = normalizeText(category);
-  return normalized === "GOHO" || normalized === "JUHO";
-}
-
-function normalizeText(value: string | null | undefined) {
-  return String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function formatLocalDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function parseIsoDate(value: string) {
-  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
 }

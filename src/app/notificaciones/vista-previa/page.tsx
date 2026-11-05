@@ -3,6 +3,7 @@ import { hasInternalAccess } from "@/lib/auth";
 import { buildNotificationMessage } from "@/lib/telegram-notifications";
 
 const summaries = [
+  { type: "daily_ranking", label: "Diario" },
   { type: "monthly_stats", label: "Mensual" },
   { type: "semester_stats", label: "Semestral" },
   { type: "yearly_stats", label: "Anual" },

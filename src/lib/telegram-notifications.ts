@@ -1,3 +1,5 @@
+import { loadExamOutlooks } from "@/lib/exam-outlook-data";
+import { formatTelegramExamOutlooks } from "@/lib/telegram-exam-outlook";
 import { summarizePeriod } from "@/lib/telegram-period-stats";
 import { getPendingFamilyBillingContexts } from "@/lib/family-units";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -227,9 +229,7 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
       "",
       formatRanking("🌱 Top niños", digest.kids),
       "",
-      formatExamReady(digest.readyForExam),
-      "",
-      formatExamUpcoming(digest.upcomingForExam)
+      formatTelegramExamOutlooks(digest.examOutlooks)
     ].filter(Boolean).join("\n").trim();
   }
 
@@ -263,7 +263,7 @@ export async function buildNotificationMessage(notificationType: NotificationTyp
     "",
     formatPeriodAttendance("🌱 Asistencia niños", stats.topKidsAttendance),
     "",
-    formatExamReady(stats.readyForExam)
+    formatTelegramExamOutlooks(stats.examOutlooks)
   ].join("\n").trim();
 }
 
@@ -398,8 +398,7 @@ async function buildDailyDigest() {
     todayClasses: todayClassesResult.data ?? [],
     birthdayAlerts: birthdayAlerts(members),
     freeTrialAlerts: await freeTrialAlerts(),
-    readyForExam: readyForExam(members),
-    upcomingForExam: upcomingForExam(members)
+    examOutlooks: [...(await loadExamOutlooks()).values()]
   };
 }
 
@@ -539,7 +538,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       )
       .slice(0, 6),
     yearGrowth,
-    readyForExam: readyForExam(members),
+    examOutlooks: [...(await loadExamOutlooks()).values()],
   };
 }
 
@@ -674,45 +673,6 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
     .map((row, index) => ({ ...row, position: index + 1 }));
 }
 
-function readyForExam(members: Member[]) {
-  return members
-    .filter((member) => member.semaphore === "VERDE")
-    .sort((a, b) => (a.next_exam_on ?? "9999-12-31").localeCompare(b.next_exam_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name))
-    .map((member) => ({
-      name: member.display_name,
-      grade: member.grade ?? "-",
-      className: member.class === "kids" ? "ninos" : "adultos",
-      nextExamOn: member.next_exam_on,
-      attendance: member.attendance_count,
-      minimum: member.minimum_attendance
-    }));
-}
-
-function upcomingForExam(members: Member[]) {
-  const today = todayIso();
-  const followUpLimit = isoDate(addDays(new Date(), 180));
-  return members
-    .filter((member) =>
-      member.semaphore !== "VERDE" &&
-      Boolean(member.next_exam_on) &&
-      member.next_exam_on! >= today &&
-      member.next_exam_on! <= followUpLimit
-    )
-    .sort((a, b) => (a.next_exam_on ?? "9999-12-31").localeCompare(b.next_exam_on ?? "9999-12-31") || a.display_name.localeCompare(b.display_name))
-    .slice(0, 12)
-    .map((member) => ({
-      name: member.display_name,
-      grade: member.grade ?? "-",
-      className: member.class === "kids" ? "ninos" : "adultos",
-      nextExamOn: member.next_exam_on,
-      semaphore: member.semaphore ?? "-",
-      reason: studentFriendlyExamReason(member),
-      attendance: member.attendance_count,
-      minimum: member.minimum_attendance,
-      missingAttendance: member.missing_attendance
-    }));
-}
-
 async function freeTrialAlerts() {
   const limit = todayIso();
   return (await getPendingFamilyBillingContexts())
@@ -786,28 +746,6 @@ function formatFreeTrialAlerts(rows: Awaited<ReturnType<typeof freeTrialAlerts>>
       : ""
   ].filter(Boolean);
   return sections.join("\n\n");
-}
-
-function studentFriendlyExamReason(member: Member) {
-  const missingAttendance = member.missing_attendance ?? 0;
-  const notice = normalizeKey(member.exam_notice);
-
-  if (member.semaphore === "GRIS") {
-    return "Necesita recuperar regularidad de entrenamiento antes de valorar convocatoria.";
-  }
-  if (member.semaphore === "AZUL" || notice.includes("TIEMPO")) {
-    return "Todavia falta tiempo minimo de practica para esta convocatoria.";
-  }
-  if (missingAttendance > 0 || notice.includes("ASISTENCIA")) {
-    return `Necesita sumar ${missingAttendance > 0 ? missingAttendance : "mas"} asistencia${missingAttendance === 1 ? "" : "s"} para llegar al minimo.`;
-  }
-  if (notice.includes("TECNIC")) {
-    return "Necesita completar mas trabajo tecnico de su grado.";
-  }
-  if (notice.includes("IMPLICACION")) {
-    return "La implicacion y cursos registrados aun no compensan los requisitos pendientes.";
-  }
-  return "En seguimiento para proxima convocatoria; revisar asistencia, tiempo minimo y progreso tecnico.";
 }
 
 function uniqueCourseEvents(rows: Course[]) {
@@ -994,35 +932,6 @@ function formatRanking(title: string, rows: Array<{ name: string; grade: string;
   return [
     `<b>${html(title)}</b>`,
     ...rows.slice(0, 10).map((row) => `${row.position}. <b>${html(row.name)}</b> · ${row.score} pts\n   ${html(row.grade)} · ${html(row.detail)}`)
-  ].join("\n");
-}
-
-function formatExamReady(rows: ReturnType<typeof readyForExam>) {
-  if (!rows.length) {
-    return "🟢 <b>Kenshis listos para examen</b>\nNinguno ahora mismo.";
-  }
-  return [
-    "🟢 <b>Kenshis listos para examen</b>",
-    ...rows.slice(0, 12).map((row) => {
-      const attendance = row.attendance !== null && row.minimum !== null ? ` - asist. ${row.attendance}/${row.minimum}` : "";
-      return `• <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)})${row.nextExamOn ? ` · ${formatHumanDate(row.nextExamOn)}` : ""}${attendance}`;
-    }),
-    rows.length > 12 ? `Y ${rows.length - 12} mas.` : ""
-  ].filter(Boolean).join("\n");
-}
-
-function formatExamUpcoming(rows: ReturnType<typeof upcomingForExam>) {
-  if (!rows.length) {
-    return "🟡 <b>Proximos a examen</b>\nSin kenshis en ventana de seguimiento.";
-  }
-  return [
-    "🟡 <b>Proximos a examen</b>",
-    ...rows.map((row) => {
-      const attendance = row.attendance !== null && row.minimum !== null
-        ? ` - asist. ${row.attendance}/${row.minimum}${row.missingAttendance ? ` (faltan ${row.missingAttendance})` : ""}`
-        : "";
-      return `• <b>${html(row.name)}</b> (${row.className}, ${html(row.grade)}) - ${html(row.semaphore)}${row.nextExamOn ? ` - ${formatHumanDate(row.nextExamOn)}` : ""}${attendance}\n   ${html(row.reason)}`;
-    })
   ].join("\n");
 }
 

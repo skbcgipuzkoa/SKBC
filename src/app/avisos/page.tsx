@@ -1,3 +1,5 @@
+import { loadExamOutlooks } from "@/lib/exam-outlook-data";
+import { formatExamOutlookSummary } from "@/lib/exam-outlook";
 import { AlertTriangle, Bell, CheckCircle2, LogOut, Pin, Printer } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { SubmitButton } from "@/app/components/SubmitButton";
@@ -164,7 +166,13 @@ export default async function AvisosPage({
     : { data: [] };
   const trialTaskByKey = new Map((trialTasks ?? []).map((task) => [`${task.subject_member_id}:${task.composition_signature}`, task]));
   const transitionCandidates = buildTransitionCandidates(examMembers);
-  const upcomingExamNotices = buildUpcomingExamNotices(examMembers);
+  const examOutlooks = await loadExamOutlooks({ memberIds: examMembers.map((member) => member.id) });
+  const upcomingExamNotices: NoticeMemberRow[] = examMembers.flatMap((member) => {
+    const outlook = examOutlooks.get(member.id);
+    if (!outlook?.candidate) return [];
+    return [{ id: member.id, legacy_id: member.legacy_id, display_name: member.display_name,
+      grade: member.grade, detail: formatExamOutlookSummary(outlook), tone: "info" as const }];
+  });
   const busenNotices = buildBusenNotices(examMembers, busenEligibilityResult.data ?? [], busenAttendanceResult.data ?? []);
   const shakujoNotices = buildShakujoNotices(examMembers, shakujoAttendanceResult.data ?? []);
   const active = notices.filter((notice) => ["open", "in_progress"].includes(notice.status));
@@ -350,8 +358,8 @@ export default async function AvisosPage({
           <div className="section-heading-row">
             <div>
               <p className="eyebrow">Convocatorias</p>
-              <h2>Proximos a examen</h2>
-              <p className="muted">Kenshis dentro de ventana de convocatoria o cerca de estar listos. Incluye que les falta de forma resumida.</p>
+              <h2>Proximos a examen · {upcomingExamNotices.length} candidatos</h2>
+              <p className="muted">Candidatos actuales y proyectados a 180 dias, con el mismo calculo que Proximos examenes. La proyeccion requiere revision del profesor.</p>
             </div>
             <a className="secondary-button" href="/proximos-examenes">Ver semaforos</a>
           </div>
@@ -536,27 +544,6 @@ function transitionAgeText(age: number) {
   return `${age} anos; empezar seguimiento para futuro paso a adultos`;
 }
 
-function buildUpcomingExamNotices(members: ExamNoticeMember[]): NoticeMemberRow[] {
-  const limit = addDays(today(), 120);
-  return members
-    .filter((member) => {
-      if (!member.next_exam_on) return false;
-      const semaphore = normalizeText(member.semaphore);
-      if (isJustAfterExamCall(member.next_exam_on)) return semaphore !== "INACTIVO" && semaphore !== "GRIS";
-      if (member.next_exam_on > limit) return false;
-      return semaphore !== "VERDE" && semaphore !== "INACTIVO" && semaphore !== "GRIS";
-    })
-    .map((member) => ({
-      id: member.id,
-      legacy_id: member.legacy_id,
-      display_name: member.display_name,
-      grade: member.grade,
-      detail: `${member.class === "kids" ? "niños" : "adultos"} - ${member.semaphore ?? "-"} - ${formatShortDate(member.next_exam_on ?? today())} - ${examMissingText(member)}`,
-      tone: member.semaphore === "ROJO" ? "danger" as const : "warn" as const
-    }))
-    .slice(0, 20);
-}
-
 function buildBusenNotices(members: ExamNoticeMember[], eligibility: Array<{ member_id: string }>, attendance: BusenAttendance[]): NoticeMemberRow[] {
   const membersById = new Map(members.map((member) => [member.id, member]));
   const recentLimit = addDays(today(), -120);
@@ -613,40 +600,6 @@ function buildShakujoNotices(members: ExamNoticeMember[], attendance: ShakujoAtt
       }];
     })
     .slice(0, 12);
-}
-
-function examMissingText(member: ExamNoticeMember) {
-  const afterCall = member.next_exam_on ? justAfterExamCallText(member.next_exam_on) : "";
-  if (afterCall) return afterCall;
-  const missing = member.missing_attendance ?? 0;
-  if (missing > 0) return `faltan ${missing} asistencias (${member.attendance_count ?? 0}/${member.minimum_attendance ?? "-"})`;
-  if (member.exam_notice?.toLowerCase().includes("tecnico")) return "revisar progreso tecnico";
-  if (member.exam_notice?.toLowerCase().includes("tiempo")) return "todavia falta tiempo minimo";
-  return "revisar condiciones de convocatoria";
-}
-
-function isJustAfterExamCall(value: string) {
-  return Boolean(justAfterExamCallText(value));
-}
-
-function justAfterExamCallText(value: string) {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return "";
-  const calls = examCallsAround(date.getFullYear());
-  const previousCall = calls
-    .filter((call) => call.getTime() < date.getTime())
-    .sort((a, b) => b.getTime() - a.getTime())[0];
-  if (!previousCall) return "";
-  const daysAfter = Math.round((date.getTime() - previousCall.getTime()) / 86400000);
-  if (daysAfter <= 0 || daysAfter > 45) return "";
-  return `vence ${daysAfter} dias despues de la convocatoria ${formatShortDate(previousCall.toISOString().slice(0, 10))}; revisar si merece adelantar`;
-}
-
-function examCallsAround(year: number) {
-  return [year - 1, year, year + 1].flatMap((item) => [
-    new Date(`${item}-06-27T00:00:00`),
-    new Date(`${item}-12-05T00:00:00`)
-  ]);
 }
 
 function today() {
