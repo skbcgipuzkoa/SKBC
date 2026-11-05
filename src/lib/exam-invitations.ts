@@ -174,7 +174,7 @@ export async function createExamInvitationDraft(input: {
   subject?: string;
   body?: string;
   title?: string;
-}) {
+}, options: { fichaOnly?: boolean } = {}) {
   await requireInvitationAdmin();
   if (
     !validDate(input.examDate) ||
@@ -243,7 +243,8 @@ export async function createExamInvitationDraft(input: {
       if (meta.error) throw meta.error;
       for (const m of members) {
         const emails = (m!.email ?? "").split(/[;,\s]+/).filter(Boolean);
-        if (emails.length !== 1 || !isBareInvitationEmail(emails[0]))
+        const validEmail = emails.length === 1 && isBareInvitationEmail(emails[0]);
+        if (!options.fichaOnly && !validEmail)
           throw new Error(`Revisa el email único de ${m!.name}.`);
         const snapshot: InvitationSnapshot = {
           name: m!.name,
@@ -252,7 +253,7 @@ export async function createExamInvitationDraft(input: {
           targetGrade: m!.targetGrade,
           callKey: input.callKey,
           examDate: input.examDate,
-          email: emails[0],
+          email: validEmail ? emails[0] : "",
           reason:
             m!.classification === "projected" || m!.currentReady
               ? m!.currentReady
@@ -280,10 +281,11 @@ export async function createExamInvitationDraft(input: {
         });
       }
     }
-    const saved = await db.rpc("replace_exam_invitation_drafts", {
+    const saved = await db.rpc(options.fichaOnly ? "replace_and_approve_exam_invitation_drafts" : "replace_exam_invitation_drafts", {
       p_call: input.callKey,
       p_member_ids: ids,
       p_rows: rows,
+      ...(options.fichaOnly ? { p_actor: "Profesor · WEB SKBC", p_event_dates: Object.fromEntries(events.map((id) => [id, input.examDate])) } : {}),
     });
     if (saved.error) throw saved.error;
     return batch.id as string;
@@ -293,6 +295,12 @@ export async function createExamInvitationDraft(input: {
     throw e;
   }
 }
+/** Explicit teacher action from planning: reuse scoped approval, never dispatch mail. */
+export async function approveExamCallFromPlanning(input: { memberIds: string[]; callKey: string; examDate: string }) {
+  await requireInvitationAdmin();
+  return createExamInvitationDraft({ ...input, instructions: "", title: `Examen SKBC · ${input.examDate}` }, { fichaOnly: true });
+}
+
 export async function sendExamInvitationBatch(
   batchId: string,
   options: { retryFailed?: boolean } = {},

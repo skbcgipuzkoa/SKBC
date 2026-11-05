@@ -1,5 +1,6 @@
 import { getUpcomingExamCalls } from "@/lib/exam-calls-data";
-import { resolveCallFilter } from "@/lib/exam-call";
+import { resolveCallFilter, madridCallToday } from "@/lib/exam-call";
+import { ApproveExamCall } from "./ApproveExamCall";
 import { loadAllPages } from "@/lib/load-all-pages";
 import { loadExamOutlooks } from "@/lib/exam-outlook-data";
 import { ExamOutlookPanel } from "@/app/components/exam-outlook-panel";
@@ -35,7 +36,7 @@ const semaphoreOrder = ["VERDE", "ROJO", "GRIS", "AMARILLO", "AZUL", "INACTIVO"]
 export default async function ProximosExamenesPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string; call?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; semaforo?: string; class?: string; saved?: string; error?: string; call?: string; view?: string; approved?: string; examDate?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -118,6 +119,8 @@ export default async function ProximosExamenesPage({
             </button>
           </form>
         </div>
+        {params.approved ? <p className="save-ok" role="status">Convocatoria aprobada para el {params.examDate}. Los alumnos seleccionados ya pueden inscribirse desde su ficha. No se han enviado correos.</p> : null}
+        {params.error ? <p className="form-error" role="alert">{params.error}</p> : null}
 
         {params.saved === "recalculate" ? <p className="save-ok">Semaforos recalculados con implicacion, cursos y calendario.</p> : null}
         {params.error === "recalculate" ? <p className="form-error">No se pudieron recalcular los semaforos.</p> : null}
@@ -232,10 +235,12 @@ export default async function ProximosExamenesPage({
           <button type="submit"><Search aria-hidden="true" size={16} /> Filtrar</button>
         </form>
 
+        <ApproveExamCall key={`${callFilter.value}:${params.q ?? ""}:${params.class ?? ""}:${view}:${normalizedSemaphore}:${params.approved ?? ""}`} callDate={callFilter.callDate} minDate={new Date(Date.parse(madridCallToday() + "T12:00:00Z") + 86400000).toISOString().slice(0, 10)}>
         <section className="table-wrap">
           <table>
             <thead>
               <tr>
+                <th>Seleccionar</th>
                 <th>Kenshi</th>
                 <th>ID SKBC</th>
                 <th>ID IKA</th>
@@ -253,6 +258,7 @@ export default async function ProximosExamenesPage({
                 const candidate = candidateByMember.get(item.id);
                 return (
                   <tr key={item.legacy_id ?? item.display_name}>
+                    <td data-label="Seleccionar"><input type="checkbox" name="memberIds" value={item.id} aria-label={`Aprobar convocatoria de ${item.display_name}`} disabled={!callFilter.callDate || candidate?.feasibility === "impossible" || !(candidate?.candidate || candidate?.preparationCandidate)} style={{ width: 24, height: 24 }} /></td>
                     <td data-label="Kenshi">
                       {item.legacy_id ? <a className="text-link" href={`/kenshis/${item.legacy_id}`}>{item.display_name}</a> : <strong>{item.display_name}</strong>}
                     </td>
@@ -273,12 +279,13 @@ export default async function ProximosExamenesPage({
                 );
               }) : (
                 <tr>
-                  <td colSpan={9} className="muted">No hay kenshis activos con esos filtros.</td>
+                  <td colSpan={10} className="muted">No hay kenshis activos con esos filtros.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </section>
+        </ApproveExamCall>
       </main>
     </div>
   );

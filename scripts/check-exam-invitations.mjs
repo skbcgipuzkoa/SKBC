@@ -196,6 +196,7 @@ for (const name of [
   "listExamInvitationResponses",
   "loadExamInvitationCandidates",
   "createExamInvitationDraft",
+  "approveExamCallFromPlanning",
   "sendExamInvitationBatch",
   "updateExamInvitationEvent",
   "approveExamInvitationBatch",
@@ -237,6 +238,13 @@ await assert.rejects(
   () => api.createExamInvitationDraft({ ...input, callKey: "2099-12-02" }),
   /selección/,
 );
+const originalEmail = candidate.email;
+candidate.email = null;
+await assert.rejects(() => api.createExamInvitationDraft(input), /email/);
+await api.createExamInvitationDraft(input, { fichaOnly: true });
+assert.equal(rpcCalls.at(-1).args.p_rows[0].snapshot.email, "");
+assert.equal(sends, 0, "Ficha authorisation must not send mail");
+candidate.email = originalEmail;
 await api.createExamInvitationDraft(input);
 let drafted = rpcCalls.at(-1).args.p_rows[0];
 assert.match(drafted.snapshot.reason, /refuerzo/);
@@ -545,3 +553,20 @@ assert.equal(
   ),
   false,
 );
+
+// Planning uses the chosen actual date and explicit scoped approval without email.
+outlooks = [{ ...candidate, currentGrade: rows[0].snapshot.currentGrade, targetGrade: rows[0].snapshot.targetGrade, memberClass: rows[0].snapshot.memberClass }];
+actualOverride = null;
+const planningSends = sends;
+const planningStart = rpcCalls.length;
+assert.equal(await api.approveExamCallFromPlanning(input), "batch");
+assert.deepEqual(rpcCalls.slice(planningStart).map(x => x.name), ["replace_and_approve_exam_invitation_drafts"]);
+assert.equal(rpcCalls[planningStart].args.p_rows[0].snapshot.examDate, input.examDate);
+assert.equal(rpcCalls[planningStart].args.p_rows[0].snapshot.callKey, input.callKey);
+assert.equal(rpcCalls[planningStart].args.p_event_dates.event, input.examDate);
+assert.equal(sends, planningSends);
+actualOverride = { ...outlooks[0], callDate: null };
+const beforeRejectedPlanning = rpcCalls.length;
+await assert.rejects(() => api.approveExamCallFromPlanning(input), /tiempo mínimo/);
+assert.equal(rpcCalls.length, beforeRejectedPlanning, "Invalid actual date cannot create or approve");
+console.log("Direct planning approval reuses actual-date validation and scoped authorisation; no SMTP.");
