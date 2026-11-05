@@ -1,4 +1,3 @@
-import { loadExamCycleAttributions, withExamCycleAttribution } from "@/lib/exam-cycle-attribution";
 import { resolveExamEligibilityTime } from "@/lib/exam-eligibility-time";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
@@ -13,7 +12,6 @@ type MemberRow = {
   grade: string | null;
   joined_on: string | null;
   last_exam_on: string | null;
-  last_exam_cycle_on?: string | null;
 };
 
 type AttendanceRow = {
@@ -78,8 +76,7 @@ export async function recalculateMemberExamStatus(memberId: string) {
 
   if (error || !member) throw new Error("Kenshi no encontrado para recalcular examen.");
 
-  const attributions = await loadExamCycleAttributions([member.id]);
-  const status = await calculateExamStatus(withExamCycleAttribution(member, attributions));
+  const status = await calculateExamStatus(member);
   const { error: updateError } = await supabase
     .from("members")
     .update({

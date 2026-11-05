@@ -1,6 +1,3 @@
-import { loadExamOutlooks } from "@/lib/exam-outlook-data";
-import { ExamOutlookPanel } from "@/app/components/exam-outlook-panel";
-import type { ExamOutlook } from "@/lib/exam-outlook";
 import { BirthdayCelebration } from "@/components/birthday-celebration";
 import { groupTechnicalProgress } from "@/lib/technical-progress-display";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
@@ -10,8 +7,10 @@ import { unstable_noStore as noStore } from "next/cache";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { buildAutomaticChildNotices } from "@/lib/child-notices";
+import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
 import { driveImageUrl } from "@/lib/drive";
 import { activeCalendarDaysBetween } from "@/lib/activity-calendar";
+import { AdultExamStatusPanel } from "@/app/ficha/[token]/AdultExamStatusPanel";
 import { FichaAccessTracker } from "@/app/ficha/[token]/FichaAccessTracker";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
 import { hasInternalAccess } from "@/lib/auth";
@@ -298,7 +297,6 @@ export default async function PublicFichaPage({
 
   if (error || !member) notFound();
   if (member.status !== "active") return <InactiveFichaNotice />;
-  const examOutlook = (await loadExamOutlooks({ memberIds: [member.id] })).get(member.id);
 
   const { data: technicalAreaLink } = await supabase
     .from("technical_area_links")
@@ -390,7 +388,7 @@ export default async function PublicFichaPage({
       <>
         {!isInternalAccess ? <FichaAccessTracker token={token} /> : null}
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-        <KidsFicha examOutlook={examOutlook} member={member} attendance={attendance} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
+        <KidsFicha member={member} attendance={attendance} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
     );
   }
@@ -484,13 +482,12 @@ export default async function PublicFichaPage({
     <>
       {!isInternalAccess ? <FichaAccessTracker token={token} /> : null}
       <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-      <AdultFicha examOutlook={examOutlook} member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} fichaToken={token} />
+      <AdultFicha member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} fichaToken={token} />
     </>
   );
 }
 
 function AdultFicha({
-  examOutlook,
   member,
   attendance,
   exams,
@@ -508,7 +505,6 @@ function AdultFicha({
   fichaUrl,
   fichaToken
 }: {
-  examOutlook?: ExamOutlook;
   member: Member;
   attendance: Attendance[];
   exams: Exam[];
@@ -530,6 +526,22 @@ function AdultFicha({
   const nacionales = courses.filter((course) => course.kind === "national");
   const internacionales = courses.filter((course) => course.kind === "international");
   const taikai = courses.filter((course) => course.kind === "taikai");
+  const recentAttendance = recentAttendanceCounts(attendance);
+  const examPanel = buildAdultExamStatusPanel({
+    semaphore: member.semaphore,
+    nextExamOn: member.next_exam_on,
+    cycleStartOn: member.last_exam_on ?? member.joined_on,
+    examNotice: member.exam_notice,
+    attendanceCount: member.attendance_count,
+    minimumAttendance: member.minimum_attendance,
+    totalCycleSessions: member.total_cycle_sessions,
+    fundamentalRepetitions: technicalProgress.details
+      .filter((item) => item.category === "GOHO" || item.category === "JUHO")
+      .map((item) => item.repetitions),
+    progressRepetitionGoal: REPETITION_GOAL,
+    recentAttendance60: recentAttendance.total60,
+    recentAttendance21: recentAttendance.total21
+  });
 
   return (
     <main className="legacy-ficha adult-ficha">
@@ -537,7 +549,7 @@ function AdultFicha({
       <AdminBackLink href={adminBackUrl} />
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="FICHA PRO · SKBC GIPUZKOA" />
 
-      <ExamOutlookPanel outlook={examOutlook} />
+      <AdultExamStatusPanel panel={examPanel} />
 
       <section className="ficha-actions">
         <a href={`/alumno/area-tecnica/${encodeURIComponent(fichaToken)}`} target="_blank"><NotebookTabs aria-hidden="true" size={18} />AREA TECNICA PERSONAL<ExternalLink aria-hidden="true" size={15} /></a>
@@ -769,7 +781,6 @@ function AdultFicha({
 }
 
 function KidsFicha({
-  examOutlook,
   member,
   attendance,
   exams,
@@ -783,7 +794,6 @@ function KidsFicha({
   adminBackUrl,
   fichaToken
 }: {
-  examOutlook?: ExamOutlook;
   member: Member;
   attendance: Attendance[];
   exams: Exam[];
@@ -811,7 +821,6 @@ function KidsFicha({
       <BirthdayCelebration birthDate={member.birth_date} name={member.first_name} active={member.status === "active"} />
       <AdminBackLink href={adminBackUrl} />
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="SKBC Gipuzkoa · Ficha infantil" />
-      <ExamOutlookPanel outlook={examOutlook} />
 
       <section className="kid-badges">
         <KidBadge label="Grado" value={member.grade ?? "-"} tone={kidGradeTone(member.grade)} />
@@ -1290,6 +1299,20 @@ function AdultGradeBadge({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </span>
   );
+}
+
+function recentAttendanceCounts(attendance: Attendance[]) {
+  const today = startOfDay(new Date());
+  const uniqueDates = new Set(attendance.map((item) => item.attended_on?.slice(0, 10)).filter(Boolean));
+  const dates = Array.from(uniqueDates)
+    .map((value) => parseDate(value))
+    .filter((date): date is Date => Boolean(date));
+
+  const differences = dates.map((date) => daysBetweenDates(date, today));
+  return {
+    total60: differences.filter((days) => days >= 0 && days <= 60).length,
+    total21: differences.filter((days) => days >= 0 && days <= 21).length
+  };
 }
 
 function BehaviorField({ label, value }: { label: string; value: string | null | undefined }) {
