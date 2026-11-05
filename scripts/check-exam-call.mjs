@@ -7,7 +7,7 @@ assert.equal(madridCallToday(new Date('2026-06-01T22:30:00Z')),'2026-06-02');
 for(const date of ['2027-01-20','2027-02-28']) {
   assert.equal(attributeExamCall(date,{isRetake:false}).callMonth,'2026-12');
   assert.equal(attributeExamCall(date,{isRetake:true}).callMonth,date.slice(0,7));
-  assert.equal(attributeExamCall(date).callMonth,date.slice(0,7));
+  assert.equal(attributeExamCall(date).callMonth,'2026-12');
   assert.equal(attributeExamCall(date,{isRetake:false}).actualDate,date);
 }
 assert.equal(attributeExamCall('2025-02-29',{isRetake:false}),null);

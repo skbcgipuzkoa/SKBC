@@ -13,13 +13,13 @@ export function madridCallToday(now = new Date()): string {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
-/** Unknown historical provenance is preserved; only an explicit normal exam is reattributed. */
+/** Club rule: January/February belong to the previous December unless marked as a retake. */
 export function attributeExamCall(actualDate: string, options: { isRetake?: boolean } = {}) {
   if (!isIsoDate(actualDate)) return null;
   const year = Number(actualDate.slice(0, 4));
   const month = Number(actualDate.slice(5, 7));
-  if (options.isRetake === false && month <= 2 && year === 1) return null;
-  const callMonth = options.isRetake === false && month <= 2
+  if (options.isRetake !== true && month <= 2 && year === 1) return null;
+  const callMonth = options.isRetake !== true && month <= 2
     ? `${String(year - 1).padStart(4, "0")}-12`
     : actualDate.slice(0, 7);
   return { actualDate, callMonth, isRetake: options.isRetake };

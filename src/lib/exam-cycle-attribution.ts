@@ -20,7 +20,12 @@ export async function loadExamCycleAttributions(memberIds: string[]) {
 
 export function withExamCycleAttribution<T extends { id: string; last_exam_on: string | null }>(member: T, rows: Map<string, ExamCycleAttribution>) {
   const row = rows.get(`${member.id}:${member.last_exam_on}`);
-  return { ...member, last_exam_cycle_on: row?.reference_on ?? null };
+  // Apply the club's winter rule to imported history too. Explicit records (including
+  // retakes) take precedence; never rewrite the actual exam date or academic status.
+  const call = member.last_exam_on ? attributeExamCall(member.last_exam_on) : null;
+  const winterReference = call && call.callMonth !== member.last_exam_on?.slice(0, 7)
+    ? `${call.callMonth}-01` : null;
+  return { ...member, last_exam_cycle_on: row?.reference_on ?? winterReference };
 }
 
 /** Explicit provenance only. A reference date is never the historical exam date. */

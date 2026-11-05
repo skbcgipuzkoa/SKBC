@@ -29,11 +29,22 @@ assert.equal(writes[0].reference_on,'2025-12-01');assert.equal(writes[1].referen
 assert(writes.every(row=>row.actual_exam_on==='2026-02-10'));
 const mapped=new Map([['5:2026-02-10',writes[0]]]);
 assert.equal(module.exports.withExamCycleAttribution(member,mapped).last_exam_cycle_on,'2025-12-01');
-assert.equal(module.exports.withExamCycleAttribution({...member,last_exam_on:'2026-02-11'},mapped).last_exam_cycle_on,null);
+assert.equal(module.exports.withExamCycleAttribution({...member,last_exam_on:'2026-02-11'},mapped).last_exam_cycle_on,'2025-12-01');
+for (const actual of ['2026-01-21','2026-02-10']) {
+ const ekaitz=module.exports.withExamCycleAttribution({...member,id:'6',last_exam_on:actual},new Map());
+ assert.equal(ekaitz.last_exam_on,actual,'Keep the actual exam date');
+ assert.equal(ekaitz.last_exam_cycle_on,'2025-12-01','Club winter rule applies without individual attribution');
+ assert.equal(evaluateExamOutlook({...base,member:ekaitz}).callDate,'2026-12-05');
+ const retake=module.exports.withExamCycleAttribution({...member,id:'6',last_exam_on:actual},new Map([[`6:${actual}`,{...writes[1],reference_on:actual,is_retake:true}]]));
+ assert.equal(retake.last_exam_cycle_on,actual,'Explicit retake must retain its actual cycle');
+ assert.equal(evaluateExamOutlook({...base,member:retake}).callDate,'2027-06-26');
+}
+assert.equal(module.exports.withExamCycleAttribution({...member,last_exam_on:null},new Map()).last_exam_cycle_on,null);
+assert.equal(module.exports.withExamCycleAttribution({...member,last_exam_on:'2026-03-10'},new Map()).last_exam_cycle_on,null);
 const migration=fs.readFileSync('supabase/migrations/20261105000200_exam_cycle_attribution.sql','utf8');
 assert.match(migration,/legacy_id in \('5', '27'\) and last_exam_on = date '2026-02-10'/);
 assert.doesNotMatch(migration,/update\s+(public\.)?members|\bdrop\b/i);
-console.log('Cycle attribution: confirmed two normal exams target December 2026; retakes/unknown retain June 2027; actual dates and first-exam rule preserved');
+console.log('Cycle attribution: all January/February history targets previous December by default; explicit retakes retain actual cycles; actual dates and first-exam rule preserved');
 // Real asynchronous attribution provider: scoped chunks and exact actual-date keys.
 const scopes=[];let chosen=[];
 const readDb={from:()=>({select(){return this},in(column,ids){assert.equal(column,'member_id');chosen=ids;scopes.push(ids);return this},order(){return this},range(){return this},returns:async()=>({data:chosen.map(id=>({member_id:id,actual_exam_on:'2026-02-10',call_month:'2025-12',is_retake:false,reference_on:'2025-12-01',source:'synthetic'})),error:null})})};
