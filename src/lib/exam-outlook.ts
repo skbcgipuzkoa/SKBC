@@ -41,6 +41,7 @@ export type OutlookClosure = {
   applies_to: string;
 };
 export type ExamOutlook = {
+  deferredFromCall?: string | null;
   memberId: string;
   name: string;
   legacyId: string | null;

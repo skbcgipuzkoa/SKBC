@@ -33,6 +33,7 @@ function formatRow(row: ExamOutlook) {
   return [
     `• <b>${escape(row.name)}</b> (${row.memberClass === "kids" ? "niños" : "adultos"} · objetivo ${escape(row.targetGrade || "por revisar")})`,
     row.callDate ? `  Convocatoria orientativa: ${formatExamCallMonth(row.callDate)} · día pendiente de confirmar.` : "  Sin convocatoria futura calculable.",
+    row.deferredFromCall ? `  Aplazado desde ${formatExamCallMonth(row.deferredFromCall)}; pendiente de nueva convocatoria del profesor.` : "",
     row.feasibility === "impossible" ? `  No es candidato a esta convocatoria con las clases previstas: ${escape((row.impossibilityReasons ?? []).join("; "))}.` : "",
     row.feasibility !== "impossible" && row.preparationCandidate && row.planningReasons?.length ? `  Para preparar: ${escape(row.planningReasons.join("; "))}.` : "",
     row.feasibility !== "impossible" && row.classification === "notyet" ? "  Previsión: no se prevé completar los requisitos al ritmo actual; necesita refuerzo." : row.feasibility !== "impossible" && row.classification === "unknown" ? "  Previsión: faltan datos para asegurar si llegará." : "",

@@ -45,7 +45,8 @@ const batch = { id: "batch", call_key: "2099-12-01", exam_date: "2099-12-20" };
 function query(table) {
   let op = "read",
     patch = {},
-    filters = {}, selectedColumns = "";
+    filters = {},
+    selectedColumns = "";
   const q = {
     select(columns = "") {
       selectedColumns = columns;
@@ -132,7 +133,15 @@ function query(table) {
         result = { data: null, error: new Error("audit unavailable") };
       else
         result = {
-          data: table === "exam_invitations" ? (!planningListVisible && selectedColumns.startsWith("id,member_id,exam_event_id,response,snapshot,revoked_at,teacher_approved_at,") ? [] : rows) : [],
+          data:
+            table === "exam_invitations"
+              ? !planningListVisible &&
+                selectedColumns.startsWith(
+                  "id,member_id,exam_event_id,response,snapshot,revoked_at,teacher_approved_at,",
+                )
+                ? []
+                : rows
+              : [],
           error: null,
         };
       return Promise.resolve(result).then(resolve, reject);
@@ -695,8 +704,15 @@ assert.equal(plannedList[0].dateConfirmed, false);
 assert.equal(plannedList[0].examDate, null);
 assert.equal(plannedList[0].acceptedCount, 1);
 const beforeDuplicatePlanning = rpcCalls.length;
-await assert.rejects(() => api.approveExamCallFromPlanning(input), /ya.*convocad/i);
-assert.equal(rpcCalls.length, beforeDuplicatePlanning, "Do not replace an existing approval or its response");
+await assert.rejects(
+  () => api.approveExamCallFromPlanning(input),
+  /ya.*convocad/i,
+);
+assert.equal(
+  rpcCalls.length,
+  beforeDuplicatePlanning,
+  "Do not replace an existing approval or its response",
+);
 planningListVisible = false;
 eventConfirmed = true;
 console.log(
@@ -710,3 +726,38 @@ await assert.rejects(
 );
 await assert.rejects(() => api.listPlanningExamApprovals(), /Acceso interno/);
 admin = true;
+// A deferred member no longer participates in the old call's math or SMTP.
+rows[0].response = "deferred";
+actualOverride = { ...outlooks[0], callDate: null, feasibility: "impossible" };
+const deferredConfirmation = rpcCalls.length;
+await api.confirmPlanningExamDate({ eventId: "event", examDate: "2099-12-15" });
+assert.equal(rpcCalls[deferredConfirmation].name, "confirm_planning_exam_date");
+const noOldMail = sends;
+await api.sendExamInvitationBatch("batch");
+assert.equal(sends, noOldMail);
+actualOverride = null;
+const deferredOld = { ...rows[0] };
+const nextApproval = {
+  ...rows[0],
+  id: "next-invite",
+  response: null,
+  teacher_approved_exam_date: "2100-06-15",
+  exam_events: {
+    ...rows[0].exam_events,
+    date_confirmed: true,
+    exam_date: "2100-06-15",
+    call_month: "2100-06",
+  },
+};
+rows = [deferredOld, nextApproval];
+assert.equal(
+  (await api.getStudentExamInvitation("member")).invitationId,
+  "next-invite",
+  "A valid future approval wins over older deferred history",
+);
+rows = [deferredOld];
+assert.equal(
+  (await api.getStudentExamInvitation("member")).invitationId,
+  "invite",
+  "Keep own deferred history when no newer approval exists",
+);

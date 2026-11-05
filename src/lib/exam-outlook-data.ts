@@ -1,4 +1,8 @@
 import {
+  findDeferredExamCall,
+  type DeferredExamInvitationRow,
+} from "@/lib/exam-call-deferral";
+import {
   loadExamCycleAttributions,
   withExamCycleAttribution,
 } from "@/lib/exam-cycle-attribution";
@@ -67,6 +71,7 @@ export async function loadExamOutlooks(
     calls,
     closures,
     courses,
+    deferrals,
   ] = await Promise.all([
     loadScoped<{ member_id: string; attended_on: string }>((ids, f, t) =>
       db
@@ -139,6 +144,19 @@ export async function loadExamOutlooks(
         .range(f, t)
         .returns<Course[]>(),
     ),
+    loadScoped<DeferredExamInvitationRow>((ids, f, t) =>
+      db
+        .from("exam_invitations")
+        .select(
+          "id,member_id,call_key,response,revoked_at,responded_at,snapshot",
+        )
+        .in("member_id", ids)
+        .eq("response", "deferred")
+        .is("revoked_at", null)
+        .order("id")
+        .range(f, t)
+        .returns<DeferredExamInvitationRow[]>(),
+    ),
   ]);
   const horizonEnd = new Date(
     new Date(today + "T00:00:00Z").getTime() +
@@ -209,32 +227,74 @@ export async function loadExamOutlooks(
               ).length * 2,
             )
           : 0;
-      const outlook = evaluateExamOutlook({
-          member: withExamCycleAttribution(member, cycleAttributions),
-          today,
-          horizonDays: options.horizonDays,
-          attendance: (attendanceByMember.get(member.id) ?? []).map(
-            (r) => r.attended_on,
-          ),
-          history: historyByMember.get(member.id) ?? [],
-          curriculum,
-          requirements,
-          calls: options.examDateOverride
-            ? [options.examDateOverride]
-            : calls.map((c) => examCallMonthEnd(c.call_date) ?? c.call_date),
-          closures,
-          advanceMonths,
-          scheduledTrainingDates: groupClasses
-            .filter((c) => c.status !== "cancelled")
-            .map((c) => c.class_date),
-          cancelledTrainingDates,
-          todayClassClosed: activeToday.length
-            ? activeToday.every((c) => c.closed)
-            : undefined,
-        });
+      const evaluation = {
+        member: withExamCycleAttribution(member, cycleAttributions),
+        today,
+        horizonDays: options.horizonDays,
+        attendance: (attendanceByMember.get(member.id) ?? []).map(
+          (r) => r.attended_on,
+        ),
+        history: historyByMember.get(member.id) ?? [],
+        curriculum,
+        requirements,
+        calls: options.examDateOverride
+          ? [options.examDateOverride]
+          : calls.map((c) => examCallMonthEnd(c.call_date) ?? c.call_date),
+        closures,
+        advanceMonths,
+        scheduledTrainingDates: groupClasses
+          .filter((c) => c.status !== "cancelled")
+          .map((c) => c.class_date),
+        cancelledTrainingDates,
+        todayClassClosed: activeToday.length
+          ? activeToday.every((c) => c.closed)
+          : undefined,
+      };
+      let outlook = evaluateExamOutlook(evaluation);
+      const deferredFromCall = findDeferredExamCall(
+        member,
+        outlook.targetGrade,
+        deferrals,
+      );
+      if (deferredFromCall) {
+        const laterCalls = evaluation.calls.filter(
+          (date) => date.slice(0, 7) > deferredFromCall.slice(0, 7),
+        );
+        outlook = evaluateExamOutlook({ ...evaluation, calls: laterCalls });
+        // Only an explicit deferral can extend planning to its selected configured follow-up.
+        // Eligibility chooses the call first; unrelated later calls never widen this bound.
+        if (outlook.callDate) {
+          const daysToFollowUp = Math.ceil(
+            (Date.parse(outlook.callDate + "T00:00:00Z") -
+              Date.parse(today + "T00:00:00Z")) /
+              86400000,
+          );
+          if (daysToFollowUp > (options.horizonDays ?? 365)) {
+            outlook = evaluateExamOutlook({
+              ...evaluation,
+              calls: laterCalls,
+              horizonDays: daysToFollowUp,
+            });
+          }
+        }
+        outlook.deferredFromCall = deferredFromCall;
+        outlook.planningReasons.push(
+          `Aplazado desde ${deferredFromCall.slice(0, 7)}`,
+        );
+        if (!outlook.callDate)
+          outlook.uncertainty.push(
+            "Sin convocatoria configurada posterior al aplazamiento",
+          );
+        if (outlook.callDate && outlook.feasibility === "possible") {
+          outlook.preparationCandidate = true;
+          outlook.candidate = true;
+        }
+      }
       // Keep the stable configured call key for filters; end-of-month is only a forecast boundary.
       if (!options.examDateOverride && outlook.callDate) {
-        outlook.callDate = calls.find((c) => examCallMonthEnd(c.call_date) === outlook.callDate)?.call_date ?? outlook.callDate;
+        outlook.callDate =
+          calls.find((c) => examCallMonthEnd(c.call_date) === outlook.callDate)
+            ?.call_date ?? outlook.callDate;
       }
       return [member.id, outlook];
     }),

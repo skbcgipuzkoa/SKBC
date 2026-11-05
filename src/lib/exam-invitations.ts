@@ -350,8 +350,18 @@ export async function approveExamCallFromPlanning(input: {
   await requireInvitationAdmin();
   if (!validDate(input.callKey)) throw new Error("Convocatoria inválida.");
   const existing = await listPlanningExamApprovals();
-  if (existing.some((event) => event.callMonth === input.callKey.slice(0, 7) && event.participants.some((person) => input.memberIds.includes(person.memberId))))
-    throw new Error("Algún alumno ya está convocado para este mes. Consulta sus respuestas o confirma el día en la convocatoria existente.");
+  if (
+    existing.some(
+      (event) =>
+        event.callMonth === input.callKey.slice(0, 7) &&
+        event.participants.some((person) =>
+          input.memberIds.includes(person.memberId),
+        ),
+    )
+  )
+    throw new Error(
+      "Algún alumno ya está convocado para este mes. Consulta sus respuestas o confirma el día en la convocatoria existente.",
+    );
   const dateConfirmed = Boolean(input.examDate.trim());
   const callMonth = input.callKey.slice(0, 7);
   const examDate = dateConfirmed
@@ -399,7 +409,9 @@ export async function sendExamInvitationBatch(
     (events.data ?? []).map((event) => [event.id, event.exam_date]),
   );
   const sendable = batch.invitations.filter(
-    (x) => x.delivery_status === (options.retryFailed ? "failed" : "draft"),
+    (x) =>
+      x.delivery_status === (options.retryFailed ? "failed" : "draft") &&
+      x.response !== "deferred",
   );
   const actualOutlooks = sendable.length
     ? await loadExamOutlooks({
@@ -461,7 +473,10 @@ export async function sendExamInvitationBatch(
     failed = 0,
     unconfirmed = 0;
   for (const inv of batch.invitations) {
-    if (inv.delivery_status !== (options.retryFailed ? "failed" : "draft"))
+    if (
+      inv.response === "deferred" ||
+      inv.delivery_status !== (options.retryFailed ? "failed" : "draft")
+    )
       continue;
     const member = candidates.find((x) => x.memberId === inv.member_id);
     if (
@@ -671,9 +686,11 @@ export async function getStudentExamInvitation(
     .eq("member_id", memberId)
     .order("teacher_approved_exam_date", { ascending: true });
   if (error) throw error;
-  const inv = (data as ApprovalScope[] | null)?.find(
-    (row) => row.member_id === memberId && isExamInvitationApprovalValid(row),
-  );
+  const valid =
+    (data as ApprovalScope[] | null)?.filter(
+      (row) => row.member_id === memberId && isExamInvitationApprovalValid(row),
+    ) ?? [];
+  const inv = valid.find((row) => row.response !== "deferred") ?? valid[0];
   if (!inv) return null;
   return {
     invitationId: inv.id,
@@ -850,7 +867,13 @@ export async function confirmPlanningExamDate(input: {
   const rows = (invitations.data ?? []) as ExamInvitation[];
   if (!rows.length) throw new Error("Convocatoria sin participantes.");
   const actual = await loadExamOutlooks({
-    memberIds: [...new Set(rows.map((inv) => inv.member_id))],
+    memberIds: [
+      ...new Set(
+        rows
+          .filter((inv) => inv.response !== "deferred")
+          .map((inv) => inv.member_id),
+      ),
+    ],
     examDateOverride: input.examDate,
   });
   const updates: Record<
@@ -858,6 +881,19 @@ export async function confirmPlanningExamDate(input: {
     { reason: string; deficits: string[]; body: string }
   > = {};
   for (const inv of rows) {
+    if (inv.response === "deferred") {
+      const reason = inv.snapshot.reason,
+        deficits = inv.snapshot.deficits;
+      updates[inv.id] = {
+        reason,
+        deficits,
+        body: invitationBody(
+          { ...inv.snapshot, examDate: input.examDate, dateConfirmed: true },
+          inv.exam_fee,
+        ),
+      };
+      continue;
+    }
     const outlook = actual.get(inv.member_id);
     if (
       !outlook?.callDate ||

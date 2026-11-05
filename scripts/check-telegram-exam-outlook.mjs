@@ -22,6 +22,9 @@ const impossible=formatTelegramExamOutlooks([{...row,feasibility:'impossible',im
 assert.match(impossible,/No llegan con las clases previstas \(1\)/);
 assert.match(impossible,/ritmo actual \(0\)/);assert.match(impossible,/necesitan refuerzo o revisión \(0\)/);
 assert.match(impossible,/Faltan 12 asistencias y quedan 8 clases/);
+const deferredMessage = formatTelegramExamOutlooks([{...row, callDate:'2027-06-26', deferredFromCall:'2026-12-05'}]);
+assert.match(deferredMessage,/Aplazado desde Diciembre de 2026/);
+assert.match(deferredMessage,/pendiente de nueva convocatoria del profesor/);
 assert.doesNotMatch(impossible,/necesita refuerzo\./);
 
 // Exercise the actual dispatch function: every scheduled report includes the same new outlook.
