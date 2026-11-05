@@ -26,6 +26,20 @@ assert.doesNotMatch(impossible,/necesita refuerzo\./);
 
 // Exercise the actual dispatch function: every scheduled report includes the same new outlook.
 const source=readFileSync('src/lib/telegram-notifications.ts','utf8');
+const nextStart=source.indexOf('async function loadNextTelegramExamOutlooks(');
+assert.ok(nextStart>=0,'Telegram must scope every digest to the next configured club call');
+const nextEnd=source.indexOf('async function buildDailyDigest(',nextStart);
+const nextMod={exports:{}};
+let configuredCalls=[{call_date:'2026-12-05'},{call_date:'2027-06-26'}];
+vm.runInNewContext(ts.transpileModule(source.slice(nextStart,nextEnd)+'\nexports.loadNext = loadNextTelegramExamOutlooks;', {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{
+ exports:nextMod.exports,
+ loadExamOutlooks:async()=>new Map([['next',row],['later',{...row,memberId:'later',callDate:'2027-06-26'}],['missing',{...row,memberId:'missing',callDate:null}]]),
+ getUpcomingExamCalls:async()=>configuredCalls,
+});
+assert.deepEqual(Array.from(await nextMod.exports.loadNext()).map(x=>x.memberId),['1']);
+configuredCalls=[];
+assert.equal((await nextMod.exports.loadNext()).length,0,'Do not invent a call when none is configured');
+assert.equal((source.match(/examOutlooks: await loadNextTelegramExamOutlooks\(\)/g)||[]).length,2,'Both daily and all period reports use next-call data');
 const start=source.indexOf('export async function buildNotificationMessage(');
 const end=source.indexOf('export async function updateTelegramNotificationSetting(',start);
 const compiled=ts.transpileModule(source.slice(start,end),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;

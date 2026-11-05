@@ -1,4 +1,5 @@
 import { loadExamOutlooks } from "@/lib/exam-outlook-data";
+import { getUpcomingExamCalls } from "@/lib/exam-calls-data";
 import { formatTelegramExamOutlooks } from "@/lib/telegram-exam-outlook";
 import { summarizePeriod } from "@/lib/telegram-period-stats";
 import { getPendingFamilyBillingContexts } from "@/lib/family-units";
@@ -293,6 +294,12 @@ export async function updateTelegramNotificationSetting(
   if (error) throw error;
 }
 
+async function loadNextTelegramExamOutlooks() {
+  const [outlooks, calls] = await Promise.all([loadExamOutlooks(), getUpcomingExamCalls()]);
+  const nextDate = calls[0]?.call_date;
+  return nextDate ? [...outlooks.values()].filter((row) => row.callDate === nextDate) : [];
+}
+
 async function buildDailyDigest() {
   const supabase = createAdminClient();
   const [
@@ -398,7 +405,7 @@ async function buildDailyDigest() {
     todayClasses: todayClassesResult.data ?? [],
     birthdayAlerts: birthdayAlerts(members),
     freeTrialAlerts: await freeTrialAlerts(),
-    examOutlooks: [...(await loadExamOutlooks()).values()]
+    examOutlooks: await loadNextTelegramExamOutlooks()
   };
 }
 
@@ -538,7 +545,7 @@ async function buildPeriodStats(period: { start: string; end: string }) {
       )
       .slice(0, 6),
     yearGrowth,
-    examOutlooks: [...(await loadExamOutlooks()).values()],
+    examOutlooks: await loadNextTelegramExamOutlooks(),
   };
 }
 
