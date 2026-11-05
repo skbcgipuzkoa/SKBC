@@ -349,6 +349,9 @@ export async function approveExamCallFromPlanning(input: {
 }) {
   await requireInvitationAdmin();
   if (!validDate(input.callKey)) throw new Error("Convocatoria inválida.");
+  const existing = await listPlanningExamApprovals();
+  if (existing.some((event) => event.callMonth === input.callKey.slice(0, 7) && event.participants.some((person) => input.memberIds.includes(person.memberId))))
+    throw new Error("Algún alumno ya está convocado para este mes. Consulta sus respuestas o confirma el día en la convocatoria existente.");
   const dateConfirmed = Boolean(input.examDate.trim());
   const callMonth = input.callKey.slice(0, 7);
   const examDate = dateConfirmed

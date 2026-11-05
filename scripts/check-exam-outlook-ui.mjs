@@ -61,12 +61,13 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/app/proximos-examenes
 const approvedModule = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync("src/app/proximos-examenes/PlanningApprovals.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, { exports: approvedModule.exports, require: id => id === "./actions" ? { confirmPlanningExamDateAction: async () => {} } : id === "@/lib/exam-call" ? examCall : require(id) });
 const query = { select() { return this; }, order() { return this; }, eq() { return this; } };
+let existingApprovals = [];
 vm.runInNewContext(compiledPage, { module: pageModule, exports: pageModule.exports, URLSearchParams, require: (id) => {
  if (id === "@/lib/exam-calls-data") return { getUpcomingExamCalls: async () => [{ id: "call", call_date: "2026-12-05", title: "Diciembre" }] };
  if (id === "@/lib/exam-call") return { ...examCall, madridCallToday: () => "2026-11-05", resolveCallFilter: () => ({ all: false, callDate: "2026-12-05", value: "next" }) };
  if (id === "./ApproveExamCall") return planningModule.exports;
  if (id === "./PlanningApprovals") return approvedModule.exports;
- if (id === "@/lib/exam-invitations") return { listPlanningExamApprovals: async () => [] };
+ if (id === "@/lib/exam-invitations") return { listPlanningExamApprovals: async () => existingApprovals };
  if (id === "@/lib/load-all-pages") return { loadAllPages: async () => records };
  if (id === "@/lib/exam-outlook-data") return { loadExamOutlooks: async () => pageOutlooks };
  if (id === "@/app/components/exam-outlook-panel") return { ExamOutlookPanel };
@@ -112,6 +113,18 @@ const allPage = await pageHtml({ view: "all" });
 assert.ok(allPage.includes('Mostrando</h2><div class="metric">3</div>'));
 for (const record of records) assert.ok(allPage.includes(record.display_name));
 console.log("Candidate default / impossible / followup / all page SSR regressions passed");
+
+existingApprovals = [{ eventId:'existing',callMonth:'2026-12',dateConfirmed:false,examDate:null,participants:[{invitationId:'inv',memberId:'0',name:'Candidate Alpha',response:'accepted'}],acceptedCount:1,deferredCount:0,pendingCount:0 }];
+const alreadyCalledPage = await pageHtml();
+assert.ok(alreadyCalledPage.includes('Mostrando</h2><div class="metric">0</div>'), 'Already called students leave the default pending list');
+assert.ok(alreadyCalledPage.includes('Ver convocados y respuestas'));
+assert.ok(!alreadyCalledPage.includes('name="memberIds" value="0"'), 'Cannot select an already called student again');
+const allWithCalled = await pageHtml({view:'all'});
+assert.match(allWithCalled, /<input(?=[^>]*name="memberIds")(?=[^>]*value="0")(?=[^>]*disabled="")[^>]*>/);
+assert.ok(allWithCalled.includes('Ya convocado · inscrito'));
+existingApprovals[0].callMonth = '2027-06';
+assert.ok((await pageHtml()).includes('name="memberIds" value="0"'), 'An approval for another month does not hide the current candidate');
+existingApprovals = [];
 
 assert.ok((await pageHtml({ view: "impossible", semaforo: "POSIBLES" })).includes("Impossible Beta"));
 

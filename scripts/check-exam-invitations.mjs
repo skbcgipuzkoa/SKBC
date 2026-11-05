@@ -24,6 +24,7 @@ let admin = true,
   eventDate = "2099-12-20",
   eventConfirmed = true,
   overrideCalls = [];
+let planningListVisible = false;
 const candidate = {
   feasibility: "possible",
   impossibilityReasons: [],
@@ -44,9 +45,10 @@ const batch = { id: "batch", call_key: "2099-12-01", exam_date: "2099-12-20" };
 function query(table) {
   let op = "read",
     patch = {},
-    filters = {};
+    filters = {}, selectedColumns = "";
   const q = {
-    select() {
+    select(columns = "") {
+      selectedColumns = columns;
       return q;
     },
     order() {
@@ -130,7 +132,7 @@ function query(table) {
         result = { data: null, error: new Error("audit unavailable") };
       else
         result = {
-          data: table === "exam_invitations" ? rows : [],
+          data: table === "exam_invitations" ? (!planningListVisible && selectedColumns.startsWith("id,member_id,exam_event_id,response,snapshot,revoked_at,teacher_approved_at,") ? [] : rows) : [],
           error: null,
         };
       return Promise.resolve(result).then(resolve, reject);
@@ -687,10 +689,15 @@ rows[0].exam_events = {
 const monthlyDto = await api.getStudentExamInvitation("member");
 assert.equal(monthlyDto.dateConfirmed, false);
 assert.equal(monthlyDto.callMonth, "2099-12");
+planningListVisible = true;
 const plannedList = await api.listPlanningExamApprovals();
 assert.equal(plannedList[0].dateConfirmed, false);
 assert.equal(plannedList[0].examDate, null);
 assert.equal(plannedList[0].acceptedCount, 1);
+const beforeDuplicatePlanning = rpcCalls.length;
+await assert.rejects(() => api.approveExamCallFromPlanning(input), /ya.*convocad/i);
+assert.equal(rpcCalls.length, beforeDuplicatePlanning, "Do not replace an existing approval or its response");
+planningListVisible = false;
 eventConfirmed = true;
 console.log(
   "Month-only planning, hidden cutoff, exact-day feasibility/confirmation and preserved responses checks passed.",

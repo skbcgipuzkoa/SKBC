@@ -64,6 +64,11 @@ export default async function ProximosExamenesPage({
   const minDate = new Date(Date.parse(madridCallToday() + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
   const callFilter = resolveCallFilter(params.call, calls.map((call) => call.call_date));
   const candidateByMember = await loadExamOutlooks({ memberIds: members.map((member) => member.id) });
+  const calledByMemberMonth = new Map(approvals.flatMap((event) => event.participants.map((person) => [`${person.memberId}:${event.callMonth}`, { eventId: event.eventId, response: person.response }] as const)));
+  const existingCall = (id: string) => {
+    const date = candidateByMember.get(id)?.callDate;
+    return date ? calledByMemberMonth.get(`${id}:${date.slice(0, 7)}`) : undefined;
+  };
 
   const normalizedSemaphore = params.semaforo ? normalizeSemaphore(params.semaforo) : "";
   const view = ["impossible", "followup", "all"].includes(params.view ?? "") ? params.view! : "candidates";
@@ -73,7 +78,7 @@ export default async function ProximosExamenesPage({
     if (view === "all") return true;
     if (view === "impossible") return outlook?.feasibility === "impossible";
     if (view === "followup") return !outlook?.candidate && outlook?.feasibility !== "impossible";
-    return Boolean(outlook?.candidate);
+    return Boolean(outlook?.candidate) && !existingCall(id);
   };
   const search = (params.q ?? "").trim().toLowerCase();
   const scoped = members
@@ -95,11 +100,11 @@ export default async function ProximosExamenesPage({
     semaphore,
     total: viewScoped.filter((item) => item.status === "active" && normalizeSemaphore(item.semaphore) === semaphore).length
   }));
-  const candidateTotal = scoped.filter((item) => candidateByMember.get(item.id)?.candidate).length;
+  const candidateTotal = scoped.filter((item) => candidateByMember.get(item.id)?.candidate && !existingCall(item.id)).length;
+  const calledTotal = scoped.filter((item) => existingCall(item.id)).length;
   const impossibleTotal = scoped.filter((item) => candidateByMember.get(item.id)?.feasibility === "impossible").length;
   const ready = viewScoped.filter((item) => candidateByMember.get(item.id)?.currentReady).length;
   const blocked = ["ROJO", "GRIS"].reduce((sum, semaphore) => sum + (counters.find((item) => item.semaphore === semaphore)?.total ?? 0), 0);
-  const upcoming = filtered.filter((item) => candidateByMember.get(item.id)?.callDate).length;
 
   const semaphoreHref = (semaphore: string) => {
     const query = new URLSearchParams({ semaforo: semaphore, call: callFilter.value, view: semaphore === "POSIBLES" ? "candidates" : view });
@@ -125,8 +130,8 @@ export default async function ProximosExamenesPage({
         </div>
         <section className="card" aria-label="Acceso rápido a convocatorias" style={{ marginBottom: 18, border: "2px solid #005bbb", background: "#eef5ff" }}>
           <h2>Gestionar convocatoria · {formatExamCallMonth(callFilter.callDate ?? calls[0]?.call_date)}</h2>
-          <p>Convoca por mes ahora y confirma el día cuando lo tengas definido.</p>
-          <div className="form-actions" style={{ flexWrap: "wrap" }}><a className="button" href="#convocar-alumnos" style={{ background: "#005bbb", color: "white", padding: "14px 20px", borderRadius: 8, fontWeight: 700 }}>Convocar alumnos</a><a className="text-link" href="#convocatorias-aprobadas">Confirmar día y ver inscritos</a></div>
+          <p>{candidateTotal} pendientes de convocar · {calledTotal} ya convocados en esta vista. Confirma el día y consulta sus respuestas sin volver a convocarlos.</p>
+          <div className="form-actions" style={{ flexWrap: "wrap" }}><a className="button" href={candidateTotal ? "#convocar-alumnos" : "#convocatorias-aprobadas"} style={{ background: "#005bbb", color: "white", padding: "14px 20px", borderRadius: 8, fontWeight: 700 }}>{candidateTotal ? "Convocar alumnos" : "Ver convocados y respuestas"}</a><a className="text-link" href="#convocatorias-aprobadas">Confirmar día y ver inscritos</a></div>
         </section>
         {params.approved ? <p className="save-ok" role="status">Convocatoria aprobada{params.examDate ? ` para el ${params.examDate}` : " · día pendiente de confirmar"}. Los alumnos seleccionados ya pueden inscribirse desde su ficha. No se han enviado correos.</p> : null}
         {params.confirmed ? <p className="save-ok" role="status">Día confirmado en las fichas. Se conservan las respuestas e inscripciones.</p> : null}
@@ -148,8 +153,8 @@ export default async function ProximosExamenesPage({
           </article>
           <article className="card">
             <Clock aria-hidden="true" size={19} />
-            <h2>Con convocatoria</h2>
-            <div className="metric">{upcoming}</div>
+            <h2>Pendientes de convocar</h2>
+            <div className="metric">{candidateTotal}</div>
           </article>
           <article className="card">
             <ShieldCheck aria-hidden="true" size={19} />
@@ -198,16 +203,16 @@ export default async function ProximosExamenesPage({
             className="semaphore-card semaphore-posibles"
             href={semaphoreHref("POSIBLES")}
           >
-            <span>POSIBLES CANDIDATOS</span>
+            <span>PENDIENTES DE CONVOCAR</span>
             <strong>{candidateTotal}</strong>
           </a>
         </section>
 
-        <p className="muted">La vista inicial muestra candidatos para preparar, no todas las personas con fecha. <a className="text-link" href={(() => { const query = new URLSearchParams({ call: callFilter.value, view: "impossible" }); if (params.class) query.set("class", params.class); if (params.q) query.set("q", params.q); return "/proximos-examenes?" + query; })()}>No llegan con las clases previstas: {impossibleTotal}</a></p>
+        <p className="muted">La vista inicial muestra candidatos pendientes de convocar. Los ya convocados están en «Confirmar día y ver inscritos». <a className="text-link" href={(() => { const query = new URLSearchParams({ call: callFilter.value, view: "impossible" }); if (params.class) query.set("class", params.class); if (params.q) query.set("q", params.q); return "/proximos-examenes?" + query; })()}>No llegan con las clases previstas: {impossibleTotal}</a></p>
         <form className="filters exam-filters">
           <label>Vista
             <select name="view" defaultValue={view}>
-              <option value="candidates">Candidatos para preparar</option>
+              <option value="candidates">Pendientes de convocar</option>
               <option value="impossible">No llegan con las clases previstas</option>
               <option value="followup">Seguimiento pendiente</option>
               <option value="all">Todos (administracion)</option>
@@ -246,7 +251,7 @@ export default async function ProximosExamenesPage({
         </form>
 
         <PlanningApprovals approvals={approvals} minDate={minDate} />
-        <ApproveExamCall key={`${callFilter.value}:${params.q ?? ""}:${params.class ?? ""}:${view}:${normalizedSemaphore}:${params.approved ?? ""}`} callDate={callFilter.callDate} minDate={minDate}>
+        {view === "candidates" && !filtered.length ? <section id="convocar-alumnos" className="card"><h2>No quedan candidatos pendientes de convocar</h2><p>Consulta los ya convocados para confirmar el día o ver sus respuestas.</p><a className="text-link" href="#convocatorias-aprobadas">Ver convocados y respuestas</a></section> : <ApproveExamCall key={`${callFilter.value}:${params.q ?? ""}:${params.class ?? ""}:${view}:${normalizedSemaphore}:${params.approved ?? ""}`} callDate={callFilter.callDate} minDate={minDate}>
         <section className="table-wrap">
           <table>
             <thead>
@@ -267,9 +272,10 @@ export default async function ProximosExamenesPage({
               {filtered.length ? filtered.map((item) => {
                 const semaphore = normalizeSemaphore(item.semaphore);
                 const candidate = candidateByMember.get(item.id);
+                const called = existingCall(item.id);
                 return (
                   <tr key={item.legacy_id ?? item.display_name}>
-                    <td data-label="Seleccionar"><input type="checkbox" name="memberIds" value={item.id} aria-label={`Aprobar convocatoria de ${item.display_name}`} disabled={!callFilter.callDate || candidate?.feasibility === "impossible" || !(candidate?.candidate || candidate?.preparationCandidate)} style={{ width: 24, height: 24 }} /></td>
+                    <td data-label="Seleccionar"><input type="checkbox" name="memberIds" value={item.id} aria-label={`Aprobar convocatoria de ${item.display_name}`} disabled={Boolean(called) || !callFilter.callDate || candidate?.feasibility === "impossible" || !(candidate?.candidate || candidate?.preparationCandidate)} style={{ width: 24, height: 24 }} />{called ? <a href="#convocatorias-aprobadas" className="text-link">{called.response === "accepted" ? "Ya convocado · inscrito" : called.response === "deferred" ? "Ya convocado · aplazado" : "Ya convocado · sin respuesta"}</a> : null}</td>
                     <td data-label="Kenshi">
                       {item.legacy_id ? <a className="text-link" href={`/kenshis/${item.legacy_id}`}>{item.display_name}</a> : <strong>{item.display_name}</strong>}
                     </td>
@@ -290,13 +296,13 @@ export default async function ProximosExamenesPage({
                 );
               }) : (
                 <tr>
-                  <td colSpan={10} className="muted">No hay kenshis activos con esos filtros.</td>
+                  <td colSpan={10} className="muted">{view === "candidates" ? "No quedan candidatos pendientes de convocar con estos filtros. Consulta los ya convocados y sus respuestas arriba." : "No hay kenshis activos con esos filtros."}</td>
                 </tr>
               )}
             </tbody>
           </table>
         </section>
-        </ApproveExamCall>
+        </ApproveExamCall>}
       </main>
     </div>
   );

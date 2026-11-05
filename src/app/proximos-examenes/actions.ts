@@ -10,7 +10,7 @@ export async function approvePlanningExamCallAction(form: FormData) {
   try {
     await approveExamCallFromPlanning({ memberIds: form.getAll("memberIds").map(String), callKey, examDate });
   } catch {
-    redirect("/proximos-examenes?error=" + encodeURIComponent("No se pudo aprobar. Revisa la selección y la fecha real: debe permitir cumplir el tiempo y la preparación. Si ya hay inscripciones, modifica el examen existente desde Exámenes."));
+    redirect("/proximos-examenes?error=" + encodeURIComponent("No se pudo aprobar. Comprueba que los seleccionados no estén ya convocados y que puedan completar los requisitos. Para los ya convocados, utiliza «Confirmar día y ver inscritos»."));
   }
   revalidatePath("/proximos-examenes");
   revalidatePath("/ficha/[token]", "page");
