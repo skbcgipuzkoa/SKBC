@@ -13140,3 +13140,18 @@ tbody tr:hover {
   opacity: .55;
   cursor: not-allowed;
 }
+
+/* Birthday effects stay inside the celebration and never intercept interaction. */
+.birthday-celebration { position: relative; isolation: isolate; width: 100%; min-width: 0; margin: 0 0 24px; padding: 16px 12px 62px; overflow: hidden; overflow: clip; border-radius: 18px; background: linear-gradient(120deg, #e7f8f0, #edf4ff 52%, #f1ebff); }
+.birthday-ribbon { position: relative; z-index: 1; text-align: center; padding: 24px 14px 26px; color: #fff; background: linear-gradient(110deg, #096848, #145e9e 55%, #6543a4); border-radius: 8px 24px 8px 24px; box-shadow: 0 8px 18px #183f5424; transform-origin: center; animation: birthday-wind 5s ease-in-out infinite; }
+.birthday-ribbon h2 { margin: 5px 0; font-size: clamp(2.15rem, 7vw, 5rem); line-height: 1.1; font-weight: 950; letter-spacing: .035em; color: #fff; overflow-wrap: anywhere; }
+.birthday-ribbon p { margin: 8px 0 0; font-size: clamp(1rem, 2vw, 1.35rem); font-weight: 650; color: #fff; overflow-wrap: anywhere; }
+.birthday-eyebrow { font-size: .7rem; font-weight: 800; letter-spacing: .16em; }
+.birthday-motion-toggle { position: absolute; bottom: 9px; right: 14px; min-height: 44px; padding: 8px 12px; border: 1px solid #536482; border-radius: 5px; color: #273b60; background: #fff; font: inherit; font-size: .8rem; cursor: pointer; }
+.birthday-motion-toggle:focus-visible { outline: 3px solid #6543a4; outline-offset: 2px; }
+.birthday-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
+.birthday-confetti i { position: absolute; left: var(--x); top: -15px; width: 7px; height: 12px; background: var(--color); opacity: 0; animation: birthday-fall 2.6s ease-in var(--delay) 1 both; }
+.birthday-celebration[data-paused="true"] .birthday-ribbon, .birthday-celebration[data-paused="true"] .birthday-confetti i { animation-play-state: paused; }
+@keyframes birthday-wind { 0%, 100% { transform: perspective(700px) rotateY(-1deg) skewY(-.35deg); } 50% { transform: perspective(700px) rotateY(1deg) skewY(.35deg) translateY(2px); } }
+@keyframes birthday-fall { 0% { opacity: 0; transform: translateY(-10px) rotate(0); } 10% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--drift), 330px) rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .birthday-celebration .birthday-ribbon { animation: none; transform: none; } .birthday-celebration .birthday-confetti, .birthday-celebration .birthday-motion-toggle { display: none; } .birthday-celebration .birthday-confetti i { animation: none; } }

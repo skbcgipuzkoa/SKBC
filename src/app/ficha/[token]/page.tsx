@@ -1,3 +1,4 @@
+import { BirthdayCelebration } from "@/components/birthday-celebration";
 import { groupTechnicalProgress } from "@/lib/technical-progress-display";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { ExternalLink, Gamepad2, Library, NotebookTabs } from "lucide-react";
@@ -543,6 +544,7 @@ function AdultFicha({
 
   return (
     <main className="legacy-ficha adult-ficha">
+      <BirthdayCelebration birthDate={member.birth_date} name={member.first_name} active={member.status === "active"} />
       <AdminBackLink href={adminBackUrl} />
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="FICHA PRO · SKBC GIPUZKOA" />
 
@@ -815,6 +817,7 @@ function KidsFicha({
   );
   return (
     <main className="legacy-ficha kids-ficha">
+      <BirthdayCelebration birthDate={member.birth_date} name={member.first_name} active={member.status === "active"} />
       <AdminBackLink href={adminBackUrl} />
       <HeaderLogos member={member} photoSrc={photoSrc} eyebrow="SKBC Gipuzkoa · Ficha infantil" />
 

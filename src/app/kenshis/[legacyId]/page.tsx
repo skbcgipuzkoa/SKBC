@@ -1,3 +1,4 @@
+import { BirthdayCelebration } from "@/components/birthday-celebration";
 import { ArrowLeft, LogOut } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { CopyFichaLinkButton } from "@/app/kenshis/[legacyId]/CopyFichaLinkButton";
@@ -358,6 +359,7 @@ export default async function KenshiDetailPage({
     <div className="shell">
       <SidebarNav current="/kenshis" />
       <main className="main">
+        <BirthdayCelebration birthDate={member.birth_date} name={member.first_name} active={member.status === "active"} />
         <div className="topbar">
           <div>
             <p className="eyebrow">
