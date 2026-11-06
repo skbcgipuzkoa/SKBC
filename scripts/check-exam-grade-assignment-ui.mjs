@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 const jsx = await import("react/jsx-runtime");
 const file = "src/app/examenes/components/ExamGradeAssignmentForm.tsx";
 const module = { exports: {} };
+let assignmentFixture = null;
 vm.runInNewContext(
   ts.transpileModule(fs.readFileSync(file, "utf8"), {
     compilerOptions: {
@@ -20,7 +21,7 @@ vm.runInNewContext(
     require: (name) =>
       name === "react/jsx-runtime"
         ? jsx
-        : { saveIntegratedExamAssignmentsAction: async () => {} },
+        : name === "react" ? { ...React, useState: (initial) => React.useState(assignmentFixture && Array.isArray(initial) ? initial.length ? assignmentFixture.rows : assignmentFixture.removed : initial) } : { saveIntegratedExamAssignmentsAction: async () => {} },
   },
 );
 const props = {
@@ -48,6 +49,9 @@ const locked = renderToStaticMarkup(
 );
 assert(locked.includes('<fieldset disabled=""'));
 assert(!locked.includes('type="submit"'));
+assert(!locked.includes("Añadir otro examinador"));
+assert(!locked.includes("Retirar esta asignación"));
+assert(!locked.includes('name="newExaminerKeys"'));
 assert(locked.includes("evaluacion enviada"));
 console.log("Adult examiner grade assignment UI checks passed.");
 
@@ -107,6 +111,26 @@ assert.deepEqual(Array.from(received.examiners[1].grades), ["4 KYU"]);
 assert.equal(received.examiners[0].name, "Persona A");
 assert.equal(received.examiners[2].name, "Persona C");
 assert.equal(received.examiners[2].id, undefined);
+const multi = new FormData();
+multi.append('eventId','event');
+multi.append('examinerIds','a');multi.append('examinerIds','b');
+multi.append('removedExaminerIds','a');
+multi.append('examinerName:b','Existing');multi.append('scope:b','5 KYU');
+for(const key of ['row-1','row-2','row-empty']) multi.append('newExaminerKeys',key);
+multi.append('examinerName:new:row-1','Named new');multi.append('scope:new:row-1','5 KYU');multi.append('scope:new:row-1','4 KYU');
+multi.append('scope:new:row-2','5 KYU');
+await assert.rejects(()=>actions.exports.saveIntegratedExamAssignmentsAction(multi),/saved=assignments/);
+assert.equal(received.examiners.length,3,'Removed row omitted, wholly empty row ignored, two new rows retained');
+assert.equal(received.examiners[0].id,'b');
+assert.equal(received.examiners[1].name,'Named new');
+assert.deepEqual(Array.from(received.examiners[1].grades),['5 KYU','4 KYU']);
+assert.equal(received.examiners[2].name,'','Blank new identity remains pending');
+assert.equal(received.examiners[2].id,undefined);
+assert.deepEqual(Array.from(received.examiners[2].grades),['5 KYU'],'Several judges may share the same grade');
+const invalid = new FormData();invalid.append('eventId','event');invalid.append('newExaminerKeys','row:invalid');
+received=null;
+await assert.rejects(()=>actions.exports.saveIntegratedExamAssignmentsAction(invalid),/error=assignments/);
+assert.equal(received,null,'Malformed temporary row key rejected before backend mutation');
 allowed = false;
 received = null;
 await assert.rejects(
@@ -213,7 +237,20 @@ console.log(
 );
 
 assert(html.includes('name="examinerName:a"'));
-assert(html.includes('name="examinerName:new"'));
+assert(html.includes('name="examinerName:new:row-0"'));
+assert(html.includes('name="newExaminerKeys" value="row-0"'));
+assert(html.includes('Añadir otro examinador'));
+assert(html.includes('Retirar esta asignación'));
+assert(html.includes('Guardar asignaciones y crear enlaces'));
+assignmentFixture={rows:['row-1','row-2'],removed:['a']};
+const dynamicHtml=renderToStaticMarkup(React.createElement(module.exports.ExamGradeAssignmentForm,props));
+assert(dynamicHtml.includes('name="examinerName:new:row-1"'));
+assert(dynamicHtml.includes('name="examinerName:new:row-2"'));
+assert.equal((dynamicHtml.match(/name="scope:new:row-1"/g)||[]).length,2);
+assert(dynamicHtml.includes('name="removedExaminerIds" value="a"'));
+assert(!dynamicHtml.includes('name="examinerIds" value="a"'));
+assert(dynamicHtml.includes('Deshacer retirada'));
+assignmentFixture=null;
 assert(html.includes("un solo enlace personal"));
 
 const baseAdultPayload = {
@@ -335,6 +372,7 @@ console.log(
 );
 
 const admin = { exports: {} };
+let lastAssignmentLocked;
 let adminData = {
   event: {
     id: "e",
@@ -357,6 +395,7 @@ let adminData = {
     },
   ],
   scores: [],
+  reviews: [],
   summaries: [
     {
       studentId: "s",
@@ -410,7 +449,7 @@ vm.runInNewContext(
                 : name === "@/lib/drive"
                   ? { driveImageUrl: () => null }
                   : name.includes("ExamGradeAssignmentForm")
-                    ? { ExamGradeAssignmentForm: () => null }
+                    ? { ExamGradeAssignmentForm: (props) => {lastAssignmentLocked=props.locked;return null;} }
                     : name.includes("ExamStepNavigator")
                       ? { StudentExamPhoto: () => null }
                       : name.includes("SidebarNav")
@@ -438,6 +477,18 @@ assert.equal(
   false,
   "Complete grade matrix permits timestamp reconciliation",
 );
+const pageHtml=async()=>renderToStaticMarkup(await admin.exports.default({params:Promise.resolve({eventId:'e'}),searchParams:Promise.resolve({})}));
+let linksHtml=await pageHtml();
+assert.match(linksHtml,/Generar enlace nuevo/);assert.match(linksHtml,/Eliminar enlace/);
+assert.match(linksHtml,/media de sus notas en cada ejercicio/);
+adminData.examiners[0].access_token='disabled_hidden_credential';
+linksHtml=await pageHtml();assert.match(linksHtml,/Enlace eliminado/);
+assert.ok(!linksHtml.includes('/examinar/disabled_hidden_credential'),'Disabled credentials never appear as links in table or grade shortcuts');
+assert.equal(await registrationDisabled(),false,'Disabling a credential never drops the submitted examiner from final readiness');
+adminData.examiners[0].access_token='t';
+adminData.hasSubmittedScores=false;adminData.reviews=[{review_notes:'Teacher review'}];
+await pageHtml();assert.equal(lastAssignmentLocked,true,'Teacher review locks judge participation even without examiner scores');
+adminData.hasSubmittedScores=true;adminData.reviews=[];
 adminData.pendingExaminerIds = ["a"];
 assert.equal(
   await registrationDisabled(),

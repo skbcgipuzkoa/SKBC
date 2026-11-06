@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+let allowed=false, fail=false;
+const calls=[], refreshed=[];
+const mod={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/examenes/examiner-link-actions.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:mod.exports,Error,String,encodeURIComponent,require(name){
+  if(name.endsWith('/auth'))return{hasInternalAccess:async()=>allowed};
+  if(name.endsWith('/integrated-exams'))return{manageAdultExaminerLink:async input=>{calls.push({...input});if(fail)throw new Error('Wrong examiner');}};
+  if(name==='next/cache')return{revalidatePath:path=>refreshed.push(path)};
+  if(name==='next/navigation')return{redirect:path=>{throw new Error('REDIRECT:'+path);}};
+  throw new Error('Unexpected import '+name);
+}});
+const action=mod.exports.manageAdultExaminerLinkAction;
+const form=new FormData();form.set('eventId','exam');form.set('examinerId','judge');form.set('operation','renew');
+await assert.rejects(()=>action(form),/REDIRECT:\/skbc-interno/);assert.equal(calls.length,0);
+allowed=true;
+await assert.rejects(()=>action(form),/saved=examiner-link-renewed/);
+assert.deepEqual(calls,[{eventId:'exam',examinerId:'judge',operation:'renew'}]);
+form.set('operation','disable');await assert.rejects(()=>action(form),/saved=examiner-link-disabled/);
+assert.equal(calls[1].operation,'disable');assert.deepEqual(refreshed,['/examenes/exam','/examenes/exam']);
+form.set('operation','delete-scores');await assert.rejects(()=>action(form),/error=examiner-link/);assert.equal(calls.length,2);
+form.set('operation','renew');fail=true;await assert.rejects(()=>action(form),/detail=Wrong%20examiner/);assert.equal(refreshed.length,2);
+console.log('Examiner link actions: auth, explicit renew/disable, rejected operations, safe errors and no token disclosure passed. No live mutations.');

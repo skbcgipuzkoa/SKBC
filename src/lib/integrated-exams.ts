@@ -1,3 +1,4 @@
+import { hasInternalAccess } from "@/lib/auth";
 import { attributeExamCall } from "@/lib/exam-call";
 import { getAdultExamCurriculum } from "@/lib/adult-exam-curriculum";
 import {
@@ -104,50 +105,122 @@ type ExamEventItem = {
   cut_grade: string | null;
   active: boolean;
 };
-type AdultExamDraftItem = Omit<ExamEventItem, "id" | "active" | "cut_grade"> & { id?: string; active?: boolean; cut_grade?: string | null };
+type AdultExamDraftItem = Omit<ExamEventItem, "id" | "active" | "cut_grade"> & {
+  id?: string;
+  active?: boolean;
+  cut_grade?: string | null;
+};
 
 function adultCurriculumKey(value: string | null | undefined) {
-  return (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/tenchiken/g, "tenchi ken").replace(/giwaken/g, "giwa ken").replace(/[^a-z0-9]+/g, " ").trim();
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/tenchiken/g, "tenchi ken")
+    .replace(/giwaken/g, "giwa ken")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
-function adultCurriculumSection(item: {section?: string | null; category?: string | null}) {
+function adultCurriculumSection(item: {
+  section?: string | null;
+  category?: string | null;
+}) {
   const section = adultCurriculumKey(item.section);
-  if (section === "programa" || !section) return adultCurriculumKey(item.category);
+  if (section === "programa" || !section)
+    return adultCurriculumKey(item.category);
   return section.replace(/tan en/g, "tanen").replace(/so tai/g, "sotai");
 }
-function appendMissingAdultItems<T extends {grade: string | null; name: string; section: string | null; category: string | null; technique_id?: string | null}>(existing: T[], required: T[]) {
+function appendMissingAdultItems<
+  T extends {
+    grade: string | null;
+    name: string;
+    section: string | null;
+    category: string | null;
+    technique_id?: string | null;
+  },
+>(existing: T[], required: T[]) {
   const result = existing.slice();
   for (const entry of required) {
-    if (!result.some(item => item.grade === entry.grade && ((entry.technique_id && item.technique_id === entry.technique_id) || (adultCurriculumSection(item) === adultCurriculumSection(entry) && adultCurriculumKey(item.name) === adultCurriculumKey(entry.name))))) result.push(entry);
+    if (
+      !result.some(
+        (item) =>
+          item.grade === entry.grade &&
+          ((entry.technique_id && item.technique_id === entry.technique_id) ||
+            (adultCurriculumSection(item) === adultCurriculumSection(entry) &&
+              adultCurriculumKey(item.name) ===
+                adultCurriculumKey(entry.name))),
+      )
+    )
+      result.push(entry);
   }
   return result;
 }
 
-export function isEmbuExamItem(item: {section?: string | null; category?: string | null; name?: string}) {
-  return /\bEMBU\b/i.test(`${item.section ?? ""} ${item.category ?? ""} ${item.name ?? ""}`.replace(/[_-]/g, " "));
+export function isEmbuExamItem(item: {
+  section?: string | null;
+  category?: string | null;
+  name?: string;
+}) {
+  return /\bEMBU\b/i.test(
+    `${item.section ?? ""} ${item.category ?? ""} ${item.name ?? ""}`.replace(
+      /[_-]/g,
+      " ",
+    ),
+  );
 }
 
-export function adultExamItemWeight(item: {source?: string; section?: string | null; category?: string | null; name?: string}) {
+export function adultExamItemWeight(item: {
+  source?: string;
+  section?: string | null;
+  category?: string | null;
+  name?: string;
+}) {
   return item.source === "cut" ? 0 : isEmbuExamItem(item) ? 3 : 1;
 }
 
 /** Adult exams finish with techniques; children's progressive sequence stays untouched. */
-export function orderIntegratedExamItems<T extends {
-  source: string; section?: string | null; category?: string | null;
-  name?: string; grade?: string | null; cut_grade?: string | null;
-}>(items: readonly T[], programType: IntegratedExamProgram): T[] {
-  if (programType !== "adults" && programType !== "dan_tribunal") return items.slice();
-  const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+export function orderIntegratedExamItems<
+  T extends {
+    source: string;
+    section?: string | null;
+    category?: string | null;
+    name?: string;
+    grade?: string | null;
+    cut_grade?: string | null;
+  },
+>(items: readonly T[], programType: IntegratedExamProgram): T[] {
+  if (programType !== "adults" && programType !== "dan_tribunal")
+    return items.slice();
+  const normalized = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, " ")
+      .trim();
   const isTechnique = (item: T) => {
     const metadata = normalized(`${item.section ?? ""} ${item.category ?? ""}`);
     const label = normalized(`${metadata} ${item.name ?? ""}`);
     // Imported fundamentals can share the goho/hokei category with actual techniques.
-    if (/\b(KATA|TANEN|TAN EN|SOTAI|SO TAI|EMBU|RANDORI)\b/.test(metadata)) return false;
-    if (/\b(UMPO|UNPO|UMPOHO|UNPOHO|UKEMI|GAKKA|KEIMYAKU|KEIMIAKU|KEI MYAKU|KIHON|CHINKON|SEIHO)\b/.test(label) || /\bUM PO HO\b/.test(label)) return false;
-    return /\b(GOHO|GO HO|JUHO|JU HO|HOKEI|TECNICA|TECNICAS|TECHNIQUE|TECHNIQUES)\b/.test(metadata);
+    if (/\b(KATA|TANEN|TAN EN|SOTAI|SO TAI|EMBU|RANDORI)\b/.test(metadata))
+      return false;
+    if (
+      /\b(UMPO|UNPO|UMPOHO|UNPOHO|UKEMI|GAKKA|KEIMYAKU|KEIMIAKU|KEI MYAKU|KIHON|CHINKON|SEIHO)\b/.test(
+        label,
+      ) ||
+      /\bUM PO HO\b/.test(label)
+    )
+      return false;
+    return /\b(GOHO|GO HO|JUHO|JU HO|HOKEI|TECNICA|TECNICAS|TECHNIQUE|TECHNIQUES)\b/.test(
+      metadata,
+    );
   };
-  const tier = (item: T) => isEmbuExamItem(item) ? 2 : Number(isTechnique(item));
-  const ordered = items.filter(item => item.source !== "cut").sort((left, right) => tier(left) - tier(right));
-  const cuts = items.filter(item => item.source === "cut");
+  const tier = (item: T) =>
+    isEmbuExamItem(item) ? 2 : Number(isTechnique(item));
+  const ordered = items
+    .filter((item) => item.source !== "cut")
+    .sort((left, right) => tier(left) - tier(right));
+  const cuts = items.filter((item) => item.source === "cut");
   return ordered.concat(cuts);
 }
 
@@ -361,7 +434,15 @@ export async function createIntegratedExamEvent(input: {
             input.childSyllabusItemIds,
           );
       if (isAdultCreation && input.templateEventId) {
-        items = appendMissingAdultItems(items, await buildAdultItems(event.id, students.map(student => student.target_grade).filter((grade): grade is string => Boolean(grade))));
+        items = appendMissingAdultItems(
+          items,
+          await buildAdultItems(
+            event.id,
+            students
+              .map((student) => student.target_grade)
+              .filter((grade): grade is string => Boolean(grade)),
+          ),
+        );
       }
     } catch (error) {
       await supabase.from("exam_events").delete().eq("id", event.id);
@@ -398,7 +479,16 @@ export async function createIntegratedExamEvent(input: {
 
     const { error: itemsError } = await supabase
       .from("exam_event_items")
-      .insert(orderIntegratedExamItems<(typeof items)[number]>(items, input.programType).map((item, index) => ({ ...item, ...(isAdultCreation ? {weight: adultExamItemWeight(item)} : {}), order_index: index + 1 })));
+      .insert(
+        orderIntegratedExamItems<(typeof items)[number]>(
+          items,
+          input.programType,
+        ).map((item, index) => ({
+          ...item,
+          ...(isAdultCreation ? { weight: adultExamItemWeight(item) } : {}),
+          order_index: index + 1,
+        })),
+      );
     if (itemsError) {
       await supabase.from("exam_events").delete().eq("id", event.id);
       throw itemsError;
@@ -511,9 +601,14 @@ async function copyExamItems(
     );
   }
   return copyExamSnapshotItems(
-    (templateItems ?? []).filter(item => (programType !== "adults" && programType !== "dan_tribunal") || !item.grade || targetGrades.includes(item.grade)).map(
-      ({ id: _id, exam_event_id: _examEventId, ...item }) => item,
-    ),
+    (templateItems ?? [])
+      .filter(
+        (item) =>
+          (programType !== "adults" && programType !== "dan_tribunal") ||
+          !item.grade ||
+          targetGrades.includes(item.grade),
+      )
+      .map(({ id: _id, exam_event_id: _examEventId, ...item }) => item),
     eventId,
   );
 }
@@ -690,7 +785,10 @@ export async function getIntegratedExamAdmin(eventId: string) {
           assignmentStudents.get(row.event_student_id)?.target_grade ?? "",
         )),
   );
-  const orderedItems = orderIntegratedExamItems(items ?? [], event.program_type);
+  const orderedItems = orderIntegratedExamItems(
+    items ?? [],
+    event.program_type,
+  );
   const summaries = (students ?? []).map((student) => {
     const review = parseReviewEnvelope(
       (reviews ?? []).find((row) => row.event_student_id === student.id)
@@ -811,9 +909,16 @@ export async function updateIntegratedExamItem(input: {
     if (input.summary !== undefined) update.summary = input.summary || null;
     if (input.weight !== undefined && input.weight !== null)
       update.weight = Number.isFinite(input.weight) ? input.weight : 1;
-    if (event.program_type === "adults" || event.program_type === "dan_tribunal") {
-      const current = data.items.find(item => item.id === input.itemId)!;
-      update.weight = adultExamItemWeight({ ...current, section: input.section ?? current.section, name: name || current.name });
+    if (
+      event.program_type === "adults" ||
+      event.program_type === "dan_tribunal"
+    ) {
+      const current = data.items.find((item) => item.id === input.itemId)!;
+      update.weight = adultExamItemWeight({
+        ...current,
+        section: input.section ?? current.section,
+        name: name || current.name,
+      });
     }
     if (input.orderIndex !== undefined && input.orderIndex !== null)
       update.order_index = Number.isFinite(input.orderIndex)
@@ -871,7 +976,12 @@ export async function createIntegratedExamItem(input: {
       summary: input.summary || null,
       grade: input.grade || null,
       category: input.category || input.section || "manual",
-      weight: event.program_type === "adults" || event.program_type === "dan_tribunal" ? adultExamItemWeight(input) : Number.isFinite(input.weight ?? 1) ? (input.weight ?? 1) : 1,
+      weight:
+        event.program_type === "adults" || event.program_type === "dan_tribunal"
+          ? adultExamItemWeight(input)
+          : Number.isFinite(input.weight ?? 1)
+            ? (input.weight ?? 1)
+            : 1,
       order_index: Number(lastItem?.order_index ?? 0) + 1,
       active: true,
     });
@@ -883,22 +993,68 @@ export async function createIntegratedExamItem(input: {
 
 export async function completeAdultExamCurriculum(eventId: string) {
   const data = await getIntegratedExamAdmin(eventId);
-  if (data.event.program_type !== "adults" && data.event.program_type !== "dan_tribunal") throw new Error("Esta operación es solo para exámenes de adultos.");
-  if (data.hasSubmittedScores || data.examiners.some(examiner => examiner.submitted_at)) throw new Error("El temario no puede modificarse después de recibir una evaluación.");
-  if (data.reviews.some(review => review.reviewed_at || review.final_passed != null || review.review_notes?.trim())) throw new Error("El examen ya tiene una revisión del profesor; no se puede cambiar su programa.");
-  const targetCandidates = data.event.target_grade ? [data.event.target_grade] : data.students.length ? data.students.map(student => student.target_grade) : data.items.map(item => item.grade);
-  const targets = [...new Set(targetCandidates.filter((grade): grade is string => Boolean(grade)))];
-  if (!targets.length) throw new Error("Indica primero el grado objetivo del examen.");
+  if (
+    data.event.program_type !== "adults" &&
+    data.event.program_type !== "dan_tribunal"
+  )
+    throw new Error("Esta operación es solo para exámenes de adultos.");
+  if (
+    data.hasSubmittedScores ||
+    data.examiners.some((examiner) => examiner.submitted_at)
+  )
+    throw new Error(
+      "El temario no puede modificarse después de recibir una evaluación.",
+    );
+  if (
+    data.reviews.some(
+      (review) =>
+        review.reviewed_at ||
+        review.final_passed != null ||
+        review.review_notes?.trim(),
+    )
+  )
+    throw new Error(
+      "El examen ya tiene una revisión del profesor; no se puede cambiar su programa.",
+    );
+  const targetCandidates = data.event.target_grade
+    ? [data.event.target_grade]
+    : data.students.length
+      ? data.students.map((student) => student.target_grade)
+      : data.items.map((item) => item.grade);
+  const targets = [
+    ...new Set(
+      targetCandidates.filter((grade): grade is string => Boolean(grade)),
+    ),
+  ];
+  if (!targets.length)
+    throw new Error("Indica primero el grado objetivo del examen.");
   return withEventMutationLock(data.event, async () => {
     const required = await buildAdultItems(eventId, targets);
-    const merged = appendMissingAdultItems<AdultExamDraftItem>(data.items, required);
-    const rows = orderIntegratedExamItems(merged, data.event.program_type).map((item,index) => ({
-      id: item.id ?? randomUUID(), exam_event_id: eventId, source: item.source,
-      technique_id: item.technique_id ?? null, child_syllabus_item_id: item.child_syllabus_item_id ?? null,
-      section: item.section, name: item.name, summary: item.summary, grade: item.grade, category: item.category,
-      weight: adultExamItemWeight(item), order_index: index+1, cut_grade: item.cut_grade ?? null, active: item.active !== false,
-    }));
-    const saved = await createAdminClient().from("exam_event_items").upsert(rows,{onConflict:"id"});
+    const merged = appendMissingAdultItems<AdultExamDraftItem>(
+      data.items,
+      required,
+    );
+    const rows = orderIntegratedExamItems(merged, data.event.program_type).map(
+      (item, index) => ({
+        id: item.id ?? randomUUID(),
+        exam_event_id: eventId,
+        source: item.source,
+        technique_id: item.technique_id ?? null,
+        child_syllabus_item_id: item.child_syllabus_item_id ?? null,
+        section: item.section,
+        name: item.name,
+        summary: item.summary,
+        grade: item.grade,
+        category: item.category,
+        weight: adultExamItemWeight(item),
+        order_index: index + 1,
+        cut_grade: item.cut_grade ?? null,
+        active: item.active !== false,
+      }),
+    );
+    const saved = await createAdminClient()
+      .from("exam_event_items")
+      .upsert(rows, { onConflict: "id" });
     if (saved.error) throw saved.error;
     await refreshIntegratedExamReview(eventId);
     return rows.length - data.items.length;
@@ -937,6 +1093,8 @@ export async function deleteIntegratedExamItem(itemId: string) {
 }
 
 export async function getExaminerExamByToken(token: string, grade?: string) {
+  if (token.startsWith("disabled_"))
+    throw new Error("Enlace de examen no valido.");
   const supabase = createAdminClient();
   const { data: examiner, error: examinerError } = await supabase
     .from("exam_event_examiners")
@@ -1242,29 +1400,34 @@ export async function saveAdultGradeGroups(input: {
   if (
     !Array.isArray(input.examiners) ||
     !input.examiners.length ||
-    input.examiners.length > 100 ||
-    input.examiners.filter((row) => !row.id).length > 1
+    input.examiners.length > 100
   )
-    throw new Error("Anade como maximo un examinador nuevo en cada guardado.");
+    throw new Error("Indica entre uno y cien examinadores.");
+  if (
+    data.reviews.some(
+      (review) =>
+        review.reviewed_at ||
+        review.final_passed != null ||
+        review.review_notes?.trim(),
+    )
+  )
+    throw new Error(
+      "El examen ya tiene una revisión del profesor; no se pueden cambiar los examinadores.",
+    );
   const seenIds = new Set<string>();
   const groups = new Map<
     string,
     { id?: string; name: string; grades: string[]; pending: boolean }
   >();
-  for (const row of input.examiners) {
+  for (const [rowIndex, row] of input.examiners.entries()) {
     const existing = row.id
       ? data.examiners.find((entry) => entry.id === row.id && !entry.revoked_at)
       : undefined;
     if (row.id && (!existing || seenIds.has(row.id)))
       throw new Error("Examinador ajeno o duplicado.");
     if (row.id) seenIds.add(row.id);
-    const pending = Boolean(
-      existing &&
-      data.pendingExaminerIds.includes(existing.id) &&
-      (!row.name.trim() || row.name.trim() === existing.name),
-    );
-    const name = pending ? existing!.name : validateExaminerName(row.name);
     if (
+      typeof row.name !== "string" ||
       !Array.isArray(row.grades) ||
       !row.grades.length ||
       row.grades.some((grade) => !data.adultTargetGrades.includes(grade))
@@ -1272,8 +1435,18 @@ export async function saveAdultGradeGroups(input: {
       throw new Error(
         "Selecciona grados objetivo validos para cada examinador.",
       );
+    const pending =
+      (!existing && !row.name.trim()) ||
+      Boolean(
+        existing &&
+        data.pendingExaminerIds.includes(existing.id) &&
+        (!row.name.trim() || row.name.trim() === existing.name),
+      );
+    const name = pending
+      ? (existing?.name ?? "Pendiente · " + [...new Set(row.grades)].join(", "))
+      : validateExaminerName(row.name);
     const key = pending
-      ? "pending:" + row.id
+      ? "pending:" + (row.id ?? "new:" + rowIndex)
       : name
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
@@ -1377,6 +1550,47 @@ export async function saveAdultGradeGroups(input: {
         });
       throw error;
     }
+  });
+}
+/** Rotate credentials without changing evaluation participation or the examiner's identity. */
+export async function manageAdultExaminerLink(input: {
+  eventId: string;
+  examinerId: string;
+  operation: "disable" | "renew";
+}) {
+  if (!(await hasInternalAccess()))
+    throw new Error("Acceso interno requerido.");
+  if (!["disable", "renew"].includes(input.operation))
+    throw new Error("Operación de enlace no válida.");
+  const data = await getIntegratedExamAdmin(input.eventId);
+  if (!["adults", "dan_tribunal"].includes(data.event.program_type))
+    throw new Error(
+      "Los enlaces gestionados corresponden solo a exámenes adultos.",
+    );
+  const examiner = data.examiners.find(
+    (row) => row.id === input.examinerId && !row.revoked_at,
+  );
+  if (!examiner?.access_token)
+    throw new Error("Examinador ajeno o enlace no disponible.");
+  return withEventMutationLock(data.event, async () => {
+    const token =
+      (input.operation === "disable" ? "disabled_" : "") +
+      randomUUID().replace(/-/g, "");
+    const { data: changed, error } = await createAdminClient()
+      .from("exam_event_examiners")
+      .update({ access_token: token, source_examiner_id: null })
+      .eq("id", examiner.id)
+      .eq("exam_event_id", data.event.id)
+      .eq("access_token", examiner.access_token)
+      .is("revoked_at", null)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!changed)
+      throw new Error(
+        "El enlace ha cambiado; recarga el examen antes de continuar.",
+      );
+    return { examinerId: examiner.id, disabled: input.operation === "disable" };
   });
 }
 export async function getInternalExamEvaluation(
@@ -2202,27 +2416,62 @@ async function buildAdultItems(eventId: string, targetGrades: string[]) {
     >();
 
   if (error) throw error;
-  const catalogue: AdultExamDraftItem[] = (data ?? []).filter(item => grades.includes(item.grade ?? "")).map((item, index) => ({
-    exam_event_id: eventId,
-    source: "technique",
-    technique_id: item.id,
-    section: item.content_type || item.category || "TECNICA",
-    name: item.name,
-    summary: item.summary_es,
-    grade: item.grade,
-    category: item.category,
-    weight: adultExamItemWeight({section: item.content_type, category: item.category, name: item.name}),
-    order_index: index + 1,
-    cut_grade: null,
-  }));
+  const catalogue: AdultExamDraftItem[] = (data ?? [])
+    .filter((item) => grades.includes(item.grade ?? ""))
+    .map((item, index) => ({
+      exam_event_id: eventId,
+      source: "technique",
+      technique_id: item.id,
+      section: item.content_type || item.category || "TECNICA",
+      name: item.name,
+      summary: item.summary_es,
+      grade: item.grade,
+      category: item.category,
+      weight: adultExamItemWeight({
+        section: item.content_type,
+        category: item.category,
+        name: item.name,
+      }),
+      order_index: index + 1,
+      cut_grade: null,
+    }));
   for (const grade of grades) {
     const required = getAdultExamCurriculum(grade);
-    if (!required.length) throw new Error(`No hay un Kamoku verificado disponible para ${grade}. Revisa el programa antes de crear el examen.`);
+    if (!required.length)
+      throw new Error(
+        `No hay un Kamoku verificado disponible para ${grade}. Revisa el programa antes de crear el examen.`,
+      );
     for (const entry of required) {
-      const sameSection = catalogue.filter(item => item.grade === grade && adultCurriculumSection(item) === adultCurriculumSection({section:entry.section}));
-      const names = new Set(sameSection.map(item => adultCurriculumKey(item.name)));
-      if (names.has(adultCurriculumKey(entry.name)) || (entry.coverageNames?.length && entry.coverageNames.every(name => names.has(adultCurriculumKey(name))))) continue;
-      catalogue.push({exam_event_id:eventId,source:"manual",section:entry.section,name:entry.name,summary:entry.summary ?? "Programa Kamoku BSKF 2024 del grado objetivo.",grade,category:entry.section,weight:adultExamItemWeight(entry),order_index:catalogue.length+1,cut_grade:null});
+      const sameSection = catalogue.filter(
+        (item) =>
+          item.grade === grade &&
+          adultCurriculumSection(item) ===
+            adultCurriculumSection({ section: entry.section }),
+      );
+      const names = new Set(
+        sameSection.map((item) => adultCurriculumKey(item.name)),
+      );
+      if (
+        names.has(adultCurriculumKey(entry.name)) ||
+        (entry.coverageNames?.length &&
+          entry.coverageNames.every((name) =>
+            names.has(adultCurriculumKey(name)),
+          ))
+      )
+        continue;
+      catalogue.push({
+        exam_event_id: eventId,
+        source: "manual",
+        section: entry.section,
+        name: entry.name,
+        summary:
+          entry.summary ?? "Programa Kamoku BSKF 2024 del grado objetivo.",
+        grade,
+        category: entry.section,
+        weight: adultExamItemWeight(entry),
+        order_index: catalogue.length + 1,
+        cut_grade: null,
+      });
     }
   }
   return catalogue;
@@ -2253,7 +2502,11 @@ async function buildKidsItems(eventId: string, targetGrades: string[]) {
 
   if (error) throw error;
 
-  const rows: Array<Omit<ExamEventItem, "id" | "active" | "cut_grade"> & { cut_grade?: string | null }> = [];
+  const rows: Array<
+    Omit<ExamEventItem, "id" | "active" | "cut_grade"> & {
+      cut_grade?: string | null;
+    }
+  > = [];
   let order = 1;
   for (const grade of grades) {
     const gradeItems = (data ?? []).filter(
@@ -2345,7 +2598,7 @@ async function buildKidsItemsFromLatestTemplate(
       )
       .map((item, index) => ({
         exam_event_id: eventId,
-        source: item.source === "cut" ? "cut" as const : "manual" as const,
+        source: item.source === "cut" ? ("cut" as const) : ("manual" as const),
         section: item.section,
         name: item.name,
         summary: item.summary,

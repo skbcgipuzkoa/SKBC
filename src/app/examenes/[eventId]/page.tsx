@@ -1,5 +1,6 @@
 import { StudentExamPhoto } from "@/app/examenes/components/ExamStepNavigator";
 import { completeAdultExamCurriculumAction } from "@/app/examenes/curriculum-actions";
+import { manageAdultExaminerLinkAction } from "@/app/examenes/examiner-link-actions";
 import { driveImageUrl } from "@/lib/drive";
 import { ExamGradeAssignmentForm } from "@/app/examenes/components/ExamGradeAssignmentForm";
 import {
@@ -69,6 +70,7 @@ export default async function IntegratedExamPage({
     event.status === "completed" || event.status === "archived";
   const isAdult =
     event.program_type === "adults" || event.program_type === "dan_tribunal";
+  const hasTeacherReview = reviews.some(review => review.reviewed_at || review.final_passed != null || review.review_notes?.trim());
   const isExaminerComplete = (examiner: (typeof examiners)[number]) => {
     if (!isAdult) return Boolean(examiner.submitted_at);
     const assigned = examinerGradeScopes[examiner.id] ?? adultTargetGrades;
@@ -161,6 +163,8 @@ export default async function IntegratedExamPage({
           <p className="save-ok">Temario del examen actualizado.</p>
         ) : null}
         {query.saved === "curriculum" ? <p className="notice">Kamoku completado. Se conservan los puntos editados y desactivados. Embu queda al final con peso 3; las demás materias tienen peso 1.</p> : null}
+        {query.saved === "examiner-link-disabled" ? <p className="notice">Enlace eliminado. Las valoraciones enviadas se conservan. Puedes generar un enlace nuevo para esta misma persona.</p> : null}
+        {query.saved === "examiner-link-renewed" ? <p className="notice">Enlace nuevo generado. Copia el enlace actualizado; el anterior ya no permite evaluar. Se conservan las valoraciones enviadas.</p> : null}
         {query.saved === "finalized" ? (
           <p className="save-ok">
             Resultados registrados. Consulta los informes y el estado de
@@ -232,6 +236,7 @@ export default async function IntegratedExamPage({
                       .filter(
                         (examiner) =>
                           !examiner.revoked_at &&
+                          !examiner.access_token?.startsWith("disabled_") &&
                           (
                             examinerGradeScopes[examiner.id] ??
                             adultTargetGrades
@@ -270,6 +275,7 @@ export default async function IntegratedExamPage({
         {event.program_type === "adults" ||
         event.program_type === "dan_tribunal" ? (
           <ExamGradeAssignmentForm
+            key={`${event.id}:${event.updated_at}`}
             eventId={eventId}
             examiners={examiners}
             grades={adultTargetGrades}
@@ -278,6 +284,7 @@ export default async function IntegratedExamPage({
             locked={
               isCompleted ||
               hasSubmittedScores ||
+              hasTeacherReview ||
               examiners.some((examiner) => Boolean(examiner.submitted_at))
             }
           />
@@ -290,6 +297,7 @@ export default async function IntegratedExamPage({
                 Estos enlaces solo muestran el examen asignado. No abren el
                 panel interno.
               </p>
+              {isAdult ? <p>Varios examinadores pueden valorar el mismo grado. Se hace la media de sus notas en cada ejercicio y se aplican los pesos del temario. El profesor revisa y decide el resultado final. Eliminar o renovar un enlace conserva las valoraciones ya enviadas.</p> : null}
             </div>
           </div>
           <div className="table-wrap">
@@ -306,6 +314,7 @@ export default async function IntegratedExamPage({
                   .filter((examiner) => !examiner.revoked_at)
                   .map((examiner) => {
                     const url = `${publicBaseUrl}/examinar/${examiner.access_token}`;
+                    const linkDisabled = isAdult && examiner.access_token?.startsWith("disabled_");
                     return (
                       <tr key={examiner.id}>
                         <td data-label="Examinador">
@@ -326,6 +335,7 @@ export default async function IntegratedExamPage({
                           ) : null}
                         </td>
                         <td data-label="Estado">
+                          {linkDisabled ? <p className="state-badge">Enlace eliminado</p> : null}
                           {isExaminerComplete(examiner) ? (
                             <span className="state-badge state-completada">
                               Enviado
@@ -336,6 +346,7 @@ export default async function IntegratedExamPage({
                         </td>
                         <td data-label="Enlace">
                           {!isCompleted &&
+                          !linkDisabled &&
                           !examiner.revoked_at &&
                           !isExaminerComplete(examiner) ? (
                             <p>
@@ -351,14 +362,15 @@ export default async function IntegratedExamPage({
                               <a href="#revision">Revisar evaluaciones</a>
                             </p>
                           )}
-                          <a
+                          {!linkDisabled ? <a
                             className="text-link"
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
                           >
                             {url}
-                          </a>
+                          </a> : <p className="muted">Genera un enlace nuevo para volver a abrir este acceso.</p>}
+                          {isAdult && !isCompleted ? <form action={manageAdultExaminerLinkAction} className="form-actions" style={{flexWrap:"wrap"}}><input type="hidden" name="eventId" value={eventId}/><input type="hidden" name="examinerId" value={examiner.id}/><button type="submit" name="operation" value="renew" style={{minHeight:44}}>Generar enlace nuevo</button>{!linkDisabled ? <button type="submit" name="operation" value="disable" className="secondary-link" style={{minHeight:44}}>Eliminar enlace</button> : null}</form> : null}
                         </td>
                       </tr>
                     );
@@ -705,7 +717,7 @@ export default async function IntegratedExamPage({
           )}
         </section>
 
-        {isAdult && !isCompleted && !hasSubmittedScores && !reviews.some(review => review.reviewed_at || review.final_passed != null || review.review_notes?.trim()) && !examiners.some(examiner => examiner.submitted_at) ? <section className="card"><h2>Programa completo del grado</h2><p>Los exámenes nuevos incluyen el Kamoku BSKF 2024. Para actualizar este examen, añade las materias que falten sin reactivar puntos desactivados. Embu se valora al final con peso 3; cada otra materia, con peso 1.</p><form action={completeAdultExamCurriculumAction}><input type="hidden" name="eventId" value={event.id}/><button type="submit">Completar con Kamoku</button></form></section> : null}
+        {isAdult && !isCompleted && !hasSubmittedScores && !hasTeacherReview && !examiners.some(examiner => examiner.submitted_at) ? <section className="card"><h2>Programa completo del grado</h2><p>Los exámenes nuevos incluyen el Kamoku BSKF 2024. Para actualizar este examen, añade las materias que falten sin reactivar puntos desactivados. Embu se valora al final con peso 3; cada otra materia, con peso 1.</p><form action={completeAdultExamCurriculumAction}><input type="hidden" name="eventId" value={event.id}/><button type="submit">Completar con Kamoku</button></form></section> : null}
         <details className="card foldable-admin-section">
           <summary>
             <span>

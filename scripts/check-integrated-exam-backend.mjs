@@ -47,6 +47,7 @@ const score = {
   notes: "Good",
 };
 let writes = [];
+let internalAccess = true;
 let dbError = null;
 let rows = [];
 let scorePresent = true;
@@ -130,6 +131,8 @@ vm.runInNewContext(source, {
   module,
   exports: module.exports,
   require(name) {
+    if (name.endsWith("/auth"))
+      return { hasInternalAccess: async () => internalAccess };
     if (name.endsWith("/adult-exam-curriculum")) return adultCurriculum;
     if (name.endsWith("/integrated-exam-snapshot")) return snapshotHelpers;
     if (name.endsWith("/exam-call")) return examCallHelpers;
@@ -163,29 +166,163 @@ vm.runInNewContext(source, {
 });
 const backend = module.exports;
 const orderingFixture = [
-  { id: 'goho', source: 'technique', section: 'PROGRAMA', category: 'goho', name: 'Tenshin geri', grade: 'BLANCO' },
-  { id: 'cut-white', source: 'cut', cut_grade: 'BLANCO' },
-  { id: 'umpo', source: 'technique', section: 'UMPO_HO', category: 'goho', name: 'Um po ho', grade: 'AMARILLO' },
-  { id: 'juho', source: 'child_syllabus', section: 'Técnicas', category: 'juho', name: 'Kote nuki', grade: 'AMARILLO' },
-  { id: 'ukemi', source: 'technique', section: 'UKEMI', category: 'goho', name: 'Mae ukemi', grade: 'BLANCO' },
-  { id: 'kata', source: 'technique', section: 'KATA_TANEN', category: 'hokei', name: 'Tenchi ken dai ichi', grade: 'AMARILLO' },
-  { id: 'gakka', source: 'manual', section: 'GAKKA', name: 'Preguntas', grade: null },
-  { id: 'keimyaku', source: 'manual', section: 'KEIMYAKU', name: 'Keimyaku', grade: 'BLANCO' },
-  { id: 'cut-yellow', source: 'cut', cut_grade: 'AMARILLO' },
+  {
+    id: "goho",
+    source: "technique",
+    section: "PROGRAMA",
+    category: "goho",
+    name: "Tenshin geri",
+    grade: "BLANCO",
+  },
+  { id: "cut-white", source: "cut", cut_grade: "BLANCO" },
+  {
+    id: "umpo",
+    source: "technique",
+    section: "UMPO_HO",
+    category: "goho",
+    name: "Um po ho",
+    grade: "AMARILLO",
+  },
+  {
+    id: "juho",
+    source: "child_syllabus",
+    section: "Técnicas",
+    category: "juho",
+    name: "Kote nuki",
+    grade: "AMARILLO",
+  },
+  {
+    id: "ukemi",
+    source: "technique",
+    section: "UKEMI",
+    category: "goho",
+    name: "Mae ukemi",
+    grade: "BLANCO",
+  },
+  {
+    id: "kata",
+    source: "technique",
+    section: "KATA_TANEN",
+    category: "hokei",
+    name: "Tenchi ken dai ichi",
+    grade: "AMARILLO",
+  },
+  {
+    id: "gakka",
+    source: "manual",
+    section: "GAKKA",
+    name: "Preguntas",
+    grade: null,
+  },
+  {
+    id: "keimyaku",
+    source: "manual",
+    section: "KEIMYAKU",
+    name: "Keimyaku",
+    grade: "BLANCO",
+  },
+  { id: "cut-yellow", source: "cut", cut_grade: "AMARILLO" },
 ];
-assert.equal(typeof backend.orderIntegratedExamItems, 'function', 'Exam ordering must enforce techniques last');
-const orderedFixture = backend.orderIntegratedExamItems(orderingFixture, 'kids_progressive');
-assert.deepEqual(Array.from(orderedFixture, x => x.id), orderingFixture.map(x=>x.id), 'Progressive children keep the original exercises and seating markers unchanged');
-assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderingFixture,'kids'),x=>x.id),orderingFixture.map(x=>x.id),'Standard children also retain their original order');
-assert.equal(orderingFixture[0].id, 'goho', 'Do not mutate the original snapshot');
-assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderedFixture,'kids_progressive'), x=>x.id), Array.from(orderedFixture,x=>x.id), 'Ordering must be idempotent');
-assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderingFixture.filter(x=>x.source!=='cut'),'adults'),x=>x.id), ['umpo','ukemi','kata','gakka','keimyaku','goho','juho']);
-assert.equal(backend.orderIntegratedExamItems([{id:'shoulder',source:'technique',section:'PROGRAMA',category:'juho',name:'Kata muna otoshi'},{id:'theory',source:'manual',section:'GAKKA'}],'adults')[1].id,'shoulder','Kata in a technique name must not turn it into a kata');
-const embuOrder = [{id:'embu',source:'manual',section:'KUMI_EMBU',name:'Kumi embu'},{id:'goho',source:'technique',section:'PROGRAMA',category:'goho'},{id:'theory',source:'manual',section:'GAKKA'}];
-assert.deepEqual(Array.from(backend.orderIntegratedExamItems(embuOrder,'adults'),x=>x.id),['theory','goho','embu'],'Embu must be the last adult subject');
-const weightedItems=embuOrder.filter(x=>x.id!=='theory').map(row=>({...row,active:true,weight:backend.adultExamItemWeight(row)}));
-const weightedSummary=reviewHelpers.buildStudentReview({studentId:'weighted',items:weightedItems,scores:weightedItems.map(row=>({event_student_id:'weighted',event_item_id:row.id,examiner_id:'one',score:row.id==='embu'?10:0,skipped:false,notes:''})),passPercentage:70});
-assert.equal(weightedSummary.percentage,75,'One embu mark weighs three times one ordinary technique');
+assert.equal(
+  typeof backend.orderIntegratedExamItems,
+  "function",
+  "Exam ordering must enforce techniques last",
+);
+const orderedFixture = backend.orderIntegratedExamItems(
+  orderingFixture,
+  "kids_progressive",
+);
+assert.deepEqual(
+  Array.from(orderedFixture, (x) => x.id),
+  orderingFixture.map((x) => x.id),
+  "Progressive children keep the original exercises and seating markers unchanged",
+);
+assert.deepEqual(
+  Array.from(
+    backend.orderIntegratedExamItems(orderingFixture, "kids"),
+    (x) => x.id,
+  ),
+  orderingFixture.map((x) => x.id),
+  "Standard children also retain their original order",
+);
+assert.equal(
+  orderingFixture[0].id,
+  "goho",
+  "Do not mutate the original snapshot",
+);
+assert.deepEqual(
+  Array.from(
+    backend.orderIntegratedExamItems(orderedFixture, "kids_progressive"),
+    (x) => x.id,
+  ),
+  Array.from(orderedFixture, (x) => x.id),
+  "Ordering must be idempotent",
+);
+assert.deepEqual(
+  Array.from(
+    backend.orderIntegratedExamItems(
+      orderingFixture.filter((x) => x.source !== "cut"),
+      "adults",
+    ),
+    (x) => x.id,
+  ),
+  ["umpo", "ukemi", "kata", "gakka", "keimyaku", "goho", "juho"],
+);
+assert.equal(
+  backend.orderIntegratedExamItems(
+    [
+      {
+        id: "shoulder",
+        source: "technique",
+        section: "PROGRAMA",
+        category: "juho",
+        name: "Kata muna otoshi",
+      },
+      { id: "theory", source: "manual", section: "GAKKA" },
+    ],
+    "adults",
+  )[1].id,
+  "shoulder",
+  "Kata in a technique name must not turn it into a kata",
+);
+const embuOrder = [
+  { id: "embu", source: "manual", section: "KUMI_EMBU", name: "Kumi embu" },
+  { id: "goho", source: "technique", section: "PROGRAMA", category: "goho" },
+  { id: "theory", source: "manual", section: "GAKKA" },
+];
+assert.deepEqual(
+  Array.from(
+    backend.orderIntegratedExamItems(embuOrder, "adults"),
+    (x) => x.id,
+  ),
+  ["theory", "goho", "embu"],
+  "Embu must be the last adult subject",
+);
+const weightedItems = embuOrder
+  .filter((x) => x.id !== "theory")
+  .map((row) => ({
+    ...row,
+    active: true,
+    weight: backend.adultExamItemWeight(row),
+  }));
+const weightedSummary = reviewHelpers.buildStudentReview({
+  studentId: "weighted",
+  items: weightedItems,
+  scores: weightedItems.map((row) => ({
+    event_student_id: "weighted",
+    event_item_id: row.id,
+    examiner_id: "one",
+    score: row.id === "embu" ? 10 : 0,
+    skipped: false,
+    notes: "",
+  })),
+  passPercentage: 70,
+});
+assert.equal(
+  weightedSummary.percentage,
+  75,
+  "One embu mark weighs three times one ordinary technique",
+);
 examiner.source_examiner_id = "old-parent";
 examiner.source_examiner = { revoked_at: "2026-01-01" };
 await assert.rejects(
@@ -491,6 +628,7 @@ const registeredMembers = [],
 let failSettingsOnce = false;
 let failSubmittedOnce = false;
 let generatedId = 0;
+let failCredentialCas = false;
 const registrationClient = {
   from(table) {
     let operation = "select",
@@ -504,7 +642,11 @@ const registrationClient = {
           if (key === "then")
             return (resolve) => {
               let matches = (database[table] ?? []).filter((row) =>
-                filters.every(([field, value]) => Array.isArray(value) ? value.includes(row[field]) : row[field] === value),
+                filters.every(([field, value]) =>
+                  Array.isArray(value)
+                    ? value.includes(row[field])
+                    : row[field] === value,
+                ),
               );
               if (
                 operation === "update" &&
@@ -530,6 +672,15 @@ const registrationClient = {
                   error: new Error("submitted marker failed"),
                 });
               }
+              if (
+                operation === "update" &&
+                table === "exam_event_examiners" &&
+                values.access_token &&
+                failCredentialCas
+              ) {
+                matches = [];
+                failCredentialCas = false;
+              }
               if (operation === "update")
                 for (const row of matches) Object.assign(row, values);
               if (operation === "insert") {
@@ -553,7 +704,9 @@ const registrationClient = {
                 for (const entry of Array.isArray(values) ? values : [values]) {
                   const existing = database[table].find(
                     (row) =>
-                      (table === "exam_event_items" ? row.id === entry.id : row.event_student_id === entry.event_student_id) &&
+                      (table === "exam_event_items"
+                        ? row.id === entry.id
+                        : row.event_student_id === entry.event_student_id) &&
                       (table !== "exam_event_scores" ||
                         (row.event_item_id === entry.event_item_id &&
                           row.examiner_id === entry.examiner_id)),
@@ -569,7 +722,8 @@ const registrationClient = {
               });
             };
           return (...args) => {
-            if (key === "eq" || key === "is" || key === "in") filters.push(args);
+            if (key === "eq" || key === "is" || key === "in")
+              filters.push(args);
             if (key === "update" || key === "upsert" || key === "insert") {
               operation = key;
               values = args[0];
@@ -595,6 +749,8 @@ vm.runInNewContext(source, {
   JSON,
   Error,
   require(name) {
+    if (name.endsWith("/auth"))
+      return { hasInternalAccess: async () => internalAccess };
     if (name.endsWith("/integrated-exam-snapshot")) return snapshotHelpers;
     if (name.endsWith("/adult-exam-curriculum")) return adultCurriculum;
     if (name.endsWith("/exam-call")) return examCallHelpers;
@@ -761,15 +917,42 @@ assert.equal(assigned.examiner.exam_events, undefined);
 assert.equal(assigned.event.notes, "Teacher event notes");
 assert.equal(assigned.assignedGrades.join(","), "1 KYU");
 assert.ok(!JSON.stringify(assigned).includes("other-secret"));
-const beforeOrderingItems = database.exam_event_items.map(row=>({...row}));
-database.exam_event_items.find(row=>row.id==='i').category='goho';
-database.exam_event_items.push({...item,id:'theory-last-in-catalog',exam_event_id:'e',section:'GAKKA',order_index:999});
-const reorderedRoute = await registrationModule.exports.getExaminerExamByToken('secret','1 KYU');
-assert.deepEqual(Array.from(reorderedRoute.items,row=>row.id),['theory-last-in-catalog','i'],'Examiner opens theory before techniques regardless of stored order');
-const reorderedAdmin = await registrationModule.exports.getIntegratedExamAdmin('e');
-assert.ok(reorderedAdmin.items.findIndex(row=>row.id==='theory-last-in-catalog')<reorderedAdmin.items.findIndex(row=>row.id==='i'),'Teacher and examiner share the techniques-last rule');
-assert.deepEqual(Array.from(reorderedAdmin.summaries.find(row=>row.studentId==='s').items,row=>row.id),['theory-last-in-catalog','i'],'Individual review/report also keeps techniques last');
-database.exam_event_items=beforeOrderingItems;
+const beforeOrderingItems = database.exam_event_items.map((row) => ({
+  ...row,
+}));
+database.exam_event_items.find((row) => row.id === "i").category = "goho";
+database.exam_event_items.push({
+  ...item,
+  id: "theory-last-in-catalog",
+  exam_event_id: "e",
+  section: "GAKKA",
+  order_index: 999,
+});
+const reorderedRoute = await registrationModule.exports.getExaminerExamByToken(
+  "secret",
+  "1 KYU",
+);
+assert.deepEqual(
+  Array.from(reorderedRoute.items, (row) => row.id),
+  ["theory-last-in-catalog", "i"],
+  "Examiner opens theory before techniques regardless of stored order",
+);
+const reorderedAdmin =
+  await registrationModule.exports.getIntegratedExamAdmin("e");
+assert.ok(
+  reorderedAdmin.items.findIndex((row) => row.id === "theory-last-in-catalog") <
+    reorderedAdmin.items.findIndex((row) => row.id === "i"),
+  "Teacher and examiner share the techniques-last rule",
+);
+assert.deepEqual(
+  Array.from(
+    reorderedAdmin.summaries.find((row) => row.studentId === "s").items,
+    (row) => row.id,
+  ),
+  ["theory-last-in-catalog", "i"],
+  "Individual review/report also keeps techniques last",
+);
+database.exam_event_items = beforeOrderingItems;
 await assert.rejects(
   () =>
     registrationModule.exports.submitIntegratedExamScores({
@@ -1051,7 +1234,14 @@ database.techniques = [
     category: "technique",
   },
 ];
-database.techniques.push({id:'basic-1',grade:'1 KYU',name:'Mae ukemi',active:true,category:'goho',content_type:'UKEMI'});
+database.techniques.push({
+  id: "basic-1",
+  grade: "1 KYU",
+  name: "Mae ukemi",
+  active: true,
+  category: "goho",
+  content_type: "UKEMI",
+});
 const created = await registrationModule.exports.createIntegratedExamEvent({
   title: "Adult groups",
   examDate: "2026-11-01",
@@ -1080,39 +1270,427 @@ assert.ok(
   ),
 );
 assert.equal(created.ownExaminerId, undefined);
-const createdItems = database.exam_event_items.filter(row=>row.exam_event_id===created.eventId);
-assert.equal(createdItems[0].technique_id,'basic-1','New exam stores fundamentals before techniques');
-assert.deepEqual(Array.from(createdItems,row=>row.order_index),Array.from({length:createdItems.length},(_,index)=>index+1),'Stored order indices match the execution order');
-assert.ok(createdItems.some(row=>row.section==='Gakka') && createdItems.some(row=>row.section==='Keimyaku'),'New adult exams include the non-technique book subjects');
-assert.equal(createdItems.at(-1).section,'Embu');
-assert.ok(createdItems.filter(row=>row.section==='Embu').every(row=>row.weight===3));
-assert.ok(createdItems.filter(row=>row.section!=='Embu').every(row=>row.weight===1));
-const disabled=createdItems.find(row=>row.section==='Gakka');
-disabled.active=false; disabled.summary='Teacher edited theory notes';
-const missing=createdItems.find(row=>row.section==='Keimyaku');
-database.exam_event_items=database.exam_event_items.filter(row=>row.id!==missing.id);
-const preservedId=disabled.id;
-createdEvent.updated_at='2026-11-06T10:00:00.000Z';
-const completionCount=await registrationModule.exports.completeAdultExamCurriculum(created.eventId);
-assert.equal(completionCount,1,'Completion adds only the missing subject');
-const afterCompletion=database.exam_event_items.filter(row=>row.exam_event_id===created.eventId);
-assert.equal(afterCompletion.find(row=>row.id===preservedId).active,false,'Completion never reactivates teacher-disabled subjects');
-assert.equal(afterCompletion.find(row=>row.id===preservedId).summary,'Teacher edited theory notes');
-assert.equal(afterCompletion.find(row=>row.technique_id==='basic-1').id,createdItems.find(row=>row.technique_id==='basic-1').id,'Catalogue association and item identity survive completion');
-assert.equal(await registrationModule.exports.completeAdultExamCurriculum(created.eventId),0,'Repeated completion is idempotent');
-const originalProgram=createdEvent.program_type; createdEvent.program_type='kids_progressive';
-await assert.rejects(()=>registrationModule.exports.completeAdultExamCurriculum(created.eventId),/solo para exámenes de adultos/);
-createdEvent.program_type=originalProgram;
-database.exam_event_reviews.push({exam_event_id:created.eventId,event_student_id:'teacher-reviewed',review_notes:'Teacher conclusion',reviewed_at:'2026-11-06T10:01:00Z'});
-await assert.rejects(()=>registrationModule.exports.completeAdultExamCurriculum(created.eventId),/revisión del profesor/,'Teacher-reviewed exams cannot be rebuilt even without examiner scores');
-database.exam_event_reviews=database.exam_event_reviews.filter(row=>row.event_student_id!=='teacher-reviewed');
-database.exam_events.push({id:'old-template',program_type:'adults',title:'Incomplete old template'});
-database.exam_event_items.push({...item,id:'template-one',exam_event_id:'old-template',grade:'1 KYU',section:'PROGRAMA',category:'goho',name:'Kusshin zuki'});
-const copied=await registrationModule.exports.createIntegratedExamEvent({title:'Complete adult copy',examDate:'2026-11-10',programType:'adults',passPercentage:70,memberIds:['member-1'],examinerNames:[],templateEventId:'old-template'});
-const copiedItems=database.exam_event_items.filter(row=>row.exam_event_id===copied.eventId);
-assert.ok(copiedItems.some(row=>row.section==='Gakka')&&copiedItems.some(row=>row.section==='Keimyaku'),'Copying old adult templates also fills missing Kamoku subjects');
-assert.ok(copiedItems.every(row=>row.grade==='1 KYU'),'Copied curriculum contains only the new target grade');
-assert.equal(copiedItems.at(-1).section,'Embu');
+const createdItems = database.exam_event_items.filter(
+  (row) => row.exam_event_id === created.eventId,
+);
+assert.equal(
+  createdItems[0].technique_id,
+  "basic-1",
+  "New exam stores fundamentals before techniques",
+);
+assert.deepEqual(
+  Array.from(createdItems, (row) => row.order_index),
+  Array.from({ length: createdItems.length }, (_, index) => index + 1),
+  "Stored order indices match the execution order",
+);
+assert.ok(
+  createdItems.some((row) => row.section === "Gakka") &&
+    createdItems.some((row) => row.section === "Keimyaku"),
+  "New adult exams include the non-technique book subjects",
+);
+assert.equal(createdItems.at(-1).section, "Embu");
+assert.ok(
+  createdItems
+    .filter((row) => row.section === "Embu")
+    .every((row) => row.weight === 3),
+);
+assert.ok(
+  createdItems
+    .filter((row) => row.section !== "Embu")
+    .every((row) => row.weight === 1),
+);
+const disabled = createdItems.find((row) => row.section === "Gakka");
+disabled.active = false;
+disabled.summary = "Teacher edited theory notes";
+const missing = createdItems.find((row) => row.section === "Keimyaku");
+database.exam_event_items = database.exam_event_items.filter(
+  (row) => row.id !== missing.id,
+);
+const preservedId = disabled.id;
+createdEvent.updated_at = "2026-11-06T10:00:00.000Z";
+const completionCount =
+  await registrationModule.exports.completeAdultExamCurriculum(created.eventId);
+assert.equal(completionCount, 1, "Completion adds only the missing subject");
+const afterCompletion = database.exam_event_items.filter(
+  (row) => row.exam_event_id === created.eventId,
+);
+assert.equal(
+  afterCompletion.find((row) => row.id === preservedId).active,
+  false,
+  "Completion never reactivates teacher-disabled subjects",
+);
+assert.equal(
+  afterCompletion.find((row) => row.id === preservedId).summary,
+  "Teacher edited theory notes",
+);
+assert.equal(
+  afterCompletion.find((row) => row.technique_id === "basic-1").id,
+  createdItems.find((row) => row.technique_id === "basic-1").id,
+  "Catalogue association and item identity survive completion",
+);
+assert.equal(
+  await registrationModule.exports.completeAdultExamCurriculum(created.eventId),
+  0,
+  "Repeated completion is idempotent",
+);
+const originalProgram = createdEvent.program_type;
+createdEvent.program_type = "kids_progressive";
+await assert.rejects(
+  () => registrationModule.exports.completeAdultExamCurriculum(created.eventId),
+  /solo para exámenes de adultos/,
+);
+createdEvent.program_type = originalProgram;
+database.exam_event_reviews.push({
+  exam_event_id: created.eventId,
+  event_student_id: "teacher-reviewed",
+  review_notes: "Teacher conclusion",
+  reviewed_at: "2026-11-06T10:01:00Z",
+});
+await assert.rejects(
+  () => registrationModule.exports.completeAdultExamCurriculum(created.eventId),
+  /revisión del profesor/,
+  "Teacher-reviewed exams cannot be rebuilt even without examiner scores",
+);
+database.exam_event_reviews = database.exam_event_reviews.filter(
+  (row) => row.event_student_id !== "teacher-reviewed",
+);
+database.exam_events.push({
+  id: "old-template",
+  program_type: "adults",
+  title: "Incomplete old template",
+});
+database.exam_event_items.push({
+  ...item,
+  id: "template-one",
+  exam_event_id: "old-template",
+  grade: "1 KYU",
+  section: "PROGRAMA",
+  category: "goho",
+  name: "Kusshin zuki",
+});
+const copied = await registrationModule.exports.createIntegratedExamEvent({
+  title: "Complete adult copy",
+  examDate: "2026-11-10",
+  programType: "adults",
+  passPercentage: 70,
+  memberIds: ["member-1"],
+  examinerNames: [],
+  templateEventId: "old-template",
+});
+const copiedItems = database.exam_event_items.filter(
+  (row) => row.exam_event_id === copied.eventId,
+);
+assert.ok(
+  copiedItems.some((row) => row.section === "Gakka") &&
+    copiedItems.some((row) => row.section === "Keimyaku"),
+  "Copying old adult templates also fills missing Kamoku subjects",
+);
+assert.ok(
+  copiedItems.every((row) => row.grade === "1 KYU"),
+  "Copied curriculum contains only the new target grade",
+);
+assert.equal(copiedItems.at(-1).section, "Embu");
 console.log(
   "Adult grade-group creation, partial submission and recovery checks passed",
+);
+// Multiple same-grade pending judges must remain separate identities.
+const linkEvent = {
+  id: "links-event",
+  title: "Credential test",
+  program_type: "adults",
+  status: "active",
+  exam_date: "2099-12-15",
+  date_confirmed: true,
+  pass_percentage: 70,
+  updated_at: "2026-11-06T10:00:00.000Z",
+  notes: assignmentHelpers.encodeExamAssignments(
+    "Teacher notes",
+    {},
+    { gradeGroupMode: true, pendingExaminerIds: [] },
+  ),
+};
+database.exam_events.push(linkEvent);
+database.exam_event_students.push({
+  id: "links-student",
+  exam_event_id: linkEvent.id,
+  member_id: "links-member",
+  target_grade: "1 KYU",
+  current_grade: "2 KYU",
+  display_order: 1,
+});
+
+database.exam_event_reviews.push({
+  exam_event_id: linkEvent.id,
+  event_student_id: "links-student",
+  reviewed_at: "2026-11-06T10:01:00Z",
+  review_notes: "Teacher-only review",
+});
+await assert.rejects(
+  () =>
+    registrationModule.exports.saveAdultGradeGroups({
+      eventId: linkEvent.id,
+      examiners: [{ name: "", grades: ["1 KYU"] }],
+    }),
+  /revisión del profesor/,
+);
+assert.equal(
+  database.exam_event_examiners.some(
+    (row) => row.exam_event_id === linkEvent.id,
+  ),
+  false,
+);
+database.exam_event_reviews = database.exam_event_reviews.filter(
+  (row) => row.exam_event_id !== linkEvent.id,
+);
+await registrationModule.exports.saveAdultGradeGroups({
+  eventId: linkEvent.id,
+  examiners: [
+    { name: "", grades: ["1 KYU"] },
+    { name: "", grades: ["1 KYU"] },
+    { name: "", grades: ["1 KYU"] },
+  ],
+});
+const pendingJudges = database.exam_event_examiners.filter(
+  (row) => row.exam_event_id === linkEvent.id && !row.revoked_at,
+);
+assert.equal(pendingJudges.length, 3);
+const pendingScopes = assignmentHelpers.decodeExamAssignments(linkEvent.notes);
+assert.equal(pendingScopes.pendingExaminerIds.length, 3);
+assert.equal(new Set(pendingJudges.map((row) => row.id)).size, 3);
+console.log("Distinct new pending examiners can share one adult target grade.");
+// Three real judge rows contribute to the weighted mean; link removal is not judge removal.
+const judgeScopes = {};
+for (const [index, judge] of pendingJudges.entries()) {
+  judge.name = `Judge ${index + 1}`;
+  judge.submitted_at = "2026-11-06T11:00:00Z";
+  judge.exam_events = linkEvent;
+  judgeScopes[judge.id] = ["1 KYU"];
+}
+linkEvent.notes = assignmentHelpers.encodeExamAssignments(
+  "Teacher notes",
+  judgeScopes,
+  { gradeGroupMode: true, pendingExaminerIds: [] },
+);
+database.exam_event_items.push(
+  {
+    id: "link-basic",
+    exam_event_id: linkEvent.id,
+    source: "manual",
+    section: "Goho",
+    name: "Ordinary",
+    grade: "1 KYU",
+    weight: 1,
+    active: true,
+    order_index: 1,
+  },
+  {
+    id: "link-embu",
+    exam_event_id: linkEvent.id,
+    source: "manual",
+    section: "Embu",
+    name: "Kumi embu",
+    grade: "1 KYU",
+    weight: 3,
+    active: true,
+    order_index: 2,
+  },
+);
+for (const [index, judge] of pendingJudges.entries())
+  for (const [itemId, mark] of [
+    ["link-basic", 2 + index * 4],
+    ["link-embu", 10 - index * 4],
+  ])
+    database.exam_event_scores.push({
+      exam_event_id: linkEvent.id,
+      event_student_id: "links-student",
+      event_item_id: itemId,
+      examiner_id: judge.id,
+      score: mark,
+      skipped: false,
+      notes: "Keep judge score",
+    });
+const beforeLinks = await registrationModule.exports.getIntegratedExamAdmin(
+  linkEvent.id,
+);
+assert.equal(
+  beforeLinks.summaries[0].percentage,
+  60,
+  "All three judges contribute with Embu weight three",
+);
+await assert.rejects(
+  () => registrationModule.exports.finalizeIntegratedExamEvent(linkEvent.id),
+  /Confirma una decision/,
+);
+await assert.rejects(
+  () =>
+    registrationModule.exports.saveAdultGradeGroups({
+      eventId: linkEvent.id,
+      examiners: pendingJudges.map((row) => ({
+        id: row.id,
+        name: row.name,
+        grades: ["1 KYU"],
+      })),
+    }),
+  /no pueden cambiar/,
+);
+const judge = pendingJudges[0];
+judge.source_examiner_id = "old-alias-parent";
+const originalCredential = judge.access_token;
+const fixedIdentity = {
+  id: judge.id,
+  name: judge.name,
+  submitted_at: judge.submitted_at,
+  revoked_at: judge.revoked_at,
+};
+const keptScores = JSON.stringify(
+  database.exam_event_scores.filter(
+    (row) => row.exam_event_id === linkEvent.id,
+  ),
+);
+database.exam_event_reviews.push({
+  exam_event_id: linkEvent.id,
+  event_student_id: "links-student",
+  reviewed_at: "2026-11-06T11:05:00Z",
+  review_notes: JSON.stringify({
+    version: 1,
+    adjustments: {},
+    conclusion: "Teacher review retained",
+  }),
+});
+const keptReview = JSON.stringify(
+  database.exam_event_reviews.filter(
+    (row) => row.exam_event_id === linkEvent.id,
+  ),
+);
+const keptSettings = linkEvent.notes;
+internalAccess = false;
+await assert.rejects(
+  () =>
+    registrationModule.exports.manageAdultExaminerLink({
+      eventId: linkEvent.id,
+      examinerId: judge.id,
+      operation: "disable",
+    }),
+  /Acceso interno/,
+);
+assert.equal(judge.access_token, originalCredential);
+internalAccess = true;
+await registrationModule.exports.manageAdultExaminerLink({
+  eventId: linkEvent.id,
+  examinerId: judge.id,
+  operation: "disable",
+});
+assert.match(judge.access_token, /^disabled_[a-f0-9]{32}$/);
+assert.equal(
+  judge.source_examiner_id,
+  null,
+  "Old alias cannot recover the replacement credential",
+);
+await assert.rejects(
+  () => registrationModule.exports.getExaminerExamByToken(originalCredential),
+  /Enlace de examen no valido/,
+);
+await assert.rejects(
+  () => registrationModule.exports.getExaminerExamByToken(judge.access_token),
+  /Enlace de examen no valido/,
+);
+assert.deepEqual(
+  {
+    id: judge.id,
+    name: judge.name,
+    submitted_at: judge.submitted_at,
+    revoked_at: judge.revoked_at,
+  },
+  fixedIdentity,
+);
+assert.equal(
+  (await registrationModule.exports.getIntegratedExamAdmin(linkEvent.id))
+    .summaries[0].percentage,
+  60,
+  "Disabling a credential retains the judge in the mean",
+);
+const disabledCredential = judge.access_token;
+await registrationModule.exports.manageAdultExaminerLink({
+  eventId: linkEvent.id,
+  examinerId: judge.id,
+  operation: "renew",
+});
+assert.match(judge.access_token, /^[a-f0-9]{32}$/);
+assert.notEqual(judge.access_token, disabledCredential);
+assert.equal(
+  (await registrationModule.exports.getExaminerExamByToken(judge.access_token))
+    .examiner.id,
+  judge.id,
+);
+assert.equal(
+  JSON.stringify(
+    database.exam_event_scores.filter(
+      (row) => row.exam_event_id === linkEvent.id,
+    ),
+  ),
+  keptScores,
+);
+assert.equal(
+  JSON.stringify(
+    database.exam_event_reviews.filter(
+      (row) => row.exam_event_id === linkEvent.id,
+    ),
+  ),
+  keptReview,
+);
+assert.equal(linkEvent.notes, keptSettings);
+const renewedCredential = judge.access_token;
+failCredentialCas = true;
+await assert.rejects(
+  () =>
+    registrationModule.exports.manageAdultExaminerLink({
+      eventId: linkEvent.id,
+      examinerId: judge.id,
+      operation: "renew",
+    }),
+  /enlace ha cambiado/,
+);
+assert.equal(judge.access_token, renewedCredential);
+assert.equal(
+  linkEvent.status,
+  "active",
+  "Failed CAS releases the mutation lease",
+);
+await assert.rejects(
+  () =>
+    registrationModule.exports.manageAdultExaminerLink({
+      eventId: linkEvent.id,
+      examinerId: "wrong-event-judge",
+      operation: "disable",
+    }),
+  /Examinador ajeno/,
+);
+linkEvent.program_type = "kids";
+await assert.rejects(
+  () =>
+    registrationModule.exports.manageAdultExaminerLink({
+      eventId: linkEvent.id,
+      examinerId: judge.id,
+      operation: "disable",
+    }),
+  /solo a exámenes adultos/,
+);
+linkEvent.program_type = "adults";
+linkEvent.status = "completed";
+await assert.rejects(
+  () =>
+    registrationModule.exports.manageAdultExaminerLink({
+      eventId: linkEvent.id,
+      examinerId: judge.id,
+      operation: "renew",
+    }),
+  /ya esta cerrado/,
+);
+linkEvent.status = "active";
+await assert.rejects(
+  () => registrationModule.exports.finalizeIntegratedExamEvent(linkEvent.id),
+  /Confirma una decision/,
+);
+console.log(
+  "Adult examiner disable/renew preserves judge identities, grades, submissions, scores, weighted mean and teacher review gate; old credentials and aliases are invalidated.",
 );

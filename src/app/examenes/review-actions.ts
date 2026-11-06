@@ -117,14 +117,20 @@ export async function saveIntegratedExamAssignmentsAction(form: FormData) {
   const eventId = text(form, "eventId");
   let errorText = "";
   try {
-    const examiners = form.getAll("examinerIds").map((value) => {
-      const id = String(value);
+    const removed = new Set(form.getAll("removedExaminerIds").map(String));
+    const examiners = [...new Set(form.getAll("examinerIds").map(String))].filter((id) => !removed.has(id)).map((id) => {
       return {
         id,
         name: text(form, `examinerName:${id}`),
         grades: form.getAll(`scope:${id}`).map(String),
       };
     });
+    for (const key of new Set(form.getAll("newExaminerKeys").map(String))) {
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(key)) throw new Error("Fila de examinador no válida.");
+      const name = text(form, `examinerName:new:${key}`);
+      const grades = form.getAll(`scope:new:${key}`).map(String);
+      if (name || grades.length) examiners.push({ id: "", name, grades });
+    }
     const name = text(form, "examinerName:new");
     if (name || form.getAll("scope:new").length)
       examiners.push({
