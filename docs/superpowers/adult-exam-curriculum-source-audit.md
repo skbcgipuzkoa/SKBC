@@ -55,3 +55,26 @@ Total: 497 rows across ten adult target grades. Embu is returned last for every 
 ## Verification
 
 `node scripts/check-adult-exam-curriculum.mjs` checks all ten grades, unsupported-grade handling, independent returned objects, unique section/name pairs, known source omissions, complete Embu/vocabulary summaries, Keimyaku cross-references, separate tan-en/sotai, explicit kata expansion and exact compound coverage. The test performs no database or SMTP operations.
+
+## Written Gakka workflow metadata (6 November 2026)
+
+The source delivery requirement is now attached to each static Gakka item as `gakka: {mode,timing}`. The separate pure `adult-exam-gakka.ts` helper builds exact target-grade plans and a read-only normalization view. The club has explicitly chosen to request **all written material in advance outside the physical examiner link**, including the KYU material whose book timing is the grading day. This club workflow does not change the recorded source timing.
+
+| Target | Oral | Required written | Written choice bank | Select | Source timing / information |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 5 KYU | 4 | 0 | 0 | 0 | Oral at the grading, including vocabulary list 1 |
+| 4 KYU | 4 | 0 | 0 | 0 | Oral at the grading, including vocabulary list 2 |
+| 3 KYU | 0 | 6 | 0 | 0 | Written at the grading in the book; prepared outside the physical link under club policy |
+| 2 KYU | 0 | 6 | 0 | 0 | Same written-at-grading source timing; exactly the six 2 KYU topics |
+| 1 KYU | 0 | 7 | 0 | 0 | Same written-at-grading source timing |
+| 1 DAN | 0 | 2 | 8 | 3 | Two advance submissions; three of eight topics selected for the grading in the source |
+| 2 DAN | 0 | 2 | 7 | 3 | Two advance submissions; three of seven topics |
+| 3 DAN | 0 | 2 | 7 | 3 | Two advance submissions; three of seven topics |
+| 4 DAN | 0 | 6 | 0 | 0 | Six advance submissions; source explicitly requires no theory test at the grading |
+| 5 DAN | 0 | 0 | 0 | 0 | Daikenshi hokai examined separately; no topic list is supplied or invented |
+
+Yondan's “no theory test at the grading” appears in `externalNotes` as an informational, nonphysical note, not as an additional subject or a claim that an external examination is required. Godan's external note is the actual separate hokai requirement.
+
+For **open adult/dan events only**, the normalization view keeps oral Gakka at weight 1; written submissions and selected-bank records have weight 0. A newly converted bank is initially unselected even if old broad catalogue records were active. Existing intentional `GAKKA_SELECCION` records retain their selection state. Unknown or wrong-grade Gakka is marked `GAKKA_FUERA_DE_GRADO` at weight 0. Identity is exact after stripping only delivery prefixes, accents, punctuation and case; there is no cross-grade topic substitution. IDs, teacher summaries/annotations and disabled states remain intact. Ordinary subjects and Embu retain their existing weights. Completed/archived exams and both child programs pass through unchanged, including array identity.
+
+Verification: `node scripts/check-adult-exam-gakka.mjs` covers per-grade counts, exact six 2 KYU topics, DAN bank counts/selection defaults, original source timing, wrong-tagged cross-grade topics, input immutability, idempotence, preserved teacher notes/disabled items, oral/Embu weights and child/history isolation. The curriculum regression additionally validates every item's source delivery metadata. These tests perform no database writes or outbound messaging.

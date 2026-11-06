@@ -1,4 +1,5 @@
 import { resolveAdultExamTargetGrade } from "../src/lib/integrated-exam-assignments.ts";
+import * as adultGakkaHelpers from "../src/lib/adult-exam-gakka.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -430,6 +431,8 @@ vm.runInNewContext(
     exports: admin.exports,
     process: { env: {} },
     require: (name) =>
+      name === "@/lib/adult-exam-gakka" ? adultGakkaHelpers :
+      name.includes("WrittenGakkaPlan") ? {WrittenGakkaPlan:()=>null} :
       name === "@/lib/exam-invitations"
         ? { listExamInvitationResponses: async () => [] }
         : name.includes("ExamCallAttribution")

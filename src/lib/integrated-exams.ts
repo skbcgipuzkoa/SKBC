@@ -1,6 +1,7 @@
 import { hasInternalAccess } from "@/lib/auth";
 import { attributeExamCall } from "@/lib/exam-call";
 import { getAdultExamCurriculum } from "@/lib/adult-exam-curriculum";
+import { getAdultGakkaPlan, gakkaIdentity, isAdultGakkaItem, normalizeAdultGakkaItems, sectionForGakka } from "@/lib/adult-exam-gakka";
 import {
   completedExaminerGrades,
   decodeExamAssignments,
@@ -147,8 +148,7 @@ function appendMissingAdultItems<
           item.grade === entry.grade &&
           ((entry.technique_id && item.technique_id === entry.technique_id) ||
             (adultCurriculumSection(item) === adultCurriculumSection(entry) &&
-              adultCurriculumKey(item.name) ===
-                adultCurriculumKey(entry.name))),
+              (adultCurriculumKey(item.name) === adultCurriculumKey(entry.name) || (isAdultGakkaItem(item) && isAdultGakkaItem(entry) && gakkaIdentity(item.name) === gakkaIdentity(entry.name))))),
       )
     )
       result.push(entry);
@@ -175,6 +175,7 @@ export function adultExamItemWeight(item: {
   category?: string | null;
   name?: string;
 }) {
+  if (/^GAKKA_(ENTREGA|SELECCION|EXTERNO|FUERA_DE_GRADO)$/.test(item.section ?? "")) return 0;
   return item.source === "cut" ? 0 : isEmbuExamItem(item) ? 3 : 1;
 }
 
@@ -444,6 +445,7 @@ export async function createIntegratedExamEvent(input: {
           ),
         );
       }
+      items = normalizeAdultGakkaItems(items, input.programType, "active");
     } catch (error) {
       await supabase.from("exam_events").delete().eq("id", event.id);
       throw error;
@@ -483,11 +485,10 @@ export async function createIntegratedExamEvent(input: {
         orderIntegratedExamItems<(typeof items)[number]>(
           items,
           input.programType,
-        ).map((item, index) => ({
-          ...item,
-          ...(isAdultCreation ? { weight: adultExamItemWeight(item) } : {}),
-          order_index: index + 1,
-        })),
+        ).map((item, index) => {
+          const {gakka:_deliveryMetadata,...record}=item as AdultExamDraftItem & {gakka?:unknown};
+          return {...record,...(isAdultCreation ? { weight: adultExamItemWeight(item) } : {}),order_index:index+1};
+        }),
       );
     if (itemsError) {
       await supabase.from("exam_events").delete().eq("id", event.id);
@@ -742,6 +743,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
       scoresError ??
       reviewsError
     );
+  const normalizedItems = normalizeAdultGakkaItems(items ?? [], event.program_type, event.status);
   const assignments = resolveExamAssignments({
     programType: event.program_type,
     notes: event.notes,
@@ -758,7 +760,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
       completedExaminerGrades({
         grades: assignments.examinerGradeScopes[examiner.id] ?? [],
         students: students ?? [],
-        items: items ?? [],
+        items: normalizedItems,
         scores: (scores ?? []).filter(
           (score) => score.examiner_id === examiner.id,
         ),
@@ -786,7 +788,7 @@ export async function getIntegratedExamAdmin(eventId: string) {
         )),
   );
   const orderedItems = orderIntegratedExamItems(
-    items ?? [],
+    normalizedItems,
     event.program_type,
   );
   const summaries = (students ?? []).map((student) => {
@@ -1061,6 +1063,30 @@ export async function completeAdultExamCurriculum(eventId: string) {
   });
 }
 
+export async function saveAdultWrittenGakkaSelection(input:{eventId:string;grade:string;topicKeys:string[]}) {
+  if (!(await hasInternalAccess())) throw new Error("Acceso interno requerido.");
+  const data=await getIntegratedExamAdmin(input.eventId);
+  if (!["adults","dan_tribunal"].includes(data.event.program_type)) throw new Error("Los escritos corresponden solo a exámenes adultos.");
+  const targets=data.event.target_grade ? [data.event.target_grade] : data.adultTargetGrades;
+  if (!targets.includes(input.grade)) throw new Error("El grado no corresponde a este examen.");
+  if (data.hasSubmittedScores || data.examiners.some(row=>row.submitted_at) || data.reviews.some(row=>row.reviewed_at || row.final_passed!=null || row.review_notes?.trim())) throw new Error("Configura las entregas escritas antes de evaluar o revisar el examen.");
+  const plan=getAdultGakkaPlan(input.grade);
+  const keys=new Set(input.topicKeys);
+  if (!plan.choiceCount || keys.size!==input.topicKeys.length || (keys.size!==0 && keys.size!==plan.choiceCount) || [...keys].some(key=>!plan.choiceWritten.some(topic=>topic.key===key))) throw new Error(`Selecciona ${plan.choiceCount || 3} temas de este grado, o deja la selección vacía para decidir más adelante.`);
+  return withEventMutationLock(data.event,async()=>{
+    const records:AdultExamDraftItem[]=data.items.map(item=>({...item}));
+    for(const topic of plan.choiceWritten){
+      const existing=records.find(item=>item.grade===input.grade && gakkaIdentity(item.name)===gakkaIdentity(topic.sourceName));
+      if(existing){ existing.section="GAKKA_SELECCION";existing.weight=0;existing.active=keys.has(topic.key); }
+      else records.push({id:randomUUID(),exam_event_id:data.event.id,source:"manual",section:"GAKKA_SELECCION",category:"Gakka",grade:input.grade,name:topic.sourceName,summary:topic.summary,weight:0,order_index:records.length+1,cut_grade:null,active:keys.has(topic.key)});
+    }
+    const rows=orderIntegratedExamItems(records,data.event.program_type).map((item,index)=>({id:item.id??randomUUID(),exam_event_id:data.event.id,source:item.source,technique_id:item.technique_id??null,child_syllabus_item_id:item.child_syllabus_item_id??null,section:item.section,category:item.category,grade:item.grade,name:item.name,summary:item.summary,weight:adultExamItemWeight(item),order_index:index+1,cut_grade:item.cut_grade??null,active:item.active!==false}));
+    const saved=await createAdminClient().from("exam_event_items").upsert(rows,{onConflict:"id"});
+    if(saved.error)throw saved.error;
+    await refreshIntegratedExamReview(data.event.id);
+  });
+}
+
 export async function deleteIntegratedExamItem(itemId: string) {
   const supabase = createAdminClient();
   const { data: item, error: itemError } = await supabase
@@ -1180,6 +1206,7 @@ export async function getExaminerExamByToken(token: string, grade?: string) {
 
   if (studentsError || itemsError || scoresError)
     throw studentsError ?? itemsError ?? scoresError;
+  const examItems = normalizeAdultGakkaItems(items ?? [], event.program_type, event.status).filter(item => !["adults","dan_tribunal"].includes(event.program_type) || ["completed","archived"].includes(event.status) || item.source === "cut" || item.weight > 0);
   const assignment = resolveExamAssignments({
     programType: event.program_type,
     notes: event.notes,
@@ -1197,7 +1224,7 @@ export async function getExaminerExamByToken(token: string, grade?: string) {
     ? completedExaminerGrades({
         grades: assignedGrades,
         students: students ?? [],
-        items: items ?? [],
+        items: examItems,
         scores: existingScores ?? [],
       })
     : [];
@@ -1214,7 +1241,7 @@ export async function getExaminerExamByToken(token: string, grade?: string) {
     (student) => !isAdult || routeGrades.includes(student.target_grade ?? ""),
   );
   const studentIds = new Set(assignedStudents.map((student) => student.id));
-  const assignedItems = (items ?? []).filter(
+  const assignedItems = examItems.filter(
     (item) => !isAdult || routeGrades.includes(item.grade ?? ""),
   );
   if (isAdult)
@@ -2101,6 +2128,12 @@ export async function finalizeIntegratedExamEvent(
       throw new Error(
         "Las evaluaciones han cambiado. Confirma las revisiones.",
       );
+    // Freeze the approved open-exam Gakka view before closing: future history/report reads
+    // must use these same persisted weights and sections, not the old imported paper scores.
+    if (["adults","dan_tribunal"].includes(data.event.program_type)) {
+      const gakkaRows=data.items.filter(isAdultGakkaItem).map(item=>({id:item.id,exam_event_id:eventId,source:item.source,technique_id:item.technique_id??null,child_syllabus_item_id:item.child_syllabus_item_id??null,section:item.section,name:item.name,summary:item.summary,grade:item.grade,category:item.category,weight:item.weight,order_index:item.order_index,cut_grade:item.cut_grade,active:item.active}));
+      if(gakkaRows.length){ const savedGakka=await supabase.from("exam_event_items").upsert(gakkaRows,{onConflict:"id"}); if(savedGakka.error)throw savedGakka.error; }
+    }
     for (const student of data.students) {
       const summary = data.summaries.find(
         (row) => row.studentId === student.id,
@@ -2423,7 +2456,7 @@ async function buildAdultItems(eventId: string, targetGrades: string[]) {
 
   if (error) throw error;
   const catalogue: AdultExamDraftItem[] = (data ?? [])
-    .filter((item) => grades.includes(item.grade ?? ""))
+    .filter((item) => grades.includes(item.grade ?? "") && !isAdultGakkaItem({section:item.content_type,category:item.category,name:item.name}))
     .map((item, index) => ({
       exam_event_id: eventId,
       source: "technique",
@@ -2468,13 +2501,14 @@ async function buildAdultItems(eventId: string, targetGrades: string[]) {
       catalogue.push({
         exam_event_id: eventId,
         source: "manual",
-        section: entry.section,
+        section: entry.gakka ? sectionForGakka(entry.gakka) : entry.section,
         name: entry.name,
         summary:
           entry.summary ?? "Programa Kamoku BSKF 2024 del grado objetivo.",
         grade,
         category: entry.section,
-        weight: adultExamItemWeight(entry),
+        weight: entry.gakka && entry.gakka.mode !== "oral" ? 0 : adultExamItemWeight(entry),
+        ...(entry.gakka?.mode === "written-choice" ? {active:false} : {}),
         order_index: catalogue.length + 1,
         cut_grade: null,
       });

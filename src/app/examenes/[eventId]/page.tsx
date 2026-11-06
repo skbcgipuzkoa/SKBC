@@ -1,6 +1,8 @@
 import { StudentExamPhoto } from "@/app/examenes/components/ExamStepNavigator";
 import { completeAdultExamCurriculumAction } from "@/app/examenes/curriculum-actions";
 import { manageAdultExaminerLinkAction } from "@/app/examenes/examiner-link-actions";
+import { WrittenGakkaPlan } from "@/app/examenes/components/WrittenGakkaPlan";
+import { getAdultGakkaPlan, gakkaIdentity } from "@/lib/adult-exam-gakka";
 import { driveImageUrl } from "@/lib/drive";
 import { ExamGradeAssignmentForm } from "@/app/examenes/components/ExamGradeAssignmentForm";
 import {
@@ -65,12 +67,14 @@ export default async function IntegratedExamPage({
   } = await getIntegratedExamAdmin(eventId);
   const publicBaseUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://skbc.vercel.app";
-  const scorableItems = items.filter((item) => item.source !== "cut");
+  const scorableItems = items.filter((item) => item.source !== "cut" && (!["adults","dan_tribunal"].includes(event.program_type) || item.weight > 0));
   const isCompleted =
     event.status === "completed" || event.status === "archived";
   const isAdult =
     event.program_type === "adults" || event.program_type === "dan_tribunal";
   const hasTeacherReview = reviews.some(review => review.reviewed_at || review.final_passed != null || review.review_notes?.trim());
+  const writtenPlans = isAdult ? (event.target_grade ? [event.target_grade] : adultTargetGrades).map(getAdultGakkaPlan) : [];
+  const writtenSelections = Object.fromEntries(writtenPlans.map(plan=>[plan.grade,plan.choiceWritten.filter(topic=>items.some(item=>item.grade===plan.grade && item.section==="GAKKA_SELECCION" && item.active && gakkaIdentity(item.name)===gakkaIdentity(topic.sourceName))).map(topic=>topic.key)]));
   const isExaminerComplete = (examiner: (typeof examiners)[number]) => {
     if (!isAdult) return Boolean(examiner.submitted_at);
     const assigned = examinerGradeScopes[examiner.id] ?? adultTargetGrades;
@@ -165,6 +169,8 @@ export default async function IntegratedExamPage({
         {query.saved === "curriculum" ? <p className="notice">Kamoku completado. Se conservan los puntos editados y desactivados. Embu queda al final con peso 3; las demás materias tienen peso 1.</p> : null}
         {query.saved === "examiner-link-disabled" ? <p className="notice">Enlace eliminado. Las valoraciones enviadas se conservan. Puedes generar un enlace nuevo para esta misma persona.</p> : null}
         {query.saved === "examiner-link-renewed" ? <p className="notice">Enlace nuevo generado. Copia el enlace actualizado; el anterior ya no permite evaluar. Se conservan las valoraciones enviadas.</p> : null}
+        {query.saved === "written-gakka" ? <p className="notice">Selección escrita guardada. Estos temas se preparan y entregan por separado; no aparecen en el enlace del examinador ni suman puntos en la prueba física.</p> : null}
+        {query.error === "written-gakka" ? <p className="info-banner">No se ha guardado la selección escrita. Elige tres temas del grado o deja la selección vacía; debe hacerse antes de evaluar o revisar el examen.</p> : null}
         {query.saved === "finalized" ? (
           <p className="save-ok">
             Resultados registrados. Consulta los informes y el estado de
@@ -717,7 +723,8 @@ export default async function IntegratedExamPage({
           )}
         </section>
 
-        {isAdult && !isCompleted && !hasSubmittedScores && !hasTeacherReview && !examiners.some(examiner => examiner.submitted_at) ? <section className="card"><h2>Programa completo del grado</h2><p>Los exámenes nuevos incluyen el Kamoku BSKF 2024. Para actualizar este examen, añade las materias que falten sin reactivar puntos desactivados. Embu se valora al final con peso 3; cada otra materia, con peso 1.</p><form action={completeAdultExamCurriculumAction}><input type="hidden" name="eventId" value={event.id}/><button type="submit">Completar con Kamoku</button></form></section> : null}
+        {isAdult ? <WrittenGakkaPlan key={`${event.id}:${event.updated_at}`} eventId={eventId} plans={writtenPlans} selected={writtenSelections} locked={isCompleted || hasSubmittedScores || hasTeacherReview || examiners.some(examiner=>Boolean(examiner.submitted_at))} /> : null}
+        {isAdult && !isCompleted && !hasSubmittedScores && !hasTeacherReview && !examiners.some(examiner => examiner.submitted_at) ? <section className="card"><h2>Programa completo del grado</h2><p>Los exámenes nuevos incluyen el Kamoku BSKF 2024. Para actualizar este examen, añade las materias que falten sin reactivar puntos desactivados. Las entregas escritas se consultan en su apartado. Embu se valora al final con peso 3; cada otra materia de la prueba física, con peso 1.</p><form action={completeAdultExamCurriculumAction}><input type="hidden" name="eventId" value={event.id}/><button type="submit">Completar con Kamoku</button></form></section> : null}
         <details className="card foldable-admin-section">
           <summary>
             <span>

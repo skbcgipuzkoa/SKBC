@@ -1,5 +1,6 @@
 import * as gradeHelpers from "../src/lib/grades.ts";
 import * as adultCurriculum from "../src/lib/adult-exam-curriculum.ts";
+import * as adultGakka from "../src/lib/adult-exam-gakka.ts";
 import * as snapshotHelpers from "../src/lib/integrated-exam-snapshot.ts";
 import * as examCallHelpers from "../src/lib/exam-call.ts";
 import * as childProgramHelpers from "../src/lib/child-program.ts";
@@ -151,6 +152,7 @@ vm.runInNewContext(source, {
   require(name) {
     if (name.endsWith("/auth"))
       return { hasInternalAccess: async () => internalAccess };
+    if (name.endsWith("/adult-exam-gakka")) return adultGakka;
     if (name.endsWith("/adult-exam-curriculum")) return adultCurriculum;
     if (name.endsWith("/integrated-exam-snapshot")) return snapshotHelpers;
     if (name.endsWith("/exam-call")) return examCallHelpers;
@@ -805,6 +807,7 @@ vm.runInNewContext(source, {
     if (name.endsWith("/auth"))
       return { hasInternalAccess: async () => internalAccess };
     if (name.endsWith("/integrated-exam-snapshot")) return snapshotHelpers;
+    if (name.endsWith("/adult-exam-gakka")) return adultGakka;
     if (name.endsWith("/adult-exam-curriculum")) return adultCurriculum;
     if (name.endsWith("/exam-call")) return examCallHelpers;
     if (name.endsWith("/grades")) return gradeHelpers;
@@ -978,7 +981,8 @@ database.exam_event_items.push({
   ...item,
   id: "theory-last-in-catalog",
   exam_event_id: "e",
-  section: "GAKKA",
+  section: "UMPO_HO",
+  name: "Chidori ashi",
   order_index: 999,
 });
 const reorderedRoute = await registrationModule.exports.getExaminerExamByToken(
@@ -1337,7 +1341,7 @@ assert.deepEqual(
   "Stored order indices match the execution order",
 );
 assert.ok(
-  createdItems.some((row) => row.section === "Gakka") &&
+  createdItems.some((row) => row.section === "GAKKA_ENTREGA") &&
     createdItems.some((row) => row.section === "Keimyaku"),
   "New adult exams include the non-technique book subjects",
 );
@@ -1349,10 +1353,12 @@ assert.ok(
 );
 assert.ok(
   createdItems
-    .filter((row) => row.section !== "Embu")
+    .filter((row) => row.section !== "Embu" && !row.section.startsWith('GAKKA_'))
     .every((row) => row.weight === 1),
 );
-const disabled = createdItems.find((row) => row.section === "Gakka");
+assert.ok(createdItems.filter(row=>row.section==='GAKKA_ENTREGA').every(row=>row.weight===0),'Written documents never contribute to physical exam scoring');
+assert.ok(createdItems.every(row=>!('gakka' in row)),'Derived delivery metadata must never be sent as a database column');
+const disabled = createdItems.find((row) => row.section === "GAKKA_ENTREGA");
 disabled.active = false;
 disabled.summary = "Teacher edited theory notes";
 const missing = createdItems.find((row) => row.section === "Keimyaku");
@@ -1434,7 +1440,7 @@ const copiedItems = database.exam_event_items.filter(
   (row) => row.exam_event_id === copied.eventId,
 );
 assert.ok(
-  copiedItems.some((row) => row.section === "Gakka") &&
+  copiedItems.some((row) => row.section === "GAKKA_ENTREGA") &&
     copiedItems.some((row) => row.section === "Keimyaku"),
   "Copying old adult templates also fills missing Kamoku subjects",
 );
@@ -1747,3 +1753,52 @@ await assert.rejects(
 console.log(
   "Adult examiner disable/renew preserves judge identities, grades, submissions, scores, weighted mean and teacher review gate; old credentials and aliases are invalidated.",
 );
+
+// An older open exam can store written/wrong-grade Gakka with weight 1; every runtime path must still exclude it.
+const legacyGakkaEvent={...event,id:'legacy-gakka',target_grade:'2 KYU',program_type:'adults',status:'active',updated_at:'2026-11-06T10:00:00.000Z',date_confirmed:true,notes:assignmentHelpers.encodeExamAssignments('',{'gakka-judge':['2 KYU']})};
+database.exam_events.push(legacyGakkaEvent);
+database.exam_event_students.push({...student,id:'gakka-student',exam_event_id:legacyGakkaEvent.id,target_grade:'2 KYU'});
+database.exam_event_items.push(...[
+  {id:'gakka-physical',name:'Tenshin geri',section:'PROGRAMA',category:'goho'},
+  {id:'gakka-paper',name:'Ken Zen Ichi Nyo',section:'Gakka',category:'Gakka'},
+  {id:'gakka-wrong-grade',name:'Doshin So y la fundación del Shorinji Kempo',section:'Gakka',category:'Gakka'},
+].map(row=>({...item,...row,exam_event_id:legacyGakkaEvent.id,grade:'2 KYU',active:true,weight:1})));
+const legacyGakkaJudge={...examiner,id:'gakka-judge',exam_event_id:legacyGakkaEvent.id,exam_events:legacyGakkaEvent,submitted_at:null,access_token:'g'.repeat(32),source_examiner_id:null};
+database.exam_event_examiners.push(legacyGakkaJudge);
+const physicalRoute=await registrationModule.exports.getExaminerExamByToken(legacyGakkaJudge.access_token);
+assert.deepEqual(Array.from(physicalRoute.items,row=>row.id),['gakka-physical'],'Neither written nor other-grade Gakka can appear in the physical examiner payload');
+assert.equal(database.exam_event_items.find(row=>row.id==='gakka-paper').weight,1,'Reading the canonical view never mutates existing stored items');
+let gakkaAdmin=await registrationModule.exports.getIntegratedExamAdmin(legacyGakkaEvent.id);
+assert.equal(gakkaAdmin.summaries[0].totalItems,1,'Admin scoring and examiner route use the same physical syllabus');
+await registrationModule.exports.submitIntegratedExamScores({token:legacyGakkaJudge.access_token,scores:[{eventStudentId:'gakka-student',eventItemId:'gakka-physical',score:5,skipped:false,notes:''}]});
+gakkaAdmin=await registrationModule.exports.getIntegratedExamAdmin(legacyGakkaEvent.id);
+assert.equal(gakkaAdmin.summaries[0].percentage,50);assert.equal(gakkaAdmin.summaries[0].complete,true,'No written-answer scores are required to complete the physical route');
+assert.deepEqual(Array.from((await registrationModule.exports.getExaminerExamByToken(legacyGakkaJudge.access_token,'2 KYU')).items,row=>row.id),['gakka-physical'],'Normalization remains consistent after a judge submits');
+await assert.rejects(()=>registrationModule.exports.finalizeIntegratedExamEvent(legacyGakkaEvent.id),/Confirma una decision/);
+await registrationModule.exports.saveIntegratedExamStudentReview({eventId:legacyGakkaEvent.id,studentId:'gakka-student',adjustments:{},decision:'fail',conclusion:'Physical review; written papers handled separately',sourceSignature:gakkaAdmin.summaries[0].sourceSignature});
+await registrationModule.exports.finalizeIntegratedExamEvent(legacyGakkaEvent.id);
+const closedGakkaAdmin=await registrationModule.exports.getIntegratedExamAdmin(legacyGakkaEvent.id);
+assert.equal(database.exam_event_items.find(row=>row.id==='gakka-paper').weight,0,'Registration freezes the canonical written separation for history and report retries');
+assert.equal(closedGakkaAdmin.summaries[0].totalItems,1);assert.equal(closedGakkaAdmin.summaries[0].percentage,50);
+assert.equal(reviewHelpers.isReviewCurrent(closedGakkaAdmin.summaries[0].review,closedGakkaAdmin.summaries[0]),true,'Closing an old exam must not resurrect the old written grading requirements');
+
+database.members.push({id:'paper-dan-member',display_name:'Written learner',class:'adults',grade:'1 KYU',status:'active'});
+const paperExam=await registrationModule.exports.createIntegratedExamEvent({title:'Written DAN',examDate:'2026-11-12',programType:'adults',passPercentage:70,memberIds:['paper-dan-member'],examinerNames:[]});
+const paperEvent=database.exam_events.find(row=>row.id===paperExam.eventId);paperEvent.updated_at='2026-11-06T10:00:00.000Z';
+const sourceBank=adultGakka.getAdultGakkaPlan('1 DAN');
+const bankKeys=sourceBank.choiceWritten.slice(0,3).map(topic=>topic.key);
+internalAccess=false;await assert.rejects(()=>registrationModule.exports.saveAdultWrittenGakkaSelection({eventId:paperEvent.id,grade:'1 DAN',topicKeys:bankKeys}),/Acceso interno/);internalAccess=true;
+await assert.rejects(()=>registrationModule.exports.saveAdultWrittenGakkaSelection({eventId:paperEvent.id,grade:'2 DAN',topicKeys:bankKeys}),/grado no corresponde/);
+await assert.rejects(()=>registrationModule.exports.saveAdultWrittenGakkaSelection({eventId:paperEvent.id,grade:'1 DAN',topicKeys:bankKeys.slice(0,2)}),/Selecciona 3/);
+await registrationModule.exports.saveAdultWrittenGakkaSelection({eventId:paperEvent.id,grade:'1 DAN',topicKeys:bankKeys});
+let savedWritten=await registrationModule.exports.getIntegratedExamAdmin(paperEvent.id);
+assert.equal(savedWritten.items.filter(row=>row.section==='GAKKA_SELECCION'&&row.active).length,3);
+assert.ok(savedWritten.items.filter(row=>row.section.startsWith('GAKKA_')).every(row=>row.weight===0));
+assert.ok(database.exam_event_items.every(row=>!('gakka' in row)),'Delivery metadata is not written into nonexistent database columns');
+await registrationModule.exports.saveAdultWrittenGakkaSelection({eventId:paperEvent.id,grade:'1 DAN',topicKeys:bankKeys});
+assert.equal(database.exam_event_items.filter(row=>row.exam_event_id===paperEvent.id&&row.section==='GAKKA_SELECCION').length,8,'Saving bank selection twice never duplicates topics');
+await registrationModule.exports.saveAdultWrittenGakkaSelection({eventId:paperEvent.id,grade:'1 DAN',topicKeys:[]});
+savedWritten=await registrationModule.exports.getIntegratedExamAdmin(paperEvent.id);assert.equal(savedWritten.items.filter(row=>row.section==='GAKKA_SELECCION'&&row.active).length,0);
+database.exam_event_reviews.push({exam_event_id:paperEvent.id,event_student_id:'paper-reviewed',review_notes:'Reviewed'});
+await assert.rejects(()=>registrationModule.exports.saveAdultWrittenGakkaSelection({eventId:paperEvent.id,grade:'1 DAN',topicKeys:bankKeys}),/antes de evaluar o revisar/);
+console.log('Written Gakka: legacy open links and score matrices exclude papers/cross-grade topics; bank selection is scoped, authenticated, zero-weight, idempotent and review-locked.');

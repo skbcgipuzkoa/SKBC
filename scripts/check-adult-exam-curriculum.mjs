@@ -181,3 +181,74 @@ assert.match(
   getAdultExamCurriculum("1 KYU").find((x) => x.section === "Embu").summary,
   /Ude maki/,
 );
+// Source delivery mode/timing is explicit; the club's paper workflow does not rewrite source timing.
+for (const grade of grades) {
+  const rows = getAdultExamCurriculum(grade);
+  assert.ok(
+    rows
+      .filter((row) => row.section === "Gakka")
+      .every(
+        (row) =>
+          row.gakka &&
+          ["oral", "written-required", "written-choice", "external"].includes(
+            row.gakka.mode,
+          ),
+      ),
+  );
+  assert.equal(
+    rows.filter((row) => row.section !== "Gakka").some((row) => row.gakka),
+    false,
+  );
+}
+for (const grade of ["5 KYU", "4 KYU"])
+  assert.ok(
+    getAdultExamCurriculum(grade)
+      .filter((row) => row.section === "Gakka")
+      .every(
+        (row) => row.gakka.mode === "oral" && row.gakka.timing === "exam-day",
+      ),
+  );
+for (const grade of ["3 KYU", "2 KYU", "1 KYU"])
+  assert.ok(
+    getAdultExamCurriculum(grade)
+      .filter((row) => row.section === "Gakka")
+      .every(
+        (row) =>
+          row.gakka.mode === "written-required" &&
+          row.gakka.timing === "exam-day",
+      ),
+  );
+for (const grade of ["1 DAN", "2 DAN", "3 DAN"]) {
+  const theory = getAdultExamCurriculum(grade).filter(
+    (row) => row.section === "Gakka",
+  );
+  assert.equal(
+    theory.filter(
+      (row) =>
+        row.gakka.mode === "written-required" && row.gakka.timing === "advance",
+    ).length,
+    2,
+  );
+  assert.equal(
+    theory.filter(
+      (row) =>
+        row.gakka.mode === "written-choice" && row.gakka.timing === "exam-day",
+    ).length,
+    grade === "1 DAN" ? 8 : 7,
+  );
+}
+assert.ok(
+  getAdultExamCurriculum("4 DAN")
+    .filter((row) => row.section === "Gakka")
+    .every(
+      (row) =>
+        row.gakka.mode === "written-required" && row.gakka.timing === "advance",
+    ),
+);
+assert.ok(
+  getAdultExamCurriculum("5 DAN")
+    .filter((row) => row.section === "Gakka")
+    .every(
+      (row) => row.gakka.mode === "external" && row.gakka.timing === "external",
+    ),
+);

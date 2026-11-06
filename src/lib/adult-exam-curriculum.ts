@@ -1,5 +1,10 @@
 /** Adult exam-only Kamoku snapshot. Source audit: docs/superpowers/adult-exam-curriculum-source-audit.md. */
+export type AdultGakkaDelivery = {
+  mode: "oral" | "written-required" | "written-choice" | "external";
+  timing: "advance" | "exam-day" | "external";
+};
 export type AdultExamCurriculumItem = {
+  gakka?: AdultGakkaDelivery;
   section: string;
   name: string;
   summary?: string;
@@ -779,6 +784,16 @@ function summaryFor(
   }
   return context.join(" ");
 }
+function gakkaDelivery(key: string, name: string): AdultGakkaDelivery {
+  if (key === "5kyu" || key === "4kyu")
+    return { mode: "oral", timing: "exam-day" };
+  if (["3kyu", "2kyu", "1kyu"].includes(key))
+    return { mode: "written-required", timing: "exam-day" };
+  if (key === "godan") return { mode: "external", timing: "external" };
+  if (key === "yondan" || name.startsWith("Entrega previa:"))
+    return { mode: "written-required", timing: "advance" };
+  return { mode: "written-choice", timing: "exam-day" };
+}
 /** Complete source-backed adult exam requirements, independent from training/progression data. */
 export function getAdultExamCurriculum(
   grade: string | null | undefined,
@@ -799,6 +814,9 @@ export function getAdultExamCurriculum(
           name,
           summary: summaryFor(key, section, name, sourceName),
           coverageNames: explicitCoverage(name),
+          ...(section === "Gakka"
+            ? { gakka: gakkaDelivery(key, sourceName) }
+            : {}),
         });
     }
   return [
