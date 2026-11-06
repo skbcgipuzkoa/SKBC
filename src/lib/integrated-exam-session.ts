@@ -166,10 +166,10 @@ export function prepareSessionSubmission(input: {
       .sort((a, b) => positions.get(a.id)! - positions.get(b.id)!);
     let first = true;
     for (const item of relevant) {
-      const outsideRoute = Boolean(
-        cutoff && positions.get(item.id)! > cutoffIndex,
-      );
       const row = provided.get(student.id + ":" + item.id);
+      const outsideRoute = Boolean(
+        cutoff && (positions.get(item.id)! > cutoffIndex || (item.id === cutoff.id && !row)),
+      );
       if (!outsideRoute && !row)
         throw new Error(
           "Completa todos los puntos con una nota o No evaluado.",

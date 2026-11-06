@@ -245,7 +245,6 @@ export function ExamStepNavigator({
     reason: string;
     from: number;
   } | null>(null);
-  const [availableCutoff, setAvailableCutoff] = useState(-1);
   const root = useRef<HTMLDivElement>(null);
   const screenRefs = useRef<Array<HTMLDivElement | null>>([]);
   const last = index === steps.length - 1;
@@ -269,12 +268,15 @@ export function ExamStepNavigator({
   const checkCurrentStep = useCallback(() => {
     const result = screenCompletion(index);
     setCompletion(result);
+    return result.ready;
+  }, [index, steps]);
+  function readStopCutoff() {
     const cutoff = findCompletedCutoff(
       steps,
       index,
       steps.map((_, i) => {
         const state = screenCompletion(i);
-        return state.total ? state.ready : null;
+        return state.total ? state.answered > 0 : null;
       }),
     );
     const hasNumeric = screenRefs.current
@@ -291,12 +293,20 @@ export function ExamStepNavigator({
             Number.isFinite(Number(radio.value)),
         ),
       );
-    setAvailableCutoff(hasNumeric ? cutoff : -1);
-    return result.ready;
-  }, [index, steps]);
+    return hasNumeric ? cutoff : -1;
+  }
   useEffect(() => {
     checkCurrentStep();
   }, [checkCurrentStep]);
+  useEffect(() => {
+    const form = root.current?.closest("form");
+    if (!form || !stop) return;
+    // A stopped activity may contain unanswered pupils. The server validates the
+    // completed prefix and excludes missing cutoff ratings rather than grading zero.
+    const previous = form.noValidate;
+    form.noValidate = true;
+    return () => { form.noValidate = previous; };
+  }, [stop]);
   useEffect(() => {
     const form = root.current?.closest("form");
     const guard = (event: Event) => {
@@ -309,6 +319,7 @@ export function ExamStepNavigator({
   // Unmounting their disabled state on resume restores the original uncontrolled values.
   function goTo(next: number) {
     if (next < 0 || next >= steps.length) return;
+    setConfirmCutoff(null);
     setIndex(next);
     root.current?.scrollIntoView({ block: "start", behavior: "instant" });
     requestAnimationFrame(() =>
@@ -443,11 +454,11 @@ export function ExamStepNavigator({
                   {stop ? (
                     <>
                       <p>
-                        Ultima actividad completada:{" "}
-                        <strong>{steps[stop.cutoff].title}</strong>. Solo se
-                        enviaran las actividades completas hasta aqui. Las
-                        posteriores quedan fuera del recorrido y no puntuan como
-                        cero.
+                        Examen detenido en:{" "}
+                        <strong>{steps[stop.cutoff].title}</strong>. Se enviaran
+                        las valoraciones introducidas hasta aqui. Los alumnos sin
+                        valorar en esta actividad y las actividades posteriores
+                        quedan fuera del calculo; no puntuan como cero.
                       </p>
                       <p>Motivo: {stop.reason}</p>
                       <button
@@ -476,14 +487,14 @@ export function ExamStepNavigator({
             aria-label="Confirmar fin anticipado"
           >
             <h2>Terminar examen aqui</h2>
-            <p>
-              Ultima actividad completada:{" "}
-              <strong>{steps[confirmCutoff].title}</strong>. Una actividad
-              parcialmente valorada queda fuera, junto con todas las
-              posteriores.
-            </p>
+            {confirmCutoff >= 0 ? <p>
+              ¿Quieres terminar el examen en <strong>{steps[confirmCutoff].title}</strong>?
+              Se conservaran las notas introducidas hasta aqui. Los alumnos sin
+              valorar en esta actividad y las actividades posteriores quedaran
+              fuera del calculo, sin contar como cero.
+            </p> : <p role="status">Aun no hay ninguna nota para enviar. Valora al menos a un alumno antes de terminar el examen.</p>}
             <label>
-              Motivo del fin anticipado
+              Motivo del fin anticipado (opcional)
               <textarea
                 value={stopReason}
                 maxLength={1000}
@@ -493,11 +504,11 @@ export function ExamStepNavigator({
             <div className="form-actions">
               <button
                 type="button"
-                disabled={!stopReason.trim()}
+                disabled={confirmCutoff < 0}
                 onClick={() => {
                   setStop({
                     cutoff: confirmCutoff,
-                    reason: stopReason.trim(),
+                    reason: stopReason.trim() || "Finalizado por el examinador",
                     from: index,
                   });
                   setConfirmCutoff(null);
@@ -546,10 +557,9 @@ export function ExamStepNavigator({
               <button
                 type="button"
                 className="secondary-button"
-                disabled={availableCutoff < 0}
                 onClick={() => {
                   checkCurrentStep();
-                  setConfirmCutoff(availableCutoff);
+                  setConfirmCutoff(readStopCutoff());
                 }}
               >
                 Terminar examen aqui

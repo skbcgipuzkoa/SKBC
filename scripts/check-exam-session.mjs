@@ -34,6 +34,20 @@ const prepared = prepareSessionSubmission({
   },
 });
 assert.equal(decodeScoreNotes(prepared[1].notes).outsideRoute, true);
+const partial=prepareSessionSubmission({
+  items,students:[{id:"s",itemIds:["a","b"]},{id:"other",itemIds:["a","b"]}],
+  scores:[{eventStudentId:"s",eventItemId:"a",score:5,skipped:false}],
+  extras:{stopAfterItemId:"a",stopReason:"Time",adjustments:[]},
+});
+assert.equal(partial.find(row=>row.eventStudentId==="s" && row.eventItemId==="a").score,5);
+const notAssessed=partial.find(row=>row.eventStudentId==="other" && row.eventItemId==="a");
+assert.equal(notAssessed.score,null);
+assert.equal(notAssessed.skipped,true);
+assert.equal(decodeScoreNotes(notAssessed.notes).outsideRoute,true,"Unassessed pupils at cutoff must not receive zero");
+const partialScores=partial.map(row=>({...row,event_student_id:row.eventStudentId,event_item_id:row.eventItemId,examiner_id:"partial-judge"}));
+assert.equal(buildStudentReview({studentId:"s",items,scores:partialScores,passPercentage:70}).percentage,50,"Only the assessed activity supplies the denominator");
+assert.equal(buildStudentReview({studentId:"other",items,scores:partialScores,passPercentage:70}).complete,false,"A completely unassessed pupil cannot gain a completed result");
+assert.throws(()=>prepareSessionSubmission({items,students:[{id:"s",itemIds:["a","b"]}],scores:[{eventStudentId:"s",eventItemId:"b",score:5,skipped:false}],extras:{stopAfterItemId:"b",stopReason:"Time",adjustments:[]}}),/Completa todos/,'Stopping cannot hide gaps in earlier activities');
 assert.throws(() =>
   prepareSessionSubmission({
     items,
