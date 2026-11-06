@@ -1099,24 +1099,30 @@ export async function getExaminerExamByToken(token: string, grade?: string) {
   const { data: examiner, error: examinerError } = await supabase
     .from("exam_event_examiners")
     .select(
-      "id,exam_event_id,name,email,access_token,submitted_at,revoked_at,source_examiner_id,source_examiner:exam_event_examiners!exam_event_examiners_source_examiner_id_fkey(id,revoked_at,exam_events(notes)),exam_events(id,title,exam_date,target_grade,date_confirmed,program_type,pass_percentage,status,notes,updated_at)",
+      "id,exam_event_id,name,email,access_token,submitted_at,revoked_at,source_examiner_id,exam_events(id,title,exam_date,target_grade,date_confirmed,program_type,pass_percentage,status,notes,updated_at)",
     )
     .eq("access_token", token)
     .maybeSingle<any>();
 
   if (examinerError) throw examinerError;
-  if (
-    !examiner ||
-    examiner.revoked_at ||
-    (examiner.source_examiner_id &&
-      (!examiner.source_examiner || examiner.source_examiner.revoked_at))
-  )
+  if (!examiner || examiner.revoked_at)
     throw new Error("Enlace de examen no valido.");
-
   if (examiner.source_examiner_id) {
-    const parent = examiner.source_examiner;
+    const { data: parent, error: parentError } = await supabase
+      .from("exam_event_examiners")
+      .select("id,access_token,revoked_at,exam_events(notes)")
+      .eq("id", examiner.source_examiner_id)
+      .maybeSingle<any>();
+    if (parentError) throw parentError;
     const childTarget = examiner.exam_events?.target_grade;
-    if (!parent?.exam_events || !childTarget)
+    if (
+      !parent ||
+      parent.revoked_at ||
+      typeof parent.access_token !== "string" ||
+      parent.access_token.startsWith("disabled_") ||
+      !parent.exam_events ||
+      !childTarget
+    )
       throw new Error("Enlace de examen no valido.");
     const permission = decodeExamAssignments(parent.exam_events.notes);
     if (

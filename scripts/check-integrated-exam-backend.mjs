@@ -52,13 +52,16 @@ let dbError = null;
 let rows = [];
 let scorePresent = true;
 let lockHeld = false;
+let parentFixture = null;
+let parentReadCount = 0;
 let reportCalls = 0;
 let releaseReport;
 const client = {
   from(table) {
     let op = "read",
       values,
-      single = false;
+      single = false,
+      selectedFields = "";
     const filters = {};
     const query = new Proxy(
       {},
@@ -66,6 +69,15 @@ const client = {
         get(_, key) {
           if (key === "then")
             return (resolve) => {
+              if (selectedFields.includes("source_examiner:"))
+                return resolve({
+                  data: null,
+                  error: {
+                    code: "PGRST201",
+                    message:
+                      "Ambiguous self relationship rejected by PostgREST",
+                  },
+                });
               if (table === "exam_events" && op === "update") {
                 if (values.status === "review") {
                   if (lockHeld) return resolve({ data: null, error: null });
@@ -84,7 +96,12 @@ const client = {
                       data:
                         op === "read"
                           ? single && table === "exam_event_examiners"
-                            ? examiner
+                            ? filters.id
+                              ? (parentReadCount++,
+                                parentFixture?.id === filters.id
+                                  ? parentFixture
+                                  : null)
+                              : examiner
                             : {
                                 exam_events: event,
                                 exam_event_students: [student],
@@ -99,6 +116,7 @@ const client = {
               );
             };
           return (...args) => {
+            if (key === "select") selectedFields = args[0] ?? "";
             if (key === "eq") filters[args[0]] = args[1];
             if (key === "maybeSingle" || key === "single") single = true;
             if (["update", "upsert", "insert", "delete"].includes(key)) {
@@ -165,6 +183,12 @@ vm.runInNewContext(source, {
   Error,
 });
 const backend = module.exports;
+assert.equal(
+  (await backend.getExaminerExamByToken("secret")).examiner.id,
+  "x",
+  "Valid direct tokens must not execute an ambiguous self-FK embed",
+);
+assert.equal(parentReadCount, 0, "Direct tokens need no parent lookup");
 const orderingFixture = [
   {
     id: "goho",
@@ -324,13 +348,18 @@ assert.equal(
   "One embu mark weighs three times one ordinary technique",
 );
 examiner.source_examiner_id = "old-parent";
-examiner.source_examiner = { revoked_at: "2026-01-01" };
+parentFixture = {
+  id: "old-parent",
+  access_token: "parent-source-token",
+  revoked_at: "2026-01-01",
+};
 await assert.rejects(
   () => backend.getExaminerExamByToken("secret"),
   /Enlace de examen no valido/,
 );
-examiner.source_examiner = {
+parentFixture = {
   id: "old-parent",
+  access_token: "parent-source-token",
   revoked_at: null,
   exam_events: {
     notes: assignmentHelpers.encodeExamAssignments("", {
@@ -343,26 +372,39 @@ await assert.rejects(
   () => backend.getExaminerExamByToken("secret"),
   /Enlace de examen no valido/,
 );
-examiner.source_examiner.exam_events.notes =
-  assignmentHelpers.encodeExamAssignments(
-    "",
-    { "old-parent": ["1 KYU"] },
-    { pendingExaminerIds: ["old-parent"] },
-  );
+parentFixture.exam_events.notes = assignmentHelpers.encodeExamAssignments(
+  "",
+  { "old-parent": ["1 KYU"] },
+  { pendingExaminerIds: ["old-parent"] },
+);
 await assert.rejects(
   () => backend.getExaminerExamByToken("secret"),
   /Enlace de examen no valido/,
 );
-examiner.source_examiner.exam_events.notes =
-  assignmentHelpers.encodeExamAssignments(
-    "",
-    { "old-parent": ["1 KYU"] },
-    { pendingExaminerIds: [] },
-  );
+parentFixture.exam_events.notes = assignmentHelpers.encodeExamAssignments(
+  "",
+  { "old-parent": ["1 KYU"] },
+  { pendingExaminerIds: [] },
+);
 assert.equal((await backend.getExaminerExamByToken("secret")).examiner.id, "x");
+assert.ok(
+  parentReadCount >= 4,
+  "Clone credentials require independent parent-row reads",
+);
+parentFixture.access_token = "disabled_" + "a".repeat(32);
+await assert.rejects(
+  () => backend.getExaminerExamByToken("secret"),
+  /Enlace de examen no valido/,
+);
+parentFixture = null;
+await assert.rejects(
+  () => backend.getExaminerExamByToken("secret"),
+  /Enlace de examen no valido/,
+);
+
 delete event.target_grade;
 delete examiner.source_examiner_id;
-delete examiner.source_examiner;
+parentFixture = null;
 event.date_confirmed = false;
 const pendingDateWrites = writes.length;
 await assert.rejects(
@@ -633,7 +675,8 @@ const registrationClient = {
   from(table) {
     let operation = "select",
       values,
-      single = false;
+      single = false,
+      selectedFields = "";
     const filters = [];
     const query = new Proxy(
       {},
@@ -641,6 +684,15 @@ const registrationClient = {
         get(_, key) {
           if (key === "then")
             return (resolve) => {
+              if (selectedFields.includes("source_examiner:"))
+                return resolve({
+                  data: null,
+                  error: {
+                    code: "PGRST201",
+                    message:
+                      "Ambiguous self relationship rejected by PostgREST",
+                  },
+                });
               let matches = (database[table] ?? []).filter((row) =>
                 filters.every(([field, value]) =>
                   Array.isArray(value)
@@ -722,6 +774,7 @@ const registrationClient = {
               });
             };
           return (...args) => {
+            if (key === "select") selectedFields = args[0] ?? "";
             if (key === "eq" || key === "is" || key === "in")
               filters.push(args);
             if (key === "update" || key === "upsert" || key === "insert") {

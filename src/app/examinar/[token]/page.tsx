@@ -5,6 +5,13 @@ import { getExaminerGradeLinks } from "@/lib/examiner-grade-links";
 import { formatExamCallMonth } from "@/lib/exam-call";
 import { redirect } from "next/navigation";
 import { ExamAccessNavigation } from "@/app/examinar/ExamAccessNavigation";
+import { getExamAccessFeedback, reportExamAccessFailure } from "@/lib/exam-access-feedback";
+
+function ExamAccessFailure({error,phase}:{error:unknown;phase:"alias"|"exam"}) {
+  const feedback=getExamAccessFeedback(error);
+  reportExamAccessFailure(error,phase);
+  return <main className="public-exam-page"><section className="public-exam-hero"><p className="eyebrow">SKBC Gipuzkoa</p><h1>{feedback.title}</h1><p>{feedback.description}</p></section><section className="card"><h2>No se puede abrir este examen</h2><p className="muted">{feedback.hint}</p><ExamAccessNavigation /></section></main>;
+}
 
 export default async function ExaminerTokenPage({
   params,
@@ -23,8 +30,8 @@ export default async function ExaminerTokenPage({
   let grouped: Awaited<ReturnType<typeof getExaminerGradeLinks>>;
   try {
     grouped = await getExaminerGradeLinks(token, query.grade);
-  } catch {
-    return <main className="public-exam-page"><section className="card"><h1>No se puede abrir este examen</h1><p>Consulta con el responsable del examen para comprobar el acceso.</p><ExamAccessNavigation /></section></main>;
+  } catch (error) {
+    return <ExamAccessFailure error={error} phase="alias" />;
   }
   if (grouped) {
     if (grouped.links.length === 1 && grouped.links[0].dateConfirmed) redirect(`/examinar/${encodeURIComponent(grouped.links[0].token)}`);
@@ -36,26 +43,8 @@ export default async function ExaminerTokenPage({
   let payload: Awaited<ReturnType<typeof getExaminerExamByToken>>;
   try {
     payload = await getExaminerExamByToken(token, query.grade);
-  } catch {
-    return (
-      <main className="public-exam-page">
-        <section className="public-exam-hero">
-          <p className="eyebrow">SKBC Gipuzkoa</p>
-          <h1>Enlace no valido</h1>
-          <p>
-            Este enlace de examen no existe, ha caducado o ha sido desactivado.
-          </p>
-        </section>
-        <section className="card">
-          <h2>No se puede abrir este examen</h2>
-          <p className="muted">
-            Si crees que es un error, pide al responsable del examen que te
-            envie un enlace nuevo.
-          </p>
-          <ExamAccessNavigation />
-        </section>
-      </main>
-    );
+  } catch (error) {
+    return <ExamAccessFailure error={error} phase="exam" />;
   }
 
   return (

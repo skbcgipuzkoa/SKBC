@@ -3,6 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { decodeExamAssignments } from "../src/lib/integrated-exam-assignments.ts";
+import { getExamAccessFeedback } from "../src/lib/exam-access-feedback.ts";
 import { createRequire } from "node:module";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -154,6 +155,12 @@ console.log(
   "Examiner old-link grade permissions, revocation, pending identities and normal-link fallback passed",
 );
 const require = createRequire(import.meta.url);
+const feedbackLogs=[];
+const feedbackTest={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/exam-access-feedback.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:feedbackTest.exports,Error,console:{error:(...args)=>feedbackLogs.push(args)}});
+feedbackTest.exports.reportExamAccessFailure({code:'PGRST201',message:'private-token-and-personal-data'},'exam');
+assert.match(JSON.stringify(feedbackLogs),/PGRST201/);assert.doesNotMatch(JSON.stringify(feedbackLogs),/private-token-and-personal-data/);
+feedbackTest.exports.reportExamAccessFailure(new Error('Enlace de examen no valido.'),'exam');assert.equal(feedbackLogs.length,1);
 const navigationCalls=[];
 const navigationWindow={history:{length:2}};
 const navigation={exports:{}};
@@ -167,6 +174,7 @@ let routedGroup = null,
   baseReads = 0,
   lookupError = false,
   baseLookupError = false;
+let baseErrorMessage='Expired credential';
 const route = { exports: {} };
 vm.runInNewContext(
   ts.transpileModule(
@@ -183,6 +191,7 @@ vm.runInNewContext(
     exports: route.exports,
     require: (id) =>
       id === "@/app/examinar/ExamAccessNavigation" ? navigation.exports :
+      id === "@/lib/exam-access-feedback" ? {getExamAccessFeedback,reportExamAccessFailure:()=>{}} :
       id === "@/lib/examiner-grade-links"
         ? {
             getExaminerGradeLinks: async () => {
@@ -196,7 +205,7 @@ vm.runInNewContext(
             ? {
                 getExaminerExamByToken: async () => {
                   baseReads++;
-                  if (baseLookupError) throw new Error('Expired credential');
+                  if (baseLookupError) throw new Error(baseErrorMessage);
                   return {};
                 },
               }
@@ -265,10 +274,16 @@ assert.match(failedMarkup, /Volver/, 'An invalid exam access must provide an esc
 assert.doesNotMatch(failedMarkup, /Internal failure/);
 lookupError=false;baseLookupError=true;
 const invalidMarkup=renderToStaticMarkup(await page());
-assert.match(invalidMarkup,/Enlace no valido/);
+assert.match(invalidMarkup,/No se puede abrir el examen ahora/,'A database or loading failure must not be presented as an invalid credential');
 assert.match(invalidMarkup,/>Volver<\/button>/);
 assert.match(invalidMarkup,/href="\/examenes"/);
 assert.doesNotMatch(invalidMarkup,/Expired credential/);
+baseErrorMessage='Enlace de examen no valido.';
+assert.match(renderToStaticMarkup(await page()),/Enlace no valido/,'Actually revoked/missing credentials retain their own warning');
+baseErrorMessage='Día pendiente de confirmar. La evaluación aún no está disponible.';
+const waitingMarkup=renderToStaticMarkup(await page());assert.match(waitingMarkup,/Día del examen pendiente de confirmar/);assert.doesNotMatch(waitingMarkup,/Enlace no valido/);
+baseErrorMessage='Grado ajeno a esta asignacion.';
+assert.match(renderToStaticMarkup(await page()),/Grado no asignado a este acceso/);
 console.log(
   "Examiner alias chooser, one-grade redirect, pending-date display and ordinary route fallback passed",
 );
