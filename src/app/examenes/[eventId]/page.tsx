@@ -64,6 +64,7 @@ export default async function IntegratedExamPage({
     gradeGroupMode,
     hasSubmittedScores,
     completedGradesByExaminer,
+    techniqueExclusions = [],
   } = await getIntegratedExamAdmin(eventId);
   const publicBaseUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://skbc.vercel.app";
@@ -724,7 +725,8 @@ export default async function IntegratedExamPage({
         </section>
 
         {isAdult ? <WrittenGakkaPlan key={`${event.id}:${event.updated_at}`} eventId={eventId} plans={writtenPlans} selected={writtenSelections} locked={isCompleted || hasSubmittedScores || hasTeacherReview || examiners.some(examiner=>Boolean(examiner.submitted_at))} /> : null}
-        {isAdult && !isCompleted && !hasSubmittedScores && !hasTeacherReview && !examiners.some(examiner => examiner.submitted_at) ? <section className="card"><h2>Programa completo del grado</h2><p>Los exámenes nuevos incluyen el Kamoku BSKF 2024. Para actualizar este examen, añade las materias que falten sin reactivar puntos desactivados. Las entregas escritas se consultan en su apartado. Embu se valora al final con peso 3; cada otra materia de la prueba física, con peso 1.</p><form action={completeAdultExamCurriculumAction}><input type="hidden" name="eventId" value={event.id}/><button type="submit">Completar con Kamoku</button></form></section> : null}
+        {isAdult && techniqueExclusions.length > 0 ? <section className="card"><details><summary><strong>{techniqueExclusions.length} referencias repetidas excluidas de la puntuación</strong></summary><p>Se valoran las variantes del catálogo sin contar otra vez su entrada agrupada. Las referencias y las notas guardadas se conservan para la revisión.</p><ul>{techniqueExclusions.map(item=><li key={item.id}>{item.name} · {item.grade}</li>)}</ul><a href="/tecnicas?status=suspicious">Revisar el catálogo técnico</a></details></section> : null}
+        {isAdult && !isCompleted && !hasSubmittedScores && !hasTeacherReview && !examiners.some(examiner => examiner.submitted_at) ? <section className="card"><h2>Programa completo del grado</h2><p>Las técnicas y sus variantes proceden del catálogo usado en el plan técnico; las demás materias se completan con el Kamoku BSKF 2024. Puedes añadir lo que falte sin reactivar puntos desactivados. Las entregas escritas se consultan en su apartado. Embu se valora al final con peso 3; cada otra materia de la prueba física, con peso 1.</p><form action={completeAdultExamCurriculumAction}><input type="hidden" name="eventId" value={event.id}/><button type="submit">Completar programa del grado</button></form></section> : null}
         <details className="card foldable-admin-section">
           <summary>
             <span>

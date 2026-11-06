@@ -15,6 +15,7 @@ export function classifyCatalogContent(row: CatalogContent): CatalogKind {
   const type = normalized(row.content_type);
   const category = normalized(row.category);
   if (type.startsWith("KATA")) return "kata";
+  if (type === "PROGRAMA" && (category === "GOHO" || category === "JUHO")) return "techniques";
   if (type && !["TECNICA", "GOHO", "JUHO"].includes(type)) return "other";
   if ((!type || type === "TECNICA") && (category === "HOKEI" || category === "KATA")) return "kata";
   if (category === "GOHO" || category === "JUHO") return "techniques";

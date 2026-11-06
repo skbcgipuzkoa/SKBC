@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { classifyCatalogContent, catalogGrades, catalogGrade, groupCatalogContent } from '../src/lib/admin-technical-catalog.ts';
 import { loadAllPages } from '../src/lib/load-all-pages.ts';
 import * as catalog from '../src/lib/admin-technical-catalog.ts';
+import * as techniqueIdentity from '../src/lib/adult-exam-technique-identity.ts';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
@@ -17,6 +18,11 @@ const rows = [
   {id:'y', category:'seiho', content_type:null, grade:'Especial'}
 ];
 assert.equal(classifyCatalogContent(rows[0]), 'techniques');
+assert.equal(classifyCatalogContent({category:'goho',content_type:'PROGRAMA'}),'techniques');
+assert.equal(classifyCatalogContent({category:'JUHO',content_type:'PROGRAMA'}),'techniques');
+assert.equal(classifyCatalogContent({category:'hokei',content_type:'PROGRAMA'}),'other');
+assert.equal(classifyCatalogContent({category:'goho',content_type:'KATA_SOTAI'}),'kata');
+assert.equal(classifyCatalogContent({category:'juho',content_type:'UKEMI'}),'other');
 assert.equal(classifyCatalogContent(rows[1]), 'kata');
 assert.equal(classifyCatalogContent(rows[2]), 'kata');
 assert.equal(classifyCatalogContent({category:'hokei',content_type:'UKEMI'}),'other','explicit content type wins over legacy category');
@@ -50,6 +56,7 @@ const dependencies={
   '@/lib/auth':{hasInternalAccess:async()=>authorized},
   '@/lib/grades':{adultGrades:['MINARAI','5 KYU','4 KYU']},
   '@/lib/admin-technical-catalog':catalog,
+  '@/lib/adult-exam-technique-identity':techniqueIdentity,
   '@/lib/load-all-pages':{loadAllPages},
   '@/lib/kamoku-summary-fallbacks':{getKamokuSummaryFallback:()=>null},
   '@/lib/supabase/admin':{createAdminClient:()=>db},
@@ -91,3 +98,33 @@ assert.match(markup,/class="inline-edit-details" open=""/);
 markup=await render({edit:'L-0',error:'technique-video-bulk-partial'});
 assert.match(markup,/Este contenido se ha guardado, pero no se ha podido completar/);
 console.log('Admin technical catalog checks passed: classification, all grades, real page filters/auth and >1000 rows');
+
+// Metadata-only variants and reference modes must survive the read-only global audit.
+const initialRecords=records.slice();
+const auditRow=(id,changes={})=>({...initialRecords[0],id,legacy_id:null,video_title:'fixture-'+id,name:'Juji gote',base_name:'Juji gote',variant:null,variant_note:null,grade:'2 KYU',category:'JUHO',content_type:'PROGRAMA',active:true,...changes});
+records.splice(0,records.length,
+ auditRow('katate',{variant:'Katate'}),auditRow('ryote',{variant:'Ryote'}),
+ auditRow('copy-a',{name:'Gyaku gote',base_name:'Gyaku gote'}),auditRow('copy-b',{name:'Gyaku gote',base_name:'Gyaku gote'}),
+ auditRow('archived-copy',{name:'Gyaku gote',base_name:'Gyaku gote',active:false}),
+ auditRow('other-grade',{name:'Gyaku gote',base_name:'Gyaku gote',grade:'1 KYU'}),
+ auditRow('note-variant',{variant:'Katate',variant_note:'Different grip detail'}),
+ auditRow('tanen',{name:'Tenchi ken dai ichi',category:'HOKEI',content_type:'KATA_TANEN'}),
+ auditRow('sotai',{name:'Tenchi ken dai ichi',category:'HOKEI',content_type:'KATA_SOTAI'})
+);
+markup=await render({status:'duplicate-name'});
+assert.equal((markup.match(/class="technique-admin-card"/g)||[]).length,2,'Only exact active semantic duplicates flagged, not valid variants/notes/grades/modes/inactive');
+assert.match(markup,/fixture-copy-a/);
+assert.match(markup,/fixture-copy-b/);
+assert.doesNotMatch(markup,/fixture-katate/);
+assert.doesNotMatch(markup,/fixture-note-variant/,'Distinct noted variant is not an exact identity duplicate');
+records.push(auditRow('unrepresented-group',{name:'Kiri gote (katate & morote)',base_name:'Kiri gote'}));
+markup=await render({status:'duplicate-base'});
+assert.equal((markup.match(/class="technique-admin-card"/g)||[]).length,0,'Split metadata variants alone are not overlaps');
+records.push(auditRow('grouped',{name:'Juji gote (katate & ryote)'}));
+markup=await render({status:'duplicate-base'});
+assert.equal((markup.match(/class="technique-admin-card"/g)||[]).length,4,'Unqualified grouped row overlaps both variants and the distinct noted child');
+for(const id of ['grouped','katate','ryote','note-variant'])assert.ok(markup.includes('fixture-'+id));
+assert.match(markup,/no fusionan ni eliminan/);
+const sourceIds=records.map(row=>row.id);await render();assert.deepEqual(records.map(row=>row.id),sourceIds,'Audit never removes catalogue IDs/history rows');
+records.splice(0,records.length,...initialRecords);
+console.log('Real catalogue page semantic duplicate audit passed: variants, notes, grades, kata modes, inactive and grouped overlaps.');

@@ -9,6 +9,7 @@ import { loadAllPages } from "@/lib/load-all-pages";
 import { getKamokuSummaryFallback } from "@/lib/kamoku-summary-fallbacks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
+import { auditAdultTechniqueRows } from "@/lib/adult-exam-technique-identity";
 import { BookOpenCheck, CheckCircle2, ExternalLink, Filter, LogOut, RotateCcw } from "lucide-react";
 
 type Tecnica = {
@@ -188,8 +189,8 @@ export default async function TecnicasPage({
               <option value="short-summary">Resumen corto</option>
               <option value="suspicious">Sospechosas</option>
               <option value="missing-variant">Sin variante</option>
-              <option value="duplicate-name">Nombre duplicado</option>
-              <option value="duplicate-base">Base sin variantes</option>
+              <option value="duplicate-name">Identidad duplicada activa</option>
+              <option value="duplicate-base">Agrupación solapada con variantes</option>
               <option value="rare-category">Categoria rara</option>
               <option value="incoherent-grade">Grado incoherente</option>
               <option value="planning-non-core">Plan no goho/juho</option>
@@ -250,6 +251,7 @@ export default async function TecnicasPage({
         </section>
 
         <h2 className="section-title">Revision tecnica</h2>
+        <p className="muted">La auditoría distingue variantes válidas (Katate/Ryote, Ura/Omote), notas de variante, grados y katas individuales o por parejas. Los registros inactivos no cuentan como duplicados activos. Estas señales no fusionan ni eliminan técnicas, vídeos, historial o progreso.</p>
         <section className="technical-review-grid">
           <a className={review.suspiciousRows.length ? "review-card danger" : "review-card ok"} href="/tecnicas?status=suspicious">
             <strong>{review.suspiciousRows.length}</strong>
@@ -273,13 +275,13 @@ export default async function TecnicasPage({
           </a>
           <a className={review.duplicateNameRows.length ? "review-card warn" : "review-card ok"} href="/tecnicas?status=duplicate-name">
             <strong>{review.duplicateNameRows.length}</strong>
-            <span>Nombres repetidos</span>
-            <small>Revisa si son variantes reales o duplicados.</small>
+            <span>Identidades duplicadas</span>
+            <small>Mismo grado, contenido y variante. Solo registros activos.</small>
           </a>
           <a className={review.baseWithoutVariantRows.length ? "review-card warn" : "review-card ok"} href="/tecnicas?status=duplicate-base">
             <strong>{review.baseWithoutVariantRows.length}</strong>
-            <span>Bases sin variante</span>
-            <small>Misma familia tecnica sin diferenciar agarre/lado.</small>
+            <span>Agrupaciones solapadas</span>
+            <small>Entrada conjunta junto a una o varias variantes individuales activas.</small>
           </a>
           <a className={review.planningNonCoreRows.length ? "review-card warn" : "review-card ok"} href="/tecnicas?status=planning-non-core">
             <strong>{review.planningNonCoreRows.length}</strong>
@@ -508,22 +510,14 @@ function buildTechnicalReview(techniques: Tecnica[]) {
   const rareCategoryIds = new Set<string>();
   const incoherentGradeIds = new Set<string>();
   const allowedCategories = new Set(["GOHO", "JUHO", "SEIHO", "UKEMI", "RANDORI", "EMBU", "HOKEI", "KIHON"]);
-  const byName = groupBy(techniques, (item) => `${normalize(item.grade)}::${normalize(item.name)}`);
-  const byBase = groupBy(
-    techniques.filter((item) => item.base_name),
-    (item) => `${normalize(item.grade)}::${normalize(item.base_name)}`
-  );
-
-  byName.forEach((rows) => {
-    if (rows.length > 1) rows.forEach((row) => duplicateNameIds.add(rowKey(row)));
-  });
-
-  byBase.forEach((rows) => {
-    const activeRows = rows.filter((row) => row.active);
-    if (activeRows.length > 1) {
-      activeRows.filter((row) => !row.variant).forEach((row) => baseWithoutVariantIds.add(rowKey(row)));
-    }
-  });
+  const identityAudit = auditAdultTechniqueRows(techniques.filter((row) => row.active));
+  for (const group of identityAudit.duplicateGroups)
+    for (const row of group.rows) duplicateNameIds.add(rowKey(row));
+  for (const overlap of identityAudit.groupedOverlaps) {
+    if (!overlap.representedBy.length) continue;
+    baseWithoutVariantIds.add(rowKey(overlap.grouped));
+    for (const row of overlap.representedBy) baseWithoutVariantIds.add(rowKey(row));
+  }
 
   const planningNonCoreRows = techniques.filter(isPlanningNonCore);
   techniques.forEach((row) => {
@@ -578,19 +572,8 @@ function buildTechnicalReview(techniques: Tecnica[]) {
   };
 }
 
-function groupBy<T>(items: T[], keyFor: (item: T) => string) {
-  const map = new Map<string, T[]>();
-  items.forEach((item) => {
-    const key = keyFor(item);
-    const rows = map.get(key) ?? [];
-    rows.push(item);
-    map.set(key, rows);
-  });
-  return map;
-}
-
 function rowKey(tecnica: Tecnica) {
-  return tecnica.legacy_id ?? `${tecnica.grade}:${tecnica.name}`;
+  return tecnica.id;
 }
 
 function formatDateTime(value: string | null | undefined) {
