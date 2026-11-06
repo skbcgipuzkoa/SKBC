@@ -154,9 +154,19 @@ console.log(
   "Examiner old-link grade permissions, revocation, pending identities and normal-link fallback passed",
 );
 const require = createRequire(import.meta.url);
+const navigationCalls=[];
+const navigationWindow={history:{length:2}};
+const navigation={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/examinar/ExamAccessNavigation.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports:navigation.exports,window:navigationWindow,require:id=>id==='next/navigation'?{useRouter:()=>({back:()=>navigationCalls.push('back'),replace:path=>navigationCalls.push(path)})}:require(id)});
+const navigationElement=navigation.exports.ExamAccessNavigation();
+const backButton=navigationElement.props.children.find(child=>child.type==='button');
+backButton.props.onClick();assert.deepEqual(navigationCalls,['back'],'Use browser history when the previous page exists');
+navigationWindow.history.length=1;backButton.props.onClick();assert.deepEqual(navigationCalls,['back','/examenes'],'A directly opened exam link has a deterministic fallback');
+const navigationMarkup=renderToStaticMarkup(navigationElement);assert.match(navigationMarkup,/href="\/examenes"/);assert.match(navigationMarkup,/min-height:48px/);
 let routedGroup = null,
   baseReads = 0,
-  lookupError = false;
+  lookupError = false,
+  baseLookupError = false;
 const route = { exports: {} };
 vm.runInNewContext(
   ts.transpileModule(
@@ -172,6 +182,7 @@ vm.runInNewContext(
   {
     exports: route.exports,
     require: (id) =>
+      id === "@/app/examinar/ExamAccessNavigation" ? navigation.exports :
       id === "@/lib/examiner-grade-links"
         ? {
             getExaminerGradeLinks: async () => {
@@ -185,6 +196,7 @@ vm.runInNewContext(
             ? {
                 getExaminerExamByToken: async () => {
                   baseReads++;
+                  if (baseLookupError) throw new Error('Expired credential');
                   return {};
                 },
               }
@@ -249,7 +261,14 @@ assert.equal(baseReads, 1);
 lookupError = true;
 const failedMarkup = renderToStaticMarkup(await page());
 assert.match(failedMarkup, /No se puede abrir/);
+assert.match(failedMarkup, /Volver/, 'An invalid exam access must provide an escape from the error screen');
 assert.doesNotMatch(failedMarkup, /Internal failure/);
+lookupError=false;baseLookupError=true;
+const invalidMarkup=renderToStaticMarkup(await page());
+assert.match(invalidMarkup,/Enlace no valido/);
+assert.match(invalidMarkup,/>Volver<\/button>/);
+assert.match(invalidMarkup,/href="\/examenes"/);
+assert.doesNotMatch(invalidMarkup,/Expired credential/);
 console.log(
   "Examiner alias chooser, one-grade redirect, pending-date display and ordinary route fallback passed",
 );
