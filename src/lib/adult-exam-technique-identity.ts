@@ -38,6 +38,19 @@ function norm(value: string | null | undefined) {
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
+/** Only these subjects must come from SKBC, never from a book fallback. */
+export function isAdultCatalogueExercise(row: TechniqueIdentityRow) {
+  const fields = [row.section, row.content_type, row.category].map(norm);
+  if (fields.some(key => key.startsWith("shakujo"))) {
+    const name = norm(row.name);
+    if (/^randori\b/.test(name)) return false;
+    return fields.some(key => /shakujo (tan ?en|so ?tai)/.test(key)) ||
+      /^(tenchi ?ken|giwa ?ken|ryuo ?ken|byakuren ?ken|ko manji ken|ido enren)\b/.test(name);
+  }
+  return fields.some(key => {
+    return ["goho", "juho", "hokei", "tecnica", "technique"].includes(key) || /^kata(?: |$)/.test(key);
+  });
+}
 function bodyKey(value: string) {
   // The club's teacher confirmed this full label names the same exercise.
   // Other compound techniques remain distinct; do not drop arbitrary pins/suffixes.
@@ -368,7 +381,9 @@ export function normalizeAdultExamTechniqueItems<
   return items.map((item, index) => {
     const source = item.technique_id ? byId.get(item.technique_id) : undefined;
     const enriched = effective[index];
-    const duplicate = !kept.has(enriched);
+    const importedBookExercise = !item.technique_id && item.source === "manual" &&
+      item.summary?.startsWith("BSKF Kamoku, 2.ª edición (2024),") && isAdultCatalogueExercise(item);
+    const duplicate = !kept.has(enriched) || importedBookExercise;
     const sourceName = source ? formatExamTechniqueName(source) : undefined;
     const originalName = bodyKey(item.name ?? "");
     const standardName =

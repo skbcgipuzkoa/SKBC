@@ -2072,7 +2072,8 @@ const groupedCatalogue = {
   variant: null,
   variant_note: null,
 };
-database.techniques.push(splitKatate, splitRyote, splitTwin, groupedCatalogue);
+const systemKata={...splitKatate,id:"system-kata",name:"SKBC kata",variant:null,variant_note:null,category:"hokei",content_type:"KATA_SOTAI"};
+database.techniques.push(splitKatate, splitRyote, splitTwin, groupedCatalogue,systemKata);
 database.members.push({
   id: "identity-member",
   display_name: "Synthetic variants",
@@ -2107,6 +2108,8 @@ assert.equal(
   false,
   "Book content must not create phantom grouped technical variants",
 );
+assert.ok(identityCreatedItems.some(row=>row.technique_id===systemKata.id),"Exam includes the SKBC kata");
+assert.equal(identityCreatedItems.some(row=>row.source==="manual" && /kata/i.test(row.section)),false,"Book must never supplement katas absent from SKBC");
 assert.ok(
   identityCreatedItems
     .find((row) => row.technique_id === splitKatate.id)
@@ -2186,10 +2189,17 @@ database.exam_event_items.push(
     weight: 1,
     order_index: 2,
   },
+  {
+    id:"identity-old-book-kata",exam_event_id:oldIdentityEvent.id,source:"manual",
+    section:"Kata tan-en",category:"Kata tan-en",name:"Legacy book-only kata",grade:"2 KYU",
+    summary:"BSKF Kamoku, 2.ª edición (2024), Kyu source requirement",active:true,weight:1,order_index:3,
+  },
 );
 let oldIdentityAdmin = await registrationModule.exports.getIntegratedExamAdmin(
   oldIdentityEvent.id,
 );
+assert.equal(oldIdentityAdmin.items.find(row=>row.id==="identity-old-book-kata").weight,0,"Open adult exams do not score old imported book katas");
+assert.equal(database.exam_event_items.find(row=>row.id==="identity-old-book-kata").weight,1,"Read-only normalization retains stored legacy rows");
 assert.equal(
   oldIdentityAdmin.items.find((row) => row.id === "identity-old-twin").weight,
   1,
@@ -2265,6 +2275,8 @@ assert.equal(
   ).items.some((row) => row.id === "identity-old-group"),
   false,
 );
+assert.equal((await registrationModule.exports.getExaminerExamByToken(oldJudge.access_token)).items.some(row=>row.id==="identity-old-book-kata"),false);
+assert.ok(database.exam_event_items.some(row=>row.exam_event_id===oldIdentityEvent.id && row.technique_id===systemKata.id),"Completion adds the real SKBC kata instead");
 const physicalIdentity = oldIdentityAdmin.items.filter(
   (row) => row.active !== false && row.weight > 0,
 );

@@ -9,3 +9,7 @@ User reports 2 KYU repeats split catalogue techniques and adds grouped Kamoku va
 - Freeze the approved effective view on final registration to avoid reviving old duplicates in closed results/report retries. Previously closed results and children's runtime remain untouched.
 - Improve existing global Técnicas duplicate audit to distinguish real same-grade duplicates and grouped overlap from valid Katate/Ryote, Ura/Omote, different grades and tan-en/sotai. No automatic destructive catalogue merge or progress migration.
 - Test 2 KYU split variants/grouped parent, partial family coverage with no invented variant, metadata-only labels, compound names, cross-grade/kata safeguards, inactive/manual preservation, old open scoring and closed persistence. Review, build, deploy.
+
+## Confirmed source rule
+
+The teacher subsequently clarified that both techniques and katas must come exclusively from SKBC, as in class plans. The Kamoku only supplies the other subjects. Builders therefore never supplement either exercise family from the book. Open adult exams exclude proven automatically imported book techniques/katas (manual source, no catalogue FK, original Kamoku summary provenance), including unrepresented book-only exercises. They retain their rows/notes for audit; explicit programme completion adds actual SKBC catalogue rows. Teacher-authored additions, inactive choices, children and already closed history remain unchanged. Regression checks cover source-only kata creation, legacy exclusion, physical payloads and final frozen scoring.

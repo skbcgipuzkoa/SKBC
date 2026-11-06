@@ -4,6 +4,7 @@ import {
   auditAdultTechniqueRows as audit,
   formatExamTechniqueName as label,
   normalizeAdultExamTechniqueItems as normalize,
+  isAdultCatalogueExercise,
 } from "../src/lib/adult-exam-technique-identity.ts";
 const katate = {
   id: "katate",
@@ -182,7 +183,17 @@ const orphan = {
   ...auto,
   name: "A source requirement with no catalogue equivalent",
 };
-assert.equal(normalize([orphan], [], "adults", "active")[0].weight, 1);
+assert.equal(normalize([orphan], [], "adults", "active")[0].weight, 0,"Book techniques cannot supply catalogue gaps");
+const bookKata = {...auto,section:"Kata tan-en",name:"Book-only kata",category:"hokei"};
+assert.equal(normalize([bookKata],[],"adults","active")[0].weight,0);
+assert.equal(normalize([bookKata],[],"dan_tribunal","active")[0].weight,0);
+assert.equal(normalize([bookKata],[],"adults","archived")[0].weight,1);
+for(const [section,name] of [["Shakujo tan-en","Tenchi ken dai ichi"],["Shakujo sotai","Uwa uke uchi otoshi"],["Shakujo","Ido enren dai ni"]])
+  assert.equal(isAdultCatalogueExercise({section,name}),true,"Weapon kata must also come from SKBC");
+for(const [section,name] of [["Shakujo","Shakujo kihon furi"],["Shakujo sotai","Randori (foam bo)"]])
+  assert.equal(isAdultCatalogueExercise({section,name}),false,"Other weapon subjects remain book requirements");
+for (const section of ["Gakka","Keimyaku","Umpo ho","Ukemi","Embu"])
+  assert.equal(normalize([{...auto,section,category:section,name:"Book subject"}],[],"adults","active")[0].weight,1,section+" remains a valid book subject");
 const manualSingle = {
   ...auto,
   name: katate.name,
@@ -196,8 +207,8 @@ assert.equal(
 assert.equal(
   normalize([auto], [{ ...katate, active: false }], "adults", "active")[0]
     .weight,
-  1,
-  "A catalogue-only variant must not erase the sole existing exam representative",
+  0,
+  "Imported book techniques are excluded even without a catalogue replacement",
 );
 assert.deepEqual(
   normalize(normalized, [katate, ryote, group], "adults", "active"),
@@ -211,8 +222,8 @@ console.log(
 const knownOrphan = { ...auto };
 assert.equal(
   normalize([knownOrphan], [], "adults", "active")[0].weight,
-  1,
-  "A known Kamoku orphan with no actual overlap is retained",
+  0,
+  "Book technical requirements are excluded; catalogue alone supplies exercises",
 );
 const gap = audit([knownOrphan]).groupedOverlaps[0];
 assert.equal(gap.dropped, false);

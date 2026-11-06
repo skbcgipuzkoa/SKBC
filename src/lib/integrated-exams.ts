@@ -2,7 +2,7 @@ import { hasInternalAccess } from "@/lib/auth";
 import { attributeExamCall } from "@/lib/exam-call";
 import { getAdultExamCurriculum } from "@/lib/adult-exam-curriculum";
 import { getAdultGakkaPlan, gakkaIdentity, isAdultGakkaItem, normalizeAdultGakkaItems, sectionForGakka } from "@/lib/adult-exam-gakka";
-import { auditAdultTechniqueRows, formatExamTechniqueName, normalizeAdultExamTechniqueItems, semanticTechniqueIdentity, type TechniqueIdentityRow } from "@/lib/adult-exam-technique-identity";
+import { auditAdultTechniqueRows, formatExamTechniqueName, isAdultCatalogueExercise, normalizeAdultExamTechniqueItems, semanticTechniqueIdentity, type TechniqueIdentityRow } from "@/lib/adult-exam-technique-identity";
 import { loadAllPages } from "@/lib/load-all-pages";
 import { adaptTechniqueSummary } from "@/lib/technique-summary-adapter";
 import {
@@ -2489,9 +2489,9 @@ async function buildAdultItems(eventId: string, targetGrades: string[], sourceCa
         `No hay un Kamoku verificado disponible para ${grade}. Revisa el programa antes de crear el examen.`,
       );
     for (const entry of required) {
-      // Split technical variants already belong to the same catalogue used by class plans.
-      // Never add an extra grouped Goho/Juho label or an unregistered variant from the book.
-      if (["Goho","Juho"].includes(entry.section)) continue;
+      // Techniques AND katas use the SKBC catalogue, as in class plans.
+      // The book only supplements the remaining subjects.
+      if (isAdultCatalogueExercise(entry)) continue;
       const sameSection = catalogue.filter(
         (item) =>
           item.grade === grade &&
