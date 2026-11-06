@@ -4,6 +4,7 @@ import { logoutAction } from "@/app/actions";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadAllPages } from "@/lib/load-all-pages";
 
 type Clase = {
   id: string;
@@ -59,22 +60,26 @@ export default async function ActasClasePage({
   const filteredClasses = (classes ?? []).filter((clase) => matchesSearch(clase, search));
   const classIds = filteredClasses.map((clase) => clase.id);
 
-  const [{ data: attendance }, { data: plans }] = classIds.length
+  const [attendance, plans] = classIds.length
     ? await Promise.all([
-        supabase
+        loadAllPages<Attendance>((from, to) => supabase
           .from("attendance_logs")
           .select("class_id,member_id,members(class,display_name)")
           .in("class_id", classIds)
-          .returns<Attendance[]>(),
-        supabase
+          .order("id")
+          .range(from, to)
+          .returns<Attendance[]>()),
+        loadAllPages<Plan>((from, to) => supabase
           .from("technical_plans")
           .select("class_id,completed")
           .in("class_id", classIds)
-          .returns<Plan[]>()
+          .order("id")
+          .range(from, to)
+          .returns<Plan[]>())
       ])
-    : [{ data: [] as Attendance[] }, { data: [] as Plan[] }];
+    : [[], []];
 
-  const summaries = filteredClasses.map((clase) => summarizeClass(clase, attendance ?? [], plans ?? []));
+  const summaries = filteredClasses.map((clase) => summarizeClass(clase, attendance, plans));
   const months = buildMonths(summaries);
 
   return (
