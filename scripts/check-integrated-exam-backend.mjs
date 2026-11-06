@@ -1,4 +1,6 @@
 import * as gradeHelpers from "../src/lib/grades.ts";
+import * as adultCurriculum from "../src/lib/adult-exam-curriculum.ts";
+import * as snapshotHelpers from "../src/lib/integrated-exam-snapshot.ts";
 import * as examCallHelpers from "../src/lib/exam-call.ts";
 import * as childProgramHelpers from "../src/lib/child-program.ts";
 import * as assignmentHelpers from "../src/lib/integrated-exam-assignments.ts";
@@ -128,6 +130,8 @@ vm.runInNewContext(source, {
   module,
   exports: module.exports,
   require(name) {
+    if (name.endsWith("/adult-exam-curriculum")) return adultCurriculum;
+    if (name.endsWith("/integrated-exam-snapshot")) return snapshotHelpers;
     if (name.endsWith("/exam-call")) return examCallHelpers;
     if (name.endsWith("/grades")) return gradeHelpers;
     if (name.endsWith("/child-program")) return childProgramHelpers;
@@ -177,6 +181,11 @@ assert.equal(orderingFixture[0].id, 'goho', 'Do not mutate the original snapshot
 assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderedFixture,'kids_progressive'), x=>x.id), Array.from(orderedFixture,x=>x.id), 'Ordering must be idempotent');
 assert.deepEqual(Array.from(backend.orderIntegratedExamItems(orderingFixture.filter(x=>x.source!=='cut'),'adults'),x=>x.id), ['umpo','ukemi','kata','gakka','keimyaku','goho','juho']);
 assert.equal(backend.orderIntegratedExamItems([{id:'shoulder',source:'technique',section:'PROGRAMA',category:'juho',name:'Kata muna otoshi'},{id:'theory',source:'manual',section:'GAKKA'}],'adults')[1].id,'shoulder','Kata in a technique name must not turn it into a kata');
+const embuOrder = [{id:'embu',source:'manual',section:'KUMI_EMBU',name:'Kumi embu'},{id:'goho',source:'technique',section:'PROGRAMA',category:'goho'},{id:'theory',source:'manual',section:'GAKKA'}];
+assert.deepEqual(Array.from(backend.orderIntegratedExamItems(embuOrder,'adults'),x=>x.id),['theory','goho','embu'],'Embu must be the last adult subject');
+const weightedItems=embuOrder.filter(x=>x.id!=='theory').map(row=>({...row,active:true,weight:backend.adultExamItemWeight(row)}));
+const weightedSummary=reviewHelpers.buildStudentReview({studentId:'weighted',items:weightedItems,scores:weightedItems.map(row=>({event_student_id:'weighted',event_item_id:row.id,examiner_id:'one',score:row.id==='embu'?10:0,skipped:false,notes:''})),passPercentage:70});
+assert.equal(weightedSummary.percentage,75,'One embu mark weighs three times one ordinary technique');
 examiner.source_examiner_id = "old-parent";
 examiner.source_examiner = { revoked_at: "2026-01-01" };
 await assert.rejects(
@@ -495,7 +504,7 @@ const registrationClient = {
           if (key === "then")
             return (resolve) => {
               let matches = (database[table] ?? []).filter((row) =>
-                filters.every(([field, value]) => row[field] === value),
+                filters.every(([field, value]) => Array.isArray(value) ? value.includes(row[field]) : row[field] === value),
               );
               if (
                 operation === "update" &&
@@ -544,7 +553,7 @@ const registrationClient = {
                 for (const entry of Array.isArray(values) ? values : [values]) {
                   const existing = database[table].find(
                     (row) =>
-                      row.event_student_id === entry.event_student_id &&
+                      (table === "exam_event_items" ? row.id === entry.id : row.event_student_id === entry.event_student_id) &&
                       (table !== "exam_event_scores" ||
                         (row.event_item_id === entry.event_item_id &&
                           row.examiner_id === entry.examiner_id)),
@@ -560,7 +569,7 @@ const registrationClient = {
               });
             };
           return (...args) => {
-            if (key === "eq" || key === "is") filters.push(args);
+            if (key === "eq" || key === "is" || key === "in") filters.push(args);
             if (key === "update" || key === "upsert" || key === "insert") {
               operation = key;
               values = args[0];
@@ -586,6 +595,8 @@ vm.runInNewContext(source, {
   JSON,
   Error,
   require(name) {
+    if (name.endsWith("/integrated-exam-snapshot")) return snapshotHelpers;
+    if (name.endsWith("/adult-exam-curriculum")) return adultCurriculum;
     if (name.endsWith("/exam-call")) return examCallHelpers;
     if (name.endsWith("/grades")) return gradeHelpers;
     if (name.endsWith("/child-program")) return childProgramHelpers;
@@ -1071,7 +1082,37 @@ assert.ok(
 assert.equal(created.ownExaminerId, undefined);
 const createdItems = database.exam_event_items.filter(row=>row.exam_event_id===created.eventId);
 assert.equal(createdItems[0].technique_id,'basic-1','New exam stores fundamentals before techniques');
-assert.deepEqual(Array.from(createdItems,row=>row.order_index),[1,2,3],'Stored order indices match the execution order');
+assert.deepEqual(Array.from(createdItems,row=>row.order_index),Array.from({length:createdItems.length},(_,index)=>index+1),'Stored order indices match the execution order');
+assert.ok(createdItems.some(row=>row.section==='Gakka') && createdItems.some(row=>row.section==='Keimyaku'),'New adult exams include the non-technique book subjects');
+assert.equal(createdItems.at(-1).section,'Embu');
+assert.ok(createdItems.filter(row=>row.section==='Embu').every(row=>row.weight===3));
+assert.ok(createdItems.filter(row=>row.section!=='Embu').every(row=>row.weight===1));
+const disabled=createdItems.find(row=>row.section==='Gakka');
+disabled.active=false; disabled.summary='Teacher edited theory notes';
+const missing=createdItems.find(row=>row.section==='Keimyaku');
+database.exam_event_items=database.exam_event_items.filter(row=>row.id!==missing.id);
+const preservedId=disabled.id;
+createdEvent.updated_at='2026-11-06T10:00:00.000Z';
+const completionCount=await registrationModule.exports.completeAdultExamCurriculum(created.eventId);
+assert.equal(completionCount,1,'Completion adds only the missing subject');
+const afterCompletion=database.exam_event_items.filter(row=>row.exam_event_id===created.eventId);
+assert.equal(afterCompletion.find(row=>row.id===preservedId).active,false,'Completion never reactivates teacher-disabled subjects');
+assert.equal(afterCompletion.find(row=>row.id===preservedId).summary,'Teacher edited theory notes');
+assert.equal(afterCompletion.find(row=>row.technique_id==='basic-1').id,createdItems.find(row=>row.technique_id==='basic-1').id,'Catalogue association and item identity survive completion');
+assert.equal(await registrationModule.exports.completeAdultExamCurriculum(created.eventId),0,'Repeated completion is idempotent');
+const originalProgram=createdEvent.program_type; createdEvent.program_type='kids_progressive';
+await assert.rejects(()=>registrationModule.exports.completeAdultExamCurriculum(created.eventId),/solo para exámenes de adultos/);
+createdEvent.program_type=originalProgram;
+database.exam_event_reviews.push({exam_event_id:created.eventId,event_student_id:'teacher-reviewed',review_notes:'Teacher conclusion',reviewed_at:'2026-11-06T10:01:00Z'});
+await assert.rejects(()=>registrationModule.exports.completeAdultExamCurriculum(created.eventId),/revisión del profesor/,'Teacher-reviewed exams cannot be rebuilt even without examiner scores');
+database.exam_event_reviews=database.exam_event_reviews.filter(row=>row.event_student_id!=='teacher-reviewed');
+database.exam_events.push({id:'old-template',program_type:'adults',title:'Incomplete old template'});
+database.exam_event_items.push({...item,id:'template-one',exam_event_id:'old-template',grade:'1 KYU',section:'PROGRAMA',category:'goho',name:'Kusshin zuki'});
+const copied=await registrationModule.exports.createIntegratedExamEvent({title:'Complete adult copy',examDate:'2026-11-10',programType:'adults',passPercentage:70,memberIds:['member-1'],examinerNames:[],templateEventId:'old-template'});
+const copiedItems=database.exam_event_items.filter(row=>row.exam_event_id===copied.eventId);
+assert.ok(copiedItems.some(row=>row.section==='Gakka')&&copiedItems.some(row=>row.section==='Keimyaku'),'Copying old adult templates also fills missing Kamoku subjects');
+assert.ok(copiedItems.every(row=>row.grade==='1 KYU'),'Copied curriculum contains only the new target grade');
+assert.equal(copiedItems.at(-1).section,'Embu');
 console.log(
   "Adult grade-group creation, partial submission and recovery checks passed",
 );

@@ -301,6 +301,7 @@ export function ExamEvaluationForm({
                         {item.section ?? item.category ?? "Item"}
                       </p>
                       <h2>{item.name}</h2>
+                      {!isKidsProgressive && item.weight === 3 ? <p className="state-badge">Peso 3 · cuenta el triple</p> : null}
                     </div>
                     {isKidsProgressive ? (
                       <span className="state-badge">

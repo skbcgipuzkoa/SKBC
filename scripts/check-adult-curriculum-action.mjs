@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+let allowed=false, failure=false;
+const calls=[], revalidated=[];
+const module={exports:{}};
+const source=ts.transpileModule(fs.readFileSync('src/app/examenes/curriculum-actions.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+vm.runInNewContext(source,{module,exports:module.exports,Error,String,encodeURIComponent,require(name){
+  if(name.endsWith('/auth'))return{hasInternalAccess:async()=>allowed};
+  if(name.endsWith('/integrated-exams'))return{completeAdultExamCurriculum:async id=>{calls.push(id);if(failure)throw new Error('Already reviewed');}};
+  if(name==='next/cache')return{revalidatePath:path=>revalidated.push(path)};
+  if(name==='next/navigation')return{redirect:path=>{throw new Error('REDIRECT:'+path);}};
+  throw new Error('Unexpected dependency '+name);
+}});
+const action=module.exports.completeAdultExamCurriculumAction;
+const form=new FormData();form.set('eventId','event');
+await assert.rejects(()=>action(form),/REDIRECT:\/skbc-interno/);
+assert.equal(calls.length,0,'Unauthenticated requests cannot change exams');
+allowed=true;
+await assert.rejects(()=>action(form),/REDIRECT:\/examenes\/event\?saved=curriculum/);
+assert.deepEqual(calls,['event']);assert.deepEqual(revalidated,['/examenes/event','/examenes']);
+failure=true;
+await assert.rejects(()=>action(form),/error=curriculum&detail=Already%20reviewed/);
+assert.equal(revalidated.length,2,'Failed completion must not report a success');
+console.log('Adult curriculum action auth, explicit mutation, errors and revalidation passed. No database or messages.');

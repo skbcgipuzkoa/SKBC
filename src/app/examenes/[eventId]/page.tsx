@@ -1,4 +1,5 @@
 import { StudentExamPhoto } from "@/app/examenes/components/ExamStepNavigator";
+import { completeAdultExamCurriculumAction } from "@/app/examenes/curriculum-actions";
 import { driveImageUrl } from "@/lib/drive";
 import { ExamGradeAssignmentForm } from "@/app/examenes/components/ExamGradeAssignmentForm";
 import {
@@ -53,6 +54,7 @@ export default async function IntegratedExamPage({
     examiners,
     scores,
     summaries,
+    reviews,
     examinerGradeScopes,
     adultTargetGrades,
     pendingExaminerIds,
@@ -158,6 +160,7 @@ export default async function IntegratedExamPage({
         {query.saved === "item" ? (
           <p className="save-ok">Temario del examen actualizado.</p>
         ) : null}
+        {query.saved === "curriculum" ? <p className="notice">Kamoku completado. Se conservan los puntos editados y desactivados. Embu queda al final con peso 3; las demás materias tienen peso 1.</p> : null}
         {query.saved === "finalized" ? (
           <p className="save-ok">
             Resultados registrados. Consulta los informes y el estado de
@@ -702,6 +705,7 @@ export default async function IntegratedExamPage({
           )}
         </section>
 
+        {isAdult && !isCompleted && !hasSubmittedScores && !reviews.some(review => review.reviewed_at || review.final_passed != null || review.review_notes?.trim()) && !examiners.some(examiner => examiner.submitted_at) ? <section className="card"><h2>Programa completo del grado</h2><p>Los exámenes nuevos incluyen el Kamoku BSKF 2024. Para actualizar este examen, añade las materias que falten sin reactivar puntos desactivados. Embu se valora al final con peso 3; cada otra materia, con peso 1.</p><form action={completeAdultExamCurriculumAction}><input type="hidden" name="eventId" value={event.id}/><button type="submit">Completar con Kamoku</button></form></section> : null}
         <details className="card foldable-admin-section">
           <summary>
             <span>
