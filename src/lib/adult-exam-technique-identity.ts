@@ -39,6 +39,9 @@ function norm(value: string | null | undefined) {
     .trim();
 }
 function bodyKey(value: string) {
+  // The club's teacher confirmed this full label names the same exercise.
+  // Other compound techniques remain distinct; do not drop arbitrary pins/suffixes.
+  if (norm(value) === "ude juji tate gassho gatame") return "ude juji";
   return value
     .replace(/\btenchiken\b/gi, "Tenchi ken")
     .replace(/\bgiwaken\b/gi, "Giwa ken")

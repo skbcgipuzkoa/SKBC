@@ -14,6 +14,26 @@ const katate = {
   active: true,
 };
 const ryote = { ...katate, id: "ryote", name: "Juji gote (ryote)" };
+const ude = {...katate,id:"ude",name:"Ude juji"};
+const udeLong = {...ude,id:"ude-long",name:"Ude juji, tate gassho gatame"};
+assert.equal(identity(ude),identity(udeLong),"Teacher-confirmed Ude juji aliases are one exercise");
+assert.equal(identity(ude),identity({...udeLong,name:"Ude juji tate Gassho gatame"}));
+assert.equal(audit([ude,udeLong]).canonicalRows.length,1);
+assert.notEqual(identity(ude),identity({...udeLong,grade:"1 KYU"}));
+assert.notEqual(identity(ude),identity({...udeLong,variant:"Katate"}));
+assert.notEqual(identity(ude),identity({...udeLong,variant_note:"Different exercise instruction"}));
+assert.notEqual(identity(ude),identity({...udeLong,name:"Ude juji (katame to renko)"}));
+const udeSnapshot=[
+  {...ude,id:"exam-ude",technique_id:"ude",source:"technique",section:"PROGRAMA",weight:1,summary:"Teacher note"},
+  {...udeLong,id:"exam-ude-long",source:"manual",section:"Juho",content_type:null,weight:1},
+];
+const udeEffective=normalize(udeSnapshot,[ude],"adults","active");
+assert.equal(udeEffective[0].weight,1);
+assert.equal(udeEffective[1].weight,0,"Existing adult duplicate must not count twice");
+assert.equal(udeEffective[0].summary,"Teacher note");
+assert.equal(udeSnapshot[1].weight,1,"Normalization must not mutate saved rows");
+assert.equal(normalize(udeSnapshot,[ude],"kids_progressive","active"),udeSnapshot);
+assert.equal(normalize(udeSnapshot,[ude],"adults","completed"),udeSnapshot);
 const group = { ...katate, id: "group", name: "Juji gote (katate & ryote)" };
 let result = audit([katate, ryote, group]);
 assert.deepEqual(
