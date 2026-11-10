@@ -1,3 +1,6 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
+import { detectPhotoMime, UPLOAD_MAX_BYTES } from "./class-photo-upload";
 import { getGoogleDriveAccessToken } from "./google-drive-api";
 
 export type AlbumRecord = { classId: string; folderId: string; title: string; caption: string; photoIds: string[]; published: { caption: string; photoIds: string[] } | null; revision: string };
@@ -9,19 +12,48 @@ const folderMime = 'application/vnd.google-apps.folder';
 const safeId = /^[A-Za-z0-9_-]{1,200}$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fields = 'id,name,mimeType,size,parents,appProperties,description,version,trashed';
-function fail(): never { throw new Error('No se pudo acceder al álbum de clase.'); }
+function fail(stage='validation',status=0): never {throw Object.assign(new Error('No se pudo acceder al álbum de clase.'),{photoDriveStage:stage,photoDriveStatus:status});}
+function isDriveFailure(error:unknown):error is Error {return error instanceof Error && 'photoDriveStage' in error;}
 function rootId() { const id=process.env.SKBC_CLASS_PHOTOS_FOLDER_ID || '15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS'; if(!safeId.test(id)) fail(); return id; }
 function validateClass(id:string) { if(!uuid.test(id)) throw new Error('Clase no válida.'); }
 function selection(caption:unknown,ids:unknown): {caption:string;photoIds:string[]} {
   if(typeof caption!=='string'||caption.length>2000||!Array.isArray(ids)||ids.length>24||ids.some(id=>typeof id!=='string'||!safeId.test(id))||new Set(ids).size!==ids.length) throw new Error('Texto o selección de fotos no válidos.');
   return {caption,photoIds:ids as string[]};
 }
+const deadlineContext = new AsyncLocalStorage<AbortSignal>();
+function aborted(signal:AbortSignal) { if(signal.aborted) throw new Error('La operación de fotos ha tardado demasiado.'); }
+function abortable<T>(promise:Promise<T>,signal:AbortSignal):Promise<T> {
+  aborted(signal);
+  return new Promise<T>((resolve,reject)=>{
+    const onAbort=()=>{cleanup();reject(new Error('La operación de fotos ha tardado demasiado.'));};
+    const cleanup=()=>signal.removeEventListener('abort',onAbort);
+    signal.addEventListener('abort',onAbort,{once:true});
+    promise.then(value=>{cleanup();if(signal.aborted)onAbort();else resolve(value);},error=>{cleanup();reject(error);});
+  });
+}
+export async function withClassPhotoDriveDeadline<T>(timeoutMs:number,task:()=>Promise<T>):Promise<T> {
+  if(!Number.isFinite(timeoutMs)||timeoutMs<=0) throw new Error('Plazo no válido.');
+  const controller=new AbortController();const parent=deadlineContext.getStore();
+  const onParent=()=>controller.abort();parent?.addEventListener('abort',onParent,{once:true});
+  if(parent?.aborted)controller.abort();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try {return await deadlineContext.run(controller.signal,()=>{aborted(controller.signal);return abortable(Promise.resolve().then(task),controller.signal);});}
+  finally {clearTimeout(timer);parent?.removeEventListener('abort',onParent);}
+}
+function requestSignal() { return deadlineContext.getStore() || AbortSignal.timeout(15000); }
+async function boundedResponse(response:Response,signal:AbortSignal):Promise<Response> {
+  // Drive metadata bodies are small. Binding readers also covers delayed bodies after fetch resolves.
+  const json=response.json.bind(response),text=response.text.bind(response);
+  response.json=()=>abortable(json(),signal);
+  response.text=()=>abortable(text(),signal);
+  return response;
+}
 type TokenCache = { promise: Promise<string>; expiresAt: number };
 let tokenCache: TokenCache | null = null;
 function driveToken(): TokenCache {
   if (tokenCache && tokenCache.expiresAt > Date.now()) return tokenCache;
   const entry: TokenCache = {
-    promise: Promise.resolve().then(() => getGoogleDriveAccessToken()),
+    promise: abortable(Promise.resolve().then(() => getGoogleDriveAccessToken()),AbortSignal.timeout(15000)),
     expiresAt: Date.now() + 45 * 60 * 1000
   };
   tokenCache = entry;
@@ -29,20 +61,57 @@ function driveToken(): TokenCache {
   return entry;
 }
 async function request(url:string,init:RequestInit={}) {
+  const signal = requestSignal();
+  aborted(signal);
   const entry = driveToken();
   try {
-    const token = await entry.promise;
+    const token = await abortable(entry.promise,signal);
+    aborted(signal);
     const headers = new Headers(init.headers);
     headers.set('authorization',`Bearer ${token}`);
-    const response = await fetch(url,{...init,headers,cache:'no-store',redirect:'error'});
+    const response = await abortable(fetch(url,{...init,headers,signal,cache:'no-store',redirect:'error'}),signal);
     if (response.status === 401 && tokenCache === entry) tokenCache = null;
     if (response.status === 412) throw new Error('El álbum ha cambiado. Recarga antes de guardar.');
-    if (!response.ok) fail();
-    return response;
+    if (!response.ok) fail('metadata',response.status);
+    return boundedResponse(response,signal);
   } catch(error) {
-    if(error instanceof Error && error.message==='El álbum ha cambiado. Recarga antes de guardar.') throw error;
-    fail();
+    if(isDriveFailure(error) || (error instanceof Error && error.message==='El álbum ha cambiado. Recarga antes de guardar.')) throw error;
+    fail('request');
   }
+}
+/** Only signed Drive media destinations are eligible for a cross-origin redirect. */
+function trustedMediaDestination(url: URL): boolean {
+  if(url.protocol!=='https:' || url.port || url.username || url.password || url.hash) return false;
+  if(url.origin==='https://www.googleapis.com') return /^\/drive\/v3\/files\/[A-Za-z0-9_-]+$/.test(url.pathname) && url.searchParams.get('alt')==='media';
+  return /^[a-z0-9-]+-apidata\.googleusercontent\.com$/.test(url.hostname) && /^\/(?:download\/drive|drive)\/v3\/files\/[A-Za-z0-9_-]+$/.test(url.pathname);
+}
+async function downloadMedia(url:string):Promise<Response> {
+  const signal=requestSignal();aborted(signal);
+  const entry=driveToken();
+  try {
+    let current=new URL(url);
+    if(!trustedMediaDestination(current) || current.origin!=='https://www.googleapis.com') fail();
+    const token=await abortable(entry.promise,signal);aborted(signal);
+    const seen=new Set<string>();
+    for(let redirects=0;redirects<=3;redirects++) {
+      if(seen.has(current.href)) fail();seen.add(current.href);
+      const headers=new Headers();
+      // Signed cross-origin URLs must never receive the Drive OAuth credential.
+      if(current.origin==='https://www.googleapis.com') headers.set('authorization',`Bearer ${token}`);
+      const response=await abortable(fetch(current.href,{method:'GET',headers,signal,cache:'no-store',redirect:'manual'}),signal);
+      if(response.status===401 && current.origin==='https://www.googleapis.com' && tokenCache===entry) tokenCache=null;
+      if([301,302,303,307,308].includes(response.status)) {
+        const location=response.headers.get('location');
+        await response.body?.cancel();
+        if(!location || redirects===3) fail();
+        const next=new URL(location,current);
+        if(!trustedMediaDestination(next)) fail();
+        current=next;continue;
+      }
+      if(!response.ok) fail('media',response.status);return boundedResponse(response,signal);
+    }
+    fail();
+  } catch(error) {if(isDriveFailure(error))throw error;fail('download');}
 }
 async function readFile(id:string) { if(!safeId.test(id)) fail(); const response=await request(`${api}/${id}?fields=${fields}&supportsAllDrives=true`);return {file:await response.json() as DriveFile,etag:response.headers.get('etag')}; }
 function parse(file:DriveFile,etag?:string|null):AlbumRecord|null {
@@ -88,7 +157,7 @@ async function resolvePublication(folder:DriveFile,album:AlbumRecord):Promise<Al
   if(!safeId.test(pointer)) fail();
   const {file}=await readFile(pointer);
   if(file.trashed || file.mimeType!=='application/json' || !file.parents?.includes(album.folderId) || file.appProperties?.skbcClassAlbumManifest!=='1' || file.appProperties?.skbcClassId!==album.classId || !file.size || !/^\d+$/.test(file.size) || Number(file.size)>16384) fail();
-  const response=await request(`${api}/${pointer}?alt=media&supportsAllDrives=true`);
+  const response=await downloadMedia(`${api}/${pointer}?alt=media&supportsAllDrives=true`);
   const raw=await response.text();if(new TextEncoder().encode(raw).length>16384) fail();
   try {const data=JSON.parse(raw);if(data.version!==1 || data.classId!==album.classId) fail();return {...album,published:selection(data.caption,data.photoIds)};}catch{fail();}
 }
@@ -122,6 +191,30 @@ export async function saveClassAlbum(input:{classId:string;caption:string;photoI
   await request(`${api}/${album.folderId}?supportsAllDrives=true`,{method:'PATCH',headers,body:JSON.stringify(update)});
 }
 export async function fetchClassPhoto(album:AlbumRecord,fileId:string):Promise<Response> {
-  await currentAlbum(album);const {file}=await readFile(fileId);if(!validPhoto(file,album.folderId)) fail();return request(`${api}/${fileId}?alt=media&supportsAllDrives=true`);
+  await currentAlbum(album);const {file}=await readFile(fileId);if(!validPhoto(file,album.folderId)) fail();return downloadMedia(`${api}/${fileId}?alt=media&supportsAllDrives=true`);
+}
+
+
+/** Adds one private original; publishing remains a separate explicit operation. */
+export async function uploadAlbumPhoto(album:AlbumRecord,input:{name:string;bytes:Uint8Array;mimeType:string}):Promise<DrivePhoto> {
+  if(!(input.bytes instanceof Uint8Array) || input.bytes.length===0 || input.bytes.length>UPLOAD_MAX_BYTES) throw new Error('La foto debe ocupar como máximo 3 MB.');
+  const mimeType=detectPhotoMime(input.bytes);
+  if(!mimeType || mimeType!==input.mimeType) throw new Error('Solo se admiten fotos JPEG, PNG o WebP válidas.');
+  if(typeof input.name!=='string') throw new Error('Nombre de foto no válido.');
+  const name=input.name.replace(/[\u0000-\u001f\u007f-\u009f/\\]/g,'').trim().slice(0,160);
+  if(!name) throw new Error('Nombre de foto no válido.');
+  await currentAlbum(album);
+  const boundary=`skbc_private_photo_${randomUUID()}`;
+  const metadata={name,mimeType,parents:[album.folderId]};
+  // Blob keeps the original binary bytes intact and exists only for this request.
+  const body=new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
+    new Uint8Array(input.bytes),
+    `\r\n--${boundary}--\r\n`
+  ]);
+  const response=await request('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size&supportsAllDrives=true',{method:'POST',headers:{'content-type':`multipart/related; boundary=${boundary}`},body});
+  const result=await response.json() as DrivePhoto;
+  if(!safeId.test(result.id||'') || typeof result.name!=='string' || result.mimeType!==mimeType || !/^\d+$/.test(result.size||'') || Number(result.size)!==input.bytes.length) fail();
+  return {id:result.id,name:result.name,mimeType:result.mimeType,size:result.size};
 }
 

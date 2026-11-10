@@ -15,3 +15,13 @@
 .class-photo-history { display:grid;gap:16px }
 .class-photo-album { min-width:0 }
 .class-photo-caption { white-space:pre-wrap }
+.class-photo-capsule { border:1px solid #d9e3ef;border-radius:10px;background:#fff;min-width:0 }
+.class-photo-capsule>summary { min-height:48px;padding:12px;cursor:pointer;box-sizing:border-box;overflow-wrap:anywhere }
+.class-photo-count { display:inline-block;margin-left:10px;padding:3px 8px;border-radius:20px;background:#edf3fa;font-size:.85rem;white-space:nowrap }
+.class-photo-capsule-content { padding:0 12px 12px }
+.class-photo-load-error { padding:16px;border-radius:8px;background:#f3f6fa;display:grid;align-content:center;gap:8px;min-height:120px }
+.class-photo-load-error button { min-height:44px;max-width:100%;white-space:normal }
+.class-photo-uploader { display:grid;gap:12px;padding:14px;margin-bottom:16px;background:#eef4fb;border-radius:10px;min-width:0 }
+.class-photo-uploader label { display:grid;gap:8px }
+.class-photo-uploader input[type=file] { width:100%;max-width:100%;min-height:44px;box-sizing:border-box }
+.class-photo-uploader button { justify-self:start;max-width:100% }

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';
 const js=ts.transpileModule(fs.readFileSync('src/lib/class-photo-drive.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -10,7 +11,7 @@ if(u.hostname==='www.googleapis.com'&&u.pathname.includes('/upload/')){const bod
 const id=u.pathname.split('/').at(-1);if(init.method==='PATCH'){const patch=JSON.parse(init.body);if(patch.description)folder.description=patch.description;if(patch.appProperties)Object.assign(folder.appProperties,patch.appProperties);return Response.json(folder);}
 if(id==='files')return Response.json({files:files.filter(f=>f.mimeType==='application/vnd.google-apps.folder')});
 const found=files.find(f=>f.id===id);if(!found)return new Response('',{status:404});if(u.searchParams.get('alt')==='media')return new Response(found.content||'image');return Response.json(found);};
-const exports={};vm.runInNewContext(js,{exports,require:()=>({getGoogleDriveAccessToken:async()=> 'secret'}),process:{env:{}},fetch:mockFetch,Response,URL,URLSearchParams,Headers,TextEncoder,console});
+const exports={};vm.runInNewContext(js,{exports,require:id=>id==='node:async_hooks'?{AsyncLocalStorage}:({getGoogleDriveAccessToken:async()=> 'secret'}),process:{env:{}},fetch:mockFetch,Response,URL,URLSearchParams,AbortSignal,AbortController,setTimeout,clearTimeout,Headers,TextEncoder,console});
 let album=await exports.getClassAlbum(classId);assert.equal(album.published,null,'legacy description cannot publish');
 await exports.saveClassAlbum({classId,caption:'Public',photoIds:['photo1'],intent:'publish',revision:album.revision});
 album=await exports.getClassAlbum(classId);assert.equal(album.published.caption,'Public');assert.equal(manifestCount,1);
@@ -35,7 +36,7 @@ console.log('class photo publication-pointer tests passed');
 // Token refresh is deduplicated; album metadata and originals are never cached.
 let authCalls=0, authFailure=false, unauthorized=false, clock=0;
 const cachedExports={};
-vm.runInNewContext(js,{exports:cachedExports,require:()=>({getGoogleDriveAccessToken:async()=>{authCalls++;await Promise.resolve();if(authFailure)throw Error('private auth details');return `token-${authCalls}`;}}),process:{env:{}},Date:{now:()=>clock},fetch:async(...args)=>unauthorized?new Response('',{status:401}):mockFetch(...args),Response,URL,URLSearchParams,Headers,TextEncoder,console});
+vm.runInNewContext(js,{exports:cachedExports,require:id=>id==='node:async_hooks'?{AsyncLocalStorage}:({getGoogleDriveAccessToken:async()=>{authCalls++;await Promise.resolve();if(authFailure)throw Error('private auth details');return `token-${authCalls}`;}}),process:{env:{}},Date:{now:()=>clock},fetch:async(...args)=>unauthorized?new Response('',{status:401}):mockFetch(...args),Response,URL,URLSearchParams,AbortSignal,AbortController,setTimeout,clearTimeout,Headers,TextEncoder,console});
 await Promise.all(Array.from({length:24},()=>cachedExports.listClassAlbums()));assert.equal(authCalls,1,'concurrent requests share token refresh');
 clock=44*60*1000;await cachedExports.listClassAlbums();assert.equal(authCalls,1);
 clock=46*60*1000;await cachedExports.listClassAlbums();assert.equal(authCalls,2,'token expires after 45 minutes');

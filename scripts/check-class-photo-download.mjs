@@ -1,0 +1,13 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';
+const js=ts.transpileModule(fs.readFileSync('src/lib/class-photo-drive.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const classId='11111111-1111-4111-8111-111111111111',album={classId,folderId:'folder1'};
+let target='https://abc-apidata.googleusercontent.com/download/drive/v3/files/photo1?signature=private',hops=[],loop=false;
+const exports={};vm.runInNewContext(js,{exports,require:id=>id==='node:async_hooks'?{AsyncLocalStorage}:({getGoogleDriveAccessToken:async()=> 'secret'}),process:{env:{}},URL,AbortSignal,AbortController,setTimeout,clearTimeout,Headers,Response,fetch:async(url,init)=>{
+ const u=new URL(url);hops.push({u,init});if(u.searchParams.get('alt')==='media'||u.hostname.endsWith('googleusercontent.com')){
+ if(u.hostname.endsWith('googleusercontent.com')&&!loop)return new Response('image');return new Response(null,{status:307,headers:{location:target}});}
+ return Response.json(u.pathname.endsWith('folder1')?{id:'folder1',name:'Class',mimeType:'application/vnd.google-apps.folder',parents:['15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS'],appProperties:{skbcClassId:classId,skbcClassAlbum:'1'},description:JSON.stringify({version:1,classId,caption:'',photoIds:[],state:'draft'})}:{id:'photo1',name:'x.jpg',mimeType:'image/jpeg',size:'20',parents:['folder1']});}});
+assert.equal(await(await exports.fetchClassPhoto(album,'photo1')).text(),'image');assert.equal(hops.at(-1).init.headers.has('authorization'),false);assert.equal(hops.at(-2).init.headers.get('authorization'),'Bearer secret');assert.equal(hops[0].init.redirect,'error');
+for(const bad of ['https://evil.test/download/drive/v3/files/photo1','http://abc-apidata.googleusercontent.com/download/drive/v3/files/photo1','https://user@abc-apidata.googleusercontent.com/download/drive/v3/files/photo1','https://abc-apidata.googleusercontent.com:444/download/drive/v3/files/photo1','https://abc-apidata.googleusercontent.com.evil.test/download/drive/v3/files/photo1','https://abc-apidata.googleusercontent.com/arbitrary']){target=bad;const before=hops.length;await assert.rejects(()=>exports.fetchClassPhoto(album,'photo1'));assert.equal(hops.length-before,3,'hostile destination never fetched');}
+target='https://abc-apidata.googleusercontent.com/download/drive/v3/files/photo1';loop=true;await assert.rejects(()=>exports.fetchClassPhoto(album,'photo1'));
+console.log('class photo safe download redirect tests passed');

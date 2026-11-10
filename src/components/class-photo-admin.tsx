@@ -1,15 +1,16 @@
 import { getClassPhotoAdmin } from "@/lib/class-photos";
 import { CLASS_PHOTO_ROOT_FOLDER_ID } from "@/lib/class-photo-drive";
 import { createClassPhotoAlbumAction, saveClassPhotosAction } from "@/app/clases/photo-actions";
+import { ClassPhotoUploader } from "@/components/class-photo-uploader";
 import "@/app/class-photos.css";
 
 export async function ClassPhotoAdmin({ classId, legacyId }: { classId: string; legacyId: string }) {
   try {
     const { album, photos } = await getClassPhotoAdmin(classId);
     return <section className="class-photos" id={`fotos-clase-${classId}`}><h2>Fotos del entrenamiento</h2>
-      <p>Sube las imágenes a la carpeta privada de Drive y vuelve a esta clase para seleccionarlas. Subir archivos o guardar un borrador no los publica en las fichas.</p>
+      <ClassPhotoUploader classId={classId} />
       <p><a className="text-link" href={`https://drive.google.com/drive/folders/${encodeURIComponent(CLASS_PHOTO_ROOT_FOLDER_ID)}`} target="_blank" rel="noopener noreferrer">Abrir carpeta de entrenamientos</a></p>
-      {!album ? <form action={createClassPhotoAlbumAction}><input type="hidden" name="classId" value={classId} /><p>Esta clase todavía no tiene álbum.</p><button type="submit">Crear carpeta privada de esta clase</button></form> : <>
+      {!album ? <details><summary>Opciones de carpeta en Drive</summary><form action={createClassPhotoAlbumAction}><input type="hidden" name="classId" value={classId} /><p>Al subir la primera foto se crea el álbum automáticamente. También puedes preparar la carpeta manualmente.</p><button type="submit">Crear carpeta privada de esta clase</button></form></details> : <>
         <p><a className="text-link" href={`https://drive.google.com/drive/folders/${encodeURIComponent(album.folderId)}`} target="_blank" rel="noopener noreferrer">Abrir carpeta privada de esta clase en Drive</a> · <a className="text-link" href={`/clases/${encodeURIComponent(legacyId)}#fotos-clase`}>Actualizar archivos</a></p>
         <p className="class-photo-state">{album.published ? `Publicado en las fichas · ${album.published.photoIds.length} fotos. Los cambios del borrador requieren volver a publicar.` : "Borrador privado · todavía no publicado en las fichas."}</p>
         <form action={saveClassPhotosAction}>

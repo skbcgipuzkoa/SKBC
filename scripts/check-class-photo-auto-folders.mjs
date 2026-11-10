@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const source=readFileSync('src/app/actions.ts','utf8');
+const body=source.slice(source.indexOf('export async function createClassAction('),source.indexOf('export async function updateClassAction('));
+let authorized=true,driveAvailable=true;let rows=[],folders=[];
+const db={from(table){assert.equal(table,'classes');let row;const q={insert(input){row={...input,id:`class-${rows.length}`};rows.push(row);return q},select(){return q},single:async()=>({data:row,error:null})};return q}};
+const mod={exports:{}};
+vm.runInNewContext(ts.transpileModule(body,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:mod.exports,hasInternalAccess:async()=>authorized,createAdminClient:()=>db,normalizeClass:group=>['adults','kids'].includes(group)?group:null,parseDateInput:value=>value,ensureClassPhotoAlbumForCreation:async id=>{folders.push(id);return driveAvailable},generateAdultTechnicalGroups:async()=>{},generateAdultTechnicalPlan:async()=>{},errorMessage:()=>'',redirect:path=>{throw new Error('REDIRECT:'+path)},console});
+const form=group=>{const f=new FormData();f.set('classDate','2026-11-10');f.set('name','Synthetic class');f.set('classGroup',group);return f};
+await assert.rejects(()=>mod.exports.createClassAction(form('kids')),/REDIRECT:\/clases\/NEW-CLA/);assert.equal(rows.length,1);assert.deepEqual(folders,['class-0']);
+rows=[];folders=[];await assert.rejects(()=>mod.exports.createClassAction(form('combined')),/REDIRECT:\/clases\/NEW-CLA/);assert.equal(rows.length,2);assert.deepEqual(folders,['class-0','class-1'],'Combined groups get separate attendance-bound folders');
+rows=[];folders=[];driveAvailable=false;await assert.rejects(()=>mod.exports.createClassAction(form('kids')),/photoFolderPending=1/);assert.equal(rows.length,1,'Drive failure must not delete or duplicate the class');
+rows=[];folders=[];authorized=false;await assert.rejects(()=>mod.exports.createClassAction(form('kids')),/REDIRECT:\//);assert.equal(rows.length,0);assert.equal(folders.length,0);
+assert.match(source.slice(source.indexOf('async function findOrCreateOpenClassIdForDelegate(')),/ensureClassPhotoAlbumForCreation\(created.id\)/,'Automatically-created companion classes also get folders');
+console.log('Automatic class folders: new kids/adult companion groups, Drive outage recovery, authorization and delegate hook passed.');

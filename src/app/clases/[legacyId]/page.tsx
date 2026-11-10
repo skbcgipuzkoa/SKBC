@@ -1,5 +1,6 @@
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
 import { ClassPhotoAdmin } from "@/components/class-photo-admin";
+import { ensureClassPhotoAlbumForCreation } from "@/lib/class-photos";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { ArrowLeft, Check, FileText, LogOut, RefreshCcw, Wand2 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
@@ -176,7 +177,7 @@ export default async function ClaseDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string; photoSaved?:string; photoError?:string }>;
+  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string; photoSaved?:string; photoError?:string; photoFolderPending?:string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -294,7 +295,7 @@ export default async function ClaseDetailPage({
   const attendanceStepHref = `/clases/${legacyId}?step=asistencia`;
   if (clase.class_group === "adults" && activeStep === "attendance" && !(dayClasses ?? []).some((item) => item.class_group === "kids")) {
     const autoKidsLegacyId = `AUTO-KIDS-${clase.class_date}-${Date.now()}`;
-    const { error: autoKidsError } = await supabase.from("classes").insert({
+    const { data:autoKids, error: autoKidsError } = await supabase.from("classes").insert({
       legacy_id: autoKidsLegacyId,
       class_date: clase.class_date,
       name: `NIÑOS ${clase.class_date}`,
@@ -303,9 +304,10 @@ export default async function ClaseDetailPage({
       responsible: clase.responsible,
       notes: "Clase infantil paralela creada automaticamente para asistencia del dia.",
       status: "pending"
-    });
+    }).select("id").single<{id:string}>();
 
     if (!autoKidsError) {
+      if(autoKids?.id) await ensureClassPhotoAlbumForCreation(autoKids.id);
       redirect(attendanceStepHref);
     }
 
@@ -1001,6 +1003,7 @@ export default async function ClaseDetailPage({
 
         {query.photoSaved ? <p className="save-ok" role="status">{query.photoSaved==="publish"?"Fotos publicadas en el historial de los asistentes.":query.photoSaved==="withdraw"?"Fotos retiradas de las fichas.":query.photoSaved==="folder"?"Carpeta privada de la clase creada en Drive.":"Borrador guardado. La publicación anterior sigue igual."}</p>:null}
         {query.photoError ? <p className="form-error" role="alert">No se pudo guardar el álbum. Actualiza la página y comprueba el acceso a la carpeta de Drive y la selección de fotos.</p>:null}
+        {query.photoFolderPending ? <p className="notice" role="status">La clase se ha creado. Su carpeta de fotos está pendiente porque Drive no respondió. Puedes reintentar desde «Fotos y actividades» o subir una foto para crearla automáticamente.</p>:null}
         <section id="fotos-clase" aria-label="Álbumes de la clase">
           {clase.class_group==="adults" && kidsDayClass?.legacy_id ? <details className="card"><summary><strong>Fotos y actividades · Niños</strong></summary><ClassPhotoAdmin classId={kidsDayClass.id} legacyId={kidsDayClass.legacy_id}/></details>:null}
           <details className="card"><summary><strong>Fotos y actividades · {clase.class_group==="kids"?"Niños":"Adultos"}</strong></summary><ClassPhotoAdmin classId={clase.id} legacyId={legacyId} /></details>

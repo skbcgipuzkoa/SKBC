@@ -1,7 +1,8 @@
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
-import { ensureClassAlbum, fetchClassPhoto, getClassAlbum, listAlbumPhotos, listClassAlbums, saveClassAlbum } from "@/lib/class-photo-drive";
+import { ensureClassAlbum, fetchClassPhoto, getClassAlbum, listAlbumPhotos, listClassAlbums, saveClassAlbum, uploadAlbumPhoto, withClassPhotoDriveDeadline } from "@/lib/class-photo-drive";
+import { detectPhotoMime, UPLOAD_MAX_BYTES } from "@/lib/class-photo-upload";
 export type { AlbumRecord, DrivePhoto } from "@/lib/class-photo-drive";
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -41,8 +42,23 @@ export async function getClassPhotoAdmin(classId:string) {
 
 export async function createClassPhotoAlbum(classId:string) {
   const row=await internalClass(classId);
-  await ensureClassAlbum({classId:row.id,title:`${row.class_date} · ${row.class_group==="kids"?"Niños":"Adultos"} · ${row.name}`});
+  await ensureClassAlbum({classId:row.id,title:`${row.class_date} · ${row.class_group==="kids"?"Niños":"Adultos"} · ${row.name}`.slice(0,200)});
   return {legacyId:row.legacy_id!};
+}
+
+/** Class creation must survive a temporary Drive outage; upload can retry provisioning. */
+export async function ensureClassPhotoAlbumForCreation(classId:string):Promise<boolean> {
+  try { await withClassPhotoDriveDeadline(3500,()=>createClassPhotoAlbum(classId)); return true; } catch { return false; }
+}
+
+export async function uploadClassPhoto(classId:string,input:{name:string;bytes:Uint8Array;mimeType:string}) {
+  const row=await internalClass(classId);
+  if(!(input.bytes instanceof Uint8Array) || !input.bytes.length || input.bytes.length>UPLOAD_MAX_BYTES ||
+    !detectPhotoMime(input.bytes) || detectPhotoMime(input.bytes)!==input.mimeType)
+    throw new Error("La foto no es válida o supera los 3 MB.");
+  const album=await ensureClassAlbum({classId:row.id,title:`${row.class_date} · ${row.class_group==="kids"?"Niños":"Adultos"} · ${row.name}`.slice(0,200)});
+  const photo=await uploadAlbumPhoto(album,input);
+  return {legacyId:row.legacy_id!,photo};
 }
 
 export async function saveClassPhotos(input:{classId:string;caption:string;photoIds:string[];intent:"draft"|"publish"|"withdraw";revision:string}) {
