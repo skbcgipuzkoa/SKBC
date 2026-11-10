@@ -46,3 +46,5 @@ response=await callback.GET(callbackRequest('wrong'));assert.equal(saved,0);asse
 response=await callback.GET(callbackRequest('a'.repeat(64)));assert.equal(saved,1);assert.equal(response.headers.get('location'),'https://skbc.vercel.app/clases?photoGoogle=error');assert.equal(response.headers.get('referrer-policy'),'no-referrer');assert.equal(response.headers.get('cache-control'),'no-store');
 assert.equal(reset,0);saveFails=false;response=await callback.GET(callbackRequest('a'.repeat(64)));assert.equal(reset,1);assert.equal(response.headers.get('location'),'https://skbc.vercel.app/clases?photoGoogle=connected');
 console.log('Photo Google OAuth: encryption/tamper, fail-closed storage, fallback, auth, state, CSRF and sanitized callback passed.');
+
+process.env.GOOGLE_OAUTH_CLIENT_ID="\uFEFFclient-id ";response=await connect.POST(new Request("https://skbc.vercel.app",{headers:{origin:"https://skbc.vercel.app"}}));assert.equal(new URL(response.headers.get("location")).searchParams.get("client_id"),"client-id");

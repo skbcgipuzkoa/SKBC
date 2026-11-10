@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   if (!await hasInternalAccess()) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   try {
     if (request.headers.get("origin") !== photoGoogleOrigin()) return NextResponse.json({ error: "Origen no válido." }, { status: 403 });
-    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
     if (!clientId || !process.env.GOOGLE_OAUTH_CLIENT_SECRET) throw new Error();
     const state = randomBytes(32).toString("hex");
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
