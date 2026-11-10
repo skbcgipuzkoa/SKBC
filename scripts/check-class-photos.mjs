@@ -55,3 +55,19 @@ await assert.rejects(()=>api.uploadClassPhoto(classId,{...upload,mimeType:'image
 const oldEnsure=drive.ensureClassAlbum;drive.ensureClassAlbum=async()=>{throw new Error('Offline')};
 assert.equal(await api.ensureClassPhotoAlbumForCreation(classId),false,'Drive outage leaves class available for retry');
 drive.ensureClassAlbum=oldEnsure;assert.equal(await api.ensureClassPhotoAlbumForCreation(classId),true);
+
+assert.equal(saved.published,true);
+assert.equal(writes.findLast(item=>item.intent)?.intent,'publish');
+assert.deepEqual(Array.from(writes.findLast(item=>item.intent).photoIds),['new-private-photo']);
+album.published={caption:'Existing caption',photoIds:[publishedId]};
+await api.uploadClassPhoto(classId,upload);
+assert.deepEqual(Array.from(writes.at(-1).photoIds),[publishedId,'new-private-photo']);
+assert.equal(writes.at(-1).caption,'Existing caption');
+const saveAlbum=drive.saveClassAlbum;drive.saveClassAlbum=async()=>{throw Error('conflict')};
+assert.equal((await api.uploadClassPhoto(classId,upload)).published,false);
+drive.saveClassAlbum=saveAlbum;
+console.log('Automatic publication preserves existing photos and handles saved-but-unpublished files.');
+
+assert.equal(writes.findLast(item=>item.intent).preserveDraft,true);
+album.published={caption:'Full',photoIds:Array.from({length:24},(_,i)=>'existing_photo_'+i)};
+await assert.rejects(()=>api.uploadClassPhoto(classId,upload),/24/);

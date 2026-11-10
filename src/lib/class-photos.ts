@@ -57,8 +57,19 @@ export async function uploadClassPhoto(classId:string,input:{name:string;bytes:U
     !detectPhotoMime(input.bytes) || detectPhotoMime(input.bytes)!==input.mimeType)
     throw new Error("La foto no es válida o supera los 3 MB.");
   const album=await ensureClassAlbum({classId:row.id,title:`${row.class_date} · ${row.class_group==="kids"?"Niños":"Adultos"} · ${row.name}`.slice(0,200)});
+  if((album.published?.photoIds.length??0)>=24) throw new Error("El álbum ya tiene 24 fotos publicadas.");
   const photo=await uploadAlbumPhoto(album,input);
-  return {legacyId:row.legacy_id!,photo};
+  try {
+    const current=await getClassAlbum(classId);
+    if(!current || current.folderId!==album.folderId) throw new Error("Álbum no disponible.");
+    const photoIds=[...new Set([...(current.published?.photoIds??[]),photo.id])];
+    if(photoIds.length>24) throw new Error("El álbum ya tiene 24 fotos publicadas.");
+    await saveClassAlbum({classId,caption:current.published?.caption??"",photoIds,intent:"publish",revision:current.revision,preserveDraft:true});
+    return {legacyId:row.legacy_id!,photo,published:true};
+  } catch {
+    // The file exists: return its ID so the client never retries this upload.
+    return {legacyId:row.legacy_id!,photo,published:false};
+  }
 }
 
 export async function saveClassPhotos(input:{classId:string;caption:string;photoIds:string[];intent:"draft"|"publish"|"withdraw";revision:string}) {

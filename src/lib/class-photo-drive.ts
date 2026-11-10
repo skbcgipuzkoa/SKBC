@@ -181,7 +181,7 @@ async function createPublication(album:AlbumRecord,published:{caption:string;pho
   const response=await request('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true',{method:'POST',headers:{'content-type':`multipart/related; boundary=${boundary}`},body});
   const data=await response.json() as {id?:string};if(!data.id || !safeId.test(data.id)) fail();return data.id;
 }
-export async function saveClassAlbum(input:{classId:string;caption:string;photoIds:string[];intent:'draft'|'publish'|'withdraw';revision:string}):Promise<void> {
+export async function saveClassAlbum(input:{classId:string;caption:string;photoIds:string[];intent:'draft'|'publish'|'withdraw';revision:string;preserveDraft?:boolean}):Promise<void> {
   if(!['draft','publish','withdraw'].includes(input.intent)) fail();
   validateClass(input.classId);
   // Read only the album folder here: withdrawal must work even if an original or old manifest was deleted.
@@ -196,7 +196,7 @@ export async function saveClassAlbum(input:{classId:string;caption:string;photoI
     const draft=selection(input.caption,input.photoIds);
     for(const id of draft.photoIds){const {file}=await readFile(id);if(!validPhoto(file,album.folderId)) throw new Error('Una foto ya no está disponible en este álbum.');}
     const description=JSON.stringify({version:1,classId:album.classId,...draft,state:'draft'});
-    update=input.intent==='publish'?{description,appProperties:{skbcPublishedAlbum:await createPublication(album,draft)}}:{description};
+    update=input.intent==='publish'?{...(input.preserveDraft ? {} : {description}),appProperties:{skbcPublishedAlbum:await createPublication(album,draft)}}:{description};
   }
   const headers:Record<string,string>={'content-type':'application/json'};if(!album.revision.startsWith('version:')) headers['if-match']=album.revision;
   await request(`${api}/${album.folderId}?supportsAllDrives=true`,{method:'PATCH',headers,body:JSON.stringify(update)});

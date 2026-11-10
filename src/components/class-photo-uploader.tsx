@@ -18,7 +18,7 @@ export function ClassPhotoUploader({ classId }: { classId: string }) {
     try {
       const results = await uploadClassPhotoBatch(files, classId, (completed, uploaded) => setProgress({ completed, uploaded, total: files.length }));
       const failed = results.filter((result) => !result.ok);
-      setErrors(failed.map((result) => `${result.file.name}: ${result.error}`));
+      setErrors(results.filter((result) => result.error).map((result) => `${result.file.name}: ${result.error}`));
       setFiles(failed.map((result) => result.file));
       if (!failed.length && input.current) input.current.value = "";
       if (results.some((result) => result.ok)) router.refresh();
@@ -26,7 +26,7 @@ export function ClassPhotoUploader({ classId }: { classId: string }) {
     finally { inFlight.current = false; setBusy(false); }
   }
   return <div className="class-photo-uploader">
-    <h3>Subir fotos desde este dispositivo</h3><p>Se optimizan antes de subirlas a la carpeta privada de Drive. No se publican automáticamente: después selecciona las fotos y pulsa «Publicar selección en las fichas».</p>
+    <h3>Subir fotos desde este dispositivo</h3><p>Se optimizan y guardan en Drive. Se publican automáticamente en las fichas de quienes asistieron a esta clase. Máximo 24 fotos publicadas por clase.</p>
     <label>Elegir fotos de la galería · máximo 24<input ref={input} type="file" accept="image/*" multiple disabled={busy} onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setErrors([]); setProgress({ completed: 0, uploaded: 0, total: 0 }); }} /></label>
     <button type="button" disabled={busy || !files.length || files.length > 24} onClick={upload}>{busy ? "Optimizando y subiendo…" : `Subir ${files.length || "las"} fotos seleccionadas`}</button>
     <p role="status" aria-live="polite">{progress.total ? `${progress.uploaded} subidas · ${progress.completed} de ${progress.total} procesadas.${busy ? " Mantén esta página abierta." : ""}` : files.length ? `${files.length} fotos seleccionadas.` : ""}</p>

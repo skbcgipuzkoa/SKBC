@@ -11,6 +11,11 @@ assert.equal(calls[0].fichaToken,'private-token');
 response=new Response('image bytes',{headers:{'Content-Type':'image/jpeg'}});result=await get();
 assert.equal(result.status,200);assert.equal(await result.text(),'image bytes');
 assert.match(result.headers.get('Cache-Control'),/private.*no-store/);assert.equal(result.headers.get('X-Content-Type-Options'),'nosniff');assert.equal(result.headers.get('Referrer-Policy'),'no-referrer');
+response=new Response('download bytes',{headers:{'Content-Type':'image/jpeg'}});
+result=await mod.exports.GET(new Request('https://skbc.vercel.app/api/class-photos/c/p?ficha=private-token&download=1'),{params:Promise.resolve({classId:'c',fileId:'p'})});
+assert.equal(result.headers.get('Content-Disposition'),'attachment; filename="SKBC-foto.jpg"');
+assert.equal(calls.at(-1).fichaToken,'private-token');
+assert.equal(await result.text(),'download bytes');
 for(const type of ['text/html','image/svg+xml','application/octet-stream']){response=new Response('<script>bad</script>',{headers:{'Content-Type':type}});assert.equal((await get()).status,404);}
 fail=true;result=await get();assert.equal(result.status,503);assert.doesNotMatch(await result.text(),/OAuth|token/);assert.match(result.headers.get('Cache-Control'),/no-store/);
 console.log('Private photo route: scoped auth, streaming, no-store, MIME allowlist and sanitized errors passed.');

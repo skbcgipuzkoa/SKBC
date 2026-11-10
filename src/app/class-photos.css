@@ -25,3 +25,7 @@
 .class-photo-uploader label { display:grid;gap:8px }
 .class-photo-uploader input[type=file] { width:100%;max-width:100%;min-height:44px;box-sizing:border-box }
 .class-photo-uploader button { justify-self:start;max-width:100% }
+
+.class-photo-item { margin:0;min-width:0 }
+.class-photo-item figcaption { padding:10px 0 }
+.class-photo-item a { display:inline-flex;align-items:center;min-height:44px }

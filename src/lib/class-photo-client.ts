@@ -49,7 +49,7 @@ export async function uploadClassPhotoBatch(files: File[], classId: string, onPr
       if (!response.ok) throw new Error("No se pudo confirmar la subida. Revisa la lista antes de volver a intentarlo para evitar duplicados.");
       const data = await response.json();
       if (!data?.id || !data?.name) throw new Error("La subida no se ha confirmado. Revisa la lista de fotos antes de repetirla.");
-      results.push({ file, ok: true }); uploaded++;
+      results.push({ file, ok: true, ...(data.published===false ? {error:"Guardada en Drive, pero no se pudo publicar. Usa las opciones del álbum para publicarla; no vuelvas a subirla."} : {}) }); uploaded++;
     } catch (error) { results.push({ file, ok: false, error: error instanceof Error && !/fetch|network/i.test(error.message) ? error.message : "No se pudo confirmar la subida. Revisa la lista de fotos antes de repetirla." }); }
     onProgress(results.length, uploaded);
   }

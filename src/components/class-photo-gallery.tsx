@@ -17,5 +17,5 @@ export function ClassPhotoImage({ src, index }: { src: string; index: number }) 
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   if (failed) return <div className="class-photo-load-error" role="status"><p>No se puede cargar la foto {index + 1} ahora.</p><button type="button" onClick={() => { setAttempt((value) => value + 1); setFailed(false); }}>Volver a intentar la foto {index + 1}</button></div>;
-  return <img src={attempt ? `${src}&retry=${attempt}` : src} alt={`Foto ${index + 1} del entrenamiento`} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+  return <figure className="class-photo-item"><img src={attempt ? `${src}&retry=${attempt}` : src} alt={`Foto ${index + 1} del entrenamiento`} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} /><figcaption><a className="text-link" href={`${src}&download=1`} download rel="noreferrer">Descargar foto {index + 1}</a></figcaption></figure>;
 }

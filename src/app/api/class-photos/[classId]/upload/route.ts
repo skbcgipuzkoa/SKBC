@@ -33,6 +33,6 @@ export async function POST(request:Request,{params}:{params:Promise<{classId:str
     const {classId}=await params;
     const saved=await uploadClassPhoto(classId,{name:file.name,mimeType:file.type,bytes:new Uint8Array(await file.arrayBuffer())});
     revalidatePath(`/clases/${encodeURIComponent(saved.legacyId)}`);
-    return Response.json({id:saved.photo.id,name:saved.photo.name},{headers});
+    return Response.json({id:saved.photo.id,name:saved.photo.name,published:saved.published},{headers});
   } catch { return result(400,"No se pudo subir la foto. Comprueba el formato y vuelve a intentarlo."); }
 }
