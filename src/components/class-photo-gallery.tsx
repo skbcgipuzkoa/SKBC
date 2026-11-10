@@ -1,11 +1,21 @@
 "use client";
 import { useState } from "react";
 
+type ClassAlbum = { classId: string; date: string; caption: string; photoIds: string[] };
+
+export function ClassPhotoCollection({ albums, fichaToken }: { albums: ClassAlbum[]; fichaToken: string }) {
+  const [open, setOpen] = useState(false);
+  return <details className="class-photo-collection" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary><strong>Galería de entrenamientos</strong><span className="class-photo-count">{albums.length} {albums.length === 1 ? "clase con fotos" : "clases con fotos"}</span><span className="class-photo-collection-hint">Elegir día de clase</span></summary>
+    {open ? <div className="class-photo-days">{albums.map((album) => <ClassPhotoGallery key={album.classId} {...album} fichaToken={fichaToken} />)}</div> : null}
+  </details>;
+}
+
 export function ClassPhotoGallery({ classId, date, caption, photoIds, fichaToken }: { classId: string; date: string; caption: string; photoIds: string[]; fichaToken: string }) {
   const [open, setOpen] = useState(false);
-  const formatted = /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}` : date;
+  const formatted = /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(8, 10)}-${date.slice(5, 7)}-${date.slice(0, 4)}` : date;
   return <details className="class-photo-capsule" onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary><span>Clase del {formatted} · Fotos de la clase</span><span className="class-photo-count">{photoIds.length} {photoIds.length === 1 ? "foto" : "fotos"}</span></summary>
+    <summary><span>Clase del {formatted}</span><span className="class-photo-count">{photoIds.length} {photoIds.length === 1 ? "foto" : "fotos"}</span></summary>
     {open ? <div className="class-photo-capsule-content">
       {caption ? <p className="class-photo-caption">{caption}</p> : null}
       <div className="class-photo-grid">{photoIds.map((id, index) => <ClassPhotoImage key={id} src={`/api/class-photos/${encodeURIComponent(classId)}/${encodeURIComponent(id)}?ficha=${encodeURIComponent(fichaToken)}`} index={index} />)}</div>

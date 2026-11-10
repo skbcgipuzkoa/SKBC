@@ -29,3 +29,9 @@
 .class-photo-item { margin:0;min-width:0 }
 .class-photo-item figcaption { padding:10px 0 }
 .class-photo-item a { display:inline-flex;align-items:center;min-height:44px }
+
+.class-photo-collection { border:1px solid #d9e3ef;border-radius:12px;background:#fff;min-width:0 }
+.class-photo-collection>summary { padding:16px;min-height:56px;box-sizing:border-box;cursor:pointer }
+.class-photo-collection-hint { display:block;margin-top:6px;color:#64748b;font-size:.9rem }
+.class-photo-days { display:grid;gap:12px;padding:0 12px 12px }
+.class-photo-collection>summary:focus-visible,.class-photo-capsule>summary:focus-visible { outline:3px solid #2563eb;outline-offset:3px }
