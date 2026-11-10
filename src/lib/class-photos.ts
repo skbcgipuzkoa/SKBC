@@ -1,3 +1,4 @@
+import { CLASS_PHOTO_ALBUM_LIMIT } from "@/lib/class-photo-limits";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
@@ -58,13 +59,13 @@ export async function uploadClassPhoto(classId:string,input:{name:string;bytes:U
     !detectPhotoMime(input.bytes) || detectPhotoMime(input.bytes)!==input.mimeType)
     throw new Error("La foto no es válida o supera los 3 MB.");
   const album=await ensureClassAlbum({classId:row.id,title:`${row.class_date} · ${row.class_group==="kids"?"Niños":"Adultos"} · ${row.name}`.slice(0,200)});
-  if((album.published?.photoIds.length??0)>=24) throw new Error("El álbum ya tiene 24 fotos publicadas.");
+  if((album.published?.photoIds.length??0)>=CLASS_PHOTO_ALBUM_LIMIT) throw new Error(`El álbum ya tiene ${CLASS_PHOTO_ALBUM_LIMIT} fotos publicadas.`);
   const photo=await uploadAlbumPhoto(album,input);
   try {
     const current=await getClassAlbum(classId);
     if(!current || current.folderId!==album.folderId) throw new Error("Álbum no disponible.");
     const photoIds=[...new Set([...(current.published?.photoIds??[]),photo.id])];
-    if(photoIds.length>24) throw new Error("El álbum ya tiene 24 fotos publicadas.");
+    if(photoIds.length>CLASS_PHOTO_ALBUM_LIMIT) throw new Error(`El álbum ya tiene ${CLASS_PHOTO_ALBUM_LIMIT} fotos publicadas.`);
     await saveClassAlbum({classId,caption:current.published?.caption??"",photoIds,intent:"publish",revision:current.revision,preserveDraft:true});
     return {legacyId:row.legacy_id!,photo,published:true};
   } catch {
@@ -76,7 +77,7 @@ export async function uploadClassPhoto(classId:string,input:{name:string;bytes:U
 export async function saveClassPhotos(input:{classId:string;caption:string;photoIds:string[];intent:"draft"|"publish"|"withdraw";revision:string}) {
   const row=await internalClass(input.classId);
   if(typeof input.caption!=="string" || input.caption.length>2000 ||
-    !Array.isArray(input.photoIds) || input.photoIds.length>24 ||
+    !Array.isArray(input.photoIds) || input.photoIds.length>CLASS_PHOTO_ALBUM_LIMIT ||
     input.photoIds.some(id=>typeof id!=="string" || !fileIdPattern.test(id)) ||
     new Set(input.photoIds).size!==input.photoIds.length ||
     !["draft","publish","withdraw"].includes(input.intent) ||
@@ -136,11 +137,11 @@ export async function syncClassPhotosForMember(classId:string,fichaToken:string)
   if(error) throw new Error("No se pudo comprobar la asistencia.");
   if(!data) return null;
   const album=await getClassAlbum(classId);
-  if(!album) return {added:0};
+  if(!album) return {added:0,pending:false};
   const last=Date.parse(album.lastSyncedAt??"");
-  if(Number.isFinite(last) && Date.now()-last<5*60*1000) return {added:0};
+  if(!album.syncPending && Number.isFinite(last) && Date.now()-last<5*60*1000) return {added:0,pending:false};
   const result=await syncClassAlbumPhotos(classId);
-  return {added:result.added};
+  return {added:result.added,pending:result.pending};
 }
 
 /** Scheduled work only touches already-prepared albums backed by an existing class. */

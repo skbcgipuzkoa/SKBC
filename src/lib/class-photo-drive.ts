@@ -1,9 +1,10 @@
+import { CLASS_PHOTO_ALBUM_LIMIT, CLASS_PHOTO_MANIFEST_MAX_BYTES } from "@/lib/class-photo-limits";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { detectPhotoMime, UPLOAD_MAX_BYTES } from "./class-photo-upload";
 import { getClassPhotoDriveAccessToken, getClassPhotoMediaAccessToken } from "./class-photo-google-auth";
 
-export type AlbumRecord = { classId: string; folderId: string; title: string; caption: string; photoIds: string[]; published: { caption: string; photoIds: string[] } | null; revision: string; lastSyncedAt?:string; policyId?:string; policySeenPhotoIds?:string[] };
+export type AlbumRecord = { classId: string; folderId: string; title: string; caption: string; photoIds: string[]; published: { caption: string; photoIds: string[] } | null; revision: string; lastSyncedAt?:string; syncPending?:boolean; policyId?:string; policySeenPhotoIds?:string[] };
 export type DrivePhoto = { id: string; name: string; mimeType: string; size?: string };
 type DriveFile = DrivePhoto & { parents?: string[]; appProperties?: Record<string,string>; description?: string; version?: string; trashed?: boolean; createdTime?:string };
 export const CLASS_PHOTO_ROOT_FOLDER_ID = process.env.SKBC_CLASS_PHOTOS_FOLDER_ID || '15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS';
@@ -17,7 +18,7 @@ function isDriveFailure(error:unknown):error is Error {return error instanceof E
 function rootId() { const id=process.env.SKBC_CLASS_PHOTOS_FOLDER_ID || '15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS'; if(!safeId.test(id)) fail(); return id; }
 function validateClass(id:string) { if(!uuid.test(id)) throw new Error('Clase no válida.'); }
 function selection(caption:unknown,ids:unknown): {caption:string;photoIds:string[]} {
-  if(typeof caption!=='string'||caption.length>2000||!Array.isArray(ids)||ids.length>24||ids.some(id=>typeof id!=='string'||!safeId.test(id))||new Set(ids).size!==ids.length) throw new Error('Texto o selección de fotos no válidos.');
+  if(typeof caption!=='string'||caption.length>2000||!Array.isArray(ids)||ids.length>CLASS_PHOTO_ALBUM_LIMIT||ids.some(id=>typeof id!=='string'||!safeId.test(id))||new Set(ids).size!==ids.length) throw new Error('Texto o selección de fotos no válidos.');
   return {caption,photoIds:ids as string[]};
 }
 const deadlineContext = new AsyncLocalStorage<AbortSignal>();
@@ -129,7 +130,7 @@ function parse(file:DriveFile,etag?:string|null):AlbumRecord|null {
   try {const data=JSON.parse(file.description||''); if(data.version!==1||!uuid.test(data.classId)||data.classId!==file.appProperties.skbcClassId||!['draft','published'].includes(data.state)) return null;
     const draft=selection(data.caption,data.photoIds);const published=null;
 
-    return {classId:data.classId,folderId:file.id,title:file.name,...draft,published,revision:etag||`version:${file.version||''}`,lastSyncedAt:file.appProperties?.skbcPhotoLastSync};
+    return {classId:data.classId,folderId:file.id,title:file.name,...draft,published,revision:etag||`version:${file.version||''}`,lastSyncedAt:file.appProperties?.skbcPhotoLastSync,syncPending:file.appProperties?.skbcPhotoSyncPending==='1'};
   } catch { return null; }
 }
 async function listFiles(query:string) {
@@ -213,9 +214,9 @@ async function resolvePublication(folder:DriveFile,album:AlbumRecord):Promise<Al
   let file:DriveFile;
   try{file=(await readFile(pointer)).file;}catch(error){if(policy)return effective;throw error;}
   if(policy&&file.appProperties?.skbcClassPhotoPolicyId!==policy.id)return effective;
-  if(file.trashed || file.mimeType!=='application/json' || !file.parents?.includes(album.folderId) || file.appProperties?.skbcClassAlbumManifest!=='1' || file.appProperties?.skbcClassId!==album.classId || !file.size || !/^\d+$/.test(file.size) || Number(file.size)>16384) fail();
+  if(file.trashed || file.mimeType!=='application/json' || !file.parents?.includes(album.folderId) || file.appProperties?.skbcClassAlbumManifest!=='1' || file.appProperties?.skbcClassId!==album.classId || !file.size || !/^\d+$/.test(file.size) || Number(file.size)>CLASS_PHOTO_MANIFEST_MAX_BYTES) fail();
   const response=await downloadMedia(`${api}/${pointer}?alt=media&supportsAllDrives=true`);
-  const raw=await response.text();if(new TextEncoder().encode(raw).length>16384) fail();
+  const raw=await response.text();if(new TextEncoder().encode(raw).length>CLASS_PHOTO_MANIFEST_MAX_BYTES) fail();
   try {const data=JSON.parse(raw);if(data.version!==1 || data.classId!==album.classId) fail();
     if((data.policyId||'legacy')!==(policy?.id||'legacy'))return effective;
     return {...effective,published:selection(data.caption,data.photoIds)};
@@ -223,7 +224,7 @@ async function resolvePublication(folder:DriveFile,album:AlbumRecord):Promise<Al
 }
 async function createPublication(album:AlbumRecord,published:{caption:string;photoIds:string[]}) {
   const content=JSON.stringify({version:1,classId:album.classId,policyId:album.policyId||'legacy',...published});
-  if(new TextEncoder().encode(content).length>16384) fail();
+  if(new TextEncoder().encode(content).length>CLASS_PHOTO_MANIFEST_MAX_BYTES) fail();
   const boundary='skbc_album_manifest';
   const metadata={name:'Publicación del álbum.json',mimeType:'application/json',parents:[album.folderId],appProperties:{skbcClassAlbumManifest:'1',skbcClassId:album.classId,skbcClassPhotoPolicyId:album.policyId||'legacy'}};
   const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--\r\n`;
@@ -272,15 +273,17 @@ export async function saveClassAlbum(input:{classId:string;caption:string;photoI
   const seen=new Set<string>(readSeen(previous));
   const activePolicy=input.intent==='draft'?null:await latestPolicy(album);
   for(const id of activePolicy?.seenPhotoIds||[])seen.add(id);
+  const availablePhotos=input.intent==='withdraw'?null:await listFiles(`'${album.folderId}' in parents and trashed = false`);
   if(input.intent==='publish'&&input.preserveDraft){for(const id of input.photoIds)seen.add(id);}
-  else if(input.intent!=='draft')for(const file of await listFiles(`'${album.folderId}' in parents and trashed = false`))if(validPhoto(file,album.folderId))seen.add(file.id);
+  else if(input.intent!=='draft')for(const file of availablePhotos??await listFiles(`'${album.folderId}' in parents and trashed = false`))if(validPhoto(file,album.folderId))seen.add(file.id);
   let update:object;
   if(input.intent==='withdraw') {
     await createPolicy(album,null,seen);
     update={description:syncDescription(previous,seen),appProperties:{skbcPublishedAlbum:null}};
   } else {
     const draft=selection(input.caption,input.photoIds);
-    for(const id of draft.photoIds){const {file}=await readFile(id);if(!validPhoto(file,album.folderId)) throw new Error('Una foto ya no está disponible en este álbum.');}
+    const available=new Map((availablePhotos||[]).map(file=>[file.id,file]));
+    for(const id of draft.photoIds){const file=available.get(id);if(!file||!validPhoto(file,album.folderId)) throw new Error('Una foto ya no está disponible en este álbum.');}
     const draftData={...previous,version:1,classId:album.classId,...draft,state:'draft'};
     const description=input.intent==='draft'?JSON.stringify(draftData):syncDescription(draftData,seen);
     const preservedDescription=previous.syncSeenPhotoIds===undefined?JSON.stringify(previous):syncDescription(previous,seen);
@@ -331,7 +334,7 @@ function syncDescription(data:Record<string,unknown>,seen:Set<string>) {
   if(seen.size>500)throw new Error('El historial de fotos del álbum está lleno.');
   const content=JSON.stringify({...data,syncSeenPhotoIds:[...seen]});if(new TextEncoder().encode(content).length>30000)throw new Error('El historial de fotos del álbum está lleno.');return content;
 }
-export type ClassAlbumSyncResult = { album:AlbumRecord; added:number; blocked:number; limitReached:boolean; baseline:boolean };
+export type ClassAlbumSyncResult = { album:AlbumRecord; added:number; blocked:number; limitReached:boolean; baseline:boolean; pending:boolean };
 /** Discovers originals in the exact class folder, leaving saved editor selections intact. */
 export async function syncClassAlbumPhotos(classId:string):Promise<ClassAlbumSyncResult> {
   return withClassPhotoDriveDeadline(15000,async()=>{
@@ -343,28 +346,33 @@ export async function syncClassAlbumPhotos(classId:string):Promise<ClassAlbumSyn
     for(const id of [...album.photoIds,...(album.published?.photoIds||[]),...(album.policySeenPhotoIds||[])])seen.add(id);
     const photoIds=[...(album.published?.photoIds||[])];let added=0,blocked=0,limitReached=false;
     const photos=await listAlbumPhotos(album);
+    // Retry unavailable media after this discovery run has visited every candidate.
+    const deferred=new Set(album.syncPending?readSeen({syncSeenPhotoIds:data.syncDeferredPhotoIds}):[]);
+    let examined=0;let pending=false;
     for(const photo of photos){
       if(baseline){seen.add(photo.id);continue;}
-      if(seen.has(photo.id))continue;
-      if(photoIds.length>=24){limitReached=true;continue;}
+      if(seen.has(photo.id)||deferred.has(photo.id))continue;
+      if(photoIds.length>=CLASS_PHOTO_ALBUM_LIMIT){limitReached=true;continue;}
+      if(examined>=3){pending=true;continue;}
+      examined++;
       try{
         const response=await fetchClassPhoto(album,photo.id);
         const mime=response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
         let readable=!!response.body&&!!mime&&['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(mime);
         if(readable&&response.body){const reader=response.body.getReader();try{const first=await abortable(reader.read(),requestSignal());readable=!first.done&&first.value.length>0;}finally{await reader.cancel();}}
         else await response.body?.cancel();
-        if(!readable){blocked++;continue;}
+        if(!readable){blocked++;deferred.add(photo.id);continue;}
       }
-      catch(error){if(isDriveFailure(error)&&['api-media','signed-media'].includes((error as Error & {photoDriveStage:string}).photoDriveStage)){blocked++;continue;}throw error;}
+      catch(error){if(isDriveFailure(error)&&['api-media','signed-media'].includes((error as Error & {photoDriveStage:string}).photoDriveStage)){blocked++;deferred.add(photo.id);continue;}throw error;}
       seen.add(photo.id);photoIds.push(photo.id);added++;
     }
     const lastSyncedAt=new Date().toISOString();
-    const update:{description:string;appProperties:Record<string,string>}={description:syncDescription(data,seen),appProperties:{skbcPhotoLastSync:lastSyncedAt}};
+    const update:{description:string;appProperties:Record<string,string>}={description:syncDescription({...data,syncDeferredPhotoIds:pending?[...deferred]:[]},seen),appProperties:{skbcPhotoLastSync:lastSyncedAt,skbcPhotoSyncPending:pending?'1':'0'}};
     const published={caption:album.published?.caption ?? '',photoIds};
     if(added)update.appProperties.skbcPublishedAlbum=await createPublication(album,published);
     const headers:Record<string,string>={'content-type':'application/json'};if(!verified.revision.startsWith('version:'))headers['if-match']=verified.revision;
     await request(`${api}/${album.folderId}?supportsAllDrives=true`,{method:'PATCH',headers,body:JSON.stringify(update)});
-    return {album:{...album,published:added?published:album.published,lastSyncedAt},added,blocked,limitReached,baseline};
+    return {album:{...album,published:added?published:album.published,lastSyncedAt,syncPending:pending},added,blocked,limitReached,baseline,pending};
   });
 }
 

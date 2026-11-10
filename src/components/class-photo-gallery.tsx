@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { CLASS_PHOTO_PAGE_SIZE } from "@/lib/class-photo-limits";
 
 type ClassAlbum = { classId: string; date: string; caption: string; photoIds: string[] };
 
@@ -13,12 +14,15 @@ export function ClassPhotoCollection({ albums, fichaToken }: { albums: ClassAlbu
 
 export function ClassPhotoGallery({ classId, date, caption, photoIds, fichaToken }: { classId: string; date: string; caption: string; photoIds: string[]; fichaToken: string }) {
   const [open, setOpen] = useState(false);
+  const [visibleCount,setVisibleCount]=useState(CLASS_PHOTO_PAGE_SIZE);
   const formatted = /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(8, 10)}-${date.slice(5, 7)}-${date.slice(0, 4)}` : date;
-  return <details className="class-photo-capsule" onToggle={(event) => setOpen(event.currentTarget.open)}>
+  return <details className="class-photo-capsule" onToggle={(event) => {setOpen(event.currentTarget.open);if(!event.currentTarget.open)setVisibleCount(CLASS_PHOTO_PAGE_SIZE);}}>
     <summary><span>Clase del {formatted}</span><span className="class-photo-count">{photoIds.length} {photoIds.length === 1 ? "foto" : "fotos"}</span></summary>
     {open ? <div className="class-photo-capsule-content">
       {caption ? <p className="class-photo-caption">{caption}</p> : null}
-      <div className="class-photo-grid">{photoIds.map((id, index) => <ClassPhotoImage key={id} src={`/api/class-photos/${encodeURIComponent(classId)}/${encodeURIComponent(id)}?ficha=${encodeURIComponent(fichaToken)}`} index={index} />)}</div>
+      <div className="class-photo-grid">{photoIds.slice(0,visibleCount).map((id, index) => <ClassPhotoImage key={id} src={`/api/class-photos/${encodeURIComponent(classId)}/${encodeURIComponent(id)}?ficha=${encodeURIComponent(fichaToken)}`} index={index} />)}</div>
+      {photoIds.length>CLASS_PHOTO_PAGE_SIZE ? <p role="status">Mostrando {Math.min(visibleCount,photoIds.length)} de {photoIds.length} fotos</p> : null}
+      {visibleCount<photoIds.length ? <button type="button" className="secondary-button" onClick={()=>setVisibleCount(count=>Math.min(count+CLASS_PHOTO_PAGE_SIZE,photoIds.length))}>Ver más fotos</button> : null}
     </div> : null}
   </details>;
 }

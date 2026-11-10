@@ -10,7 +10,9 @@ No se crea carpeta al crear o abrir una clase. Se crea al subir la primera foto 
 
 ## Fotos añadidas directamente en Drive
 
-Subir JPEG, PNG, WebP, GIF o AVIF de hasta 20 MB a la carpeta exacta de la clase. Se incorporan las fotos nuevas legibles por Google, hasta 24 publicadas por clase. No se incluyen subcarpetas ni vídeos/HEIC. El móvil puede subir HEIC mediante SKBC si su navegador puede convertirlo a JPEG.
+Subir JPEG, PNG, WebP, GIF o AVIF de hasta 20 MB a la carpeta exacta de la clase. Se incorporan las fotos nuevas legibles por Google, hasta 200 publicadas por clase. No se incluyen subcarpetas ni vídeos/HEIC. El móvil puede subir HEIC mediante SKBC si su navegador puede convertirlo a JPEG.
+
+La subida desde SKBC permite hasta 50 fotos por envío; pueden hacerse varios envíos hasta alcanzar 200 por clase. La galería carga 20 fotos inicialmente y ofrece Ver más fotos. Las importaciones grandes avanzan por tandas conservando el progreso.
 
 La ficha comprueba novedades al abrirse y cada cinco minutos mientras está visible. Hay una revisión diaria adicional y el admin dispone de Sincronizar fotos de Drive ahora. La revisión exige autorización activa y asistencia antes de acceder a Drive; nunca crea carpetas desde la ficha.
 

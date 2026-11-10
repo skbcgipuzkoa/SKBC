@@ -1,5 +1,7 @@
 "use server";
 
+import { CLASS_PHOTO_ALBUM_LIMIT } from "@/lib/class-photo-limits";
+
 import { hasInternalAccess } from "@/lib/auth";
 import { createClassPhotoAlbum, syncClassPhotosForAdmin, saveClassPhotos, resolveClassPhotoReturn } from "@/lib/class-photos";
 import { redirect } from "next/navigation";
@@ -37,7 +39,7 @@ export async function saveClassPhotosAction(form: FormData) {
     if (!["draft", "publish", "withdraw"].includes(rawIntent)) throw new Error("Invalid intent");
     intent = rawIntent as typeof intent;
     const photoIds = [...new Set(form.getAll("photoIds").map(String))];
-    if (photoIds.length > 24 || photoIds.some((value) => !/^[A-Za-z0-9_-]{1,200}$/.test(value)) || caption.length > 2000) throw new Error("Invalid content");
+    if (photoIds.length > CLASS_PHOTO_ALBUM_LIMIT || photoIds.some((value) => !/^[A-Za-z0-9_-]{1,200}$/.test(value)) || caption.length > 2000) throw new Error("Invalid content");
     const revision = String(form.get("revision") ?? "");
     if (!revision.trim() || revision.length > 500 || /[\r\n]/.test(revision)) throw new Error("Invalid revision");
     path = destination((await saveClassPhotos({ classId: id, caption, photoIds, intent, revision })).legacyId);
@@ -49,9 +51,9 @@ export async function saveClassPhotosAction(form: FormData) {
 
 export async function syncClassPhotosAction(form:FormData) {
   if(!(await hasInternalAccess()))redirect("/skbc-interno");
-  let path:string;let blocked=0;let full=false;
-  try {const result=await syncClassPhotosForAdmin(classId(form));path=destination(result.legacyId);blocked=result.blocked;full=result.limitReached;}
+  let path:string;let blocked=0;let full=false;let pending=false;
+  try {const result=await syncClassPhotosForAdmin(classId(form));path=destination(result.legacyId);blocked=result.blocked;full=result.limitReached;pending=result.pending;}
   catch {redirect(await failurePath(form));}
   revalidatePath(path);revalidatePath("/ficha","layout");
-  redirect(`${path}?photoSaved=sync${blocked?"&photoSyncBlocked=1":""}${full?"&photoSyncFull=1":""}#fotos-clase`);
+  redirect(`${path}?photoSaved=sync${blocked?"&photoSyncBlocked=1":""}${full?"&photoSyncFull=1":""}${pending?"&photoSyncPending=1":""}#fotos-clase`);
 }

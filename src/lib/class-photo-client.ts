@@ -1,3 +1,4 @@
+import { CLASS_PHOTO_UPLOAD_BATCH_LIMIT } from "@/lib/class-photo-limits";
 export const CLASS_PHOTO_CLIENT_LIMIT = Math.floor(2.5 * 1024 * 1024);
 export function fitPhotoDimensions(width: number, height: number, maxEdge = 2048) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) throw new Error("La imagen no tiene dimensiones válidas.");
@@ -38,7 +39,7 @@ export async function optimizeClassPhoto(file: File): Promise<File> {
 }
 export type ClassPhotoUploadResult = { file: File; ok: boolean; error?: string };
 export async function uploadClassPhotoBatch(files: File[], classId: string, onProgress: (completed: number, uploaded: number) => void): Promise<ClassPhotoUploadResult[]> {
-  if (!files.length || files.length > 24) throw new Error("Selecciona entre 1 y 24 fotos por envío.");
+  if (!files.length || files.length > CLASS_PHOTO_UPLOAD_BATCH_LIMIT) throw new Error(`Selecciona entre 1 y ${CLASS_PHOTO_UPLOAD_BATCH_LIMIT} fotos por envío.`);
   const results: ClassPhotoUploadResult[] = [];
   let uploaded = 0;
   for (const file of files) {

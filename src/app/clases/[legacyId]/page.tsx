@@ -1,3 +1,4 @@
+import { CLASS_PHOTO_ALBUM_LIMIT } from "@/lib/class-photo-limits";
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
 import { ClassPhotoAdmin } from "@/components/class-photo-admin";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
@@ -176,7 +177,7 @@ export default async function ClaseDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string; photoSaved?:string; photoSyncBlocked?:string; photoSyncFull?:string; photoError?:string; photoFolderPending?:string }>;
+  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string; photoSaved?:string; photoSyncBlocked?:string; photoSyncFull?:string; photoSyncPending?:string; photoError?:string; photoFolderPending?:string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -1001,7 +1002,8 @@ export default async function ClaseDetailPage({
 
         {query.photoSaved ? <p className="save-ok" role="status">{query.photoSaved==="publish"?"Fotos publicadas en el historial de los asistentes.":query.photoSaved==="withdraw"?"Fotos retiradas de las fichas.":query.photoSaved==="folder"?"Carpeta privada preparada en Drive por año y mes.":query.photoSaved==="sync"?"Revisión de fotos de Drive completada.":"Borrador guardado. La publicación anterior sigue igual."}</p>:null}
         {query.photoSyncBlocked ? <p className="notice" role="status">Hay fotos que Google todavía no permite leer. Revisa «Conexión con Google Drive» para autorizar el acceso.</p>:null}
-        {query.photoSyncFull ? <p className="notice" role="status">El álbum ha alcanzado el máximo de 24 fotos publicadas. El resto se conserva en Drive.</p>:null}
+        {query.photoSyncPending ? <p className="notice" role="status">Se han incorporado las primeras fotos. El resto seguirá sincronizándose automáticamente al abrir las fichas o en la próxima revisión.</p>:null}
+        {query.photoSyncFull ? <p className="notice" role="status">El álbum ha alcanzado el máximo de {CLASS_PHOTO_ALBUM_LIMIT} fotos publicadas. El resto se conserva en Drive.</p>:null}
         {query.photoError ? <p className="form-error" role="alert">No se pudo guardar el álbum. Actualiza la página y comprueba el acceso a la carpeta de Drive y la selección de fotos.</p>:null}
         <section id="fotos-clase" aria-label="Álbumes de la clase">
           {clase.class_group==="adults" && kidsDayClass?.legacy_id ? <details className="card"><summary><strong>Fotos y actividades · Niños</strong></summary><ClassPhotoAdmin classId={kidsDayClass.id} legacyId={kidsDayClass.legacy_id}/></details>:null}

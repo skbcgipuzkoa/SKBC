@@ -38,7 +38,7 @@ const fetch=async(url,init={})=>{
   if(u.searchParams.get('alt')==='media'){downloads.push(id);if(blocked.has(id))return Response.json({error:{status:'PERMISSION_DENIED'}},{status:403});return new Response(file.content||'image',{headers:{'content-type':file.responseMime||file.mimeType}});}
   return Response.json(file);
 };
-const exports={};vm.runInNewContext(source,{exports,require:id=>id==='node:async_hooks'?{AsyncLocalStorage}:{getClassPhotoDriveAccessToken:async()=> 'token',getClassPhotoMediaAccessToken:async()=> 'media-token'},process:{env:{}},fetch,Response,Headers,URL,URLSearchParams,TextEncoder,AbortSignal,AbortController,setTimeout,clearTimeout});
+const exports={};vm.runInNewContext(source,{exports,require:id=>id.includes('class-photo-limits')?{CLASS_PHOTO_ALBUM_LIMIT:200,CLASS_PHOTO_MANIFEST_MAX_BYTES:65536}:id==='node:async_hooks'?{AsyncLocalStorage}:{getClassPhotoDriveAccessToken:async()=> 'token',getClassPhotoMediaAccessToken:async()=> 'media-token'},process:{env:{}},fetch,Response,Headers,URL,URLSearchParams,TextEncoder,AbortSignal,AbortController,setTimeout,clearTimeout});
 let result=await exports.syncClassAlbumPhotos(classId);
 assert.equal(result.baseline,true);assert.equal(result.added,0);assert.equal(downloads.length,0,'legacy baseline never republishes old originals');
 files.push(photo('new'),photo('blocked'));blocked.add('blocked');
@@ -101,8 +101,20 @@ result=await exports.syncClassAlbumPhotos(classId);assert.equal(result.added,0,'
 // An automatic device save that started from old UI selections must respect newer policy.
 album=await exports.getClassAlbum(classId);await exports.saveClassAlbum({classId,caption:'stale caption',photoIds:['device','late-before-manual-selection'],intent:'publish',revision:album.revision,preserveDraft:true});
 album=await exports.getClassAlbum(classId);assert.equal(album.published.caption,'manual caption');assert.deepEqual(Array.from(album.published.photoIds),['device']);
-// A full publication remains at 24 and reports external overflow without dropping existing IDs.
-const ids=Array.from({length:24},(_,i)=>'full'+i);files.push(...ids.map(photo));
-album=await exports.getClassAlbum(classId);await exports.saveClassAlbum({classId,caption:'full',photoIds:ids,intent:'publish',revision:album.revision});files.push(photo('overflow'));
-result=await exports.syncClassAlbumPhotos(classId);assert.equal(result.limitReached,true);assert.equal(result.added,0);assert.equal(result.album.published.photoIds.length,24);
-console.log('Drive sync: legacy baseline, external media recovery, drafts, withdrawal, strict ancestry, migration, hierarchy reuse and limit passed.');
+// Publish more than the former limit, then incrementally discover a complete album.
+const ids=Array.from({length:200},(_,i)=>'capacity_'+String(i).padStart(24,'0'));files.push(...ids.slice(0,25).map(photo));
+album=await exports.getClassAlbum(classId);await exports.saveClassAlbum({classId,caption:'full',photoIds:ids.slice(0,25),intent:'publish',revision:album.revision});
+assert.equal((await exports.getClassAlbum(classId)).published.photoIds.length,25);
+files.push(...ids.slice(25).map(photo));
+const unavailable=Array.from({length:5},(_,i)=>'unavailable'+i);files.splice(files.indexOf(folder)+1,0,...unavailable.map(photo));for(const id of unavailable)blocked.add(id);
+let passes=0,totalAdded=0;do {result=await exports.syncClassAlbumPhotos(classId);passes++;totalAdded+=result.added;assert.ok(result.added+result.blocked<=3,'each pass bounds media probes');assert.equal(result.album.syncPending,result.pending);assert.ok(passes<70,'blocked files do not starve later candidates');}while(result.pending);
+assert.equal(totalAdded,175);assert.equal(result.album.published.photoIds.length,200);assert.ok(passes>1);
+assert.equal(result.album.published.caption,'full');assert.equal(JSON.parse(folder.description).caption,'full');
+assert.ok(!result.album.published.photoIds.includes('late-before-manual-selection'),'exclusions survive all continuation passes');
+album=await exports.getClassAlbum(classId);
+await exports.saveClassAlbum({classId,caption:'manual 200',photoIds:ids,intent:'publish',revision:album.revision});
+assert.equal((await exports.getClassAlbum(classId)).published.photoIds.length,200,'manual publication supports 200');
+album=await exports.getClassAlbum(classId);
+await assert.rejects(()=>exports.saveClassAlbum({classId,caption:'overflow',photoIds:[...ids,'overflow'],intent:'publish',revision:album.revision}),/selección/);
+files.push(photo('overflow'));result=await exports.syncClassAlbumPhotos(classId);assert.equal(result.limitReached,true);assert.equal(result.added,0);assert.equal(result.pending,false);assert.equal(result.album.published.photoIds.length,200);
+console.log('Drive sync: 200-photo manual and incremental publication, bounded media probes, exclusions, blocked recovery, overflow and races passed.');
