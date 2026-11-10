@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {groupClassPhotoAlbums,orderedClassPhotoAlbums,flattenClassPhotos} from '../src/lib/class-photo-groups.ts';
+const album=(classId,date,photoIds=['photo-'+classId])=>({classId,date,caption:'',photoIds});
+const input=[album('nov','2026-11-10'),album('jan','2027-01-03'),album('old','2025-12-01'),album('feb-a','2027-02-12'),album('feb-b','2027-02-02'),album('empty','2028-01-01',[])];
+const groups=groupClassPhotoAlbums(input);
+assert.deepEqual(groups.map(g=>g.year),['2027','2026','2025']);
+assert.deepEqual(groups[0].months.map(m=>m.label),['Febrero','Enero']);
+assert.deepEqual(groups[0].months[0].albums.map(a=>a.classId),['feb-a','feb-b']);
+assert.deepEqual(orderedClassPhotoAlbums(input).map(a=>a.classId),['feb-a','feb-b','jan','nov','old']);
+assert.deepEqual(input.map(a=>a.classId),['nov','jan','old','feb-a','feb-b','empty'],'Sorting must not mutate attendance-authorized source');
+const flat=flattenClassPhotos(input);assert.equal(flat.length,5);assert.equal(flat[0].classId,'feb-a');assert.equal(flat[0].photoId,'photo-feb-a');assert.equal(flat[0].index,0);
+assert.equal(flat.some(p=>p.classId==='empty'),false);
+console.log('Photo years/months/days and all-photo ordering passed without widening album membership.');

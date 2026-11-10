@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import * as limits from '../src/lib/class-photo-limits.ts';
+import * as photoGroups from '../src/lib/class-photo-groups.ts';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
@@ -10,7 +11,7 @@ const require=createRequire(import.meta.url);
 let allowed=true,reads=0,writes=0,fail=false,lookupFail=false,received;
 let album=null,photos=[],history=[];
 const service={getClassPhotoAdmin:async()=>{reads++;if(fail)throw Error('OAuth private-token');return {album,photos};},getMemberClassPhotoHistory:async(token)=>{reads++;assert.equal(token,'own-token');if(fail)throw Error('OAuth private-token');return history;},createClassPhotoAlbum:async(id)=>{writes++;if(fail)throw Error('OAuth secret');return {legacyId:'trusted legacy'};},saveClassPhotos:async(input)=>{writes++;received=input;if(fail)throw Error('OAuth secret');return {legacyId:'trusted legacy'};},syncClassPhotosForAdmin:async()=>({legacyId:'trusted legacy',added:1,blocked:0,limitReached:false}),resolveClassPhotoReturn:async()=>{if(lookupFail)throw Error('secret');return {legacyId:'trusted legacy'};}};
-const mocks={'@/lib/class-photo-limits':limits,'@/components/class-photo-auto-sync':{ClassPhotoAutoSync:()=>null},'@/components/class-photo-google-connection':{ClassPhotoGoogleConnection:()=>null},'@/components/class-photo-uploader':{ClassPhotoUploader:()=>React.createElement('div',{'data-uploader':'present'},'Subida directa privada')},'@/lib/class-photos':service,'@/lib/class-photo-drive':{CLASS_PHOTO_ROOT_FOLDER_ID:'private-root'},'@/app/clases/photo-actions':{createClassPhotoAlbumAction:()=>writes++,saveClassPhotosAction:()=>writes++},'@/lib/auth':{hasInternalAccess:async()=>allowed},'next/navigation':{redirect:(path)=>{throw Error('REDIRECT:'+path);}},'next/cache':{revalidatePath:()=>{}}};
+const mocks={'@/lib/class-photo-groups':photoGroups,'@/lib/class-photo-limits':limits,'@/components/class-photo-auto-sync':{ClassPhotoAutoSync:()=>null},'@/components/class-photo-google-connection':{ClassPhotoGoogleConnection:()=>null},'@/components/class-photo-uploader':{ClassPhotoUploader:()=>React.createElement('div',{'data-uploader':'present'},'Subida directa privada')},'@/lib/class-photos':service,'@/lib/class-photo-drive':{CLASS_PHOTO_ROOT_FOLDER_ID:'private-root'},'@/app/clases/photo-actions':{createClassPhotoAlbumAction:()=>writes++,saveClassPhotosAction:()=>writes++},'@/lib/auth':{hasInternalAccess:async()=>allowed},'next/navigation':{redirect:(path)=>{throw Error('REDIRECT:'+path);}},'next/cache':{revalidatePath:()=>{}}};
 function load(file){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText,{exports:module.exports,module,require:(name)=>name.endsWith('.css')?{}:name in mocks?mocks[name]:require(name)});return module.exports;}
 const {ClassPhotoAdmin}=load('src/components/class-photo-admin.tsx');
 const gallery=load('src/components/class-photo-gallery.tsx');
@@ -54,7 +55,9 @@ galleryState=[];
 const renderCollection=()=>{galleryCursor=0;return interactive.ClassPhotoCollection({albums:[galleryProps],fichaToken:'own-token'});};
 let collection=renderCollection();assert.equal(find(collection,node=>node.type===interactive.ClassPhotoGallery),null);
 collection.props.onToggle({currentTarget:{open:true}});collection=renderCollection();
-assert.ok(find(collection,node=>node.type===interactive.ClassPhotoGallery));
+assert.ok(find(collection,node=>node.type===interactive.ClassPhotoYear));
+assert.equal(find(collection,node=>node.type===interactive.ClassPhotoGallery),null);
+find(collection,node=>node.type==='button'&&node.props.children==='Ver todas las fotos').props.onClick();collection=renderCollection();assert.ok(find(collection,node=>node.type===interactive.ClassPhotoAll));assert.equal(find(collection,node=>node.type===interactive.ClassPhotoYear),null);
 collection.props.onToggle({currentTarget:{open:false}});
 assert.equal(find(renderCollection(),node=>node.type===interactive.ClassPhotoGallery),null,'Closing the collection unmounts open class galleries');
 console.log('Nested gallery starts closed, shows days on demand and unmounts photos when closed.');
@@ -68,3 +71,17 @@ assert.equal(countImages(tree),200);assert.equal(find(tree,node=>node.type==='bu
 tree.props.onToggle({currentTarget:{open:false}});tree=renderGallery();tree.props.onToggle({currentTarget:{open:true}});assert.equal(countImages(renderGallery()),20,'Reopening resets to one page');
 galleryProps.photoIds=smallIds;
 console.log('Large gallery: 200 photos paginate by 20, preserve downloads and reset on close.');
+
+galleryState=[];
+const yearGroup=photoGroups.groupClassPhotoAlbums([galleryProps])[0];
+const renderYear=()=>{galleryCursor=0;return interactive.ClassPhotoYear({group:yearGroup,fichaToken:'own-token'});};
+let y=renderYear();assert.equal(find(y,node=>node.type===interactive.ClassPhotoMonthGroup),null);y.props.onToggle({currentTarget:{open:true}});assert.ok(find(renderYear(),node=>node.type===interactive.ClassPhotoMonthGroup));
+galleryState=[];const renderMonth=()=>{galleryCursor=0;return interactive.ClassPhotoMonthGroup({group:yearGroup.months[0],fichaToken:'own-token'});};
+let month=renderMonth();assert.equal(find(month,node=>node.type===interactive.ClassPhotoGallery),null);month.props.onToggle({currentTarget:{open:true}});assert.ok(find(renderMonth(),node=>node.type===interactive.ClassPhotoGallery));
+galleryState=[];const allAlbums=[{...galleryProps,classId:'older',date:'2025-12-01',photoIds:Array.from({length:30},(_,i)=>'older-'+i)},{...galleryProps,classId:'newer',date:'2027-01-02',photoIds:Array.from({length:30},(_,i)=>'newer-'+i)}];
+const renderAll=()=>{galleryCursor=0;return interactive.ClassPhotoAll({albums:allAlbums,fichaToken:'own-token'});};
+let all=renderAll();assert.equal(countImages(all),20);assert.match(find(all,node=>node.type===interactive.ClassPhotoImage).props.src,/newer/);
+find(all,node=>node.type==='button'&&node.props.children==='Ver más fotos').props.onClick();all=renderAll();assert.equal(countImages(all),40);
+function images(node){if(!node||typeof node!=='object')return [];return [...(node.type===interactive.ClassPhotoImage?[node]:[]),...[node.props?.children].flat(Infinity).flatMap(images)];}
+assert.match(images(all)[30].props.src,/older/);assert.equal(images(all)[30].props.classDate,'01-12-2025');
+console.log('Year/month/day disclosures and all-photo cross-class pagination remain scoped to supplied albums.');

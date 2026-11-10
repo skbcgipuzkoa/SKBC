@@ -35,3 +35,12 @@
 .class-photo-collection-hint { display:block;margin-top:6px;color:#64748b;font-size:.9rem }
 .class-photo-days { display:grid;gap:12px;padding:0 12px 12px }
 .class-photo-collection>summary:focus-visible,.class-photo-capsule>summary:focus-visible { outline:3px solid #2563eb;outline-offset:3px }
+
+.class-photo-date-group { border:1px solid #d9e3ef;border-radius:10px;background:#f8fafc;min-width:0 }
+.class-photo-date-group>summary { padding:12px;min-height:48px;box-sizing:border-box;cursor:pointer }
+.class-photo-date-content { display:grid;gap:10px;padding:0 10px 10px }
+.class-photo-view-switch { display:flex;flex-wrap:wrap;gap:8px }
+.class-photo-view-switch button { flex:1 1 180px }
+.class-photo-view-switch button[aria-pressed=true] { background:#075bb5;color:#fff;border-color:#075bb5 }
+.class-photo-date-group>summary:focus-visible { outline:3px solid #2563eb;outline-offset:3px }
+.class-photo-date-label { font-size:.9rem;font-weight:600 }
