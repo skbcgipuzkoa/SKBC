@@ -18,11 +18,11 @@ La primera revisión de un álbum antiguo establece una referencia de los archiv
 
 ## Autorización Google
 
-Desde Fotos del entrenamiento / Conexión con Google Drive, usar Conectar Google para fotos de Drive. Debe ser la cuenta que pueda abrir la carpeta raíz. Autorizar lectura de Drive y gestión de archivos usados con SKBC; no se cambia la configuración de uso compartido.
+Desde Fotos del entrenamiento / Conexión con Google Drive, usar Conectar Google para fotos de Drive. Debe ser la cuenta que pueda abrir la carpeta raíz. Autorizar únicamente lectura de Drive; no se cambia la configuración de uso compartido.
 
-El cliente OAuth de Google debe permitir la URI exacta https://skbc.vercel.app/api/admin/class-photos/google/callback (o el origen HTTPS configurado en SKBC_PUBLIC_URL). Si Google indica redirect_uri_mismatch, registrar esa URI en el cliente de Google Cloud antes de volver a conectar.
+El cliente web propio para fotos se configura cifrado desde el admin (o con SKBC_CLASS_PHOTOS_GOOGLE_CLIENT_ID y SKBC_CLASS_PHOTOS_GOOGLE_CLIENT_SECRET). No sirve el cliente de consola CLASP de la conexión antigua. El cliente OAuth de Google debe permitir la URI exacta https://skbc.vercel.app/api/admin/class-photos/google/callback (o el origen HTTPS configurado en SKBC_PUBLIC_URL). Si Google indica redirect_uri_mismatch, registrar esa URI en el cliente de Google Cloud antes de volver a conectar.
 
-La nueva autorización solo afecta a fotos. El refresh token se cifra con AES-256-GCM usando la clave derivada del secreto OAuth del servidor, se almacena en un archivo privado de integración en la raíz y nunca se envía a las fichas ni al navegador. La conexión anterior de otros servicios se conserva.
+La nueva autorización solo afecta a fotos. El refresh token se cifra con AES-256-GCM usando una clave derivada de SUPABASE_SERVICE_ROLE_KEY del servidor, se almacena en un archivo privado de integración en la raíz y nunca se envía a las fichas ni al navegador. La conexión anterior de otros servicios se conserva, y sigue usándose para los metadatos privados y las escrituras de Drive. La nueva autorización solo descarga archivos.
 
 ## Verificación
 

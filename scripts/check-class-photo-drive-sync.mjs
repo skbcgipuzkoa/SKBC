@@ -12,6 +12,7 @@ const photo=id=>({id,name:id+'.jpg',mimeType:'image/jpeg',size:'12',parents:['le
 files=[folder,photo('draft'),photo('old-duplicate')];
 const fetch=async(url,init={})=>{
   const u=new URL(url),id=u.pathname.split('/').at(-1);
+  assert.equal(init.headers.get('authorization'),u.searchParams.get('alt')==='media'?'Bearer media-token':'Bearer token','private metadata stays with the original app; bytes use the read-only media app');
   if(init.method==='POST'&&u.pathname.includes('/upload/')){
     const content=String(init.body).split('Content-Type: application/json; charset=UTF-8\r\n\r\n').at(-1).split('\r\n--')[0];
     const metadata=JSON.parse(String(init.body).split('Content-Type: application/json; charset=UTF-8\r\n\r\n')[1].split('\r\n--')[0]);
@@ -37,7 +38,7 @@ const fetch=async(url,init={})=>{
   if(u.searchParams.get('alt')==='media'){downloads.push(id);if(blocked.has(id))return Response.json({error:{status:'PERMISSION_DENIED'}},{status:403});return new Response(file.content||'image',{headers:{'content-type':file.responseMime||file.mimeType}});}
   return Response.json(file);
 };
-const exports={};vm.runInNewContext(source,{exports,require:id=>id==='node:async_hooks'?{AsyncLocalStorage}:{getClassPhotoDriveAccessToken:async()=> 'token'},process:{env:{}},fetch,Response,Headers,URL,URLSearchParams,TextEncoder,AbortSignal,AbortController,setTimeout,clearTimeout});
+const exports={};vm.runInNewContext(source,{exports,require:id=>id==='node:async_hooks'?{AsyncLocalStorage}:{getClassPhotoDriveAccessToken:async()=> 'token',getClassPhotoMediaAccessToken:async()=> 'media-token'},process:{env:{}},fetch,Response,Headers,URL,URLSearchParams,TextEncoder,AbortSignal,AbortController,setTimeout,clearTimeout});
 let result=await exports.syncClassAlbumPhotos(classId);
 assert.equal(result.baseline,true);assert.equal(result.added,0);assert.equal(downloads.length,0,'legacy baseline never republishes old originals');
 files.push(photo('new'),photo('blocked'));blocked.add('blocked');

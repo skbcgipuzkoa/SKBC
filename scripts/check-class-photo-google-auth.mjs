@@ -9,25 +9,36 @@ function load(path, dependencies, extras={}) {
   return mod.exports;
 }
 process.env.GOOGLE_OAUTH_CLIENT_SECRET='test-secret'; process.env.GOOGLE_OAUTH_CLIENT_ID='test-client';
+process.env.SUPABASE_SERVICE_ROLE_KEY='private-service-key';
+process.env.SKBC_CLASS_PHOTOS_GOOGLE_CLIENT_ID='1234567890-webclient.apps.googleusercontent.com';
+process.env.SKBC_CLASS_PHOTOS_GOOGLE_CLIENT_SECRET='web-secret';
 let network=[]; let files=[]; let media='';
 const auth=load('src/lib/class-photo-google-auth.ts',{'node:crypto':crypto,'./google-drive-api':{getGoogleDriveAccessToken:async()=> 'old-token'}},{fetch:async(url,options)=>{network.push([url,options]);if(url.includes('oauth2.googleapis.com'))return Response.json({access_token:'new-token'});if(url.includes('alt=media'))return new Response(media);return Response.json({files});}});
 const encrypted=auth.encryptPhotoGoogleCredential('private-refresh');
 assert.ok(!encrypted.includes('private-refresh'));
 assert.equal(auth.decryptPhotoGoogleCredential(encrypted),'private-refresh');
 const tampered=JSON.parse(encrypted);tampered.tag=Buffer.alloc(16).toString('base64');assert.throws(()=>auth.decryptPhotoGoogleCredential(JSON.stringify(tampered)),/No se pudo/);
-process.env.GOOGLE_OAUTH_CLIENT_SECRET='wrong';assert.throws(()=>auth.decryptPhotoGoogleCredential(encrypted));process.env.GOOGLE_OAUTH_CLIENT_SECRET='test-secret';
+process.env.SUPABASE_SERVICE_ROLE_KEY='wrong';assert.throws(()=>auth.decryptPhotoGoogleCredential(encrypted));process.env.SUPABASE_SERVICE_ROLE_KEY='private-service-key';
+delete process.env.SUPABASE_SERVICE_ROLE_KEY;assert.throws(()=>auth.encryptPhotoGoogleCredential('x'));process.env.SUPABASE_SERVICE_ROLE_KEY='private-service-key';
 assert.ok(auth.validPhotoGoogleState('a'.repeat(64),'a'.repeat(64)));
 for(const value of [null,'a','b'.repeat(64),'a'.repeat(65)])assert.equal(auth.validPhotoGoogleState(value,'a'.repeat(64)),false);
 assert.equal(await auth.getClassPhotoDriveAccessToken(),'old-token');
 const record={id:'credential',mimeType:'application/json',parents:['15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS'],size:String(encrypted.length),appProperties:{skbcClassPhotosOAuth:'1'}};
-files=[record,record];await assert.rejects(auth.getClassPhotoDriveAccessToken());
-files=[record];media=encrypted;assert.equal(await auth.getClassPhotoDriveAccessToken(),'new-token');
-media='invalid';await assert.rejects(auth.getClassPhotoDriveAccessToken());
-for (const rootResponse of [new Response('',{status:403}),Response.json({id:'other-root',mimeType:'application/vnd.google-apps.folder',trashed:false}),Response.json({id:record.parents[0],mimeType:'application/vnd.google-apps.folder',trashed:false,capabilities:{canAddChildren:false,canEdit:false}})]) {
+files=[record,record];await assert.rejects(auth.getClassPhotoMediaAccessToken());
+files=[record];media=auth.encryptPhotoGoogleCredential(JSON.stringify({clientId:process.env.SKBC_CLASS_PHOTOS_GOOGLE_CLIENT_ID,clientSecret:'stored-secret',refreshToken:'stored-refresh'}));
+assert.equal(await auth.getClassPhotoDriveAccessToken(),'old-token');
+const start=network.length;assert.deepEqual(await Promise.all([auth.getClassPhotoMediaAccessToken(),auth.getClassPhotoMediaAccessToken()]),['new-token','new-token']);
+assert.equal(network.slice(start).filter(([url])=>url.includes('oauth2.googleapis.com')).length,1);
+for(const [url,options] of network.filter(([url])=>url.includes('www.googleapis.com')))assert.equal(options.headers.authorization,'Bearer old-token','private appProperties and credential reads must use original app');
+auth.resetClassPhotoMediaAccessToken();media='invalid';await assert.rejects(auth.getClassPhotoMediaAccessToken());
+files=[];media='';assert.equal(await auth.getClassPhotoMediaAccessToken(),'old-token');
+const fallbackCalls=network.length;assert.equal(await auth.getClassPhotoMediaAccessToken(),'old-token');assert.equal(network.length,fallbackCalls);
+for (const rootResponse of [new Response('',{status:403}),Response.json({id:'other-root',mimeType:'application/vnd.google-apps.folder',trashed:false})]) {
   let writes=0;
   const wrongAccount=load('src/lib/class-photo-google-auth.ts',{'node:crypto':crypto,'./google-drive-api':{getGoogleDriveAccessToken:async()=> 'old-token'}},{fetch:async(url,options)=>{
     if(url.includes('oauth2.googleapis.com'))return Response.json({access_token:'wrong-account',refresh_token:'replacement',scope:auth.PHOTO_GOOGLE_SCOPES.join(' ')});
     if(options.method==='PATCH'||url.includes('/upload/'))writes++;
+    if(url.includes('?q='))return Response.json({files:[]});
     return rootResponse;
   }});
   await assert.rejects(wrongAccount.saveClassPhotoGoogleCode('test'));assert.equal(writes,0,'wrong account must preserve existing credentials');
@@ -47,4 +58,14 @@ response=await callback.GET(callbackRequest('a'.repeat(64)));assert.equal(saved,
 assert.equal(reset,0);saveFails=false;response=await callback.GET(callbackRequest('a'.repeat(64)));assert.equal(reset,1);assert.equal(response.headers.get('location'),'https://skbc.vercel.app/clases?photoGoogle=connected');
 console.log('Photo Google OAuth: encryption/tamper, fail-closed storage, fallback, auth, state, CSRF and sanitized callback passed.');
 
-process.env.GOOGLE_OAUTH_CLIENT_ID="\uFEFFclient-id ";response=await connect.POST(new Request("https://skbc.vercel.app",{headers:{origin:"https://skbc.vercel.app"}}));assert.equal(new URL(response.headers.get("location")).searchParams.get("client_id"),"client-id");
+response=await connect.POST(new Request('https://skbc.vercel.app',{headers:{origin:'https://skbc.vercel.app'}}));
+assert.equal(new URL(response.headers.get('location')).searchParams.get('client_id'),process.env.SKBC_CLASS_PHOTOS_GOOGLE_CLIENT_ID);
+assert.equal(new URL(response.headers.get('location')).searchParams.get('scope'),'https://www.googleapis.com/auth/drive.readonly');
+delete process.env.SKBC_CLASS_PHOTOS_GOOGLE_CLIENT_ID;delete process.env.SKBC_CLASS_PHOTOS_GOOGLE_CLIENT_SECRET;
+await assert.rejects(auth.getClassPhotoGoogleClientConfiguration(),'never use default CLASP client');
+let configured=0;
+dependencies['@/lib/class-photo-google-auth'].saveClassPhotoGoogleClientConfiguration=async(id,secret)=>{assert.equal(id,'web');assert.equal(secret,'private');configured++};
+const config=load('src/app/api/admin/class-photos/google/config/route.ts',dependencies);
+response=await config.POST(new Request('https://skbc.vercel.app',{method:'POST',headers:{origin:'https://evil.example'},body:'clientId=web&clientSecret=private'}));assert.equal(response.status,403);assert.equal(configured,0);
+response=await config.POST(new Request('https://skbc.vercel.app',{method:'POST',headers:{origin:'https://skbc.vercel.app','content-type':'application/x-www-form-urlencoded'},body:'clientId=web&clientSecret=private'}));assert.equal(configured,1);assert.equal(response.headers.get('location'),'https://skbc.vercel.app/clases?photoGoogle=configured');
+response=await config.POST(new Request('https://skbc.vercel.app',{method:'POST',headers:{origin:'https://skbc.vercel.app','content-type':'application/x-www-form-urlencoded'},body:'x'.repeat(8193)}));assert.equal(configured,1);assert.equal(response.headers.get('location'),'https://skbc.vercel.app/clases?photoGoogle=config-error');

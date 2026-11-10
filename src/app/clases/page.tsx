@@ -73,7 +73,7 @@ export default async function ClasesPage({
           </div>
         </div>
         {params.saved === "deleted" ? <p className="save-ok">Clase eliminada del sistema nuevo.</p> : null}
-        {params.photoGoogle === "connected" ? <p className="save-ok">Google conectado para leer las fotos añadidas en Drive.</p> : params.photoGoogle === "error" ? <p className="form-error" role="alert">No se pudo completar la conexión. Comprueba la cuenta y vuelve a intentarlo.</p> : null}
+        {params.photoGoogle === "connected" ? <p className="save-ok">Google conectado para leer las fotos añadidas en Drive.</p> : params.photoGoogle === "configured" ? <p className="save-ok">Cliente de fotos guardado. Ahora pulsa «Conectar Google para fotos de Drive» y autoriza la cuenta propietaria de la carpeta.</p> : (params.photoGoogle === "error" || params.photoGoogle === "config-error") ? <p className="form-error" role="alert">No se pudo completar la conexión. Comprueba la cuenta y vuelve a intentarlo.</p> : null}
         {params.photoGoogle ? <ClassPhotoGoogleConnection /> : null}
         <nav className="filter-tabs" aria-label="Filtrar clases">
           <a className={!showOpenOnly ? "active" : ""} href="/clases">Todas</a>

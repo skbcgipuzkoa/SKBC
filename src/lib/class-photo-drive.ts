@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { detectPhotoMime, UPLOAD_MAX_BYTES } from "./class-photo-upload";
-import { getClassPhotoDriveAccessToken } from "./class-photo-google-auth";
+import { getClassPhotoDriveAccessToken, getClassPhotoMediaAccessToken } from "./class-photo-google-auth";
 
 export type AlbumRecord = { classId: string; folderId: string; title: string; caption: string; photoIds: string[]; published: { caption: string; photoIds: string[] } | null; revision: string; lastSyncedAt?:string; policyId?:string; policySeenPhotoIds?:string[] };
 export type DrivePhoto = { id: string; name: string; mimeType: string; size?: string };
@@ -99,11 +99,10 @@ function trustedMediaDestination(url: URL): boolean {
 }
 async function downloadMedia(url:string):Promise<Response> {
   const signal=requestSignal();aborted(signal);
-  const entry=driveToken();
   try {
     let current=new URL(url);
     if(!trustedMediaDestination(current) || current.origin!=='https://www.googleapis.com') fail();
-    const token=await abortable(entry.promise,signal);aborted(signal);
+    const token=await abortable(Promise.resolve().then(()=>getClassPhotoMediaAccessToken()),signal);aborted(signal);
     const seen=new Set<string>();
     for(let redirects=0;redirects<=3;redirects++) {
       if(seen.has(current.href)) fail();seen.add(current.href);
@@ -111,7 +110,6 @@ async function downloadMedia(url:string):Promise<Response> {
       // Signed cross-origin URLs must never receive the Drive OAuth credential.
       if(current.origin==='https://www.googleapis.com') headers.set('authorization',`Bearer ${token}`);
       const response=await abortable(fetch(current.href,{method:'GET',headers,signal,cache:'no-store',redirect:'manual'}),signal);
-      if(response.status===401 && current.origin==='https://www.googleapis.com' && tokenCache===entry) tokenCache=null;
       if([301,302,303,307,308].includes(response.status)) {
         const location=response.headers.get('location');
         await response.body?.cancel();
