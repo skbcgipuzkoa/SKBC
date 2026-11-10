@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';
+let permitted=false,calls=0;
+const m={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/api/class-photos/[classId]/sync/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:m.exports,Response,URL,Uint8Array,TextDecoder,require:name=>{assert.equal(name,'@/lib/class-photos');return {syncClassPhotosForMember:async(id,token)=>{calls++;assert.equal(id,'class-id');assert.equal(token,'own-token');return permitted?{added:2}:null;}}}});
+const req=(body=JSON.stringify({fichaToken:'own-token'}),origin='https://skbc.vercel.app')=>new Request('https://skbc.vercel.app/api/class-photos/class-id/sync',{method:'POST',headers:{origin,'content-type':'application/json'},body});
+const invoke=request=>m.exports.POST(request,{params:Promise.resolve({classId:'class-id'})});
+assert.equal((await invoke(req(undefined,'https://evil.example'))).status,403);assert.equal(calls,0);
+assert.equal((await invoke(req('x'.repeat(1025)))).status,413);assert.equal(calls,0);
+assert.equal((await invoke(req('{}'))).status,400);assert.equal(calls,0);
+assert.equal((await invoke(req())).status,404);
+permitted=true;const response=await invoke(req());assert.deepEqual(await response.json(),{added:2});assert.match(response.headers.get('Cache-Control'),/private.*no-store/);
+let runs=0;const cron={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/api/cron/class-photos/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:cron.exports,Response,process:{env:{CRON_SECRET:'test-secret'}},require:name=>name==='@/lib/class-photo-drive'?{withClassPhotoDriveDeadline:async(ms,task)=>task()}:({syncAllClassPhotos:async()=>{runs++;return {processed:1,added:2}}})});
+assert.equal((await cron.exports.GET(new Request('https://skbc.vercel.app'))).status,401);assert.equal(runs,0);
+assert.equal((await cron.exports.GET(new Request('https://skbc.vercel.app',{headers:{authorization:'Bearer test-secret'}}))).status,200);assert.equal(runs,1);
+console.log('Photo sync endpoint requires same origin, bounded body, exact ficha authorization; cron requires secret.');

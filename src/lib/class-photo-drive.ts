@@ -1,9 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { detectPhotoMime, UPLOAD_MAX_BYTES } from "./class-photo-upload";
-import { getGoogleDriveAccessToken } from "./google-drive-api";
+import { getClassPhotoDriveAccessToken } from "./class-photo-google-auth";
 
-export type AlbumRecord = { classId: string; folderId: string; title: string; caption: string; photoIds: string[]; published: { caption: string; photoIds: string[] } | null; revision: string };
+export type AlbumRecord = { classId: string; folderId: string; title: string; caption: string; photoIds: string[]; published: { caption: string; photoIds: string[] } | null; revision: string; lastSyncedAt?:string };
 export type DrivePhoto = { id: string; name: string; mimeType: string; size?: string };
 type DriveFile = DrivePhoto & { parents?: string[]; appProperties?: Record<string,string>; description?: string; version?: string; trashed?: boolean };
 export const CLASS_PHOTO_ROOT_FOLDER_ID = process.env.SKBC_CLASS_PHOTOS_FOLDER_ID || '15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS';
@@ -50,11 +50,12 @@ async function boundedResponse(response:Response,signal:AbortSignal):Promise<Res
 }
 type TokenCache = { promise: Promise<string>; expiresAt: number };
 let tokenCache: TokenCache | null = null;
+export function resetClassPhotoDriveToken():void { tokenCache=null; }
 function driveToken(): TokenCache {
   if (tokenCache && tokenCache.expiresAt > Date.now()) return tokenCache;
   const entry: TokenCache = {
-    promise: abortable(Promise.resolve().then(() => getGoogleDriveAccessToken()),AbortSignal.timeout(15000)),
-    expiresAt: Date.now() + 45 * 60 * 1000
+    promise: abortable(Promise.resolve().then(() => getClassPhotoDriveAccessToken()),AbortSignal.timeout(15000)),
+    expiresAt: Date.now() + 60 * 1000
   };
   tokenCache = entry;
   void entry.promise.catch(() => { if (tokenCache === entry) tokenCache = null; });
@@ -126,11 +127,11 @@ async function downloadMedia(url:string):Promise<Response> {
 }
 async function readFile(id:string) { if(!safeId.test(id)) fail(); const response=await request(`${api}/${id}?fields=${fields}&supportsAllDrives=true`);return {file:await response.json() as DriveFile,etag:response.headers.get('etag')}; }
 function parse(file:DriveFile,etag?:string|null):AlbumRecord|null {
-  if(file.trashed||file.mimeType!==folderMime||!file.parents?.includes(rootId())||file.appProperties?.skbcClassAlbum!=='1'||!safeId.test(file.id)) return null;
+  if(file.trashed||file.mimeType!==folderMime||file.appProperties?.skbcClassAlbum!=='1'||!safeId.test(file.id)) return null;
   try {const data=JSON.parse(file.description||''); if(data.version!==1||!uuid.test(data.classId)||data.classId!==file.appProperties.skbcClassId||!['draft','published'].includes(data.state)) return null;
     const draft=selection(data.caption,data.photoIds);const published=null;
 
-    return {classId:data.classId,folderId:file.id,title:file.name,...draft,published,revision:etag||`version:${file.version||''}`};
+    return {classId:data.classId,folderId:file.id,title:file.name,...draft,published,revision:etag||`version:${file.version||''}`,lastSyncedAt:file.appProperties?.skbcPhotoLastSync};
   } catch { return null; }
 }
 async function listFiles(query:string) {
@@ -139,26 +140,69 @@ async function listFiles(query:string) {
   return files;
 }
 export async function listClassAlbums():Promise<AlbumRecord[]> {
-  const files=await listFiles(`'${rootId()}' in parents and trashed = false and mimeType = '${folderMime}' and appProperties has { key='skbcClassAlbum' and value='1' }`);
+  const files=await albumCandidates();
   const albums: AlbumRecord[] = [];
-  for (const file of files) { const album=parse(file); if(album) albums.push(await resolvePublication(file,album)); }
+  for (const file of files) { const album=await scopedAlbum(file); if(album) albums.push(await resolvePublication(file,album)); }
   return albums;
 }
 export async function getClassAlbum(classId:string):Promise<AlbumRecord|null> {
   validateClass(classId);
   // Media requests need only this class; never download every other published manifest.
-  const folders=await listFiles(`'${rootId()}' in parents and trashed = false and mimeType = '${folderMime}' and appProperties has { key='skbcClassAlbum' and value='1' } and appProperties has { key='skbcClassId' and value='${classId}' }`);
+  const folders=await albumCandidates(classId);
   const found=folders.map(file=>parse(file)).filter((album):album is AlbumRecord=>album!==null && album.classId===classId);
   if(found.length>1) throw new Error('Hay varios álbumes para esta clase. Revisa Drive.');if(!found.length) return null;
-  const current=await readFile(found[0].folderId);const album=parse(current.file,current.etag);return album?.classId===classId?resolvePublication(current.file,album):null;
+  const current=await readFile(found[0].folderId);const album=await scopedAlbum(current.file,current.etag);return album?.classId===classId?resolvePublication(current.file,album):null;
 }
-export async function ensureClassAlbum(input:{classId:string;title:string}):Promise<AlbumRecord> {
-  validateClass(input.classId);if(typeof input.title!=='string'||!input.title.trim()||input.title.length>200) throw new Error('Título no válido.');const existing=await getClassAlbum(input.classId);if(existing) return existing;
-  const response=await request(`${api}?fields=${fields}&supportsAllDrives=true`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:input.title.trim(),mimeType:folderMime,parents:[rootId()],appProperties:{skbcClassAlbum:'1',skbcClassId:input.classId},description:JSON.stringify({version:1,classId:input.classId,caption:'',photoIds:[],published:null,state:'draft'})})});
-  const album=parse(await response.json(),response.headers.get('etag'));if(!album) fail();return album;
+function albumDate(title:string,date?:string) {
+  const value=date || title.slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(`${value}T00:00:00Z`)) || new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)!==value) throw new Error('Fecha de clase no válida.');
+  return value;
+}
+async function scopedAlbum(file:DriveFile,etag?:string|null):Promise<AlbumRecord|null> {
+  const album=parse(file,etag);if(!album||file.parents?.length!==1)return null;
+  if(file.parents[0]===rootId())return album;
+  let date:string;try{date=albumDate(file.name,file.appProperties?.skbcClassDate);}catch{return null;}
+  const month=(await readFile(file.parents[0])).file;
+  if(month.trashed||month.mimeType!==folderMime||month.parents?.length!==1||month.appProperties?.skbcClassPhotoMonth!==date.slice(0,7))return null;
+  const year=(await readFile(month.parents[0])).file;
+  if(year.trashed||year.mimeType!==folderMime||year.parents?.length!==1||year.parents[0]!==rootId()||year.appProperties?.skbcClassPhotoYear!==date.slice(0,4))return null;
+  return album;
+}
+async function albumCandidates(classId?:string) {
+  const files=await listFiles(`trashed = false and mimeType = '${folderMime}' and appProperties has { key='skbcClassAlbum' and value='1' }${classId?` and appProperties has { key='skbcClassId' and value='${classId}' }`:''}`);
+  const result:DriveFile[]=[];
+  for(const file of files){const album=await scopedAlbum(file);if(album&&(!classId||album.classId===classId))result.push(file);}
+  return result;
+}
+async function ensureDateFolder(parent:string,key:string,value:string,name:string) {
+  const candidates=async()=>(await listFiles(`'${parent}' in parents and trashed = false and mimeType = '${folderMime}' and appProperties has { key='${key}' and value='${value}' }`)).filter(file=>!file.trashed&&file.mimeType===folderMime&&file.parents?.length===1&&file.parents[0]===parent&&file.appProperties?.[key]===value).sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
+  const existing=await candidates();if(existing.length)return existing[0].id;
+  const response=await request(`${api}?fields=${fields}&supportsAllDrives=true`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,mimeType:folderMime,parents:[parent],appProperties:{[key]:value}})});
+  const file=await response.json() as DriveFile;if(!safeId.test(file.id))fail();
+  // Concurrent bucket creation is harmless: converge on a deterministic owned bucket.
+  const observed=await candidates();return observed[0]?.id||file.id;
+}
+export async function ensureClassAlbum(input:{classId:string;title:string;date?:string}):Promise<AlbumRecord> {
+  validateClass(input.classId);if(typeof input.title!=='string'||!input.title.trim()||input.title.length>200)throw new Error('Título no válido.');
+  const date=albumDate(input.title,input.date);const existing=await getClassAlbum(input.classId);
+  const year=await ensureDateFolder(rootId(),'skbcClassPhotoYear',date.slice(0,4),date.slice(0,4));
+  const monthNames=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const month=await ensureDateFolder(year,'skbcClassPhotoMonth',date.slice(0,7),`${date.slice(5,7)} · ${monthNames[Number(date.slice(5,7))-1]}`);
+  if(existing){
+    const current=await readFile(existing.folderId);const checked=await scopedAlbum(current.file,current.etag);if(!checked||checked.classId!==input.classId)fail();
+    const previousParent=current.file.parents![0];
+    if(previousParent!==month || current.file.appProperties?.skbcClassDate!==date){
+      const headers:Record<string,string>={'content-type':'application/json'};if(current.etag)headers['if-match']=current.etag;
+      const move=previousParent!==month?`&addParents=${month}&removeParents=${previousParent}`:'';
+      await request(`${api}/${existing.folderId}?supportsAllDrives=true${move}`,{method:'PATCH',headers,body:JSON.stringify({appProperties:{skbcClassDate:date}})});
+    }
+    return (await getClassAlbum(input.classId))!;
+  }
+  const response=await request(`${api}?fields=${fields}&supportsAllDrives=true`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:input.title.trim(),mimeType:folderMime,parents:[month],appProperties:{skbcClassAlbum:'1',skbcClassId:input.classId,skbcClassDate:date},description:JSON.stringify({version:1,classId:input.classId,caption:'',photoIds:[],published:null,state:'draft',syncSeenPhotoIds:[]})})});
+  const album=await scopedAlbum(await response.json(),response.headers.get('etag'));if(!album)fail();return album;
 }
 function validPhoto(file:DriveFile,folderId:string) { return !file.trashed&&file.parents?.includes(folderId)&&['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(file.mimeType)&&typeof file.size==='string'&&/^\d+$/.test(file.size)&&Number(file.size)<=20*1024*1024; }
-async function currentAlbum(album:AlbumRecord) {const current=await readFile(album.folderId);const parsed=parse(current.file,current.etag);if(!parsed||parsed.classId!==album.classId) fail();return parsed;}
+async function currentAlbum(album:AlbumRecord) {const current=await readFile(album.folderId);const parsed=await scopedAlbum(current.file,current.etag);if(!parsed||parsed.classId!==album.classId) fail();return parsed;}
 export async function listAlbumPhotos(album:AlbumRecord):Promise<DrivePhoto[]> {
   await currentAlbum(album);return (await listFiles(`'${album.folderId}' in parents and trashed = false`)).filter(file=>validPhoto(file,album.folderId)).map(({id,name,mimeType,size})=>({id,name,mimeType,size}));
 }
@@ -185,18 +229,24 @@ export async function saveClassAlbum(input:{classId:string;caption:string;photoI
   if(!['draft','publish','withdraw'].includes(input.intent)) fail();
   validateClass(input.classId);
   // Read only the album folder here: withdrawal must work even if an original or old manifest was deleted.
-  const candidates=(await listFiles(`'${rootId()}' in parents and trashed = false and mimeType = '${folderMime}' and appProperties has { key='skbcClassAlbum' and value='1' }`)).filter(file=>parse(file)?.classId===input.classId);
+  const candidates=await albumCandidates(input.classId);
   if(candidates.length!==1) fail();
-  const current=await readFile(candidates[0].id);const album=parse(current.file,current.etag);if(!album) fail();
+  const current=await readFile(candidates[0].id);const album=await scopedAlbum(current.file,current.etag);if(!album) fail();
   if(!input.revision || input.revision!==album.revision) throw new Error('El álbum ha cambiado. Recarga antes de guardar.');
+  const previous=JSON.parse(current.file.description||'{}');
+  const seen=new Set<string>(readSeen(previous));
+  if(input.intent==='publish'&&input.preserveDraft){for(const id of input.photoIds)seen.add(id);}
+  else if(input.intent!=='draft')for(const file of await listFiles(`'${album.folderId}' in parents and trashed = false`))if(validPhoto(file,album.folderId))seen.add(file.id);
   let update:object;
   if(input.intent==='withdraw') {
-    update={appProperties:{skbcPublishedAlbum:null}};
+    update={description:syncDescription(previous,seen),appProperties:{skbcPublishedAlbum:null}};
   } else {
     const draft=selection(input.caption,input.photoIds);
     for(const id of draft.photoIds){const {file}=await readFile(id);if(!validPhoto(file,album.folderId)) throw new Error('Una foto ya no está disponible en este álbum.');}
-    const description=JSON.stringify({version:1,classId:album.classId,...draft,state:'draft'});
-    update=input.intent==='publish'?{...(input.preserveDraft ? {} : {description}),appProperties:{skbcPublishedAlbum:await createPublication(album,draft)}}:{description};
+    const draftData={...previous,version:1,classId:album.classId,...draft,state:'draft'};
+    const description=input.intent==='draft'?JSON.stringify(draftData):syncDescription(draftData,seen);
+    const preservedDescription=previous.syncSeenPhotoIds===undefined?JSON.stringify(previous):syncDescription(previous,seen);
+    update=input.intent==='publish'?{description:input.preserveDraft?preservedDescription:description,appProperties:{skbcPublishedAlbum:await createPublication(album,draft)}}:{description};
   }
   const headers:Record<string,string>={'content-type':'application/json'};if(!album.revision.startsWith('version:')) headers['if-match']=album.revision;
   await request(`${api}/${album.folderId}?supportsAllDrives=true`,{method:'PATCH',headers,body:JSON.stringify(update)});
@@ -227,5 +277,51 @@ export async function uploadAlbumPhoto(album:AlbumRecord,input:{name:string;byte
   const result=await response.json() as DrivePhoto;
   if(!safeId.test(result.id||'') || typeof result.name!=='string' || result.mimeType!==mimeType || !/^\d+$/.test(result.size||'') || Number(result.size)!==input.bytes.length) fail();
   return {id:result.id,name:result.name,mimeType:result.mimeType,size:result.size};
+}
+
+function readSeen(data:{syncSeenPhotoIds?:unknown}):string[] {
+  if(data.syncSeenPhotoIds===undefined)return [];
+  if(!Array.isArray(data.syncSeenPhotoIds)||data.syncSeenPhotoIds.length>500||data.syncSeenPhotoIds.some(id=>typeof id!=='string'||!safeId.test(id)))fail();
+  return data.syncSeenPhotoIds as string[];
+}
+function syncDescription(data:Record<string,unknown>,seen:Set<string>) {
+  if(seen.size>500)throw new Error('El historial de fotos del álbum está lleno.');
+  const content=JSON.stringify({...data,syncSeenPhotoIds:[...seen]});if(new TextEncoder().encode(content).length>30000)throw new Error('El historial de fotos del álbum está lleno.');return content;
+}
+export type ClassAlbumSyncResult = { album:AlbumRecord; added:number; blocked:number; limitReached:boolean; baseline:boolean };
+/** Discovers originals in the exact class folder, leaving saved editor selections intact. */
+export async function syncClassAlbumPhotos(classId:string):Promise<ClassAlbumSyncResult> {
+  return withClassPhotoDriveDeadline(15000,async()=>{
+    const album=await getClassAlbum(classId);if(!album)throw new Error('No existe álbum para esta clase.');
+    const current=await readFile(album.folderId);const verified=await scopedAlbum(current.file,current.etag);if(!verified)fail();
+    if(verified.revision!==album.revision)throw new Error('El álbum ha cambiado. Recarga antes de guardar.');
+    const data=JSON.parse(current.file.description||'{}');const baseline=data.syncSeenPhotoIds===undefined;
+    const seen=new Set(readSeen(data));
+    for(const id of [...album.photoIds,...(album.published?.photoIds||[])])seen.add(id);
+    const photoIds=[...(album.published?.photoIds||[])];let added=0,blocked=0,limitReached=false;
+    const photos=await listAlbumPhotos(album);
+    for(const photo of photos){
+      if(baseline){seen.add(photo.id);continue;}
+      if(seen.has(photo.id))continue;
+      if(photoIds.length>=24){limitReached=true;continue;}
+      try{
+        const response=await fetchClassPhoto(album,photo.id);
+        const mime=response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
+        let readable=!!response.body&&!!mime&&['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(mime);
+        if(readable&&response.body){const reader=response.body.getReader();try{const first=await abortable(reader.read(),requestSignal());readable=!first.done&&first.value.length>0;}finally{await reader.cancel();}}
+        else await response.body?.cancel();
+        if(!readable){blocked++;continue;}
+      }
+      catch(error){if(isDriveFailure(error)&&['api-media','signed-media'].includes((error as Error & {photoDriveStage:string}).photoDriveStage)){blocked++;continue;}throw error;}
+      seen.add(photo.id);photoIds.push(photo.id);added++;
+    }
+    const lastSyncedAt=new Date().toISOString();
+    const update:{description:string;appProperties:Record<string,string>}={description:syncDescription(data,seen),appProperties:{skbcPhotoLastSync:lastSyncedAt}};
+    const published={caption:album.published?.caption ?? '',photoIds};
+    if(added)update.appProperties.skbcPublishedAlbum=await createPublication(album,published);
+    const headers:Record<string,string>={'content-type':'application/json'};if(!verified.revision.startsWith('version:'))headers['if-match']=verified.revision;
+    await request(`${api}/${album.folderId}?supportsAllDrives=true`,{method:'PATCH',headers,body:JSON.stringify(update)});
+    return {album:{...album,published:added?published:album.published,lastSyncedAt},added,blocked,limitReached,baseline};
+  });
 }
 

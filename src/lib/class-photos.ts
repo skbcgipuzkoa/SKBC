@@ -1,7 +1,7 @@
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAllPages } from "@/lib/load-all-pages";
-import { ensureClassAlbum, fetchClassPhoto, getClassAlbum, listAlbumPhotos, listClassAlbums, saveClassAlbum, uploadAlbumPhoto, withClassPhotoDriveDeadline } from "@/lib/class-photo-drive";
+import { ensureClassAlbum, fetchClassPhoto, getClassAlbum, listAlbumPhotos, listClassAlbums, saveClassAlbum, uploadAlbumPhoto, syncClassAlbumPhotos, withClassPhotoDriveDeadline } from "@/lib/class-photo-drive";
 import { detectPhotoMime, UPLOAD_MAX_BYTES } from "@/lib/class-photo-upload";
 export type { AlbumRecord, DrivePhoto } from "@/lib/class-photo-drive";
 
@@ -43,6 +43,7 @@ export async function getClassPhotoAdmin(classId:string) {
 export async function createClassPhotoAlbum(classId:string) {
   const row=await internalClass(classId);
   await ensureClassAlbum({classId:row.id,title:`${row.class_date} · ${row.class_group==="kids"?"Niños":"Adultos"} · ${row.name}`.slice(0,200)});
+  await syncClassAlbumPhotos(classId);
   return {legacyId:row.legacy_id!};
 }
 
@@ -86,7 +87,7 @@ export async function saveClassPhotos(input:{classId:string;caption:string;photo
   return {legacyId:row.legacy_id!};
 }
 
-export async function getMemberClassPhotoHistory(fichaToken:string):Promise<MemberClassPhoto[]> {
+export async function getMemberClassPhotoHistory(fichaToken:string,includeEmpty=false):Promise<MemberClassPhoto[]> {
   const memberId=await activeMember(fichaToken);
   if(!memberId) return [];
   const supabase=createAdminClient();
@@ -97,8 +98,8 @@ export async function getMemberClassPhotoHistory(fichaToken:string):Promise<Memb
   const albums=await listClassAlbums();
   return albums.flatMap(album=>{
     const clase=byClass.get(album.classId);
-    if(!clase || !album.published?.photoIds.length) return [];
-    return [{classId:album.classId,date:clase.class_date,className:clase.name,caption:album.published.caption,photoIds:album.published.photoIds}];
+    if(!clase || (!includeEmpty && !album.published?.photoIds.length)) return [];
+    return [{classId:album.classId,date:clase.class_date,className:clase.name,caption:album.published?.caption??"",photoIds:album.published?.photoIds??[]}];
   }).sort((a,b)=>b.date.localeCompare(a.date)||a.classId.localeCompare(b.classId));
 }
 
@@ -117,4 +118,46 @@ export async function authorizeClassPhoto(input:{classId:string;fileId:string;fi
   const album=await getClassAlbum(input.classId);
   if(!album || (familyRequest && !album.published?.photoIds.includes(input.fileId))) return null;
   return fetchClassPhoto(album,input.fileId);
+}
+
+export async function syncClassPhotosForAdmin(classId:string) {
+  const row=await internalClass(classId);
+  await ensureClassAlbum({classId:row.id,title:photoClassTitle(row),date:row.class_date});
+  return {legacyId:row.legacy_id!,...await syncClassAlbumPhotos(classId)};
+}
+function photoClassTitle(row:PhotoClass) { return `${row.class_date} · ${row.class_group==="kids"?"Niños":"Adultos"} · ${row.name}`.slice(0,200); }
+
+export async function syncClassPhotosForMember(classId:string,fichaToken:string) {
+  if(!uuid.test(classId)) return null;
+  const memberId=await activeMember(fichaToken);
+  if(!memberId) return null;
+  const {data,error}=await createAdminClient().from("attendance_logs").select("class_id")
+    .eq("member_id",memberId).eq("class_id",classId).limit(1).maybeSingle<{class_id:string}>();
+  if(error) throw new Error("No se pudo comprobar la asistencia.");
+  if(!data) return null;
+  const album=await getClassAlbum(classId);
+  if(!album) return {added:0};
+  const last=Date.parse(album.lastSyncedAt??"");
+  if(Number.isFinite(last) && Date.now()-last<5*60*1000) return {added:0};
+  const result=await syncClassAlbumPhotos(classId);
+  return {added:result.added};
+}
+
+/** Scheduled work only touches already-prepared albums backed by an existing class. */
+export async function syncAllClassPhotos() {
+  const albums=await listClassAlbums();
+  albums.sort((a,b)=>(a.lastSyncedAt??"").localeCompare(b.lastSyncedAt??"")||a.classId.localeCompare(b.classId));
+  const started=Date.now();const totals={processed:0,added:0,blocked:0,failed:0};
+  for(const album of albums) {
+    if(Date.now()-started>40000) break;
+    try {
+      const {data,error}=await createAdminClient().from("classes").select("id,legacy_id,name,class_date,class_group").eq("id",album.classId).maybeSingle<PhotoClass>();
+      if(error) throw error;
+      if(!data) continue;
+      await ensureClassAlbum({classId:data.id,title:photoClassTitle(data),date:data.class_date});
+      const result=await syncClassAlbumPhotos(data.id);
+      totals.processed++;totals.added+=result.added;totals.blocked+=result.blocked;
+    } catch {totals.failed++;}
+  }
+  return totals;
 }

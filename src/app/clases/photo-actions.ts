@@ -1,7 +1,7 @@
 "use server";
 
 import { hasInternalAccess } from "@/lib/auth";
-import { createClassPhotoAlbum, saveClassPhotos, resolveClassPhotoReturn } from "@/lib/class-photos";
+import { createClassPhotoAlbum, syncClassPhotosForAdmin, saveClassPhotos, resolveClassPhotoReturn } from "@/lib/class-photos";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -45,4 +45,13 @@ export async function saveClassPhotosAction(form: FormData) {
   revalidatePath(path);
   revalidatePath("/ficha", "layout");
   redirect(`${path}?photoSaved=${intent}#fotos-clase`);
+}
+
+export async function syncClassPhotosAction(form:FormData) {
+  if(!(await hasInternalAccess()))redirect("/skbc-interno");
+  let path:string;let blocked=0;let full=false;
+  try {const result=await syncClassPhotosForAdmin(classId(form));path=destination(result.legacyId);blocked=result.blocked;full=result.limitReached;}
+  catch {redirect(await failurePath(form));}
+  revalidatePath(path);revalidatePath("/ficha","layout");
+  redirect(`${path}?photoSaved=sync${blocked?"&photoSyncBlocked=1":""}${full?"&photoSyncFull=1":""}#fotos-clase`);
 }

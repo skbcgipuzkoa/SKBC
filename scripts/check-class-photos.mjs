@@ -13,7 +13,7 @@ const publishedId='photo_approved_123',draftId='photo_draft_123456';
 let album={classId,folderId:'class_folder_12345',title:'Kids',caption:'Draft',photoIds:[draftId],published:{caption:'Training day',photoIds:[publishedId]},revision:'v1'};
 let driveReads=0,mediaReads=0,writes=[];
 const db={from(table){let filters=[],from=0,to=999;const q={select(){return q},eq(key,value){filters.push(row=>row[key]===value);return q},order(){return q},limit(){return q},range(a,b){from=a;to=b;return q},returns(){return q},maybeSingle(){return q.then(r=>({...r,data:r.data[0]??null}))},single(){return q.maybeSingle()},then(resolve,reject){const source=({members,classes,attendance_logs:logs})[table];assert.ok(source,table);return Promise.resolve({data:source.filter(row=>filters.every(test=>test(row))).slice(from,to+1),error:null}).then(resolve,reject)}};return q}};
-const drive={withClassPhotoDriveDeadline:async(_ms,task)=>task(),CLASS_PHOTO_ROOT_FOLDER_ID:'root_folder_123456',getClassAlbum:async id=>{driveReads++;return album?.classId===id?album:null},listClassAlbums:async()=>{driveReads++;return album?[album]:[]},listAlbumPhotos:async()=>[],ensureClassAlbum:async input=>{writes.push(input);return album},saveClassAlbum:async input=>{writes.push(input)},fetchClassPhoto:async()=>{mediaReads++;return new Response('bytes',{headers:{'Content-Type':'image/jpeg'}})}};
+const drive={syncClassAlbumPhotos:async()=>({added:0,blocked:0,limitReached:false}),withClassPhotoDriveDeadline:async(_ms,task)=>task(),CLASS_PHOTO_ROOT_FOLDER_ID:'root_folder_123456',getClassAlbum:async id=>{driveReads++;return album?.classId===id?album:null},listClassAlbums:async()=>{driveReads++;return album?[album]:[]},listAlbumPhotos:async()=>[],ensureClassAlbum:async input=>{writes.push(input);return album},saveClassAlbum:async input=>{writes.push(input)},fetchClassPhoto:async()=>{mediaReads++;return new Response('bytes',{headers:{'Content-Type':'image/jpeg'}})}};
 const deps={'@/lib/auth':{hasInternalAccess:async()=>internal},'@/lib/supabase/admin':{createAdminClient:()=>db},'@/lib/load-all-pages':{loadAllPages},'@/lib/class-photo-drive':drive,'@/lib/class-photo-upload':uploadRules};
 const mod={exports:{}};
 vm.runInNewContext(ts.transpileModule(readFileSync('src/lib/class-photos.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:mod.exports,Response,Set,Map,Uint8Array,require(name){assert.ok(deps[name],name);return deps[name]}});
@@ -71,3 +71,13 @@ console.log('Automatic publication preserves existing photos and handles saved-b
 assert.equal(writes.findLast(item=>item.intent).preserveDraft,true);
 album.published={caption:'Full',photoIds:Array.from({length:24},(_,i)=>'existing_photo_'+i)};
 await assert.rejects(()=>api.uploadClassPhoto(classId,upload),/24/);
+
+let syncCalls=0;drive.syncClassAlbumPhotos=async id=>{syncCalls++;assert.equal(id,classId);return {added:1,blocked:0,limitReached:false};};
+logs.push({id:'sync-attendee',member_id:'attendee',class_id:classId,classes:{name:'Kids',class_date:'2026-11-10'}});
+album.lastSyncedAt=undefined;
+assert.equal(await api.syncClassPhotosForMember(classId,'absent-token'),null);assert.equal(syncCalls,0);
+assert.equal(await api.syncClassPhotosForMember(classId,'inactive-token'),null);assert.equal(syncCalls,0);
+assert.equal((await api.syncClassPhotosForMember(classId,'attendee-token')).added,1);assert.equal(syncCalls,1);
+album.lastSyncedAt=new Date().toISOString();
+assert.equal((await api.syncClassPhotosForMember(classId,'attendee-token')).added,0);assert.equal(syncCalls,1,'Recent sync is throttled');
+console.log('Family photo sync checks exact attendance, active token and per-album throttle.');

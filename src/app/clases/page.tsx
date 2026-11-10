@@ -3,6 +3,7 @@ import { SidebarNav } from "@/app/components/SidebarNav";
 import { logoutAction } from "@/app/actions";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ClassPhotoGoogleConnection } from "@/components/class-photo-google-connection";
 import { LogOut } from "lucide-react";
 
 type Clase = {
@@ -28,7 +29,7 @@ type ClaseDisplay = Clase & {
 export default async function ClasesPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; month?: string; status?: string }>;
+  searchParams: Promise<{ saved?: string; month?: string; status?: string; photoGoogle?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -72,6 +73,8 @@ export default async function ClasesPage({
           </div>
         </div>
         {params.saved === "deleted" ? <p className="save-ok">Clase eliminada del sistema nuevo.</p> : null}
+        {params.photoGoogle === "connected" ? <p className="save-ok">Google conectado para leer las fotos añadidas en Drive.</p> : params.photoGoogle === "error" ? <p className="form-error" role="alert">No se pudo completar la conexión. Comprueba la cuenta y vuelve a intentarlo.</p> : null}
+        {params.photoGoogle ? <ClassPhotoGoogleConnection /> : null}
         <nav className="filter-tabs" aria-label="Filtrar clases">
           <a className={!showOpenOnly ? "active" : ""} href="/clases">Todas</a>
           <a className={showOpenOnly ? "active" : ""} href="/clases?status=open">Sin cerrar</a>
