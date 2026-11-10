@@ -16,9 +16,10 @@ export async function GET(request:Request,{params}:{params:Promise<{classId:stri
       return new Response("Foto no disponible.",{status:404,headers:privateHeaders});
     return new Response(response.body,{headers:{...privateHeaders,"Content-Type":type,"Content-Disposition":"inline"}});
   } catch(error) {
-    const info=error as {photoDriveStage?:unknown;photoDriveStatus?:unknown};
+    const info=error as {photoDriveStage?:unknown;photoDriveStatus?:unknown;photoDriveCode?:unknown};
     const stage=typeof info?.photoDriveStage==="string" && /^[a-z-]{1,20}$/.test(info.photoDriveStage)?info.photoDriveStage:"unavailable";
     const status=typeof info?.photoDriveStatus==="number" && Number.isInteger(info.photoDriveStatus)?info.photoDriveStatus:0;
-    return new Response("Fotos temporalmente no disponibles.",{status:503,headers:{...privateHeaders,"X-SKBC-Photo-Failure":`${stage}-${status}`}});
+    const reason=typeof info?.photoDriveCode==="string" && /^[A-Za-z0-9_-]{1,64}$/.test(info.photoDriveCode)?info.photoDriveCode:"unavailable";
+    return new Response("Fotos temporalmente no disponibles.",{status:503,headers:{...privateHeaders,"X-SKBC-Photo-Failure":`${stage}-${status}`,"X-SKBC-Photo-Reason":reason}});
   }
 }

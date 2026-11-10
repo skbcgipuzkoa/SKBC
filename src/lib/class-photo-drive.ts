@@ -12,7 +12,7 @@ const folderMime = 'application/vnd.google-apps.folder';
 const safeId = /^[A-Za-z0-9_-]{1,200}$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fields = 'id,name,mimeType,size,parents,appProperties,description,version,trashed';
-function fail(stage='validation',status=0): never {throw Object.assign(new Error('No se pudo acceder al álbum de clase.'),{photoDriveStage:stage,photoDriveStatus:status});}
+function fail(stage='validation',status=0,code?:string): never {throw Object.assign(new Error('No se pudo acceder al álbum de clase.'),{photoDriveStage:stage,photoDriveStatus:status,...(code?{photoDriveCode:code}:{})});}
 function isDriveFailure(error:unknown):error is Error {return error instanceof Error && 'photoDriveStage' in error;}
 function rootId() { const id=process.env.SKBC_CLASS_PHOTOS_FOLDER_ID || '15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS'; if(!safeId.test(id)) fail(); return id; }
 function validateClass(id:string) { if(!uuid.test(id)) throw new Error('Clase no válida.'); }
@@ -79,6 +79,17 @@ async function request(url:string,init:RequestInit={}) {
     fail('request');
   }
 }
+async function mediaFailureCode(response:Response,signal:AbortSignal):Promise<string|undefined> {
+  const reader=response.body?.getReader();if(!reader)return undefined;
+  try {
+    const chunks:Uint8Array[]=[];let length=0;
+    while(true){const part=await abortable(reader.read(),signal);if(part.done)break;length+=part.value.length;if(length>8192)return undefined;chunks.push(part.value);}
+    const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+    const data=await new Response(bytes).json();
+    const code=data?.error?.errors?.[0]?.reason ?? data?.error?.status;
+    return typeof code==='string' && /^[A-Za-z0-9_-]{1,64}$/.test(code)?code:undefined;
+  } catch {return undefined;} finally {void reader.cancel().catch(()=>{});}
+}
 /** Only signed Drive media destinations are eligible for a cross-origin redirect. */
 function trustedMediaDestination(url: URL): boolean {
   if(url.protocol!=='https:' || url.port || url.username || url.password || url.hash) return false;
@@ -108,7 +119,7 @@ async function downloadMedia(url:string):Promise<Response> {
         if(!trustedMediaDestination(next)) fail();
         current=next;continue;
       }
-      if(!response.ok) fail('media',response.status);return boundedResponse(response,signal);
+      if(!response.ok) fail(current.origin==='https://www.googleapis.com'?'api-media':'signed-media',response.status,await mediaFailureCode(response,signal));return boundedResponse(response,signal);
     }
     fail();
   } catch(error) {if(isDriveFailure(error))throw error;fail('download');}
