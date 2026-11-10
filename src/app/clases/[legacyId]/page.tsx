@@ -1,4 +1,5 @@
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
+import { ClassPhotoAdmin } from "@/components/class-photo-admin";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { ArrowLeft, Check, FileText, LogOut, RefreshCcw, Wand2 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
@@ -175,7 +176,7 @@ export default async function ClaseDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string; photoSaved?:string; photoError?:string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -996,6 +997,13 @@ export default async function ClaseDetailPage({
           <article className="card"><h2>Tipo</h2><div className="metric small">{clase.class_type ?? "-"}</div></article>
           <article className="card"><h2>Estado</h2><div className="metric small">{isCorrectionMode ? "En correccion" : clase.status}</div></article>
           <article className="card"><h2>Asistentes</h2><div className="metric">{totalDayAttendance}</div></article>
+        </section>
+
+        {query.photoSaved ? <p className="save-ok" role="status">{query.photoSaved==="publish"?"Fotos publicadas en el historial de los asistentes.":query.photoSaved==="withdraw"?"Fotos retiradas de las fichas.":query.photoSaved==="folder"?"Carpeta privada de la clase creada en Drive.":"Borrador guardado. La publicación anterior sigue igual."}</p>:null}
+        {query.photoError ? <p className="form-error" role="alert">No se pudo guardar el álbum. Actualiza la página y comprueba el acceso a la carpeta de Drive y la selección de fotos.</p>:null}
+        <section id="fotos-clase" aria-label="Álbumes de la clase">
+          {clase.class_group==="adults" && kidsDayClass?.legacy_id ? <details className="card"><summary><strong>Fotos y actividades · Niños</strong></summary><ClassPhotoAdmin classId={kidsDayClass.id} legacyId={kidsDayClass.legacy_id}/></details>:null}
+          <details className="card"><summary><strong>Fotos y actividades · {clase.class_group==="kids"?"Niños":"Adultos"}</strong></summary><ClassPhotoAdmin classId={clase.id} legacyId={legacyId} /></details>
         </section>
 
         <section className="delegate-visible-panel">

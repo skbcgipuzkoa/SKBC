@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {createRequire} from 'node:module';
+import ts from 'typescript';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+const require=createRequire(import.meta.url);
+let allowed=true,reads=0,writes=0,fail=false,lookupFail=false,received;
+let album=null,photos=[],history=[];
+const service={getClassPhotoAdmin:async()=>{reads++;if(fail)throw Error('OAuth private-token');return {album,photos};},getMemberClassPhotoHistory:async(token)=>{reads++;assert.equal(token,'own-token');if(fail)throw Error('OAuth private-token');return history;},createClassPhotoAlbum:async(id)=>{writes++;if(fail)throw Error('OAuth secret');return {legacyId:'trusted legacy'};},saveClassPhotos:async(input)=>{writes++;received=input;if(fail)throw Error('OAuth secret');return {legacyId:'trusted legacy'};},resolveClassPhotoReturn:async()=>{if(lookupFail)throw Error('secret');return {legacyId:'trusted legacy'};}};
+const mocks={'@/lib/class-photos':service,'@/lib/class-photo-drive':{CLASS_PHOTO_ROOT_FOLDER_ID:'private-root'},'@/app/clases/photo-actions':{createClassPhotoAlbumAction:()=>writes++,saveClassPhotosAction:()=>writes++},'@/lib/auth':{hasInternalAccess:async()=>allowed},'next/navigation':{redirect:(path)=>{throw Error('REDIRECT:'+path);}},'next/cache':{revalidatePath:()=>{}}};
+function load(file){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText,{exports:module.exports,module,require:(name)=>name.endsWith('.css')?{}:name in mocks?mocks[name]:require(name)});return module.exports;}
+const {ClassPhotoAdmin}=load('src/components/class-photo-admin.tsx');
+const {ClassPhotoHistory}=load('src/components/class-photo-history.tsx');
+const admin=async()=>renderToStaticMarkup(await ClassPhotoAdmin({classId:'class-id',legacyId:'display-legacy'}));
+const family=async()=>renderToStaticMarkup(await ClassPhotoHistory({fichaToken:'own-token'}));
+let html=await admin();assert.match(html,/Crear carpeta privada/);assert.doesNotMatch(html,/name="intent"/);assert.equal(writes,0,'GET cannot create a folder');
+album={classId:'class-id',folderId:'private-folder',title:'Class',caption:'Private draft',photoIds:['photo-a'],published:null,revision:'version:123'};photos=[{id:'photo-a',name:'Admin-only filename.jpg',mimeType:'image/jpeg'}];
+html=await admin();assert.match(html,/Borrador privado/);assert.match(html,/value="draft"/);assert.match(html,/value="publish"/);assert.match(html,/name="revision" value="version:123"/);assert.match(html,/maxLength="2000"/);assert.match(html,/\/api\/class-photos\/class-id\/photo-a/);assert.doesNotMatch(html,/[?]ficha=/);assert.doesNotMatch(html,/value="withdraw"/);
+album.published={caption:'Published',photoIds:['photo-a']};html=await admin();assert.match(html,/Publicado en las fichas/);assert.match(html,/value="withdraw"/);
+assert.equal(await family(),'');history=[{classId:'class-id',date:'2026-11-10',className:'Training',caption:'Family caption',photoIds:['photo-a']}];html=await family();assert.match(html,/10\/11\/2026/);assert.match(html,/Family caption/);assert.match(html,/ficha=own-token/);assert.match(html,/referrerPolicy="no-referrer"/);assert.match(html,/loading="lazy"/);assert.doesNotMatch(html,/drive.google|private-folder|filename|image\/jpeg/);
+fail=true;html=await admin();assert.match(html,/No se pueden cargar/);assert.doesNotMatch(html,/OAuth|private-token/);html=await family();assert.match(html,/seguir consultando tu ficha/);assert.doesNotMatch(html,/OAuth|private-token/);fail=false;assert.equal(writes,0,'All SSR paths read-only');
+const actions=load('src/app/clases/photo-actions.ts');const form=new FormData();form.set('classId','class-id');form.set('legacyId','attacker-url');form.set('revision','version:123');form.set('caption','Caption');form.append('photoIds','photo-a');
+for(const intent of ['draft','publish','withdraw']){form.set('intent',intent);await assert.rejects(()=>actions.saveClassPhotosAction(form),new RegExp('REDIRECT:/clases/trusted%20legacy[?]photoSaved='+intent));assert.equal(received.intent,intent);assert.equal(received.revision,'version:123');}
+form.set('revision','"opaque-drive-etag"');await assert.rejects(()=>actions.saveClassPhotosAction(form),/photoSaved=withdraw/);assert.equal(received.revision,'"opaque-drive-etag"');form.set('revision','version:123');
+await assert.rejects(()=>actions.createClassPhotoAlbumAction(form),/trusted%20legacy[?]photoSaved=folder/);
+let before=writes;form.set('caption','x'.repeat(2001));await assert.rejects(()=>actions.saveClassPhotosAction(form),/trusted%20legacy[?]photoError=1/);assert.equal(writes,before);form.set('caption','Caption');form.set('revision','bad\r\nETag');await assert.rejects(()=>actions.saveClassPhotosAction(form),/photoError=1/);assert.equal(writes,before);form.set('revision','3');form.delete('photoIds');for(let i=0;i<25;i++)form.append('photoIds','photo-'+i);await assert.rejects(()=>actions.saveClassPhotosAction(form),/photoError=1/);assert.equal(writes,before);
+fail=true;lookupFail=true;await assert.rejects(()=>actions.createClassPhotoAlbumAction(form),/REDIRECT:\/clases[?]photoError=1$/);fail=false;lookupFail=false;
+allowed=false;before=writes;await assert.rejects(()=>actions.createClassPhotoAlbumAction(form),/skbc-interno/);await assert.rejects(()=>actions.saveClassPhotosAction(form),/skbc-interno/);assert.equal(writes,before);
+console.log('Class photo SSR/actions passed: read-only GET, private draft/publish/withdraw, trusted redirects, validation, auth and family privacy.');

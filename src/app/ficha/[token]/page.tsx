@@ -11,6 +11,7 @@ import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
 import { driveImageUrl } from "@/lib/drive";
 import { activeCalendarDaysBetween } from "@/lib/activity-calendar";
 import { AdultExamStatusPanel } from "@/app/ficha/[token]/AdultExamStatusPanel";
+import { ClassPhotoHistory } from "@/components/class-photo-history";
 import { FichaAccessTracker } from "@/app/ficha/[token]/FichaAccessTracker";
 import { StudentFichaReturnCookie } from "@/app/ficha/[token]/StudentFichaReturnCookie";
 import { hasInternalAccess } from "@/lib/auth";
@@ -723,6 +724,7 @@ function AdultFicha({
         {!technicalProgress.details.length ? <p className="ficha-card">Sin técnicas cargadas para el grado objetivo.</p> : null}
       </FoldableSection>
 
+      <ClassPhotoHistory fichaToken={fichaToken} />
       <FoldableSection title="Historial tecnico global" meta={`${fullTechnicalHistory.totalRepetitions} practicas acumuladas · ${fullTechnicalHistory.techniques.length} tecnicas`}>
         <div className="ficha-card global-technical-summary">
           <div>
@@ -939,6 +941,7 @@ function KidsFicha({
         </div>
       </FoldableSection>
 
+      <ClassPhotoHistory fichaToken={fichaToken} />
       <FoldableSection title="Historial de examenes" meta={`${exams.length} registros`}>
         <div className="exam-card-list">
           {exams.length ? exams.map((exam) => (
