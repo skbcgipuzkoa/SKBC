@@ -3,15 +3,15 @@ import { randomUUID } from "node:crypto";
 import { detectPhotoMime, UPLOAD_MAX_BYTES } from "./class-photo-upload";
 import { getClassPhotoDriveAccessToken } from "./class-photo-google-auth";
 
-export type AlbumRecord = { classId: string; folderId: string; title: string; caption: string; photoIds: string[]; published: { caption: string; photoIds: string[] } | null; revision: string; lastSyncedAt?:string };
+export type AlbumRecord = { classId: string; folderId: string; title: string; caption: string; photoIds: string[]; published: { caption: string; photoIds: string[] } | null; revision: string; lastSyncedAt?:string; policyId?:string; policySeenPhotoIds?:string[] };
 export type DrivePhoto = { id: string; name: string; mimeType: string; size?: string };
-type DriveFile = DrivePhoto & { parents?: string[]; appProperties?: Record<string,string>; description?: string; version?: string; trashed?: boolean };
+type DriveFile = DrivePhoto & { parents?: string[]; appProperties?: Record<string,string>; description?: string; version?: string; trashed?: boolean; createdTime?:string };
 export const CLASS_PHOTO_ROOT_FOLDER_ID = process.env.SKBC_CLASS_PHOTOS_FOLDER_ID || '15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS';
 const api = 'https://www.googleapis.com/drive/v3/files';
 const folderMime = 'application/vnd.google-apps.folder';
 const safeId = /^[A-Za-z0-9_-]{1,200}$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const fields = 'id,name,mimeType,size,parents,appProperties,description,version,trashed';
+const fields = 'id,name,mimeType,size,parents,appProperties,description,version,trashed,createdTime';
 function fail(stage='validation',status=0,code?:string): never {throw Object.assign(new Error('No se pudo acceder al álbum de clase.'),{photoDriveStage:stage,photoDriveStatus:status,...(code?{photoDriveCode:code}:{})});}
 function isDriveFailure(error:unknown):error is Error {return error instanceof Error && 'photoDriveStage' in error;}
 function rootId() { const id=process.env.SKBC_CLASS_PHOTOS_FOLDER_ID || '15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS'; if(!safeId.test(id)) fail(); return id; }
@@ -207,23 +207,60 @@ export async function listAlbumPhotos(album:AlbumRecord):Promise<DrivePhoto[]> {
   await currentAlbum(album);return (await listFiles(`'${album.folderId}' in parents and trashed = false`)).filter(file=>validPhoto(file,album.folderId)).map(({id,name,mimeType,size})=>({id,name,mimeType,size}));
 }
 async function resolvePublication(folder:DriveFile,album:AlbumRecord):Promise<AlbumRecord> {
+  const policy=await latestPolicy(album);
+  const effective=policy?{...album,published:policy.published,policyId:policy.id,policySeenPhotoIds:policy.seenPhotoIds}:album;
   const pointer=folder.appProperties?.skbcPublishedAlbum;
-  if(!pointer) return album;
+  if(!pointer) return effective;
   if(!safeId.test(pointer)) fail();
-  const {file}=await readFile(pointer);
+  let file:DriveFile;
+  try{file=(await readFile(pointer)).file;}catch(error){if(policy)return effective;throw error;}
+  if(policy&&file.appProperties?.skbcClassPhotoPolicyId!==policy.id)return effective;
   if(file.trashed || file.mimeType!=='application/json' || !file.parents?.includes(album.folderId) || file.appProperties?.skbcClassAlbumManifest!=='1' || file.appProperties?.skbcClassId!==album.classId || !file.size || !/^\d+$/.test(file.size) || Number(file.size)>16384) fail();
   const response=await downloadMedia(`${api}/${pointer}?alt=media&supportsAllDrives=true`);
   const raw=await response.text();if(new TextEncoder().encode(raw).length>16384) fail();
-  try {const data=JSON.parse(raw);if(data.version!==1 || data.classId!==album.classId) fail();return {...album,published:selection(data.caption,data.photoIds)};}catch{fail();}
+  try {const data=JSON.parse(raw);if(data.version!==1 || data.classId!==album.classId) fail();
+    if((data.policyId||'legacy')!==(policy?.id||'legacy'))return effective;
+    return {...effective,published:selection(data.caption,data.photoIds)};
+  }catch{fail();}
 }
 async function createPublication(album:AlbumRecord,published:{caption:string;photoIds:string[]}) {
-  const content=JSON.stringify({version:1,classId:album.classId,...published});
+  const content=JSON.stringify({version:1,classId:album.classId,policyId:album.policyId||'legacy',...published});
   if(new TextEncoder().encode(content).length>16384) fail();
   const boundary='skbc_album_manifest';
-  const metadata={name:'Publicación del álbum.json',mimeType:'application/json',parents:[album.folderId],appProperties:{skbcClassAlbumManifest:'1',skbcClassId:album.classId}};
+  const metadata={name:'Publicación del álbum.json',mimeType:'application/json',parents:[album.folderId],appProperties:{skbcClassAlbumManifest:'1',skbcClassId:album.classId,skbcClassPhotoPolicyId:album.policyId||'legacy'}};
   const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--\r\n`;
   const response=await request('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true',{method:'POST',headers:{'content-type':`multipart/related; boundary=${boundary}`},body});
   const data=await response.json() as {id?:string};if(!data.id || !safeId.test(data.id)) fail();return data.id;
+}
+type PhotoPolicy = {id:string;published:AlbumRecord['published'];seenPhotoIds:string[]};
+function policyTime(file:DriveFile) {
+  const match=file.createdTime?.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/);
+  if(!match)fail();return `${match[1]}.${(match[2]||'').padEnd(9,'0')}`;
+}
+async function latestPolicy(album:AlbumRecord):Promise<PhotoPolicy|null> {
+  const files=(await listFiles(`'${album.folderId}' in parents and trashed = false and appProperties has { key='skbcClassPhotoPolicy' and value='1' }`)).filter(file=>file.appProperties?.skbcClassPhotoPolicy==='1');
+  if(files.length>500)fail();
+  for(const file of files){if(file.trashed||file.mimeType!=='application/json'||file.parents?.length!==1||file.parents[0]!==album.folderId||file.appProperties?.skbcClassId!==album.classId||!safeId.test(file.id)||!/^\d+$/.test(file.size||'')||Number(file.size)>30000)fail();policyTime(file);}
+  files.sort((a,b)=>{const x=policyTime(a),y=policyTime(b);return x<y?1:x>y?-1:a.id<b.id?1:a.id>b.id?-1:0;});
+  if(!files.length)return null;
+  const file=files[0];const response=await downloadMedia(`${api}/${file.id}?alt=media&supportsAllDrives=true`);
+  const raw=await response.text();if(new TextEncoder().encode(raw).length>30000)fail();
+  try{const data=JSON.parse(raw);if(data.version!==1||data.classId!==album.classId||!Array.isArray(data.seenPhotoIds))fail();
+    const seenPhotoIds=readSeen({syncSeenPhotoIds:data.seenPhotoIds});
+    const published=data.published===null?null:selection(data.published?.caption,data.published?.photoIds);
+    return {id:file.id,published,seenPhotoIds};
+  }catch{fail();}
+}
+/** Immutable manual decision: automatic writers can never replace or undo this record. */
+async function createPolicy(album:AlbumRecord,published:AlbumRecord['published'],seen:Set<string>) {
+  syncDescription({},seen);
+  const content=JSON.stringify({version:1,classId:album.classId,published,seenPhotoIds:[...seen]});
+  if(new TextEncoder().encode(content).length>30000)fail();
+  const boundary='skbc_album_policy';
+  const metadata={name:'Decisión de publicación del álbum.json',mimeType:'application/json',parents:[album.folderId],appProperties:{skbcClassPhotoPolicy:'1',skbcClassId:album.classId}};
+  const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--\r\n`;
+  const response=await request('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true',{method:'POST',headers:{'content-type':`multipart/related; boundary=${boundary}`},body});
+  const data=await response.json() as {id?:string};if(!data.id||!safeId.test(data.id))fail();return data.id;
 }
 export async function saveClassAlbum(input:{classId:string;caption:string;photoIds:string[];intent:'draft'|'publish'|'withdraw';revision:string;preserveDraft?:boolean}):Promise<void> {
   if(!['draft','publish','withdraw'].includes(input.intent)) fail();
@@ -235,10 +272,13 @@ export async function saveClassAlbum(input:{classId:string;caption:string;photoI
   if(!input.revision || input.revision!==album.revision) throw new Error('El álbum ha cambiado. Recarga antes de guardar.');
   const previous=JSON.parse(current.file.description||'{}');
   const seen=new Set<string>(readSeen(previous));
+  const activePolicy=input.intent==='draft'?null:await latestPolicy(album);
+  for(const id of activePolicy?.seenPhotoIds||[])seen.add(id);
   if(input.intent==='publish'&&input.preserveDraft){for(const id of input.photoIds)seen.add(id);}
   else if(input.intent!=='draft')for(const file of await listFiles(`'${album.folderId}' in parents and trashed = false`))if(validPhoto(file,album.folderId))seen.add(file.id);
   let update:object;
   if(input.intent==='withdraw') {
+    await createPolicy(album,null,seen);
     update={description:syncDescription(previous,seen),appProperties:{skbcPublishedAlbum:null}};
   } else {
     const draft=selection(input.caption,input.photoIds);
@@ -246,7 +286,12 @@ export async function saveClassAlbum(input:{classId:string;caption:string;photoI
     const draftData={...previous,version:1,classId:album.classId,...draft,state:'draft'};
     const description=input.intent==='draft'?JSON.stringify(draftData):syncDescription(draftData,seen);
     const preservedDescription=previous.syncSeenPhotoIds===undefined?JSON.stringify(previous):syncDescription(previous,seen);
-    update=input.intent==='publish'?{description:input.preserveDraft?preservedDescription:description,appProperties:{skbcPublishedAlbum:await createPublication(album,draft)}}:{description};
+    if(input.intent==='publish'){
+      const policy=input.preserveDraft?activePolicy:null;
+      const publication=policy?{caption:policy.published?.caption??'',photoIds:draft.photoIds.filter(id=>!policy.seenPhotoIds.includes(id)||policy.published?.photoIds.includes(id))}:draft;
+      const policyId=input.preserveDraft?policy?.id:await createPolicy(album,draft,seen);
+      update={description:input.preserveDraft?preservedDescription:description,appProperties:{skbcPublishedAlbum:await createPublication({...album,policyId},publication)}};
+    }else update={description};
   }
   const headers:Record<string,string>={'content-type':'application/json'};if(!album.revision.startsWith('version:')) headers['if-match']=album.revision;
   await request(`${api}/${album.folderId}?supportsAllDrives=true`,{method:'PATCH',headers,body:JSON.stringify(update)});
@@ -297,7 +342,7 @@ export async function syncClassAlbumPhotos(classId:string):Promise<ClassAlbumSyn
     if(verified.revision!==album.revision)throw new Error('El álbum ha cambiado. Recarga antes de guardar.');
     const data=JSON.parse(current.file.description||'{}');const baseline=data.syncSeenPhotoIds===undefined;
     const seen=new Set(readSeen(data));
-    for(const id of [...album.photoIds,...(album.published?.photoIds||[])])seen.add(id);
+    for(const id of [...album.photoIds,...(album.published?.photoIds||[]),...(album.policySeenPhotoIds||[])])seen.add(id);
     const photoIds=[...(album.published?.photoIds||[])];let added=0,blocked=0,limitReached=false;
     const photos=await listAlbumPhotos(album);
     for(const photo of photos){

@@ -5,11 +5,11 @@ const js=ts.transpileModule(fs.readFileSync('src/lib/class-photo-drive.ts','utf8
 const root='15Fl2RjeqV0ui-xCt8f6esGh6hzCTT5eS',classId='11111111-1111-4111-8111-111111111111';
 const folder={id:'folder1',name:'Class',mimeType:'application/vnd.google-apps.folder',parents:[root],appProperties:{skbcClassId:classId,skbcClassAlbum:'1'},description:JSON.stringify({version:1,classId,caption:'draft',photoIds:['photo1'],state:'published',published:{caption:'legacy ignored',photoIds:['photo1']}}),version:'1'};
 const photo={id:'photo1',name:'a.jpg',mimeType:'image/jpeg',size:'20',parents:['folder1']};
-let files=[folder,photo],calls=[],manifestContent='',manifestCount=0;
+let files=[folder,photo],calls=[],manifestContent='',manifestCount=0,policyCount=0;
 const mockFetch=async(url,init={})=>{calls.push([String(url),init]);const u=new URL(url);
-if(u.hostname==='www.googleapis.com'&&u.pathname.includes('/upload/')){const body=String(init.body);manifestContent=body.split('Content-Type: application/json; charset=UTF-8\r\n\r\n').at(-1).split('\r\n--')[0];const id='manifest'+(++manifestCount);files.push({id,name:'manifest',mimeType:'application/json',size:String(new TextEncoder().encode(manifestContent).length),parents:['folder1'],appProperties:{skbcClassAlbumManifest:'1',skbcClassId:classId},content:manifestContent});return Response.json({id});}
+if(u.hostname==='www.googleapis.com'&&u.pathname.includes('/upload/')){const body=String(init.body);manifestContent=body.split('Content-Type: application/json; charset=UTF-8\r\n\r\n').at(-1).split('\r\n--')[0];const metadata=JSON.parse(body.split('Content-Type: application/json; charset=UTF-8\r\n\r\n')[1].split('\r\n--')[0]);const id=metadata.appProperties.skbcClassPhotoPolicy?'policy'+(++policyCount):'manifest'+(++manifestCount);files.push({...metadata,id,createdTime:new Date(1800000000000+policyCount).toISOString(),size:String(new TextEncoder().encode(manifestContent).length),content:manifestContent});return Response.json({id});}
 const id=u.pathname.split('/').at(-1);if(init.method==='PATCH'){const patch=JSON.parse(init.body);if(patch.description)folder.description=patch.description;if(patch.appProperties)Object.assign(folder.appProperties,patch.appProperties);return Response.json(folder);}
-if(id==='files')return Response.json({files:files.filter(f=>f.mimeType==='application/vnd.google-apps.folder')});
+if(id==='files'){const q=u.searchParams.get('q');let result=files;const parent=q.match(/'([^']+)' in parents/);if(parent)result=result.filter(f=>f.parents?.includes(parent[1]));for(const m of q.matchAll(/key='([^']+)' and value='([^']+)'/g))result=result.filter(f=>f.appProperties?.[m[1]]===m[2]);return Response.json({files:result});}
 const found=files.find(f=>f.id===id);if(!found)return new Response('',{status:404});if(u.searchParams.get('alt')==='media')return new Response(found.content||'image');return Response.json(found);};
 const exports={};vm.runInNewContext(js,{exports,require:id=>id==='node:async_hooks'?{AsyncLocalStorage}:({getClassPhotoDriveAccessToken:async()=> 'secret'}),process:{env:{}},fetch:mockFetch,Response,URL,URLSearchParams,AbortSignal,AbortController,setTimeout,clearTimeout,Headers,TextEncoder,console});
 let album=await exports.getClassAlbum(classId);assert.equal(album.published,null,'legacy description cannot publish');
@@ -28,8 +28,11 @@ const lastPatch=JSON.parse(calls.filter(c=>c[1].method==='PATCH').at(-1)[1].body
 photo.parents=['other'];await assert.rejects(()=>exports.fetchClassPhoto(album,'photo1'));photo.parents=['folder1'];
 await assert.rejects(()=>exports.saveClassAlbum({classId,caption:'bad',photoIds:['https://evil'],intent:'publish',revision:album.revision}));
 await assert.rejects(()=>exports.saveClassAlbum({classId,caption:'bad',photoIds:[],intent:'draft',revision:'old'}));
-// Manifest ownership and payload are checked before published data is returned.
-folder.appProperties.skbcPublishedAlbum='manifest1';const manifest=files.find(f=>f.id==='manifest1');manifest.parents=['other'];await assert.rejects(()=>exports.getClassAlbum(classId));manifest.parents=['folder1'];
+// A stale pointer cannot override the latest immutable withdrawal decision.
+folder.appProperties.skbcPublishedAlbum='manifest1';assert.equal((await exports.getClassAlbum(classId)).published,null);
+// Manifest ownership is still enforced for the currently active policy.
+album=await exports.getClassAlbum(classId);await exports.saveClassAlbum({classId,caption:'Public',photoIds:['photo1'],intent:'publish',revision:album.revision});
+const manifest=files.find(f=>f.id===folder.appProperties.skbcPublishedAlbum);manifest.parents=['other'];await assert.rejects(()=>exports.getClassAlbum(classId));manifest.parents=['folder1'];
 assert.equal((await exports.getClassAlbum(classId)).published.caption,'Public');
 folder.appProperties.skbcPublishedAlbum=null;
 console.log('class photo publication-pointer tests passed');
