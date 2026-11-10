@@ -17,7 +17,7 @@ mocks['@/components/class-photo-gallery']=gallery;
 const {ClassPhotoHistory}=load('src/components/class-photo-history.tsx');
 const admin=async()=>renderToStaticMarkup(await ClassPhotoAdmin({classId:'class-id',legacyId:'display-legacy'}));
 const family=async()=>renderToStaticMarkup(await ClassPhotoHistory({fichaToken:'own-token'}));
-let html=await admin();assert.match(html,/Crear carpeta privada/);assert.match(html,/data-uploader="present"/);assert.doesNotMatch(html,/name="intent"/);assert.equal(writes,0,'GET cannot create a folder');
+let html=await admin();assert.match(html,/al subir la primera foto/);assert.doesNotMatch(html,/Crear carpeta privada/);assert.match(html,/data-uploader="present"/);assert.doesNotMatch(html,/name="intent"/);assert.equal(writes,0,'GET cannot create a folder');
 album={classId:'class-id',folderId:'private-folder',title:'Class',caption:'Private draft',photoIds:['photo-a'],published:null,revision:'version:123'};photos=[{id:'photo-a',name:'Admin-only filename.jpg',mimeType:'image/jpeg'}];
 html=await admin();assert.match(html,/data-uploader="present"/);assert.match(html,/Borrador privado/);assert.match(html,/value="draft"/);assert.match(html,/value="publish"/);assert.match(html,/name="revision" value="version:123"/);assert.match(html,/maxLength="2000"/);assert.match(html,/\/api\/class-photos\/class-id\/photo-a/);assert.doesNotMatch(html,/[?]ficha=/);assert.doesNotMatch(html,/value="withdraw"/);
 album.published={caption:'Published',photoIds:['photo-a']};html=await admin();assert.match(html,/Publicado en las fichas/);assert.match(html,/value="withdraw"/);

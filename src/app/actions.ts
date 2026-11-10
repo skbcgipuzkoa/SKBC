@@ -1,6 +1,5 @@
 "use server";
 import { identifyIntegratedExaminer } from "@/lib/integrated-exams";
-import { ensureClassPhotoAlbumForCreation } from "@/lib/class-photos";
 import { parseExamSubmissionExtras } from "@/lib/integrated-exam-session";
 
 import { randomBytes } from "crypto";
@@ -2548,10 +2547,9 @@ export async function createClassAction(formData: FormData) {
     redirect(dojoFlow ? "/skbc-interno/dojo?error=class" : "/clases/nueva?error=class");
   }
 
-  const photoClassIds = [data.id];
 
   if (combinedClass) {
-    const { data: kidsClass, error: kidsError } = await supabase
+    const { error: kidsError } = await supabase
       .from("classes")
       .insert({
         legacy_id: `NEW-CLA-KIDS-${Date.now()}`,
@@ -2569,10 +2567,8 @@ export async function createClassAction(formData: FormData) {
       if (dojoFlow) redirect(`/skbc-interno/dojo/${data.legacy_id}?error=kids-companion`);
       redirect(`/clases/${data.legacy_id}?saved=class&error=kids-companion${delegateFlow ? "&delegate=1" : ""}`);
     }
-    if(kidsClass?.id) photoClassIds.push(kidsClass.id);
   }
 
-  const photoFolderPending = (await Promise.all(photoClassIds.map(ensureClassPhotoAlbumForCreation))).some(ready=>!ready);
 
   if (classGroup === "adults" && !specialClass) {
     try {
@@ -2585,8 +2581,8 @@ export async function createClassAction(formData: FormData) {
     }
   }
 
-  if (dojoFlow) redirect(`/skbc-interno/dojo/${data.legacy_id}${photoFolderPending?"?photoFolderPending=1":""}`);
-  redirect(`/clases/${data.legacy_id}?saved=${classGroup === "adults" && !specialClass ? "class-prepared" : "class"}${delegateFlow ? "&delegate=1" : ""}${photoFolderPending?"&photoFolderPending=1":""}`);
+  if (dojoFlow) redirect(`/skbc-interno/dojo/${data.legacy_id}`);
+  redirect(`/clases/${data.legacy_id}?saved=${classGroup === "adults" && !specialClass ? "class-prepared" : "class"}${delegateFlow ? "&delegate=1" : ""}`);
 }
 
 function isSpecialClassType(value: string | null) {
@@ -5980,7 +5976,6 @@ async function findOrCreateOpenClassIdForDelegate(
     .single<{ id: string }>();
 
   if (createError || !created?.id) throw createError ?? new Error("No se ha podido crear la clase paralela.");
-  await ensureClassPhotoAlbumForCreation(created.id);
   return created.id;
 }
 
