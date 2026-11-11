@@ -46,7 +46,7 @@ const sectionItems: NavItem[] = [
   { label: "Salud Supabase", href: "/salud-supabase" },
   { label: "Notificaciones", href: "/notificaciones" },
   { label: "Sistema", href: "/sistema" },
-  { label: "Web del club", href: "http://localhost:8787/admin.html", external: true }
+  { label: "Web del club", href: "https://www.skbcgipuzkoa.com/admin.html", external: true }
 ];
 
 const navItems = [
