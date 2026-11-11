@@ -79,6 +79,15 @@ const moduleGroups: Array<{ title: string; items: ModuleLink[] }> = [
       { label: "Notificaciones", href: "/notificaciones", icon: Bell },
       { label: "Sistema", href: "/sistema", icon: ShieldCheck }
     ]
+  },
+  {
+    title: "Web del club",
+    items: [
+      { label: "Admin web", href: "http://localhost:8787/admin.html", icon: ShieldCheck, external: true },
+      { label: "Editar noticias", href: "http://localhost:8787/admin.html?panel=news", icon: FileSearch, external: true },
+      { label: "Editar calendario web", href: "http://localhost:8787/admin.html?panel=events", icon: CalendarCheck, external: true },
+      { label: "Ver web pública", href: "https://www.skbcgipuzkoa.com/", icon: NotebookTabs, external: true }
+    ]
   }
 ];
 
