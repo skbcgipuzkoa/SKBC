@@ -1,3 +1,4 @@
+import { techniqueHistoryName, type TechniqueVariant } from "@/lib/technique-variant-label";
 import { loadExamOutlooks } from "@/lib/exam-outlook-data";
 import { ExamOutlookPanel } from "@/app/components/exam-outlook-panel";
 import { BirthdayCelebration } from "@/components/birthday-celebration";
@@ -78,6 +79,9 @@ type Course = {
 };
 
 type TechnicalHistory = {
+  id: string;
+  content_type: string | null;
+  techniques: TechniqueVariant | null;
   class_date: string;
   technique_name: string;
   group_grade: string | null;
@@ -91,6 +95,7 @@ type TechnicalHistory = {
 };
 
 type ChildTechnicalHistory = {
+  syllabus_item_id: string | null;
   practiced_on: string;
   created_at: string;
   title_snapshot: string | null;
@@ -243,7 +248,7 @@ export default async function KenshiDetailPage({
       .returns<Course[]>(),
     supabase
       .from("member_technical_history")
-      .select("class_date,technique_name,group_grade,target_grade,category,proposal_type,counts_as_progression,counts_as_review,counts_for_stats,created_at")
+      .select("id,content_type,techniques(variant,variant_note,content_type),class_date,technique_name,group_grade,target_grade,category,proposal_type,counts_as_progression,counts_as_review,counts_for_stats,created_at")
       .eq("member_id", member.id)
       .order("class_date", { ascending: false })
       .order("created_at", { ascending: false })
@@ -252,7 +257,7 @@ export default async function KenshiDetailPage({
     member.class === "kids"
       ? supabase
           .from("child_syllabus_history")
-          .select("practiced_on,created_at,title_snapshot,category_snapshot,description_snapshot,child_syllabus_items(title,grade,category,description)")
+          .select("syllabus_item_id,practiced_on,created_at,title_snapshot,category_snapshot,description_snapshot,child_syllabus_items(title,grade,category,description)")
           .eq("member_id", member.id)
           .order("practiced_on", { ascending: false })
           .order("created_at", { ascending: false })
@@ -1002,18 +1007,20 @@ function buildAuditTechniqueRows(
     return childHistory
       .filter((item) => item.title_snapshot ?? item.child_syllabus_items?.title)
       .map((item) => ({
-        key: `${item.created_at}-${item.title_snapshot ?? item.child_syllabus_items?.title ?? "tecnica"}`,
+        key: `${item.created_at}-${item.syllabus_item_id ?? item.title_snapshot}`,
         date: item.practiced_on,
-        name: item.title_snapshot ?? item.child_syllabus_items?.title ?? "Tecnica infantil",
+        name: techniqueHistoryName(item.title_snapshot ?? item.child_syllabus_items?.title ?? "Técnica infantil", {
+          category: item.category_snapshot ?? item.child_syllabus_items?.category
+        }),
         group: item.child_syllabus_items?.grade ?? "Programa infantil",
         countsAs: (item.title_snapshot !== null ? item.category_snapshot : item.child_syllabus_items?.category) ?? "practica infantil"
       }));
   }
 
   return adultHistory.map((item) => ({
-    key: `${item.created_at}-${item.technique_name}`,
+    key: item.id,
     date: item.class_date,
-    name: item.technique_name,
+    name: techniqueHistoryName(item.technique_name, { ...item.techniques, content_type: item.content_type ?? item.techniques?.content_type, category: item.category }),
     group: `${item.group_grade ?? "-"} para ${item.target_grade ?? "-"}`,
     countsAs: technicalHistoryLabel(item)
   }));

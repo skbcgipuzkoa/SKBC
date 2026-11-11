@@ -1,3 +1,4 @@
+import { techniqueHistoryName, type TechniqueVariant } from "@/lib/technique-variant-label";
 import { BirthdayCelebration } from "@/components/birthday-celebration";
 import { groupTechnicalProgress } from "@/lib/technical-progress-display";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
@@ -90,6 +91,7 @@ type Member = {
 };
 
 type Attendance = {
+  id: string;
   class_id: string | null;
   attended_on: string;
   official_grade: string | null;
@@ -125,7 +127,7 @@ type Course = {
   competition_notes: string | null;
 };
 
-type Technique = {
+type Technique = TechniqueVariant & {
   video_url: string | null;
   id: string;
   grade: string;
@@ -138,6 +140,7 @@ type Technique = {
 };
 
 type TechnicalHistory = {
+  techniques: TechniqueVariant | null;
   technique_id: string | null;
   technique_name: string;
   technique_grade: string | null;
@@ -221,6 +224,7 @@ type ChildClassPlanHistoryRow = {
 };
 
 type ChildClassGroupWorkHistoryRow = {
+  notes: string | null;
   class_id: string;
   group_label: string;
   content: string;
@@ -316,7 +320,7 @@ export default async function PublicFichaPage({
   const [attendance, { data: exams }, { data: courses }, { data: fichaClosures }] = await Promise.all([
     loadAllPages<Attendance>((from, to) => supabase
       .from("attendance_logs")
-      .select("class_id,attended_on,official_grade,trained_grade,classes(name)")
+      .select("id,class_id,attended_on,official_grade,trained_grade,classes(name)")
       .eq("member_id", member.id)
       .order("attended_on", { ascending: false })
       .range(from, to)
@@ -405,13 +409,13 @@ export default async function PublicFichaPage({
   const [{ data: techniques }, technicalHistory, { data: allAdults }, allAttendance, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
     supabase
       .from("techniques")
-      .select("id,grade,base_name,name,category,content_type,active,active_in_planning,video_url")
+      .select("id,grade,base_name,name,category,content_type,variant,variant_note,active,active_in_planning,video_url")
       .eq("grade", targetGrade)
       .eq("active", true)
       .returns<Technique[]>(),
     loadAllPages<TechnicalHistory>((from, to) => supabase
       .from("member_technical_history")
-      .select("technique_id,technique_name,technique_grade,category,content_type,class_date,proposal_type,completed,counts_as_progression")
+      .select("techniques(variant,variant_note,content_type),technique_id,technique_name,technique_grade,category,content_type,class_date,proposal_type,completed,counts_as_progression")
       .eq("member_id", member.id)
       .eq("completed", true)
       .order("class_date", { ascending: false })
@@ -1031,6 +1035,21 @@ async function loadChildProgramHistoryRows(
   if (!classDates.size) return history;
 
   const classIds = [...classDates.keys()];
+  const adjustedDates = new Set<string>();
+  const attendanceDates = new Map(attendance.map(row => [row.id, row.attended_on]));
+  const attendanceIds = [...attendanceDates.keys()];
+  for (let offset = 0; offset < attendanceIds.length; offset += 100) {
+    const { data, error } = await supabase.from("attendance_individual_work")
+      .select("attendance_id").in("attendance_id", attendanceIds.slice(offset, offset + 100));
+    if (error) {
+      console.error("Error loading individual work for child ficha", error);
+      return history;
+    }
+    for (const row of data ?? []) {
+      const date = attendanceDates.get(row.attendance_id);
+      if (date) adjustedDates.add(date);
+    }
+  }
   const [{ data: directPlans, error: planError }, { data: directGroupWork, error: groupWorkError }] = await Promise.all([
     supabase
       .from("child_class_plans")
@@ -1039,7 +1058,7 @@ async function loadChildProgramHistoryRows(
       .returns<ChildClassPlanHistoryRow[]>(),
     supabase
       .from("child_class_group_work")
-      .select("class_id,group_label,content,member_ids")
+      .select("class_id,group_label,content,member_ids,notes")
       .in("class_id", classIds)
       .returns<ChildClassGroupWorkHistoryRow[]>()
   ]);
@@ -1145,6 +1164,7 @@ async function loadChildProgramHistoryRows(
     for (const activity of plan.activities ?? []) {
       addFallbackRow(practicedOn, childClassActivityLabel(activity), "CLASE GENERAL", "ACTIVIDAD");
     }
+    if (adjustedDates.has(practicedOn)) continue;
     for (const itemId of plan.syllabus_item_ids ?? []) {
       const item = itemsById.get(itemId);
       if (!item) continue;
@@ -1156,6 +1176,7 @@ async function loadChildProgramHistoryRows(
     const practicedOn = classDates.get(work.class_id);
     const assignedMembers = work.member_ids ?? [];
     if (!practicedOn || (assignedMembers.length && !assignedMembers.includes(memberId))) continue;
+    if (adjustedDates.has(practicedOn) && work.notes?.startsWith("SKBC_SYLLABUS_ITEM:")) continue;
     addFallbackRow(practicedOn, work.content, "CLASE GENERAL", "GRUPO", work.group_label);
   }
 
@@ -1216,7 +1237,7 @@ function buildChildProgramHistory(history: ChildSyllabusHistoryRow[]) {
       if (row.practiced_on > existing.lastDate) existing.lastDate = row.practiced_on;
     } else {
       byItem.set(key, {
-        title: item.title,
+        title: techniqueHistoryName(item.title, item),
         grade,
         category: item.category,
         repetitions: 1,
@@ -1562,18 +1583,23 @@ function buildTechnicalProgress(targetGrade: string, techniques: Technique[], hi
     const idKey = row.technique_id ? `id:${row.technique_id}` : "";
     const nameKey = `name:${normalize(row.technique_name)}`;
     if (idKey) repetitions.set(idKey, (repetitions.get(idKey) ?? 0) + 1);
-    repetitions.set(nameKey, (repetitions.get(nameKey) ?? 0) + 1);
+    else repetitions.set(nameKey, (repetitions.get(nameKey) ?? 0) + 1);
   }
 
+  const nameCounts = new Map<string, number>();
+  for (const technique of techniques) {
+    const name = normalize(technique.name);
+    nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+  }
   const details = techniques.map((technique) => {
-    const reps = repetitions.get(`id:${technique.id}`) ?? repetitions.get(`name:${normalize(technique.name)}`) ?? 0;
+    const reps = repetitions.get(`id:${technique.id}`) ?? (nameCounts.get(normalize(technique.name)) === 1 ? repetitions.get(`name:${normalize(technique.name)}`) : 0) ?? 0;
     const repetitionsCapped = Math.min(reps, REPETITION_GOAL);
     const contentType = normalize(technique.content_type);
     const isKata = contentType.startsWith("KATA");
     const label = isKata ? kataLabel(technique.content_type) : technique.category.toUpperCase();
     return {
       id: technique.id,
-      name: technique.name,
+      name: techniqueHistoryName(technique.name, technique),
       category: technique.category.toUpperCase(),
       contentType: technique.content_type,
       videoUrl: technique.video_url,
@@ -1633,7 +1659,7 @@ function buildFullTechnicalHistory(history: TechnicalHistory[]) {
     if (!row.completed) continue;
     const key = row.technique_id ? `id:${row.technique_id}` : `name:${normalize(row.technique_name)}`;
     const current = byTechnique.get(key) ?? {
-      name: row.technique_name,
+      name: techniqueHistoryName(row.technique_name, { ...row.techniques, content_type: row.content_type ?? row.techniques?.content_type, category: row.category }),
       grade: row.technique_grade ?? "-",
       category: row.category ? row.category.toUpperCase() : "-",
       repetitions: 0,

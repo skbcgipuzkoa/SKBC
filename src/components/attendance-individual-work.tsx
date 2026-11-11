@@ -1,5 +1,6 @@
 "use client";
 
+import { techniqueVariantLabel } from "@/lib/technique-variant-label";
 import { useId, useRef, useState } from "react";
 import "./attendance-individual-work.css";
 
@@ -20,9 +21,7 @@ const endpoint = "/api/classes/individual-work";
 const normalize = (value: string) => value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
 
 function techniqueDetails(item: Technique) {
-  const type = (item.content_type ?? item.category ?? "").toLowerCase().replaceAll("_", "-");
-  const kata = type === "kata-tanen" ? "Tan-en (individual)" : type === "kata-sotai" ? "Sotai (en parejas)" : null;
-  return [item.grade, kata ?? item.category, item.variant, item.variant_note].filter(Boolean).join(" · ");
+  return [item.grade, techniqueVariantLabel(item) || item.category].filter(Boolean).join(" · ");
 }
 
 export function AttendanceIndividualWork({ attendanceId, name }: { attendanceId: string; name: string }) {
@@ -159,7 +158,7 @@ export function AttendanceIndividualWork({ attendanceId, name }: { attendanceId:
               </select></label>
             </div>
             {selected.length ? <div className="individual-work-selected" aria-label="Técnicas añadidas">
-              {selected.map(item => <button type="button" className="secondary-button" key={item.id} onClick={() => toggle("addedIds", item.id)} aria-label={`Quitar ${item.name}`}>{item.name} ×</button>)}
+              {selected.map(item => <button type="button" className="secondary-button" key={item.id} onClick={() => toggle("addedIds", item.id)} aria-label={`Quitar ${[item.name, techniqueVariantLabel(item)].filter(Boolean).join(" · ")}`}>{[item.name, techniqueVariantLabel(item)].filter(Boolean).join(" · ")} ×</button>)}
             </div> : null}
             <div className="individual-work-results" role="group" aria-label="Técnicas y katas filtradas">
               {results.length ? results.map(item => {
