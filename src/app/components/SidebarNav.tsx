@@ -45,7 +45,8 @@ const sectionItems: NavItem[] = [
   { label: "Backups", href: "/backups" },
   { label: "Salud Supabase", href: "/salud-supabase" },
   { label: "Notificaciones", href: "/notificaciones" },
-  { label: "Sistema", href: "/sistema" }
+  { label: "Sistema", href: "/sistema" },
+  { label: "Web del club", href: "http://localhost:8787/admin.html", external: true }
 ];
 
 const navItems = [
