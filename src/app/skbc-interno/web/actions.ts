@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { prepareClosureSync } from "@/lib/website-closure-sync";
 import { redirect } from "next/navigation";
 import { hasInternalAccess } from "@/lib/auth";
 import { readWebsite, writeWebsite, prepareWebsitePhoto } from "@/lib/website-content";
@@ -39,11 +41,18 @@ export async function publishWebsite(form: FormData) {
     if (isNews && [value("url"), value("image")].some(link => link && !/^(https:\/\/[^\s]+|\/?[a-zA-Z0-9_-][a-zA-Z0-9_./-]*)$/.test(link))) {
       throw new Error("Usa un enlace HTTPS o una ruta de la web.");
     }
+    const closure = isNews ? undefined : await prepareClosureSync(original);
+    if (closure) Object.assign(updated, { managementClosure: closure.key });
     const photo = isNews ? await prepareWebsitePhoto(form.get("photo")) : undefined;
     if (photo) Object.assign(updated, { image: photo.path });
     if (index === -1) entries.push(updated);
     else entries[index] = updated;
     await writeWebsite(sha, data, head, photo);
+    if (closure) {
+      await closure.apply(date, end || date);
+      revalidatePath("/calendario");
+      notice = "Calendario web publicado y cierre actualizado en gestión.";
+    }
   } catch (error) {
     notice = error instanceof Error ? error.message : "No se pudo publicar.";
   }
