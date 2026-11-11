@@ -1,3 +1,5 @@
+import { withIndividualWorkSnapshot } from "@/lib/individual-work-snapshot";
+import { applyIndividualWork, loadIndividualWork, type IndividualWork } from "@/lib/attendance-individual-work";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ClassRow = {
@@ -65,6 +67,10 @@ export async function setPlanTechniqueCompleted(planId: string, completed: boole
 type AdultClassClosePhase = "technical" | "profiles" | "finalizing";
 
 export async function closeAdultClass(classId: string, onPhase?: (phase: AdultClassClosePhase) => Promise<void>) {
+  return withIndividualWorkSnapshot(classId, () => rebuildAdultClass(classId, onPhase));
+}
+
+async function rebuildAdultClass(classId: string, onPhase?: (phase: AdultClassClosePhase) => Promise<void>) {
   const supabase = createAdminClient();
   const { data: clase, error: classError } = await supabase
     .from("classes")
@@ -94,23 +100,24 @@ export async function closeAdultClass(classId: string, onPhase?: (phase: AdultCl
   if (attendanceError) throw attendanceError;
   if (planError) throw planError;
 
+  const validAttendance = (attendance ?? []).filter((row) => row.members?.class === "adults");
+  const completedPlan = (plan ?? []).filter((row) => row.completed && row.technique_id);
+  const progressionPlan = completedPlan.filter((row) => row.used_for_history);
+
+  const individual = validAttendance.length ? await loadIndividualWork(clase.id) : new Map<string, IndividualWork>();
+  const overrides = await getTechnicalOverrides(clase.id, validAttendance);
   if (wasClosed) {
     await clearGeneratedClassTechnicalHistory(supabase, clase.id);
   }
 
   await onPhase?.("technical");
 
-  const validAttendance = (attendance ?? []).filter((row) => row.members?.class === "adults");
-  const completedPlan = (plan ?? []).filter((row) => row.completed && row.technique_id);
-  const progressionPlan = completedPlan.filter((row) => row.used_for_history);
-
   let assignmentCount = 0;
   let dojoHistoryCount = 0;
   let memberHistoryCount = 0;
 
-  if (validAttendance.length && completedPlan.length) {
-    const overrides = await getTechnicalOverrides(clase.id, validAttendance);
-    const insertedAssignments = await generateAssignments(clase, validAttendance, completedPlan, overrides);
+  if (validAttendance.length && (completedPlan.length || individual.size)) {
+    const insertedAssignments = await generateAssignments(clase, validAttendance, completedPlan, overrides, individual);
     assignmentCount = insertedAssignments;
     dojoHistoryCount = await generateDojoHistory(clase, validAttendance, progressionPlan);
     await onPhase?.("profiles");
@@ -180,7 +187,13 @@ async function getTechnicalOverrides(classId: string, attendance: AttendanceRow[
   return map;
 }
 
-async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[], plan: PlanRow[], overrides: Map<string, Set<string>>) {
+async function generateAssignments(
+  clase: ClassRow,
+  attendance: AttendanceRow[],
+  plan: PlanRow[],
+  overrides: Map<string, Set<string>>,
+  individual: Map<string, IndividualWork>
+) {
   const supabase = createAdminClient();
   const { data: existing, error } = await supabase
     .from("member_technique_assignments")
@@ -193,63 +206,52 @@ async function generateAssignments(clase: ClassRow, attendance: AttendanceRow[],
   const existingKeys = new Set(
     (existing ?? []).map((row) => `${row.class_id}::${row.member_id}::${row.technique_id ?? ""}`)
   );
-  const attendanceByGrade = groupAttendanceByTrainedGrade(attendance.filter((row) => !overrides.has(row.id)));
   const planById = new Map(plan.map((item) => [item.id, item]));
+  const planByGrade = new Map<string, PlanRow[]>();
+  for (const item of plan) {
+    const grade = normalize(item.group_grade);
+    const items = planByGrade.get(grade) ?? [];
+    items.push(item);
+    planByGrade.set(grade, items);
+  }
 
   const inserts = [];
   for (const attendant of attendance) {
-    const overridePlanIds = overrides.get(attendant.id);
-    if (!overridePlanIds?.size) continue;
-
-    for (const planId of overridePlanIds) {
-      const item = planById.get(planId);
-      if (!item) continue;
-      const isReview = isReviewForAttendant(item, attendant);
-      const key = `${clase.id}::${attendant.member_id}::${item.technique_id ?? ""}`;
-      if (existingKeys.has(key)) continue;
-      existingKeys.add(key);
-      inserts.push({
-        legacy_id: buildGeneratedLegacyId("ATAC", clase.id, attendant.member_id, item.technique_id ?? item.id),
-        class_id: clase.id,
-        plan_id: item.id,
-        technique_id: item.technique_id,
-        member_id: attendant.member_id,
-        assigned_on: item.class_date || clase.class_date,
-        group_grade: item.group_grade,
-        active: true,
-        completed: true,
-        counts_as_progression: !isReview,
-        counts_as_review: isReview,
-        counts_for_stats: true,
-        notes: attendant.technical_note || "AJUSTE TECNICO MANUAL DE CLASE",
-        created_by: "system"
-      });
+    const grade = normalize(attendant.trained_grade ?? attendant.official_grade);
+    const legacyOverride = overrides.get(attendant.id);
+    const adjustment = attendant.use_for_history ? individual.get(attendant.id) : undefined;
+    const baseline = legacyOverride
+      ? [...legacyOverride].map((id) => planById.get(id)).filter((item): item is PlanRow => Boolean(item))
+      : grade ? planByGrade.get(grade) ?? [] : [];
+    const baselineByTechnique = new Map<string, PlanRow>();
+    for (const item of baseline) {
+      if (item.technique_id && !baselineByTechnique.has(item.technique_id)) {
+        baselineByTechnique.set(item.technique_id, item);
+      }
     }
-  }
 
-  for (const item of plan) {
-    const groupGrade = normalize(item.group_grade);
-    const attendants = attendanceByGrade.get(groupGrade) ?? [];
-
-    for (const attendant of attendants) {
-      const isReview = isReviewForAttendant(item, attendant);
-      const key = `${clase.id}::${attendant.member_id}::${item.technique_id ?? ""}`;
+    const baseIds = [...baselineByTechnique.keys()];
+    const selectedIds = adjustment ? applyIndividualWork(baseIds, adjustment) : baseIds;
+    for (const techniqueId of selectedIds) {
+      const key = `${clase.id}::${attendant.member_id}::${techniqueId}`;
       if (existingKeys.has(key)) continue;
       existingKeys.add(key);
+      const item = adjustment?.mode === "replace" ? undefined : baselineByTechnique.get(techniqueId);
+      const isReview = item ? isReviewForAttendant(item, attendant) : true;
       inserts.push({
-        legacy_id: buildGeneratedLegacyId("ATAC", clase.id, attendant.member_id, item.technique_id ?? item.id),
+        legacy_id: buildGeneratedLegacyId(item ? "ATAC" : "ATI", clase.id, attendant.member_id, techniqueId),
         class_id: clase.id,
-        plan_id: item.id,
-        technique_id: item.technique_id,
+        plan_id: item?.id ?? null,
+        technique_id: techniqueId,
         member_id: attendant.member_id,
-        assigned_on: item.class_date || clase.class_date,
-        group_grade: item.group_grade,
+        assigned_on: item?.class_date || clase.class_date,
+        group_grade: item ? item.group_grade : grade || null,
         active: true,
         completed: true,
         counts_as_progression: !isReview,
         counts_as_review: isReview,
         counts_for_stats: true,
-        notes: attendant.technical_note || "AUTOASIGNADO POR GRUPO Y TECNICAS REALIZADAS",
+        notes: attendant.technical_note || (adjustment || legacyOverride ? "AJUSTE TECNICO MANUAL DE CLASE" : "AUTOASIGNADO POR GRUPO Y TECNICAS REALIZADAS"),
         created_by: "system"
       });
     }
@@ -317,11 +319,15 @@ async function generateDojoHistory(clase: ClassRow, attendance: AttendanceRow[],
   return inserts.length;
 }
 
+function individualTechnique(row: { legacy_id: string | null; techniques: { name: string; grade: string | null; category: string | null; content_type: string | null } | null }) {
+  return row.legacy_id?.startsWith("ATI") ? row.techniques : null;
+}
+
 async function generateMemberHistory(clase: ClassRow) {
   const supabase = createAdminClient();
   const { data: assignments, error: assignmentError } = await supabase
     .from("member_technique_assignments")
-    .select("id,legacy_id,class_id,assigned_on,member_id,group_grade,completed,counts_as_progression,counts_as_review,counts_for_stats,notes,created_by,technical_plans(technical_group_id,target_grade,technique_id,technique_name,technique_grade,category,content_type,proposal_type),members(grade)")
+    .select("id,legacy_id,class_id,assigned_on,member_id,group_grade,completed,counts_as_progression,counts_as_review,counts_for_stats,notes,created_by,technique_id,techniques(name,grade,category,content_type),technical_plans(technical_group_id,target_grade,technique_id,technique_name,technique_grade,category,content_type,proposal_type),members(grade)")
     .eq("class_id", clase.id);
 
   if (assignmentError) throw assignmentError;
@@ -341,7 +347,7 @@ async function generateMemberHistory(clase: ClassRow) {
   const inserts = (assignments ?? [])
     .filter((row: any) => row.completed)
     .filter((row: any) => {
-      const techniqueId = row.technical_plans?.technique_id ?? null;
+      const techniqueId = row.technical_plans?.technique_id ?? (individualTechnique(row) ? row.technique_id : null);
       const key = `${row.class_id}::${row.member_id}::${techniqueId ?? ""}`;
       if (existingAssignmentIds.has(row.id) || existingKeys.has(key)) return false;
       existingKeys.add(key);
@@ -349,8 +355,10 @@ async function generateMemberHistory(clase: ClassRow) {
     })
     .map((row: any) => {
       const plan = row.technical_plans;
+      const extra = individualTechnique(row);
+      const techniqueId = plan?.technique_id ?? (extra ? row.technique_id : null);
       return {
-        legacy_id: buildGeneratedLegacyId("HIA", row.class_id, row.member_id, plan?.technique_id ?? row.id),
+        legacy_id: buildGeneratedLegacyId("HIA", row.class_id, row.member_id, techniqueId ?? row.id),
         class_id: row.class_id,
         class_date: row.assigned_on || clase.class_date,
         assignment_id: row.id,
@@ -359,11 +367,11 @@ async function generateMemberHistory(clase: ClassRow) {
         technical_group_id: plan?.technical_group_id ?? null,
         group_grade: row.group_grade,
         target_grade: plan?.target_grade ?? null,
-        technique_id: plan?.technique_id ?? null,
-        technique_name: plan?.technique_name ?? "",
-        technique_grade: plan?.technique_grade ?? null,
-        category: plan?.category ?? null,
-        content_type: plan?.content_type ?? null,
+        technique_id: techniqueId,
+        technique_name: plan?.technique_name ?? extra?.name ?? "",
+        technique_grade: plan?.technique_grade ?? extra?.grade ?? null,
+        category: plan?.category ?? extra?.category ?? null,
+        content_type: plan?.content_type ?? extra?.content_type ?? null,
         proposal_type: plan?.proposal_type ?? null,
         completed: true,
         counts_as_progression: row.counts_as_progression,
@@ -408,18 +416,6 @@ async function updateTechniqueMetrics(plan: PlanRow[]) {
 
     if (updateError) throw updateError;
   }
-}
-
-function groupAttendanceByTrainedGrade(attendance: AttendanceRow[]) {
-  const map = new Map<string, AttendanceRow[]>();
-  attendance.forEach((row) => {
-    const grade = normalize(row.trained_grade ?? row.official_grade);
-    if (!grade) return;
-    const group = map.get(grade) ?? [];
-    group.push(row);
-    map.set(grade, group);
-  });
-  return map;
 }
 
 function normalize(value: string | null | undefined) {

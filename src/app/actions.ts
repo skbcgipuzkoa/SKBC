@@ -1,4 +1,5 @@
 "use server";
+import { withIndividualWorkSnapshot } from "@/lib/individual-work-snapshot";
 import { identifyIntegratedExaminer } from "@/lib/integrated-exams";
 import { parseExamSubmissionExtras } from "@/lib/integrated-exam-session";
 
@@ -7,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
+import { applyIndividualWork, loadIndividualWork } from "@/lib/attendance-individual-work";
 import { generateAdultTechnicalGroups, resolveTrainingGroupGrade } from "@/lib/adult-groups";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { runSkbcBackup } from "@/lib/backups";
@@ -2337,20 +2339,12 @@ export async function saveDelegateChildPlanAction(formData: FormData) {
       p_notes: notes
     });
     if (planError) throw planError;
-    await syncChildSyllabusHistoryForClass(supabase, kidsClass.id);
+    if (!closeAfter) await syncChildSyllabusHistoryForClass(supabase, kidsClass.id);
 
     if (closeAfter) {
       await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
       await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
-      const { data: closedClass, error: closeError } = await supabase
-        .from("classes")
-        .update({ closed: true, status: "completed", updated_at: now })
-        .eq("id", kidsClass.id)
-        .eq("class_group", "kids")
-        .eq("closed", false)
-        .select("id")
-        .single<{ id: string }>();
-      if (closeError || !closedClass) throw closeError ?? new Error("La clase infantil ya ha sido cerrada.");
+      await closeChildClassWithHistory(supabase, kidsClass.id);
       await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
       await recalculateClassExamStatus(kidsClass.id);
       await recalculateChildRankings();
@@ -2449,14 +2443,8 @@ export async function submitDelegateClassAction(formData: FormData) {
           await closeAdultClass(clase.id, adultClosureProgress(progressId));
         } else {
           const supabase = createAdminClient();
-          await syncChildSyllabusHistoryForClass(supabase, clase.id);
           await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
-          const { error } = await supabase
-            .from("classes")
-            .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
-            .eq("id", clase.id)
-            .eq("class_group", "kids");
-          if (error) throw error;
+          await closeChildClassWithHistory(supabase, clase.id);
         }
       }
 
@@ -2958,12 +2946,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
             await closeAdultClass(dayClass.id, adultClosureProgress(progressId));
           } else {
             await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
-            const { error: closeError } = await supabase
-              .from("classes")
-              .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
-              .eq("id", dayClass.id)
-              .eq("class_group", "kids");
-            if (closeError) throw closeError;
+            await closeChildClassWithHistory(supabase, dayClass.id);
           }
         }
         await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
@@ -3064,17 +3047,11 @@ export async function addBulkAttendanceAction(formData: FormData) {
         await closeAdultClass(classId, adultClosureProgress(progressId));
       } else {
         await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
-        const { error: closeError } = await supabase
-          .from("classes")
-          .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
-          .eq("id", classId)
-          .eq("class_group", "kids");
-        if (closeError) throw closeError;
+        await closeChildClassWithHistory(supabase, classId);
       }
       await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
       await recalculateClassExamStatus(classId);
       if (clase.class_group === "kids") {
-        await syncChildSyllabusHistoryForClass(supabase, classId);
         await recalculateChildRankings();
       }
       await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
@@ -3521,7 +3498,7 @@ export async function finishClassCorrectionAction(formData: FormData) {
         await closeAdultClass(dayClass.id, adultClosureProgress(progressId));
       } else {
         await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
-        await syncChildSyllabusHistoryForClass(supabase, dayClass.id);
+        await closeChildClassWithHistory(supabase, dayClass.id);
       }
     }
 
@@ -3573,18 +3550,12 @@ export async function closeKidsClassAction(formData: FormData) {
   try {
     await beginClassClosureProgress(progressId, classId);
     await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
-    await syncChildSyllabusHistoryForClass(supabase, classId);
+    await closeChildClassWithHistory(supabase, classId);
     await advanceClassClosureProgress(progressId, "profiles", CLOSURE_TECHNICAL);
     await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
     await recalculateClassExamStatus(classId);
     await recalculateChildRankings();
     await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
-    const { error } = await supabase
-      .from("classes")
-      .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
-      .eq("id", classId)
-      .eq("class_group", "kids");
-    if (error) throw error;
     await finishClassClosureProgress(progressId);
   } catch (error) {
     console.error("Error recalculating kids class exam status", error);
@@ -6105,8 +6076,22 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
 
 const CHILD_TARGETED_SYLLABUS_PREFIX = "SKBC_SYLLABUS_ITEM:";
 
+async function closeChildClassWithHistory(supabase: ReturnType<typeof createAdminClient>, classId: string) {
+  await withIndividualWorkSnapshot(classId, async () => {
+    await rebuildChildSyllabusHistory(supabase, classId);
+    const { error } = await supabase.from("classes")
+      .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+      .eq("id", classId).eq("class_group", "kids");
+    if (error) throw error;
+  });
+}
+
 async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof createAdminClient>, classId: string) {
-  const [{ data: clase, error: classError }, { data: plan, error: planError }, { data: attendances, error: attendanceError }, { data: targetedWork, error: targetedWorkError }, { data: existingHistory, error: existingHistoryError }] = await Promise.all([
+  await withIndividualWorkSnapshot(classId, () => rebuildChildSyllabusHistory(supabase, classId));
+}
+
+async function rebuildChildSyllabusHistory(supabase: ReturnType<typeof createAdminClient>, classId: string) {
+  const [{ data: clase, error: classError }, { data: plan, error: planError }, { data: attendances, error: attendanceError }, { data: targetedWork, error: targetedWorkError }, existingHistory] = await Promise.all([
     supabase
       .from("classes")
       .select("id,class_date,class_group")
@@ -6128,18 +6113,16 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
       .eq("class_id", classId)
       .like("notes", `${CHILD_TARGETED_SYLLABUS_PREFIX}%`)
       .returns<Array<{ member_ids: string[] | null; notes: string | null }>>(),
-    supabase
+    loadAllPages<{ id: string; member_id: string; syllabus_item_id: string; title_snapshot: string | null; category_snapshot: string | null; description_snapshot: string | null }>((from, to) => supabase
       .from("child_syllabus_history")
-      .select("member_id,syllabus_item_id,title_snapshot,category_snapshot,description_snapshot")
-      .eq("class_id", classId)
-      .returns<Array<{ member_id: string; syllabus_item_id: string; title_snapshot: string | null; category_snapshot: string | null; description_snapshot: string | null }>>()
+      .select("id,member_id,syllabus_item_id,title_snapshot,category_snapshot,description_snapshot")
+      .eq("class_id", classId).order("id").range(from, to))
   ]);
 
   if (classError) throw classError;
   if (planError) throw planError;
   if (attendanceError) throw attendanceError;
   if (targetedWorkError) throw targetedWorkError;
-  if (existingHistoryError) throw existingHistoryError;
   if (!clase || clase.class_group !== "kids") return;
 
   const planSyllabusItemIds = Array.from(new Set((plan?.syllabus_item_ids ?? []).filter(Boolean)));
@@ -6147,37 +6130,37 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
     itemId: String(work.notes ?? "").slice(CHILD_TARGETED_SYLLABUS_PREFIX.length).trim(),
     memberIds: new Set(work.member_ids ?? [])
   })).filter((work) => work.itemId && work.memberIds.size);
-  const syllabusItemIds = Array.from(new Set([...planSyllabusItemIds, ...targetedItems.map((work) => work.itemId)]));
+  const individual = await loadIndividualWork(classId);
+  const syllabusItemIds = Array.from(new Set([
+    ...planSyllabusItemIds,
+    ...targetedItems.map((work) => work.itemId),
+    ...[...individual.values()].flatMap((work) => work.addedIds)
+  ]));
   const existingHistorySnapshots = new Map((existingHistory ?? []).map((row) => [`${row.member_id}:${row.syllabus_item_id}`, row]));
-  const { error: deleteError } = await supabase
-    .from("child_syllabus_history")
-    .delete()
-    .eq("class_id", classId);
-
-  if (deleteError) throw deleteError;
-  if (!syllabusItemIds.length || !attendances?.length) return;
-
-  const [{ data: syllabusItems, error: syllabusError }, { data: overrides, error: overrideError }] = await Promise.all([
-    supabase
+  const syllabusItems: Array<{ id: string; grade: string | null; title: string; category: string | null; description: string | null }> = [];
+  for (let offset = 0; offset < syllabusItemIds.length; offset += 100) {
+    const { data, error } = await supabase
       .from("child_syllabus_items")
       .select("id,grade,title,category,description")
-      .in("id", syllabusItemIds)
-      .returns<Array<{ id: string; grade: string | null; title: string; category: string | null; description: string | null }>>(),
-    supabase
-      .from("child_attendance_work_overrides")
-      .select("attendance_id,work_mode,trained_grade")
-      .eq("class_id", classId)
-      .returns<Array<{ attendance_id: string; work_mode: string | null; trained_grade: string | null }>>()
-  ]);
-
-  if (syllabusError) throw syllabusError;
+      .in("id", syllabusItemIds.slice(offset, offset + 100))
+      .returns<typeof syllabusItems>();
+    if (error) throw error;
+    syllabusItems.push(...(data ?? []));
+  }
+  const { data: overrides, error: overrideError } = await supabase
+    .from("child_attendance_work_overrides")
+    .select("attendance_id,work_mode,trained_grade")
+    .eq("class_id", classId)
+    .returns<Array<{ attendance_id: string; work_mode: string | null; trained_grade: string | null }>>();
   if (overrideError) throw overrideError;
-  if (!syllabusItems?.length) return;
 
+  const syllabusById = new Map(syllabusItems.map((item) => [item.id, item]));
+  const generalItems = syllabusItems.filter((item) => planSyllabusItemIds.includes(item.id));
   const overridesByAttendance = new Map((overrides ?? []).map((item) => [item.attendance_id, item]));
   const now = new Date().toISOString();
   const rows = [];
-  for (const attendance of attendances) {
+  const desiredKeys = new Set<string>();
+  for (const attendance of attendances ?? []) {
     const override = overridesByAttendance.get(attendance.id);
     const mode = normalizeChildWorkMode(String(override?.work_mode ?? "common"));
     if (mode === "observer") continue;
@@ -6187,7 +6170,6 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
       : mode === "other_grade"
         ? childSyllabusGradeSearchLabels(String(override?.trained_grade ?? ""))
         : [];
-    const generalItems = syllabusItems.filter((item) => planSyllabusItemIds.includes(item.id));
     const itemsForAttendance = targetGrades.length
       ? generalItems.filter((item) => targetGrades.includes(String(item.grade ?? "").trim().toUpperCase().replace(/\s+/g, " ")))
       : generalItems;
@@ -6195,8 +6177,16 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
     const selectedItems = new Map(itemsForAttendance.map((item) => [item.id, item]));
     syllabusItems.filter((item) => targetedItemIds.has(item.id)).forEach((item) => selectedItems.set(item.id, item));
 
-    for (const item of selectedItems.values()) {
-      const existingSnapshot = existingHistorySnapshots.get(`${attendance.member_id}:${item.id}`);
+    const adjustment = individual.get(attendance.id);
+    const baseIds = [...selectedItems.keys()];
+    const itemIds = adjustment ? applyIndividualWork(baseIds, adjustment) : baseIds;
+    for (const id of itemIds) {
+      const item = syllabusById.get(id);
+      if (!item) continue;
+      const key = `${attendance.member_id}:${item.id}`;
+      if (desiredKeys.has(key)) continue;
+      desiredKeys.add(key);
+      const existingSnapshot = existingHistorySnapshots.get(key);
       rows.push({
         member_id: attendance.member_id,
         class_id: classId,
@@ -6212,13 +6202,24 @@ async function syncChildSyllabusHistoryForClass(supabase: ReturnType<typeof crea
     }
   }
 
-  if (!rows.length) return;
+  if (rows.length) {
+    const { error } = await supabase
+      .from("child_syllabus_history")
+      .upsert(rows, { onConflict: "member_id,class_id,syllabus_item_id" });
+    if (error) throw error;
+  }
 
-  const { error } = await supabase
-    .from("child_syllabus_history")
-    .insert(rows);
-
-  if (error) throw error;
+  const obsoleteIds = (existingHistory ?? [])
+    .filter((row) => !desiredKeys.has(`${row.member_id}:${row.syllabus_item_id}`))
+    .map((row) => row.id);
+  for (let offset = 0; offset < obsoleteIds.length; offset += 100) {
+    const { error } = await supabase
+      .from("child_syllabus_history")
+      .delete()
+      .eq("class_id", classId)
+      .in("id", obsoleteIds.slice(offset, offset + 100));
+    if (error) throw error;
+  }
 }
 
 async function addTeachingBonuses(

@@ -1,6 +1,7 @@
 import { CLASS_PHOTO_ALBUM_LIMIT } from "@/lib/class-photo-limits";
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
 import { ClassPhotoAdmin } from "@/components/class-photo-admin";
+import { AttendanceIndividualWork } from "@/components/attendance-individual-work";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { ArrowLeft, Check, FileText, LogOut, RefreshCcw, Wand2 } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
@@ -1470,6 +1471,7 @@ export default async function ClaseDetailPage({
                     <td data-label="Grado entrenado">{item.trained_grade ?? "-"}</td>
                     <td data-label="Ficha">{item.members?.legacy_id ? <a className="text-link" href={`/kenshis/${item.members.legacy_id}`}>Abrir ficha</a> : "-"}</td>
                     <td data-label="Accion">
+                      <AttendanceIndividualWork attendanceId={item.id} name={`${item.members?.first_name ?? ""} ${item.members?.last_name ?? ""}`.trim() || "este alumno"} />
                       <form action={removeAttendanceAction}>
                         <input type="hidden" name="attendanceId" value={item.id} />
                         <input type="hidden" name="legacyId" value={legacyId} />
