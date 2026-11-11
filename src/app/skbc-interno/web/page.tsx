@@ -1,3 +1,4 @@
+import styles from "./editor.module.css";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { hasInternalAccess } from "@/lib/auth";
@@ -16,11 +17,11 @@ export default async function WebsiteEditor({ searchParams }: {
   const snapshot = await readWebsite().catch(() => null);
   const fields = (entry: WebsiteItem, index: number) => {
     const field = (key: string) => typeof entry[key] === "string" ? String(entry[key]) : "";
-    return <form action={publishWebsite} style={{ display: "grid", gap: 12, paddingBlock: 12 }}>
+    return <form action={publishWebsite} className={styles.form}>
       <input type="hidden" name="section" value={section} />
       <input type="hidden" name="index" value={index} />
       <input type="hidden" name="sha" value={snapshot?.sha} />
-      <label><input type="checkbox" name="enabled" defaultChecked={entry.enabled !== false} /> Visible en la web</label>
+      <label className={styles.checkbox}><input type="checkbox" name="enabled" defaultChecked={entry.enabled !== false} /> Visible en la web</label>
       <label>{isNews ? "Fecha" : "Inicio"} <input required type="date" name="date" defaultValue={field(isNews ? "date" : "start")} /></label>
       {isNews ? <>
         <label>Fecha de caducidad <input type="datetime-local" name="expiresAt" defaultValue={field("expiresAt")} /></label>
@@ -32,7 +33,7 @@ export default async function WebsiteEditor({ searchParams }: {
         <label>Lugar <input name="location" defaultValue={field("location")} /></label>
       </>}
       {[["es", "Castellano"], ["eu", "Euskera"], ["en", "Inglés"]].map(([lang, label]) =>
-        <fieldset key={lang} style={{ minWidth: 0, display: "grid", gap: 8 }}>
+        <fieldset key={lang} className={styles.language}>
           <legend>{label}</legend>
           <label>Título <input name={lang + "-title"} required={lang === "es"} maxLength={180} defaultValue={entry.languages?.[lang]?.title} /></label>
           <label>{isNews ? "Texto" : "Descripción"} <textarea name={lang + "-text"} rows={4} maxLength={8000} defaultValue={entry.languages?.[lang]?.[isNews ? "text" : "description"]} /></label>
@@ -41,18 +42,28 @@ export default async function WebsiteEditor({ searchParams }: {
       <button type="submit">Publicar en la web</button>
     </form>;
   };
-  return <main key={section} style={{ maxWidth: 700, margin: "auto", padding: 16 }}>
-    <Link href="/skbc-interno">Volver al panel</Link>
-    <h1>{isNews ? "Noticias de la web" : "Calendario web"}</h1>
-    <nav style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-      <Link href="?section=news">Noticias</Link><Link href="?section=events">Calendario</Link>
+  return <main key={section} className={styles.editor}>
+    <Link className={styles.back} href="/skbc-interno">← Volver al panel</Link>
+    <header className={styles.header}><p>Web del club</p>
+    <h1>{isNews ? "Noticias de la web" : "Calendario web"}</h1></header>
+    <nav className={styles.tabs} aria-label="Web del club">
+      <Link href="?section=news" aria-current={isNews ? "page" : undefined}>Noticias</Link>
+      <Link href="?section=events" aria-current={!isNews ? "page" : undefined}>Calendario</Link>
     </nav>
-    {params.notice && <p role="status">{params.notice}</p>}
+    {params.notice && <p className={styles.notice} role="status">{params.notice}</p>}
     {!snapshot ? <p role="alert">No se pudo cargar la web desde GitHub. Vuelve a intentarlo.</p> : <>
-      <details><summary>{isNews ? "Nueva noticia" : "Nuevo evento"}</summary>{fields({}, -1)}</details>
+      <details className={styles.create}><summary>{isNews ? "Nueva noticia" : "Nuevo evento"}</summary>{fields({}, -1)}</details>
+      <h2 className={styles.listTitle}>{isNews ? "Noticias guardadas" : "Eventos guardados"}</h2>
       {snapshot.data.settings[section].map((entry, index) => ({ entry, index })).reverse().map(({ entry, index }) =>
-        <details key={snapshot.sha + index}>
-          <summary>{String(entry[isNews ? "date" : "start"] ?? "")} · {entry.languages?.es?.title || "Sin título"}</summary>
+        <details className={styles.card} key={snapshot.sha + index}>
+          <summary>
+            <span><strong>{entry.languages?.es?.title || "Sin título"}</strong>
+              <small>{String(entry[isNews ? "date" : "start"] ?? "")}
+                {entry.enabled === false ? " · Oculto" : isNews && typeof entry.expiresAt === "string" && Date.parse(entry.expiresAt) < Date.now() ? " · Caducada" : ""}
+              </small>
+            </span>
+            <span className={styles.edit}>Editar</span>
+          </summary>
           {fields(entry, index)}
         </details>
       )}

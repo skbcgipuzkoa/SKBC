@@ -1,0 +1,33 @@
+.editor {
+  width: min(100%, 860px);
+  margin-inline: auto;
+  padding: clamp(16px, 4vw, 40px);
+  display: grid;
+  gap: 14px;
+}
+.back { width: fit-content; padding-block: 12px; color: var(--brand-strong); font-weight: 650; }
+.header { padding: clamp(18px, 4vw, 32px); border-radius: 16px; background: var(--brand-dark); color: white; }
+.header p { margin: 0 0 6px; color: #c1d5ed; font-weight: 650; }
+.header h1 { margin: 0; font-size: clamp(1.6rem, 5vw, 2.3rem); }
+.tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.tabs a { padding: 12px; text-align: center; font-weight: 700; border-radius: 8px; }
+.tabs a[aria-current="page"] { color: white; background: var(--brand-strong); }
+.create, .card { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.create summary, .card summary { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; min-height: 48px; list-style: none; }
+.editor summary::-webkit-details-marker { display: none; }
+.create summary { background: var(--brand-strong); color: white; border-radius: 11px; font-weight: 700; }
+.create summary::after { content: "+"; font-size: 1.35rem; }
+.create[open] summary::after { content: "−"; }
+.card summary > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.card small { display: block; margin-top: 5px; color: var(--muted); }
+.edit { color: var(--brand-strong); font-weight: 700; }
+.card[open] summary { border-bottom: 1px solid var(--line); }
+.listTitle { font-size: 1.1rem; margin: 12px 0 0; }
+.form { display: grid; gap: 14px; padding: clamp(14px, 4vw, 22px); }
+.form label { display: grid; gap: 6px; min-width: 0; font-weight: 650; }
+.form input:not([type="checkbox"]), .form textarea { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 1rem; color: var(--ink); background: white; }
+.form .checkbox { display: flex; align-items: center; min-height: 44px; gap: 10px; }
+.language { min-width: 0; display: grid; gap: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 0; }
+.language legend { font-weight: 700; padding-inline: 6px; }
+.form button { min-height: 48px; border: 0; border-radius: 8px; background: var(--brand-strong); color: white; font: inherit; font-weight: 700; padding: 10px 16px; cursor: pointer; }
+.notice { margin: 0; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
