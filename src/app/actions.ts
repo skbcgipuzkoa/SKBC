@@ -69,7 +69,7 @@ function adultClosureProgress(id: string) {
 export async function loginAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
   const returnTo = safeLoginReturn(String(formData.get("returnTo") ?? ""));
-  const validCodes = [process.env.SKBC_INTERNAL_ACCESS_CODE, "SKBC2026"].filter(Boolean);
+  const validCodes = [process.env.SKBC_INTERNAL_ACCESS_CODE ?? (process.env.NODE_ENV === "production" ? undefined : "SKBC2026")].filter(Boolean);
 
   if (!validCodes.includes(code)) {
     const returnQuery = returnTo === "/tesoreria" ? "&returnTo=%2Ftesoreria" : "";
