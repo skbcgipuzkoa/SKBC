@@ -3,7 +3,7 @@ import {loadAllPages} from "@/lib/load-all-pages";
 import {kidsGrades} from "@/lib/grades";
 
 export type IndividualWork={mode:"adjust"|"replace";removedIds:string[];addedIds:string[]};
-export type WorkItem={id:string;name:string;grade:string|null;category:string|null};
+export type WorkItem={id:string;name:string;grade:string|null;category:string|null;content_type?:string|null;variant?:string|null;variant_note?:string|null};
 type Row={attendance_id:string;mode:IndividualWork["mode"];removed_ids:string[];added_ids:string[]};
 type Attendance={id:string;member_id:string;class_id:string;official_grade:string|null;trained_grade:string|null;use_for_history:boolean|null;classes:{id:string;class_group:"kids"|"adults";closed:boolean;status:string|null}|null;members:{class:string}|null};
 const targetedPrefix="SKBC_SYLLABUS_ITEM:";
@@ -57,15 +57,15 @@ async function childContext(row:Attendance) {
 async function adultContext(row:Attendance) {
   const db=createAdminClient();
   const [plan,old,catalog]=await Promise.all([
-    db.from("technical_plans").select("id,technique_id,technique_name,technique_grade,group_grade,category").eq("class_id",row.class_id).eq("completed",true).returns<{id:string;technique_id:string|null;technique_name:string;technique_grade:string|null;group_grade:string|null;category:string|null}[]>(),
+    db.from("technical_plans").select("id,technique_id,technique_name,technique_grade,group_grade,category,techniques(content_type,variant,variant_note)").eq("class_id",row.class_id).eq("completed",true).returns<{id:string;technique_id:string|null;technique_name:string;technique_grade:string|null;group_grade:string|null;category:string|null;techniques:Pick<WorkItem,"content_type"|"variant"|"variant_note">|null}[]>(),
     db.from("attendance_technical_overrides").select("plan_id").eq("attendance_id",row.id).eq("include_in_history",true).returns<{plan_id:string}[]>(),
-    loadAllPages<WorkItem>((from,to)=>db.from("techniques").select("id,name,grade,category").eq("active",true).order("id").range(from,to))
+    loadAllPages<WorkItem>((from,to)=>db.from("techniques").select("id,name,grade,category,content_type,variant,variant_note").eq("active",true).order("id").range(from,to))
   ]);
   if(plan.error||old.error)throw plan.error??old.error;
   const prior=new Set((old.data??[]).map(item=>item.plan_id));
   const grade=normalize(row.trained_grade??row.official_grade);
   const baseline=new Map<string,WorkItem>();
-  for(const item of plan.data??[])if(item.technique_id&&(prior.size?prior.has(item.id):!!grade&&normalize(item.group_grade)===grade))baseline.set(item.technique_id,{id:item.technique_id,name:item.technique_name,grade:item.technique_grade,category:item.category});
+  for(const item of plan.data??[])if(item.technique_id&&(prior.size?prior.has(item.id):!!grade&&normalize(item.group_grade)===grade))baseline.set(item.technique_id,{id:item.technique_id,name:item.technique_name,grade:item.technique_grade,category:item.category,...item.techniques});
   return {blocked:row.use_for_history!==true,baseline:[...baseline.values()],catalog};
 }
 export async function getIndividualWorkEditor(attendanceId:string) {

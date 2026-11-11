@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import "./attendance-individual-work.css";
 
-type Technique = { id: string; name: string; grade: string | null; category: string | null };
+type Technique = { id: string; name: string; grade: string | null; category: string | null; content_type?: string | null; variant?: string | null; variant_note?: string | null };
 type Mode = "adjust" | "replace";
 type Work = {
   mode: Mode;
@@ -18,6 +18,12 @@ type Work = {
 const planFilter = "realizadas-del-plan";
 const endpoint = "/api/classes/individual-work";
 const normalize = (value: string) => value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+
+function techniqueDetails(item: Technique) {
+  const type = (item.content_type ?? item.category ?? "").toLowerCase().replaceAll("_", "-");
+  const kata = type === "kata-tanen" ? "Tan-en (individual)" : type === "kata-sotai" ? "Sotai (en parejas)" : null;
+  return [item.grade, kata ?? item.category, item.variant, item.variant_note].filter(Boolean).join(" · ");
+}
 
 export function AttendanceIndividualWork({ attendanceId, name }: { attendanceId: string; name: string }) {
   const titleId = useId();
@@ -81,6 +87,7 @@ export function AttendanceIndividualWork({ attendanceId, name }: { attendanceId:
         setWork({ ...work, saved: true });
         setNotice("Trabajo técnico guardado.");
       }
+      dialog.current?.close();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se ha podido guardar el trabajo técnico.");
     } finally {
@@ -111,7 +118,7 @@ export function AttendanceIndividualWork({ attendanceId, name }: { attendanceId:
   const candidates = filter === planFilter ? baseline : allTechniques;
   const results = candidates.filter(item =>
     (!filter || filter === planFilter || item.grade === filter) &&
-    normalize([item.name, item.grade, item.category].join(" ")).includes(query)
+    normalize([item.name, techniqueDetails(item)].join(" ")).includes(query)
   );
   const selected = catalog.filter(item => work?.addedIds.includes(item.id));
   const addedCount = work?.addedIds.filter(id => work.mode === "replace" || !baselineIds.has(id)).length ?? 0;
@@ -119,6 +126,7 @@ export function AttendanceIndividualWork({ attendanceId, name }: { attendanceId:
 
   return <>
     <button type="button" className="secondary-button" onClick={open} aria-label={`Trabajo técnico de ${name}`}>Trabajo técnico</button>
+    <span role="status">{notice ? <span className="save-ok">✓ {notice}</span> : null}</span>
     <dialog ref={dialog} className="individual-work-dialog" aria-labelledby={titleId} onCancel={event => { if (busy) event.preventDefault(); }}>
       <header className="individual-work-header">
         <h2 id={titleId}>Trabajo técnico · {name}</h2>
@@ -126,7 +134,6 @@ export function AttendanceIndividualWork({ attendanceId, name }: { attendanceId:
       </header>
       {busy && !work ? <p role="status">Cargando trabajo técnico…</p> : null}
       {error ? <p className="form-error" role="alert">{error}</p> : null}
-      {notice ? <p className="save-ok" role="status">{notice}</p> : null}
       {work ? <>
         {work.closed ? <p className="muted">Para editar, la clase debe estar abierta y la asistencia debe contar para el historial.</p> : null}
         <fieldset className="individual-work-fields" disabled={busy || work.closed}>
@@ -160,7 +167,7 @@ export function AttendanceIndividualWork({ attendanceId, name }: { attendanceId:
                 return <label className="individual-work-choice" key={item.id}>
                   <input type="checkbox" checked={fromPlan ? !work.removedIds.includes(item.id) : work.addedIds.includes(item.id)}
                     onChange={() => toggle(fromPlan ? "removedIds" : "addedIds", item.id)} />
-                  <span>{item.name}<small>{[item.grade, item.category, fromPlan && filter !== planFilter ? "Del plan" : null].filter(Boolean).join(" · ")}</small></span>
+                  <span>{item.name}<small>{[techniqueDetails(item), fromPlan && filter !== planFilter ? "Del plan" : null].filter(Boolean).join(" · ")}</small></span>
                 </label>;
               }) : <p className="muted">{filter === planFilter && !baseline.length
                 ? "El plan no tiene técnicas realizadas para este alumno. Elige un grado para añadir técnicas."
