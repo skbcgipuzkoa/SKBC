@@ -1,3 +1,4 @@
+import { techniqueHistoryName } from "@/lib/technique-variant-label";
 import { CLASS_PHOTO_ALBUM_LIMIT } from "@/lib/class-photo-limits";
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
 import { ClassPhotoAdmin } from "@/components/class-photo-admin";
@@ -64,6 +65,7 @@ type PlanRow = {
   group_grade: string | null;
   target_grade: string | null;
   technique_name: string;
+  content_type: string | null;
   variant: string | null;
   variant_note: string | null;
   category: string | null;
@@ -74,6 +76,9 @@ type PlanRow = {
   notes: string | null;
   score_at_that_moment: number | null;
   techniques: {
+    content_type: string | null;
+    variant: string | null;
+    variant_note: string | null;
     video_url: string | null;
     repetitions: number | null;
     last_trained_on: string | null;
@@ -198,7 +203,7 @@ export default async function ClaseDetailPage({
   const [{ data: plan }, { data: attendance }, { data: groups }, { data: classMembers }, { data: delegateLinks }, { data: dayClasses }, { data: dayMembers }, { data: dayAttendance }, { data: techniqueOptions }] = await Promise.all([
     supabase
       .from("technical_plans")
-      .select("id,legacy_id,group_grade,target_grade,technique_name,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score,summary_es,video_url)")
+      .select("id,legacy_id,group_grade,target_grade,technique_name,content_type,variant,variant_note,category,proposal_type,focus,summary_es,completed,notes,score_at_that_moment,techniques(repetitions,last_trained_on,score,summary_es,video_url,content_type,variant,variant_note)")
       .eq("class_id", clase.id)
       .order("group_grade")
       .order("suggested_order")
@@ -640,7 +645,7 @@ export default async function ClaseDetailPage({
                             defaultChecked={selectedPlanIds.has(item.id)}
                           />
                           <span>
-                            <span className="plan-technique-heading"><strong>{item.technique_name}</strong><TechniqueVideoLink url={item.techniques?.video_url} name={item.technique_name} /></span>
+                            <span className="plan-technique-heading"><strong>{planTechniqueName(item)}</strong><TechniqueVideoLink url={item.techniques?.video_url} name={planTechniqueName(item)} /></span>
                             <small>{item.category ?? "tecnica"} · {item.proposal_type ?? item.focus ?? "programa"}</small>
                             <ExamPreparationNotice focus={item.focus} />
                           </span>
@@ -1274,7 +1279,7 @@ export default async function ClaseDetailPage({
                       {items.map((item) => (
                         <div className={item.completed ? "plan-card completed" : "plan-card"} key={item.id}>
                           <div>
-                            <span className="plan-technique-heading"><strong>{item.technique_name}</strong><TechniqueVideoLink url={item.techniques?.video_url} name={item.technique_name} /></span>
+                            <span className="plan-technique-heading"><strong>{planTechniqueName(item)}</strong><TechniqueVideoLink url={item.techniques?.video_url} name={planTechniqueName(item)} /></span>
                             <span>{item.category ?? "-"} - {item.proposal_type ?? item.focus ?? "-"}</span>
                             <ExamPreparationNotice focus={item.focus} />
                             <small className="plan-reason">
@@ -1288,7 +1293,7 @@ export default async function ClaseDetailPage({
                             </span>
                           ) : (
                             <label className="mini-action">
-                              <input name="planIds" type="checkbox" value={item.id} defaultChecked={item.completed} />
+                              <input name="planIds" type="checkbox" value={item.id} defaultChecked={item.completed} aria-label={`Marcar como realizada: ${planTechniqueName(item)}`} />
                               <Check aria-hidden="true" size={15} />
                               Hecha
                             </label>
@@ -1616,7 +1621,7 @@ function ChildLightPlanPanel({
                       <label key={item.id}>
                         <input name="syllabusItemIds" type="checkbox" value={item.id} defaultChecked={selectedSyllabusItems.has(item.id)} />
                         <span>
-                          <strong>{item.title}</strong>
+                          <strong>{techniqueHistoryName(item.title, item)}</strong>
                           <small>{childSyllabusCategoryLabel(item.category)}</small>
                           {item.description ? <small>{item.description}</small> : null}
                         </span>
@@ -1939,14 +1944,24 @@ function groupPlanByGrade(plan: PlanRow[]) {
   return [...groups.entries()].sort(([gradeA], [gradeB]) => gradeSortValue(gradeA) - gradeSortValue(gradeB));
 }
 
+function planTechniqueName(item: PlanRow) {
+  return techniqueHistoryName(item.technique_name, {
+    category: item.category,
+    content_type: item.content_type || item.techniques?.content_type,
+    variant: item.variant || item.techniques?.variant,
+    variant_note: item.variant_note || item.techniques?.variant_note
+  });
+}
+
 function summarizeManualCommonPlan(plan: PlanRow[]) {
   const grouped = new Map<string, { key: string; ids: string[]; name: string; category: string | null; grades: string[] }>();
   plan.forEach((item) => {
-    const key = `${normalizeGradeLabel(item.technique_name)}::${normalizeGradeLabel(item.category)}`;
+    const name = planTechniqueName(item);
+    const key = `${normalizeGradeLabel(name)}::${normalizeGradeLabel(item.category)}`;
     const current = grouped.get(key) ?? {
       key,
       ids: [],
-      name: item.technique_name,
+      name,
       category: item.category,
       grades: []
     };
