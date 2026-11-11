@@ -40,7 +40,7 @@ export default async function WebsiteEditor({ searchParams }: {
       <button type="submit">Publicar en la web</button>
     </form>;
   };
-  return <main style={{ maxWidth: 700, margin: "auto", padding: 16 }}>
+  return <main key={section} style={{ maxWidth: 700, margin: "auto", padding: 16 }}>
     <Link href="/skbc-interno">Volver al panel</Link>
     <h1>{isNews ? "Noticias de la web" : "Calendario web"}</h1>
     <nav style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
