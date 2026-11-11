@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { hasInternalAccess } from "@/lib/auth";
-import { readWebsite, writeWebsite } from "@/lib/website-content";
+import { readWebsite, writeWebsite, prepareWebsitePhoto } from "@/lib/website-content";
 
 export async function publishWebsite(form: FormData) {
   if (!process.env.SKBC_INTERNAL_ACCESS_CODE || !(await hasInternalAccess())) redirect("/skbc-interno");
@@ -11,7 +11,7 @@ export async function publishWebsite(form: FormData) {
   const target = "/skbc-interno/web?section=" + section;
   let notice = "Cambios enviados a la web pública. Pueden tardar unos minutos en aparecer.";
   try {
-    const { sha, data } = await readWebsite();
+    const { sha, data, head } = await readWebsite();
     if (form.get("sha") !== sha) throw new Error("El contenido cambió. Revisa la versión actual antes de publicar.");
     const entries = data.settings[section];
     const index = Number(form.get("index"));
@@ -39,9 +39,11 @@ export async function publishWebsite(form: FormData) {
     if (isNews && [value("url"), value("image")].some(link => link && !/^(https:\/\/[^\s]+|\/?[a-zA-Z0-9_-][a-zA-Z0-9_./-]*)$/.test(link))) {
       throw new Error("Usa un enlace HTTPS o una ruta de la web.");
     }
+    const photo = isNews ? await prepareWebsitePhoto(form.get("photo")) : undefined;
+    if (photo) Object.assign(updated, { image: photo.path });
     if (index === -1) entries.push(updated);
     else entries[index] = updated;
-    await writeWebsite(sha, data);
+    await writeWebsite(sha, data, head, photo);
   } catch (error) {
     notice = error instanceof Error ? error.message : "No se pudo publicar.";
   }

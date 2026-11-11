@@ -25,6 +25,7 @@ export default async function WebsiteEditor({ searchParams }: {
       {isNews ? <>
         <label>Fecha de caducidad <input type="datetime-local" name="expiresAt" defaultValue={field("expiresAt")} /></label>
         <label>Enlace <input name="url" defaultValue={field("url")} /></label>
+        <label>Subir foto (JPG, PNG o WebP, hasta 3 MB) <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" /></label>
         <label>Dirección de la imagen <input name="image" defaultValue={field("image")} /></label>
       </> : <>
         <label>Fin <input type="date" name="end" defaultValue={field("end")} /></label>
