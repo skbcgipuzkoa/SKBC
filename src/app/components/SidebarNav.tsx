@@ -50,6 +50,7 @@ const sectionItems: NavItem[] = [
 
 const navItems = [
   homeItem,
+  { label: "Web del club", href: "/skbc-interno/web" },
   ...sectionItems.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }))
 ];
 
