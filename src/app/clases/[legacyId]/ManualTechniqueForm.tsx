@@ -1,10 +1,11 @@
 "use client";
 
+import { techniqueHistoryName, type TechniqueVariant } from "@/lib/technique-variant-label";
 import { Search } from "lucide-react";
 import { useFormStatus } from "react-dom";
 import { useMemo, useState, type FormEvent } from "react";
 
-type TechniqueOption = {
+type TechniqueOption = TechniqueVariant & {
   id: string;
   grade: string;
   name: string;
@@ -32,11 +33,11 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
   const selectedTechniques = techniques.filter((technique) => selectedIds.includes(technique.id));
   function toggle(id: string) { setSelectedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : ids.length < 50 ? [...ids, id] : ids); }
   const visibleTechniques = useMemo(() => {
-    const normalized = normalize(query);
-    const filtered = normalized
-      ? techniques.filter((technique) => normalize(`${technique.name} ${technique.grade} ${technique.category ?? ""} ${technique.content_type ?? ""}`).includes(normalized))
-      : techniques;
-    return filtered;
+    const terms = normalize(query).split(/\s+/).filter(Boolean);
+    return techniques.filter((technique) => {
+      const searchable = normalize([techniqueHistoryName(technique.name, technique), technique.grade, technique.category, technique.content_type].join(" "));
+      return terms.every(term => searchable.includes(term));
+    });
   }, [query, techniques]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -60,7 +61,7 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar por nombre, grado o categoria"
+            placeholder="Buscar por nombre, grado o variante"
           />
         </span>
       </label>
@@ -76,8 +77,8 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
                 onClick={() => toggle(technique.id)}
                 type="button"
               >
-                <strong>{technique.name}</strong>
-                <small>{technique.grade} - {formatTechniqueKind(technique)}</small>
+                <strong>{techniqueHistoryName(technique.name, technique)}</strong>
+                <small>{technique.grade} - {technique.category ?? "Técnica"}</small>
               </button>
             ))
           ) : (
@@ -90,8 +91,8 @@ export function ManualTechniqueForm({ action, classId, legacyId, returnTo, techn
       {query.trim() && visibleTechniques.length ? <button type="button" disabled={new Set([...selectedIds, ...visibleTechniques.map((item) => item.id)]).size > 50} onClick={() => setSelectedIds(Array.from(new Set([...selectedIds, ...visibleTechniques.map((item) => item.id)])))}>Seleccionar resultados</button> : null}
       {selectedTechniques.length ? <div className="manual-technique-selected" aria-label="Técnicas seleccionadas">
         {selectedTechniques.map((technique) => <div className="manual-technique-current" key={technique.id}>
-          <span><strong>{technique.name}</strong><small>{technique.grade} - {formatTechniqueKind(technique)}</small></span>
-          <button type="button" aria-label={"Quitar " + technique.name + " de la selección"} onClick={() => toggle(technique.id)}>Quitar</button>
+          <span><strong>{techniqueHistoryName(technique.name, technique)}</strong><small>{technique.grade} - {technique.category ?? "Técnica"}</small></span>
+          <button type="button" aria-label={"Quitar " + techniqueHistoryName(technique.name, technique) + " de la selección"} onClick={() => toggle(technique.id)}>Quitar</button>
         </div>)}
         <button type="button" onClick={() => setSelectedIds([])}>Limpiar selección</button>
       </div> : null}
@@ -118,18 +119,12 @@ function normalize(value: string) {
     .toUpperCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\bUKEMIS\b/g, "UKEMI");
+    .replace(/\bUKEMIS\b/g, "UKEMI")
+    .replace(/[-_]/g, " ");
 }
 
 function slugGrade(grade: string | null | undefined) {
   return String(grade ?? "grado").trim().toLowerCase().replace(/\s+/g, "-");
-}
-
-function formatTechniqueKind(technique: TechniqueOption) {
-  const contentType = normalize(technique.content_type ?? "");
-  if (contentType === "KATA_TANEN") return "kata tanen";
-  if (contentType === "KATA_SOTAI") return "kata sotai";
-  return technique.category ?? "tecnica";
 }
 
 function ManualTechniqueSubmit({ disabled }: { disabled: boolean }) {

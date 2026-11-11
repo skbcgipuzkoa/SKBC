@@ -256,7 +256,7 @@ export default async function ClaseDetailPage({
       .returns<Array<AttendanceRow & { class_id: string }>>(),
     supabase
       .from("techniques")
-      .select("id,grade,name,category,content_type,active")
+      .select("id,grade,name,category,content_type,variant,variant_note,active")
       .eq("active", true)
       .order("grade")
       .order("name")
