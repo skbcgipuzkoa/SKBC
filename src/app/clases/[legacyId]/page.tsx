@@ -1,6 +1,7 @@
 import { techniqueHistoryName } from "@/lib/technique-variant-label";
 import { CLASS_PHOTO_ALBUM_LIMIT } from "@/lib/class-photo-limits";
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
+import { ClassPhotoShortcut } from "@/components/class-photo-shortcut";
 import { ClassPhotoAdmin } from "@/components/class-photo-admin";
 import { AttendanceIndividualWork } from "@/components/attendance-individual-work";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
@@ -893,6 +894,13 @@ export default async function ClaseDetailPage({
               </button>
             </form>
           </div>
+        </div>
+
+        <div className="class-photo-actions" aria-label="Añadir fotos de la clase">
+          {clase.class_group === "adults" && kidsDayClass?.legacy_id ? (
+            <ClassPhotoShortcut classId={kidsDayClass.id} label="Añadir fotos · Niños" />
+          ) : null}
+          <ClassPhotoShortcut classId={clase.id} label={clase.class_group === "kids" ? "Añadir fotos · Niños" : "Añadir fotos · Adultos"} />
         </div>
 
         {query.saved === "plan" ? <p className="save-ok">Plan tecnico generado.</p> : null}

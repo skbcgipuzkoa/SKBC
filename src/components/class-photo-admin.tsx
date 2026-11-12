@@ -12,6 +12,8 @@ export async function ClassPhotoAdmin({ classId, legacyId }: { classId: string; 
     const { album, photos } = await getClassPhotoAdmin(classId);
     return <section className="class-photos" id={`fotos-clase-${classId}`}><h2>Fotos del entrenamiento</h2>
       <ClassPhotoUploader classId={classId} />
+      <details>
+      <summary>Gestionar álbum y carpeta de Drive</summary>
       <ClassPhotoGoogleConnection />
       <p><a className="text-link" href={`https://drive.google.com/drive/folders/${encodeURIComponent(CLASS_PHOTO_ROOT_FOLDER_ID)}`} target="_blank" rel="noopener noreferrer">Abrir carpeta de entrenamientos</a></p>
       {!album ? <><p className="muted">La carpeta se crea al subir la primera foto. Si prefieres subirlas directamente a Drive, prepárala aquí. Se organiza por año y mes.</p><form action={createClassPhotoAlbumAction}><input type="hidden" name="classId" value={classId} /><button type="submit">Preparar carpeta en Drive</button></form></> : <>
@@ -29,6 +31,7 @@ export async function ClassPhotoAdmin({ classId, legacyId }: { classId: string; 
           <p className="muted">Publicar muestra solo las fotos seleccionadas y este texto a las familias autorizadas por su ficha. Retirar oculta la publicación y conserva los archivos privados de Drive.</p>
         </form>
       </>}
+      </details>
     </section>;
   } catch {
     return <section className="class-photos" id={`fotos-clase-${classId}`}><h2>Fotos del entrenamiento</h2><p className="form-error" role="alert">No se pueden cargar las fotos ahora. Vuelve a intentarlo más tarde.</p><p><a href={`https://drive.google.com/drive/folders/${encodeURIComponent(CLASS_PHOTO_ROOT_FOLDER_ID)}`} target="_blank" rel="noopener noreferrer">Abrir carpeta de entrenamientos</a></p></section>;
