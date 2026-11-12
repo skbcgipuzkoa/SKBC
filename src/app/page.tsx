@@ -443,11 +443,19 @@ export function LoginHome({ error, returnTo }: { error?: string; returnTo?: stri
               <PasswordField id="code" name="code" autoComplete="current-password" required />
               <button type="submit">Entrar</button>
             </div>
-            <p className="login-help">
-              Si no recuerdas el codigo, revisa la variable <strong>SKBC_INTERNAL_ACCESS_CODE</strong> en Vercel.
-            </p>
-            {error ? <p className="form-error">Codigo incorrecto.</p> : null}
+            {error ? <p className="form-error" role="alert">Código incorrecto. Si sigue fallando, abre la ayuda de acceso.</p> : null}
           </form>
+          <details className="login-help">
+            <summary>¿No puedes entrar?</summary>
+            <p>Para recuperar el acceso necesitas entrar en la cuenta de Vercel que administra el proyecto SKBC.</p>
+            <ol>
+              <li>En <a href="https://vercel.com/dashboard">Vercel</a>, abre <strong>skbc → Settings → Environment Variables</strong>.</li>
+              <li>Busca <strong>SKBC_INTERNAL_ACCESS_CODE</strong> en <strong>Production</strong>. Si el campo <strong>Value</strong> aparece en blanco al editar un <strong>Secret</strong>, Vercel está ocultando el valor guardado.</li>
+              <li>Si no recuerdas el código, introduce uno nuevo en <strong>Value</strong> y pulsa <strong>Save</strong>. Si falta la variable, créala como <strong>Secret</strong> para <strong>Production</strong>.</li>
+              <li>En <strong>Deployments</strong>, abre el menú del último despliegue de producción y pulsa <strong>Redeploy</strong>. Cuando aparezca <strong>Ready</strong>, vuelve aquí y entra con el código nuevo.</li>
+            </ol>
+            <p>Si no tienes acceso a Vercel, pide ayuda a la persona que administra el proyecto.</p>
+          </details>
         </section>
       </main>
     </div>
