@@ -67,7 +67,7 @@ async function request(url:string,init:RequestInit={}) {
   aborted(signal);
   const entry = driveToken();
   try {
-    const token = await abortable(entry.promise,signal);
+    const token = await abortable(entry.promise,signal).catch(() => fail("credentials"));
     aborted(signal);
     const headers = new Headers(init.headers);
     headers.set('authorization',`Bearer ${token}`);

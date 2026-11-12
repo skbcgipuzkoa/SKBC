@@ -47,8 +47,10 @@ export async function uploadClassPhotoBatch(files: File[], classId: string, onPr
       const optimized = await optimizeClassPhoto(file);
       const body = new FormData(); body.set("photo", optimized);
       const response = await fetch(`/api/class-photos/${encodeURIComponent(classId)}/upload`, { method: "POST", credentials: "same-origin", body });
-      if (!response.ok) throw new Error("No se pudo confirmar la subida. Revisa la lista antes de volver a intentarlo para evitar duplicados.");
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(typeof data?.error === "string" ? data.error : "No se pudo confirmar la subida. Revisa el álbum antes de volver a intentarlo.");
+      }
       if (!data?.id || !data?.name) throw new Error("La subida no se ha confirmado. Revisa la lista de fotos antes de repetirla.");
       results.push({ file, ok: true, ...(data.published===false ? {error:"Guardada en Drive, pero no se pudo publicar. Usa las opciones del álbum para publicarla; no vuelvas a subirla."} : {}) }); uploaded++;
     } catch (error) { results.push({ file, ok: false, error: error instanceof Error && !/fetch|network/i.test(error.message) ? error.message : "No se pudo confirmar la subida. Revisa la lista de fotos antes de repetirla." }); }

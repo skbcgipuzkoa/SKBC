@@ -34,5 +34,18 @@ export async function POST(request:Request,{params}:{params:Promise<{classId:str
     const saved=await uploadClassPhoto(classId,{name:file.name,mimeType:file.type,bytes:new Uint8Array(await file.arrayBuffer())});
     revalidatePath(`/clases/${encodeURIComponent(saved.legacyId)}`);
     return Response.json({id:saved.photo.id,name:saved.photo.name,published:saved.published},{headers});
-  } catch { return result(400,"No se pudo subir la foto. Comprueba el formato y vuelve a intentarlo."); }
+  } catch (error) {
+    if (error && typeof error === "object" && "photoDriveStage" in error) {
+      const status = "photoDriveStatus" in error ? error.photoDriveStatus : null;
+      console.error("Class photo upload failed in Drive", { stage: error.photoDriveStage, status });
+      if (error.photoDriveStage === "credentials" || status === 401) {
+        return result(503,"SKBC no ha podido conectarse a Google Drive. Revisa la conexión de Drive del sistema.");
+      }
+      if (status === 403 || status === 404) {
+        return result(503,"Google Drive ha rechazado el acceso a la carpeta. Revisa los permisos y el espacio disponible.");
+      }
+      return result(503,"Google Drive no ha confirmado la subida. Revisa el álbum antes de volver a intentarlo.");
+    }
+    return result(400,"No se pudo subir la foto. Comprueba el formato y vuelve a intentarlo.");
+  }
 }
