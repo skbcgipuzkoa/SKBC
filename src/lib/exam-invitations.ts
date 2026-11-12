@@ -706,7 +706,7 @@ export type StudentExamInvitation = {
   dateConfirmed: boolean;
   callMonth: string;
 };
-type ApprovalScope = ExamInvitation & {
+export type ApprovalScope = ExamInvitation & {
   exam_events: {
     exam_date: string;
     status: string;

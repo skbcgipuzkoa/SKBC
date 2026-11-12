@@ -295,9 +295,9 @@ export async function updateTelegramNotificationSetting(
 }
 
 async function loadNextTelegramExamOutlooks() {
-  const [outlooks, calls] = await Promise.all([loadExamOutlooks(), getUpcomingExamCalls()]);
+  const [outlooks, calls] = await Promise.all([loadExamOutlooks({ includeNotificationReadiness: true }), getUpcomingExamCalls()]);
   const nextDate = calls[0]?.call_date;
-  return nextDate ? [...outlooks.values()].filter((row) => row.callDate === nextDate) : [];
+  return [...outlooks.values()].filter(row => row.notificationReady || row.notificationApproval || (nextDate && row.callDate === nextDate));
 }
 
 async function buildDailyDigest() {

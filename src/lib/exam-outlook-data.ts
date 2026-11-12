@@ -1,3 +1,5 @@
+import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
+import type { ApprovalScope } from "@/lib/exam-invitations";
 import {
   findDeferredExamCall,
   type DeferredExamInvitationRow,
@@ -20,6 +22,12 @@ import {
   type OutlookClosure,
 } from "@/lib/exam-outlook";
 
+type NotificationMember = OutlookMember & {
+  semaphore: string | null;
+  exam_notice: string | null;
+  attendance_count: number | null;
+  minimum_attendance: number | null;
+};
 type Course = { member_id: string; kind: string; course_date: string };
 /** Read-only: one stable paginated scan per source, never a member-by-member query loop. */
 export async function loadExamOutlooks(
@@ -28,20 +36,21 @@ export async function loadExamOutlooks(
     now?: Date;
     horizonDays?: number;
     examDateOverride?: string;
+    includeNotificationReadiness?: boolean;
   } = {},
 ): Promise<Map<string, ExamOutlook>> {
   const db = createAdminClient(),
     today = madridToday(options.now);
   if (options.memberIds?.length === 0) return new Map();
-  const members = await loadAllPages<OutlookMember>((from, to) => {
+  const members = await loadAllPages<NotificationMember>((from, to) => {
     let q = db
       .from("members")
       .select(
-        "id,display_name,legacy_id,class,status,grade,joined_on,last_exam_on",
+        "id,display_name,legacy_id,class,status,grade,joined_on,last_exam_on,semaphore,exam_notice,attendance_count,minimum_attendance",
       )
       .eq("status", "active");
     if (options.memberIds) q = q.in("id", options.memberIds);
-    return q.order("id").range(from, to).returns<OutlookMember[]>();
+    return q.order("id").range(from, to).returns<NotificationMember[]>();
   });
   if (!members.length) return new Map();
   const cycleAttributions = await loadExamCycleAttributions(
@@ -72,6 +81,7 @@ export async function loadExamOutlooks(
     closures,
     courses,
     deferrals,
+    approvals,
   ] = await Promise.all([
     loadScoped<{ member_id: string; attended_on: string }>((ids, f, t) =>
       db
@@ -96,13 +106,13 @@ export async function loadExamOutlooks(
         .range(f, t)
         .returns<OutlookHistory[]>(),
     ),
-    loadAllPages<OutlookTechnique>((f, t) =>
+    loadAllPages<OutlookTechnique & { active: boolean }>((f, t) =>
       db
         .from("techniques")
-        .select("id,name,category,content_type,grade")
+        .select("id,name,category,content_type,grade,active")
         .order("id")
         .range(f, t)
-        .returns<OutlookTechnique[]>(),
+        .returns<(OutlookTechnique & { active: boolean })[]>(),
     ),
     loadAllPages<OutlookRequirement>((f, t) =>
       db
@@ -157,7 +167,14 @@ export async function loadExamOutlooks(
         .range(f, t)
         .returns<DeferredExamInvitationRow[]>(),
     ),
+    options.includeNotificationReadiness
+      ? loadScoped<ApprovalScope>((ids, f, t) => db.from("exam_invitations")
+        .select("id,member_id,response,revoked_at,teacher_approved_at,teacher_approved_by,teacher_approved_exam_date,snapshot,exam_events(exam_date,status,title,date_confirmed,call_month),members(grade,class,status)")
+        .in("member_id", ids).gte("teacher_approved_exam_date", today)
+        .is("revoked_at", null).order("id").range(f,t).returns<ApprovalScope[]>())
+      : Promise.resolve([]),
   ]);
+  const approvalValid = approvals.length ? (await import("@/lib/exam-invitations")).isExamInvitationApprovalValid : null;
   const horizonEnd = new Date(
     new Date(today + "T00:00:00Z").getTime() +
       (options.horizonDays ?? 365) * 86400000,
@@ -199,6 +216,7 @@ export async function loadExamOutlooks(
   const attendanceByMember = byMember(attendance),
     historyByMember = byMember(history),
     coursesByMember = byMember(courses);
+  const approvalsByMember = byMember(approvals);
   return new Map(
     members.map((member) => {
       const groupClasses = scheduledClasses.filter(
@@ -296,7 +314,62 @@ export async function loadExamOutlooks(
           calls.find((c) => examCallMonthEnd(c.call_date) === outlook.callDate)
             ?.call_date ?? outlook.callDate;
       }
+      if (options.includeNotificationReadiness) {
+        const approved = (approvalsByMember.get(member.id) ?? [])
+          .filter(row => row.response !== "deferred" && approvalValid?.(row, options.now))
+          .sort((a, b) => a.exam_events!.exam_date.localeCompare(b.exam_events!.exam_date))[0];
+        if (approved?.exam_events) outlook.notificationApproval = {
+          date: approved.exam_events.exam_date,
+          targetGrade: approved.snapshot.targetGrade,
+          confirmed: approved.exam_events.date_confirmed !== false
+        };
+        outlook.notificationReady = member.class === "adults"
+          ? hasFourCompleteCriteria(member, outlook.targetGrade, curriculum, evaluation.history, evaluation.attendance, today)
+          : String(member.semaphore ?? "").trim().toUpperCase() === "VERDE";
+      }
       return [member.id, outlook];
     }),
   );
+}
+
+function hasFourCompleteCriteria(
+  member: NotificationMember,
+  targetGrade: string | null,
+  curriculum: (OutlookTechnique & { active: boolean })[],
+  history: OutlookHistory[],
+  attendance: string[],
+  today: string,
+) {
+  const normalize = (value: string) => value.trim().toUpperCase();
+  const program = curriculum.filter(item => item.active && item.grade === targetGrade);
+  const nameCounts = new Map<string, number>();
+  for (const item of program) {
+    const name = normalize(item.name);
+    nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+  }
+  const repetitions = new Map<string, number>();
+  for (const row of history) {
+    if (!row.completed || !row.counts_as_progression) continue;
+    const key = row.technique_id ? "id:" + row.technique_id : "name:" + normalize(row.technique_name);
+    repetitions.set(key, (repetitions.get(key) ?? 0) + 1);
+  }
+  const fundamentalRepetitions = program
+    .filter(item => ["GOHO", "JUHO"].includes(normalize(item.category ?? "")))
+    .map(item => repetitions.get("id:" + item.id) ??
+      (nameCounts.get(normalize(item.name)) === 1 ? repetitions.get("name:" + normalize(item.name)) : 0) ?? 0);
+  const ages = [...new Set(attendance)].map(date => (Date.parse(today) - Date.parse(date)) / 86400000);
+  const panel = buildAdultExamStatusPanel({
+    semaphore: member.semaphore,
+    nextExamOn: null,
+    totalCycleSessions: null,
+    examNotice: member.exam_notice,
+    attendanceCount: member.attendance_count,
+    minimumAttendance: member.minimum_attendance,
+    fundamentalRepetitions,
+    progressRepetitionGoal: 3,
+    recentAttendance60: ages.filter(days => days >= 0 && days <= 60).length,
+    recentAttendance21: ages.filter(days => days >= 0 && days <= 21).length,
+    currentOn: today
+  });
+  return panel.criteria.every(criterion => criterion.tone === "complete");
 }

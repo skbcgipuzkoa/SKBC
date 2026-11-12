@@ -4,28 +4,38 @@ import { formatExamCallMonth } from "./exam-call.ts";
 /** Telegram HTML: never render user-controlled names or projection details as markup. */
 export function formatTelegramExamOutlooks(outlooks: ExamOutlook[]) {
   const ordered = [...outlooks].sort((a, b) => (a.callDate ?? "9999").localeCompare(b.callDate ?? "9999") || a.name.localeCompare(b.name, "es"));
-  const eligible = ordered.filter(row => row.feasibility !== "impossible");
-  const ready = eligible.filter(row => row.currentReady && row.candidate);
-  const projected = eligible.filter(row => !row.currentReady && row.candidate && row.classification === "projected");
-  const preparation = eligible.filter(row => !row.currentReady && row.candidate && row.classification !== "projected");
+  const isReady = (row: ExamOutlook) => Boolean(row.notificationApproval || (row.notificationReady ?? (row.currentReady && row.candidate && row.feasibility !== "impossible")));
+  const ready = ordered.filter(isReady);
+  const eligible = ordered.filter(row => !isReady(row) && row.feasibility !== "impossible");
+  const projected = eligible.filter(row => row.candidate && row.classification === "projected");
+  const preparation = eligible.filter(row => row.candidate && row.classification !== "projected");
   const followUp = eligible.filter(row => !row.candidate);
-  const impossible = ordered.filter(row => row.feasibility === "impossible");
+  const impossible = ordered.filter(row => !isReady(row) && row.feasibility === "impossible");
   const section = (title: string, rows: ExamOutlook[], empty: string) => [
     `<b>${title} (${rows.length})</b>`,
-    ...(rows.length ? rows.slice(0, 12).map(formatRow) : [empty]),
+    ...(rows.length ? rows.slice(0, 12).map(row => isReady(row) ? formatReadyRow(row) : formatRow(row)) : [empty]),
     ...(rows.length > 12 ? [`Y ${rows.length - 12} más; consulta el detalle en Próximos exámenes.`] : [])
   ].join("\n");
   return [
     "🎓 <b>Exámenes · situación actual y previsión</b>",
     ...(ordered[0]?.evidence.windowEnd ? [`<i>Cálculo a ${ordered[0].evidence.windowEnd.split("-").reverse().join("/")}</i>`] : []),
     "La previsión se recalcula con los registros actuales, aunque el resumen corresponda a un periodo anterior. No concede aptitud ni sustituye la revisión del profesor.",
-    section("🟢 Cumplen requisitos registrados hoy", ready, "Ninguno ahora mismo."),
+    section("🟢 Aptos hoy", ready, "Ninguno ahora mismo."),
     section("🔵 Posibles candidatos · podrían llegar con su ritmo actual", projected, "Ninguno con una proyección favorable respaldada por datos."),
     section("🟣 Candidatos para preparar · necesitan refuerzo o revisión", preparation, "Sin otros candidatos cercanos a preparar."),
     section("⛔ No llegan con las clases previstas", impossible, "Ningún caso matemáticamente bloqueado con el calendario actual."),
     section("🟠 Seguimiento · faltan datos o preparación", followUp, "Sin otros casos en seguimiento."),
     "Las estimaciones dependen de mantener la asistencia y trabajar los contenidos pendientes. Revisa los casos con poco margen antes de avisar."
   ].join("\n\n");
+}
+
+function formatReadyRow(row: ExamOutlook) {
+  const approval = row.notificationApproval;
+  const target = approval?.targetGrade ?? row.targetGrade;
+  const status = approval
+    ? "Autorizado por el profesor · " + (approval.confirmed ? approval.date.split("-").reverse().join("/") : formatExamCallMonth(approval.date) + " · día pendiente de confirmar")
+    : row.memberClass === "adults" ? "Cuatro apartados en verde." : "Semáforo verde.";
+  return `• <b>${escape(row.name)}</b> (${row.memberClass === "kids" ? "niños" : "adultos"} · objetivo ${escape(target || "por revisar")})\n  ${status}`;
 }
 
 function formatRow(row: ExamOutlook) {

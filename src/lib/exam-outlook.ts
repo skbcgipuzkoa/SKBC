@@ -41,6 +41,8 @@ export type OutlookClosure = {
   applies_to: string;
 };
 export type ExamOutlook = {
+  notificationReady?: boolean;
+  notificationApproval?: { date: string; targetGrade: string; confirmed: boolean };
   deferredFromCall?: string | null;
   memberId: string;
   name: string;

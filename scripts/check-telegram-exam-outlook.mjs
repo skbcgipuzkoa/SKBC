@@ -27,6 +27,16 @@ assert.match(deferredMessage,/Aplazado desde Diciembre de 2026/);
 assert.match(deferredMessage,/pendiente de nueva convocatoria del profesor/);
 assert.doesNotMatch(impossible,/necesita refuerzo\./);
 
+const actualReadiness = formatTelegramExamOutlooks([
+  {...row, name:'Cuatro apartados', notificationReady:true, candidate:false, feasibility:'impossible'},
+  {...row, name:'Autorización manual', notificationReady:false, notificationApproval:{date:'2026-12-12',targetGrade:'3 KYU',confirmed:true}},
+  {...row, name:'Solo proyección', notificationReady:false}
+]);
+assert.match(actualReadiness,/Aptos hoy \(2\)/);
+assert.match(actualReadiness,/ritmo actual \(1\)/);
+assert.match(actualReadiness,/Autorizado por el profesor · 12\/12\/2026/);
+assert.match(actualReadiness,/No llegan con las clases previstas \(0\)/);
+
 // Exercise the actual dispatch function: every scheduled report includes the same new outlook.
 const source=readFileSync('src/lib/telegram-notifications.ts','utf8');
 const nextStart=source.indexOf('async function loadNextTelegramExamOutlooks(');
