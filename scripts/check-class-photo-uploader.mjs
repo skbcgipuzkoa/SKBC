@@ -24,8 +24,18 @@ const hookReact={useState(initial){const i=cursor++;if(!(i in state))state[i]=in
 const handlers=load('src/components/class-photo-uploader.tsx',{'react':hookReact,'next/navigation':{useRouter:()=>({refresh(){refreshes++;}})},'@/lib/class-photo-client':{uploadClassPhotoBatch:async()=>{uploads++;return await new Promise(resolve=>finish=resolve);}}});
 const render=()=>{cursor=0;refCursor=0;return handlers.ClassPhotoUploader({classId:'class-id'});};
 function find(node,type){if(!node||typeof node!=='object')return null;if(node.type===type)return node;for(const child of [node.props?.children].flat(Infinity)){const result=find(child,type);if(result)return result;}return null;}
-let tree=render();find(tree,'input').props.onChange({target:{files:[photo,photo]}});tree=render();refs[0].current={value:'selected'};const first=find(tree,'button').props.onClick();await find(tree,'button').props.onClick();assert.equal(uploads,1,'Synchronous lock prevents double upload');finish([{file:photo,ok:true},{file:photo,ok:false,error:'Synthetic failure'}]);await first;assert.equal(refreshes,1);assert.equal(state[0].length,1,'Only failed files remain selected');assert.equal(refs[0].current.value,'selected','Partial failure does not clear input');assert.equal(uploads,1,'No automatic retry');
-tree=render();const retry=find(tree,'button').props.onClick();finish([{file:photo,ok:true}]);await retry;assert.equal(refs[0].current.value,'');assert.equal(state[0].length,0);assert.equal(refreshes,2);
+let tree=render();
+const picker={files:[photo,photo],value:'selected'};
+find(tree,'input').props.onChange({target:picker});
+find(tree,'input').props.onChange({target:picker});
+assert.equal(uploads,1,'Choosing photos starts upload immediately and locks the batch');
+finish([{file:photo,ok:true},{file:photo,ok:false,error:'Synthetic failure'}]);
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(refreshes,1);
+assert.equal(state[0].length,1,'Only failed files remain for retry');
+assert.equal(picker.value,'','The same file can be selected again');
+assert.equal(uploads,1,'No automatic retry');
+tree=render();const retry=find(tree,'button').props.onClick();finish([{file:photo,ok:true}]);await retry;assert.equal(state[0].length,0);assert.equal(refreshes,2);
 console.log('Class photo uploader passed: compression dimensions/size/limits, HEIC feedback, sequential authenticated uploads, SSR, busy lock, failure retention and refresh.');
 
 assert.equal((await client.uploadClassPhotoBatch(Array(25).fill(photo),'class-id',()=>{})).length,25,'Uploads beyond the old limit must work');
