@@ -49,11 +49,12 @@ export async function saveClassPhotosAction(form: FormData) {
   redirect(`${path}?photoSaved=${intent}#fotos-clase`);
 }
 
-export async function syncClassPhotosAction(form:FormData) {
-  if(!(await hasInternalAccess()))redirect("/skbc-interno");
-  let path:string;let blocked=0;let full=false;let pending=false;
-  try {const result=await syncClassPhotosForAdmin(classId(form));path=destination(result.legacyId);blocked=result.blocked;full=result.limitReached;pending=result.pending;}
-  catch {redirect(await failurePath(form));}
-  revalidatePath(path);revalidatePath("/ficha","layout");
-  redirect(`${path}?photoSaved=sync${blocked?"&photoSyncBlocked=1":""}${full?"&photoSyncFull=1":""}${pending?"&photoSyncPending=1":""}#fotos-clase`);
+export async function syncClassPhotosAction(id: string) {
+  if (!(await hasInternalAccess())) throw new Error("Acceso interno requerido.");
+  const result = await syncClassPhotosForAdmin(id);
+  if (result.added) {
+    revalidatePath(destination(result.legacyId));
+    revalidatePath("/ficha", "layout");
+  }
+  return { added: result.added, blocked: result.blocked, pending: result.pending, limitReached: result.limitReached };
 }

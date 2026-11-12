@@ -1,8 +1,9 @@
 import { CLASS_PHOTO_ALBUM_LIMIT } from "@/lib/class-photo-limits";
 import { getClassPhotoAdmin } from "@/lib/class-photos";
 import { CLASS_PHOTO_ROOT_FOLDER_ID } from "@/lib/class-photo-drive";
-import { createClassPhotoAlbumAction, syncClassPhotosAction, saveClassPhotosAction } from "@/app/clases/photo-actions";
+import { createClassPhotoAlbumAction, saveClassPhotosAction } from "@/app/clases/photo-actions";
 import { ClassPhotoGoogleConnection } from "@/components/class-photo-google-connection";
+import { ClassPhotoSyncButton } from "@/components/class-photo-sync-button";
 import { ClassPhotoUploader } from "@/components/class-photo-uploader";
 import "@/app/class-photos.css";
 
@@ -15,7 +16,7 @@ export async function ClassPhotoAdmin({ classId, legacyId }: { classId: string; 
       <p><a className="text-link" href={`https://drive.google.com/drive/folders/${encodeURIComponent(CLASS_PHOTO_ROOT_FOLDER_ID)}`} target="_blank" rel="noopener noreferrer">Abrir carpeta de entrenamientos</a></p>
       {!album ? <><p className="muted">La carpeta se crea al subir la primera foto. Si prefieres subirlas directamente a Drive, prepárala aquí. Se organiza por año y mes.</p><form action={createClassPhotoAlbumAction}><input type="hidden" name="classId" value={classId} /><button type="submit">Preparar carpeta en Drive</button></form></> : <>
         <p><a className="text-link" href={`https://drive.google.com/drive/folders/${encodeURIComponent(album.folderId)}`} target="_blank" rel="noopener noreferrer">Abrir carpeta privada de esta clase en Drive</a> · <a className="text-link" href={`/clases/${encodeURIComponent(legacyId)}#fotos-clase`}>Actualizar archivos</a></p>
-        <form action={syncClassPhotosAction}><input type="hidden" name="classId" value={classId} /><button type="submit" className="secondary-button">Sincronizar fotos de Drive ahora</button></form>
+        <ClassPhotoSyncButton classId={classId} />
         <p className="muted">Las fotos nuevas de esta carpeta se incorporan automáticamente al abrir la ficha y en la revisión diaria. Solo las ven los asistentes. Máximo {CLASS_PHOTO_ALBUM_LIMIT} fotos por clase.</p>
         <p className="class-photo-state">{album.published ? `Publicado en las fichas · ${album.published.photoIds.length} fotos. Los cambios del borrador requieren volver a publicar.` : "Borrador privado · todavía no publicado en las fichas."}</p>
         <form action={saveClassPhotosAction}>
