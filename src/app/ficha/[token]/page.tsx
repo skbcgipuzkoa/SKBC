@@ -576,6 +576,8 @@ function AdultFicha({
         <a href={`/alumno/consulta-tecnica?maxGrade=${encodeURIComponent(technicalProgress.targetGrade || member.grade || "MINARAI")}&returnTo=${encodeURIComponent(fichaUrl)}`} target="_blank"><Library aria-hidden="true" size={18} />CONSULTAR TECNICAS<ExternalLink aria-hidden="true" size={15} /></a>
       </section>
 
+      <ClassPhotoHistory fichaToken={fichaToken} />
+
       <section className="ficha-section">
         <h2>Datos del kenshi</h2>
         <div className="adult-grade-badges">
@@ -728,7 +730,6 @@ function AdultFicha({
         {!technicalProgress.details.length ? <p className="ficha-card">Sin técnicas cargadas para el grado objetivo.</p> : null}
       </FoldableSection>
 
-      <ClassPhotoHistory fichaToken={fichaToken} />
       <FoldableSection title="Historial tecnico global" meta={`${fullTechnicalHistory.totalRepetitions} practicas acumuladas · ${fullTechnicalHistory.techniques.length} tecnicas`}>
         <div className="ficha-card global-technical-summary">
           <div>
