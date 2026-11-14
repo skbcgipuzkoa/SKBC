@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const derive = promisify(scrypt);
 const cookieName = "skbc_anandi_access";
-const lifetime = 8 * 3600;
+const lifetime = 365 * 24 * 60 * 60;
 const slug = "anandi";
 const tokenPattern = /^[a-f0-9]{64}$/;
 
