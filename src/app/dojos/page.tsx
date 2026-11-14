@@ -7,6 +7,13 @@ import { redirect } from "next/navigation";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const dojoStatuses = {
+  active: "Activo",
+  inactive: "Inactivo",
+  paused: "En pausa",
+  under_construction: "En construcción"
+} as const;
+
 async function createDojo(form: FormData) {
   "use server";
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
@@ -65,6 +72,8 @@ async function saveDojoDetails(slug: string, form: FormData) {
   const name = field("name");
   const back = "/dojos?edit=" + encodeURIComponent(slug);
   if (!name || name.length > 100 || (count !== null && !/^\d{1,6}$/.test(count))) redirect(back + "&error=ficha");
+  const operationalStatus = field("operational_status");
+  if (!operationalStatus || !Object.hasOwn(dojoStatuses, operationalStatus)) redirect(back + "&error=ficha");
   const color = field("color");
   const memberId = field("sensei_member");
   const photo = field("sensei_photo");
@@ -76,7 +85,7 @@ async function saveDojoDetails(slug: string, form: FormData) {
   const member = linked?.data;
   const { error } = await db.from("dojos").update({
     training_schedule: field("training_schedule")?.slice(0, 1000) ?? null,
-    accent_color: color, sensei_member_id: memberId,
+    operational_status: operationalStatus, accent_color: color, sensei_member_id: memberId,
     sensei_photo_url: member ? member.photo_url : photo,
     name, opened_on: slug === "gainberri" ? gainberriTrainingStart : field("opened_on"), location: field("location"), sensei: member ? member.display_name : field("sensei"),
     contact: member ? [member.student_phone, member.family_email].filter(Boolean).join(" · ") || null : field("contact"), notes: field("notes"), opening_members: count === null ? null : Number(count)
@@ -91,7 +100,7 @@ export default async function DojosPage({ searchParams }: {
   const access = await readAnandiAccess();
   const { error: formError, close, edit, saved } = await searchParams;
   const { data, error } = await createAdminClient().from("dojos")
-    .select("slug,name,accent_color,archived_at,registered_at,opened_on,location,sensei,contact,notes,opening_members,sensei_member_id,sensei_photo_url,internal_id,training_schedule").order("name");
+    .select("slug,name,accent_color,archived_at,registered_at,opened_on,location,sensei,contact,notes,opening_members,sensei_member_id,sensei_photo_url,internal_id,training_schedule,operational_status").order("name");
   if (error) throw error;
 
   const selected = data.find((dojo) => dojo.slug === close && !dojo.archived_at && dojo.slug !== "gainberri");
@@ -133,7 +142,7 @@ export default async function DojosPage({ searchParams }: {
       <div className={styles.grid}>
         {data.map((dojo) => (
           <article key={dojo.slug} className={styles.dojo} style={{ borderTopColor: dojo.accent_color }}>
-            <span className={styles.status}>{dojo.archived_at ? "Archivado" : "Activo"}</span>
+            <span className={styles.status}>{dojo.archived_at ? "Archivado" : dojoStatuses[dojo.operational_status as keyof typeof dojoStatuses]}</span>
             <h2>{dojo.name}</h2>
             {dojo.location && <p>{dojo.location}</p>}
             {dojo.sensei && <p className={styles.sensei}>
@@ -169,6 +178,11 @@ export default async function DojosPage({ searchParams }: {
           <label>Nombre <input name="name" required maxLength={100} defaultValue={editable.name} /></label>
           {editable.slug === "gainberri" ? <p>Entrenamos en Gainberri desde el {formatMilestoneDate(gainberriTrainingStart)}</p> : <label>Fecha de apertura <input name="opened_on" type="date" defaultValue={editable.opened_on ?? ""} /></label>}
           <label>Lugar o dirección <input name="location" maxLength={240} defaultValue={editable.location ?? ""} /></label>
+          <label>Estado
+            <select name="operational_status" defaultValue={editable.operational_status}>
+              {Object.entries(dojoStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
           <label>Color <input name="color" type="color" defaultValue={editable.accent_color} /></label>
           <DojoSenseiFields key={editable.slug} members={senseiOptions} initial={{
             id: editable.sensei_member_id ?? "", name: editable.sensei ?? "",
