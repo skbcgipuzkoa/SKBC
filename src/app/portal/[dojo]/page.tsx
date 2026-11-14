@@ -30,7 +30,11 @@ export default async function DojoPortal({ params, searchParams }: {
       <header className={styles.hero}>
         <div className={styles.brand}>
           {dojo.slug === "anandi" && <Image className={styles.logo} src="/skbc-icon.png" alt="" width={96} height={96} sizes="(max-width: 480px) 52px, 96px" />}
-          <div><p>SKBC Gipuzkoa</p><h1>{dojo.name}</h1></div>
+          <div>
+            <p>SKBC Gipuzkoa</p>
+            <h1>{dojo.name}</h1>
+            {dojo.slug === "anandi" && <span className={styles.dojoLabel}>Dojo</span>}
+          </div>
         </div>
         <a href={`/portal/${dojo.slug}/clases`}><CalendarDays size={19} /> Ver clases <ArrowUpRight size={17} /></a>
       </header>
