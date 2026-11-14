@@ -1,3 +1,4 @@
+import { readAnandiAccess, rotateAnandiLink } from "@/lib/anandi-auth";
 import { redirect } from "next/navigation";
 import { hasInternalAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -45,10 +46,18 @@ async function approveEnrollment(id: string, form: FormData) {
   redirect(error ? "/dojos?error=alta" : "/dojos");
 }
 
+async function manageAnandiLink(form: FormData) {
+  "use server";
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  await rotateAnandiLink(form.get("mode") === "revoke");
+  redirect("/dojos");
+}
+
 export default async function DojosPage({ searchParams }: {
   searchParams: Promise<{ error?: string; close?: string }>;
 }) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const access = await readAnandiAccess();
   const { error: formError, close } = await searchParams;
   const { data, error } = await createAdminClient().from("dojos")
     .select("slug,name,accent_color,archived_at").order("name");
@@ -71,6 +80,14 @@ export default async function DojosPage({ searchParams }: {
     <main className="main">
       <a href="/skbc-interno">Volver al admin general</a>
       <h1>Dojos</h1>
+      <section>
+        <h2>Enlace privado de Anandi</h2>
+        {access?.token && <label>Enlace para copiar <input readOnly value={`https://skbc.vercel.app/portal/enlace?enlace=${access.token}`} /></label>}
+        <form action={manageAnandiLink}>
+          <button>{access?.token ? "Generar otro enlace" : "Generar enlace"}</button>
+          {access?.token && <button name="mode" value="revoke">Anular enlace</button>}
+        </form>
+      </section>
       <ul>{data.map((dojo) => (
         <li key={dojo.slug}>
           <a href={`/portal/${dojo.slug}`}>{dojo.name}</a> · {dojo.archived_at ? "Archivado" : "Activo"} · {dojo.accent_color}

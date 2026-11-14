@@ -46,7 +46,8 @@ export default async function DojoPortal({ params, searchParams }: {
         {" · "}
         <a href={`/portal/${dojo.slug}/resumen`}>Resumen semanal</a>
       </nav>
-      <a href={`/portal/${dojo.slug}/visitantes`}>Kenshis visitantes</a><h2>Kenshis</h2>
+      <a href={`/portal/${dojo.slug}/visitantes`}>Kenshis visitantes</a>{dojo.slug === "anandi" && !dojo.archived_at && <p><a href="/portal/anandi-clave">Cambiar contraseña</a></p>}
+      <h2>Kenshis</h2>
       {requested && <p role="status">Alta pendiente de validación.</p>}
       {!dojo.archived_at && <form className="filters" action={requestEnrollment.bind(null, dojo.slug)}>
         <label>Nombre <input name="firstName" required maxLength={100} /></label>
