@@ -1372,18 +1372,14 @@ async function formatDojoMilestones({ start, end }: { start: string; end: string
   const db = createAdminClient();
   const cutoff = end < todayIso() ? end : todayIso();
   const [openings, closures] = await Promise.all([
-    db.from("dojos").select("name,location,opened_on,opening_members")
-      .neq("slug", "gainberri").gte("opened_on", start).lte("opened_on", cutoff).order("opened_on"),
+    db.from("dojo_events").select("event_on,summary").neq("kind", "registration").gte("event_on", start).lte("event_on", cutoff).order("event_on"),
     db.from("dojo_closure_history").select("dojo_name,location,closed_on,reason,members")
       .gte("closed_on", start).lte("closed_on", cutoff).order("closed_on")
   ]);
   if (openings.error || closures.error) throw openings.error ?? closures.error;
   const events = [
     ...clubMilestones.filter(event => event.date >= start && event.date <= cutoff),
-    ...openings.data.map(row => ({
-      date: row.opened_on,
-      line: `Apertura de ${html(row.name)}${row.location ? " en " + html(row.location) : ""}${row.opening_members === null ? "" : " · " + row.opening_members + " kenshis"}`
-    })),
+    ...openings.data.map(row => ({ date: row.event_on, line: html(row.summary) })),
     ...closures.data.map(row => ({
       date: row.closed_on,
       line: `Cierre de ${html(row.dojo_name)}${row.location ? " en " + html(row.location) : ""} · ${row.members} kenshis · ${html(row.reason)}`

@@ -116,6 +116,13 @@ export default async function DojosPage({ searchParams }: {
   })) ?? [];
   const history = await db.from("dojo_closure_history").select("id,dojo_name,location,closed_on,reason,members").order("closed_on", { ascending: false });
   if (history.error) throw history.error;
+  const events = await db.from("dojo_events").select("event_on,summary").order("event_on", { ascending: false });
+  if (events.error) throw events.error;
+  const timeline = [
+    ...clubMilestones,
+    ...events.data.map(event => ({ date: event.event_on, line: event.summary })),
+    ...history.data.map(event => ({ date: event.closed_on, line: `Cierre de ${event.dojo_name}${event.location ? " en " + event.location : ""} · ${event.members} kenshis · ${event.reason}` }))
+  ].sort((a, b) => b.date.localeCompare(a.date));
   const pending = await db.from("dojo_enrollment_requests")
     .select("id,dojo_slug,first_name,last_name").is("approved_member", null).order("created_at");
   if (pending.error) throw pending.error;
@@ -196,8 +203,7 @@ export default async function DojosPage({ searchParams }: {
       </section>}
       <section id="historial" className="card">
         <h2>Historial del club</h2>
-        <ul>{clubMilestones.map(event => <li key={event.date}>{formatMilestoneDate(event.date)} · {event.line}</li>)}</ul>
-        <ul>{history.data.map(event => <li key={event.id}>{event.closed_on} · {event.dojo_name}{event.location && ` · ${event.location}`} · {event.members} kenshis · {event.reason}</li>)}</ul>
+        <ul>{timeline.map((event, index) => <li key={index}>{formatMilestoneDate(event.date)} · {event.line}</li>)}</ul>
       </section>
       {selected && <section id="cierre-dojo" className="card">
         <h2>Cerrar {selected.name}</h2>
