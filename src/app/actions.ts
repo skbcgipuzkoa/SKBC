@@ -2620,7 +2620,10 @@ export async function createClassAction(formData: FormData) {
   }
 
 
-  if (classGroup === "adults" && !specialClass) {
+  if (classGroup === "adults" && !specialClass && !delegateFlow) {
+    redirect(`/portal/gainberri/clases/${data.id}/visitantes${dojoFlow ? "?origin=dojo" : ""}`);
+  }
+  if (classGroup === "adults" && !specialClass && delegateFlow) {
     try {
       await generateAdultTechnicalGroups(data.id);
       await generateAdultTechnicalPlan(data.id);

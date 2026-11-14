@@ -12,6 +12,12 @@ async function createClass(slug: string, form: FormData) {
   if (!name || name.length > 100 || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
       (group !== "kids" && group !== "adults")) redirect(back + "?error=1");
 
+  if (group === "adults" && dojo.slug !== "gainberri") {
+    const { data, error } = await db.from("classes").insert({ dojo_slug: dojo.slug, name, class_date: date, class_group: group }).select("id").single();
+    if (error || !data) redirect(back + "?error=1");
+    redirect(`${back}/${data.id}/visitantes`);
+  }
+
   const { error } = await db.rpc("create_dojo_class", {
     p_slug: dojo.slug, p_name: name, p_date: date, p_group: group
   });

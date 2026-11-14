@@ -181,7 +181,10 @@ export default async function DojoClassPage({
   const kids = (members ?? []).filter((item) => item.class === "kids");
   const adults = (members ?? []).filter((item) => item.class === "adults");
   const pendingKids = kids.filter((item) => !kidsPresent.has(item.id));
-  const pendingAdults = adults.filter((item) => !adultPresent.has(item.id));
+  const adultRoster = adultClass ? await supabase.rpc("dojo_class_roster", { p_slug: "gainberri", p_class: adultClass.id }) : null;
+  if (adultRoster?.error) throw adultRoster.error;
+  const eligibleAdults = new Set((Array.isArray(adultRoster?.data) ? adultRoster.data : []).map(row => row.member_id));
+  const pendingAdults = adults.filter((item) => eligibleAdults.has(item.id) && !adultPresent.has(item.id));
   const planRows = plan ?? [];
   const completedPlan = planRows.filter((item) => item.completed).length;
   const step = resolveStep(query.step, {

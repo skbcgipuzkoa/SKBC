@@ -83,7 +83,7 @@ type SelectedTechnique = {
   usedForHistory: boolean;
 };
 
-export async function generateAdultTechnicalPlan(classId: string) {
+export async function generateAdultTechnicalPlan(classId: string, appendMissingGroups = false, visitorGrades?: Set<string>) {
   const supabase = createAdminClient();
 
   const { data: clase, error: classError } = await supabase
@@ -106,12 +106,11 @@ export async function generateAdultTechnicalPlan(classId: string) {
 
   const { data: currentPlan, error: currentPlanError } = await supabase
     .from("technical_plans")
-    .select("id")
-    .eq("class_id", clase.id)
-    .limit(1);
+    .select("technical_group_id,group_grade")
+    .eq("class_id", clase.id);
 
   if (currentPlanError) throw currentPlanError;
-  if (clase.plan_generated || (currentPlan?.length ?? 0) > 0) {
+  if (!appendMissingGroups && (clase.plan_generated || (currentPlan?.length ?? 0) > 0)) {
     throw new Error("Esta clase ya tiene plan tecnico.");
   }
 
@@ -142,7 +141,13 @@ export async function generateAdultTechnicalPlan(classId: string) {
   const legacyPrefix = `PLA_${Date.now().toString(36).toUpperCase()}`;
   let legacyCounter = 1;
 
-  const inserts = groups.flatMap((group) => {
+  const coveredGrades = new Set(currentPlan?.map(row => normalize(row.group_grade)));
+  const pendingGroups = appendMissingGroups ? groups.filter(group => {
+    const grade = normalize(group.grade);
+    return !coveredGrades.has(grade) && (!visitorGrades || visitorGrades.has(grade));
+  }) : groups;
+  if (!pendingGroups.length) return 0;
+  const inserts = pendingGroups.flatMap((group) => {
     const gradeWork = resolveWorkGrade(group.grade);
     const targetGrade = resolveTargetGrade(group.grade);
     const programGrade = resolveProgramGrade(targetGrade);

@@ -1,21 +1,30 @@
 import { redirect } from "next/navigation";
 import { ClassVisitorPicker } from "./class-visitor-picker";
 import { requireDojo } from "@/lib/dojo-access";
+import { prepareVisitorPlan } from "@/lib/visitor-plan";
 
-async function add(host: string, classId: string, back: string, form: FormData) {
+async function add(host: string, classId: string, group: string, back: string, planning: boolean, form: FormData) {
   "use server";
   const { db } = await requireDojo(host, true);
   const members = [...new Set(form.getAll("member").map(String))];
-  const { error } = await db.rpc("add_class_visitors", {
+  const { error } = await db.rpc(planning ? "plan_class_visitors" : "add_class_visitors", {
     p_host: host, p_class: classId, p_origin: String(form.get("origin") ?? ""), p_members: members
   });
   const url = new URL(back, "https://skbc.vercel.app");
   url.searchParams.set(error || !members.length ? "error" : "saved", "visitors");
+  if (!error && members.length && !planning && group === "adults") {
+    try {
+      await prepareVisitorPlan(host, classId, true);
+    } catch (error) {
+      console.error("Error extending visitor plan", error);
+      url.searchParams.set("error", "visitor-plan");
+    }
+  }
   redirect(url.pathname + url.search + url.hash);
 }
 
-export async function ClassVisitorForm({ host, classId, group, returnTo }: {
-  host: string; classId: string; group: string; returnTo: string;
+export async function ClassVisitorForm({ host, classId, group, returnTo, planning = false }: {
+  host: string; classId: string; group: string; returnTo: string; planning?: boolean;
 }) {
   const { db } = await requireDojo(host);
   const [dojos, members, attendance] = await Promise.all([
@@ -33,5 +42,5 @@ export async function ClassVisitorForm({ host, classId, group, returnTo }: {
       .map(row => ({ id: row.member_id, name: row.members.display_name }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"))
   }));
-  return <ClassVisitorPicker groups={groups} action={add.bind(null, host, classId, returnTo)} />;
+  return <ClassVisitorPicker groups={groups} action={add.bind(null, host, classId, group, returnTo, planning)} />;
 }

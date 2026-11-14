@@ -2,7 +2,6 @@ import { ArrowRight, CalendarDays } from "lucide-react";
 import { redirect } from "next/navigation";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { requireDojo } from "@/lib/dojo-access";
-import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 
 function todayInMadrid() {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date());
@@ -27,18 +26,10 @@ async function start(slug: string) {
   }
   if (session.error || !session.data) redirect(back);
   const { id, closed, status, plan_generated } = session.data;
-  let planError = false;
   if (!closed && status === "pending" && !plan_generated) {
-    try {
-      const { error } = await db.rpc("prepare_dojo_plan_groups", { p_slug: slug, p_class: id });
-      if (error) throw error;
-      await generateAdultTechnicalPlan(id);
-    } catch (error) {
-      console.error("Error preparing dojo plan", error);
-      planError = true;
-    }
+    redirect(`/portal/${slug}/clases/${id}/visitantes`);
   }
-  redirect(`/portal/${slug}/clases/${id}?modo=plan${planError ? "&error=plan" : ""}`);
+  redirect(`/portal/${slug}/clases/${id}?modo=plan`);
 }
 
 export default async function PortalDojoMode({ params, searchParams }: {
