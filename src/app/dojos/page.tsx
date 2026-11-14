@@ -74,6 +74,7 @@ async function saveDojoDetails(slug: string, form: FormData) {
   if (memberId && (!linked?.data || linked.error)) redirect(back + "&error=ficha");
   const member = linked?.data;
   const { error } = await db.from("dojos").update({
+    training_schedule: field("training_schedule")?.slice(0, 1000) ?? null,
     accent_color: color, sensei_member_id: memberId,
     sensei_photo_url: member ? member.photo_url : photo,
     name, opened_on: field("opened_on"), location: field("location"), sensei: member ? member.display_name : field("sensei"),
@@ -89,7 +90,7 @@ export default async function DojosPage({ searchParams }: {
   const access = await readAnandiAccess();
   const { error: formError, close, edit, saved } = await searchParams;
   const { data, error } = await createAdminClient().from("dojos")
-    .select("slug,name,accent_color,archived_at,registered_at,opened_on,location,sensei,contact,notes,opening_members,sensei_member_id,sensei_photo_url").order("name");
+    .select("slug,name,accent_color,archived_at,registered_at,opened_on,location,sensei,contact,notes,opening_members,sensei_member_id,sensei_photo_url,internal_id,training_schedule").order("name");
   if (error) throw error;
 
   const selected = data.find((dojo) => dojo.slug === close && !dojo.archived_at && dojo.slug !== "gainberri");
@@ -155,6 +156,7 @@ export default async function DojosPage({ searchParams }: {
       </div>
       {editable && <section id="ficha-dojo" className="card">
         <h2>Ficha de {editable.name}</h2>
+        <p>ID interno · SKBC-DOJO-{String(editable.internal_id).padStart(3, "0")}</p>
         {editable.sensei_photo_url && <img className={styles.senseiPhoto} src={driveImageUrl(editable.sensei_photo_url) ?? undefined} alt={editable.sensei ?? "Sensei"} width={88} height={88} />}
         <p>Alta en el sistema · {editable.registered_at?.slice(0, 10) ?? "Fecha sin registrar"}</p>
         {formError === "ficha" && <p role="alert">No se pudo guardar la ficha.</p>}
@@ -168,6 +170,7 @@ export default async function DojosPage({ searchParams }: {
             contact: editable.contact ?? "", photo: editable.sensei_photo_url ?? ""
           }} />
           <label>Kenshis en la apertura <input name="opening_members" type="number" min={0} max={999999} defaultValue={editable.opening_members ?? ""} /></label>
+          <label>Días y horas de entrenamiento <textarea name="training_schedule" rows={3} maxLength={1000} defaultValue={editable.training_schedule ?? ""} placeholder="Lunes y miércoles, 19:00–20:30" /></label>
           <label>Notas <textarea name="notes" maxLength={2000} defaultValue={editable.notes ?? ""} /></label>
           <button className="primary-link">Guardar ficha</button>
         </form>
