@@ -1,3 +1,4 @@
+import { clubMilestones, formatMilestoneDate, gainberriTrainingStart } from "@/lib/club-milestones";
 import { DojoSenseiFields } from "./sensei-fields";
 import { driveImageUrl } from "@/lib/drive";
 import styles from "./dojos.module.css";
@@ -77,7 +78,7 @@ async function saveDojoDetails(slug: string, form: FormData) {
     training_schedule: field("training_schedule")?.slice(0, 1000) ?? null,
     accent_color: color, sensei_member_id: memberId,
     sensei_photo_url: member ? member.photo_url : photo,
-    name, opened_on: field("opened_on"), location: field("location"), sensei: member ? member.display_name : field("sensei"),
+    name, opened_on: slug === "gainberri" ? gainberriTrainingStart : field("opened_on"), location: field("location"), sensei: member ? member.display_name : field("sensei"),
     contact: member ? [member.student_phone, member.family_email].filter(Boolean).join(" · ") || null : field("contact"), notes: field("notes"), opening_members: count === null ? null : Number(count)
   }).eq("slug", slug);
   redirect(error ? back + "&error=ficha#ficha-dojo" : "/dojos?saved=ficha");
@@ -126,7 +127,7 @@ export default async function DojosPage({ searchParams }: {
       </header>
       <nav className={styles.actions} aria-label="Gestión de dojos">
         <a className={styles.pill} href="#altas">Altas pendientes ({pending.data.length})</a>
-        {history.data.length > 0 && <a className={styles.pill} href="#historial">Historial de cierres</a>}
+        <a className={styles.pill} href="#historial">Historial del club</a>
       </nav>
       {saved === "ficha" && <p role="status">Ficha del dojo guardada.</p>}
       <div className={styles.grid}>
@@ -139,7 +140,7 @@ export default async function DojosPage({ searchParams }: {
               {dojo.sensei_photo_url && <img src={driveImageUrl(dojo.sensei_photo_url) ?? undefined} alt="" width={44} height={44} loading="lazy" />}
               <span>Sensei · {dojo.sensei}</span>
             </p>}
-            {dojo.opened_on && <p>Apertura · {dojo.opened_on}</p>}
+            {dojo.slug === "gainberri" ? <p>Entrenamos en Gainberri desde el {formatMilestoneDate(gainberriTrainingStart)}</p> : dojo.opened_on && <p>Apertura · {dojo.opened_on}</p>}
             {dojo.training_schedule && <p className={styles.schedule}><strong>Entrenamientos</strong><br />{dojo.training_schedule}</p>}
             <div className={styles.actions}>
               <a className="primary-link" href={`/dojos?edit=${dojo.slug}#ficha-dojo`}>Ficha del dojo</a>
@@ -166,7 +167,7 @@ export default async function DojosPage({ searchParams }: {
         {formError === "ficha" && <p role="alert">No se pudo guardar la ficha.</p>}
         <form className={styles.form} action={saveDojoDetails.bind(null, editable.slug)}>
           <label>Nombre <input name="name" required maxLength={100} defaultValue={editable.name} /></label>
-          <label>Fecha de apertura <input name="opened_on" type="date" defaultValue={editable.opened_on ?? ""} /></label>
+          {editable.slug === "gainberri" ? <p>Entrenamos en Gainberri desde el {formatMilestoneDate(gainberriTrainingStart)}</p> : <label>Fecha de apertura <input name="opened_on" type="date" defaultValue={editable.opened_on ?? ""} /></label>}
           <label>Lugar o dirección <input name="location" maxLength={240} defaultValue={editable.location ?? ""} /></label>
           <label>Color <input name="color" type="color" defaultValue={editable.accent_color} /></label>
           <DojoSenseiFields key={editable.slug} members={senseiOptions} initial={{
@@ -179,10 +180,11 @@ export default async function DojosPage({ searchParams }: {
           <button className="primary-link">Guardar ficha</button>
         </form>
       </section>}
-      {history.data.length > 0 && <section id="historial" className="card">
-        <h2>Historial de cierres</h2>
+      <section id="historial" className="card">
+        <h2>Historial del club</h2>
+        <ul>{clubMilestones.map(event => <li key={event.date}>{formatMilestoneDate(event.date)} · {event.line}</li>)}</ul>
         <ul>{history.data.map(event => <li key={event.id}>{event.closed_on} · {event.dojo_name}{event.location && ` · ${event.location}`} · {event.members} kenshis · {event.reason}</li>)}</ul>
-      </section>}
+      </section>
       {selected && <section id="cierre-dojo" className="card">
         <h2>Cerrar {selected.name}</h2>
         <p>El sistema conserva las fichas y archiva el dojo si tiene historial.</p>
