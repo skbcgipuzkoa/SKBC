@@ -112,7 +112,7 @@ export default async function SessionPage({ params, searchParams }: {
   searchParams: Promise<{ error?: string; modo?: string; saved?: string; warning?: string }>;
 }) {
   const { error: formError, modo, saved, warning } = await searchParams;
-  const guided = modo === "plan" || modo === "asistencia" || modo === "cierre";
+  const fromMode = modo === "plan" || modo === "asistencia" || modo === "cierre";
   const { dojo: slug, id } = await params;
   const { db, dojo } = await requireDojo(slug);
   const { data: session, error } = await db.from("classes")
@@ -137,7 +137,8 @@ export default async function SessionPage({ params, searchParams }: {
     : { data: [], error: null };
   if (substituteError) throw substituteError;
   const path = `/portal/${slug}/clases/${id}`;
-  const step = !editable ? "cerrada" : modo;
+  const guided = session.class_group === "adults" && slug !== "gainberri";
+  const step = !editable ? "cerrada" : fromMode ? modo : "plan";
   const attendancePath = guided ? path + "?modo=asistencia" : path;
   const grades = [...new Set(plan.map((row) => row.group_grade))];
   const showManual = guided && editable && step === "plan" && session.class_group === "adults";
@@ -148,7 +149,7 @@ export default async function SessionPage({ params, searchParams }: {
   if (catalog.error || groups.error) throw catalog.error ?? groups.error;
   return (
     <main className={guided ? "dojo-page" : "main"}>
-      <PortalBackLink href={`/portal/${slug}/${guided ? "modo-dojo" : "clases"}`} label={guided ? "Volver a Modo Dojo" : "Volver a clases"} />
+      <PortalBackLink href={`/portal/${slug}/${fromMode ? "modo-dojo" : "clases"}`} label={fromMode ? "Volver a Modo Dojo" : "Volver a clases"} />
       {guided && editable && <ClassSectionNav
         current={step === "plan" ? "adult-technical" : step === "asistencia" ? "adult-attendance" : "close"}
         links={[
@@ -159,11 +160,11 @@ export default async function SessionPage({ params, searchParams }: {
       />}
       <section className={guided ? "dojo-task-card" : undefined}>
       <h1>{guided ? (step === "cerrada" ? "Clase cerrada" : step === "plan" ? "Técnicas adultos" : step === "asistencia" ? "Asistencia adultos" : "Cerrar clase") : session.name}</h1>
-      <p>{session.class_date} · {present.size} asistentes</p>
+      <p>{guided && <>{session.name} · </>}{session.class_date} · {present.size} asistentes</p>
       {formError && <p role="alert">No se pudo guardar el cambio.</p>}
       {saved === "updated" && <p role="status">Clase actualizada.</p>}
       {warning === "exam" && <p role="alert">Quedó pendiente recalcular la preparación de examen de algún asistente.</p>}
-      {!guided && slug !== "gainberri" && !dojo.archived_at && (
+      {slug !== "gainberri" && !dojo.archived_at && (
         <details id="mantenimiento" className="card maintenance-panel" open={formError === "mantenimiento"}>
           <summary>Editar o eliminar clase</summary>
           <div className="split-section">
@@ -251,10 +252,10 @@ export default async function SessionPage({ params, searchParams }: {
         </fieldset>
         <button className={guided ? "dojo-primary-button" : undefined}>Cerrar clase</button>
       </form>}
-      {editable && !guided && <section>
+      {editable && (!guided || step === "plan") && <section className="card">
         <h2>Sustituto</h2>
         {substitutes?.[0] ? <a href={`/portal/sustituto/${substitutes[0].token}`}>Abrir o copiar enlace del sustituto</a> :
-          <form action={createSubstituteLink.bind(null, slug, id)}><button>Crear enlace de sustitución</button></form>}
+          <form action={createSubstituteLink.bind(null, slug, id)}><DojoSubmitButton pendingLabel="Creando enlace…">Crear enlace de sustitución</DojoSubmitButton></form>}
       </section>}
       </section>
     </main>
