@@ -17,3 +17,18 @@
 .roster { padding: 0; list-style: none; }
 .roster li { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; border-top: 1px solid #d9e7e7; padding: 12px 0; }
 .dashboard a:focus-visible, .dashboard button:focus-visible { outline: 3px solid #178081; outline-offset: 3px; }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 3vw, 26px);
+  min-width: 0;
+}
+
+.logo {
+  flex: none;
+  width: clamp(52px, 8vw, 96px);
+  height: auto;
+  border-radius: 50%;
+  background: white;
+}

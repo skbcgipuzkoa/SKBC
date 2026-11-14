@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { CSSProperties } from "react";
 import { ArrowUpRight, CalendarDays, ClipboardList, PlayCircle, Award, Trophy, ChartBar, Users, KeyRound } from "lucide-react";
 import styles from "./dashboard.module.css";
@@ -27,7 +28,10 @@ export default async function DojoPortal({ params, searchParams }: {
   return (
     <main className={styles.dashboard} style={{ "--dojo-accent": dojo.accent_color } as CSSProperties}>
       <header className={styles.hero}>
-        <div><p>SKBC Gipuzkoa</p><h1>{dojo.name}</h1></div>
+        <div className={styles.brand}>
+          {dojo.slug === "anandi" && <Image className={styles.logo} src="/skbc-icon.png" alt="" width={96} height={96} sizes="(max-width: 480px) 52px, 96px" />}
+          <div><p>SKBC Gipuzkoa</p><h1>{dojo.name}</h1></div>
+        </div>
         <a href={`/portal/${dojo.slug}/clases`}><CalendarDays size={19} /> Ver clases <ArrowUpRight size={17} /></a>
       </header>
       <nav className={styles.grid} aria-label="Gestión del dojo">
