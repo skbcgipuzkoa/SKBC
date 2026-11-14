@@ -7,6 +7,7 @@ import { splitContactValues } from "@/lib/member-contacts";
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
   submitLabel: string;
+  adultsOnly?: boolean;
   hiddenFields?: Record<string, string>;
   error?: boolean | string;
   saved?: boolean;
@@ -32,7 +33,7 @@ type Props = {
   };
 };
 
-export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, error, saved }: Props) {
+export function KenshiForm({ action, submitLabel, hiddenFields = {}, adultsOnly, initial, error, saved }: Props) {
   const [memberClass, setMemberClass] = useState<"kids" | "adults">(initial?.class ?? "adults");
   const gradeOptions = useMemo(() => (memberClass === "kids" ? kidsGrades : adultGrades), [memberClass]);
   const [familyEmail, familyEmail2 = ""] = splitContactValues(initial?.familyEmail, "email");
@@ -60,7 +61,7 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, initial, er
         <label>
           Clase
           <select name="class" value={memberClass} onChange={(event) => setMemberClass(event.target.value as "kids" | "adults")}>
-            <option value="kids">Ninos</option>
+            <option value="kids" disabled={adultsOnly}>Ninos</option>
             <option value="adults">Adultos</option>
           </select>
         </label>

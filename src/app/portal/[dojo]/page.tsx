@@ -13,19 +13,6 @@ async function changeMembership(slug: string, member: string, active: boolean) {
   redirect(`/portal/${dojo.slug}${error ? "?error=estado" : ""}`);
 }
 
-async function requestEnrollment(slug: string, form: FormData) {
-  "use server";
-  const { db, dojo } = await requireDojo(slug, true);
-  const firstName = String(form.get("firstName") ?? "").trim();
-  const lastName = String(form.get("lastName") ?? "").trim();
-  const back = `/portal/${dojo.slug}`;
-  if (!firstName || firstName.length > 100 || lastName.length > 100) redirect(back + "?error=alta");
-  const { error } = await db.from("dojo_enrollment_requests").insert({
-    dojo_slug: dojo.slug, first_name: firstName, last_name: lastName || null, member_class: "adults"
-  });
-  redirect(back + (error ? "?error=alta" : "?requested=1"));
-}
-
 export default async function DojoPortal({ params, searchParams }: {
   params: Promise<{ dojo: string }>;
   searchParams: Promise<{ error?: string; requested?: string }>;
@@ -64,11 +51,7 @@ export default async function DojoPortal({ params, searchParams }: {
       <section className={styles.members}>
       <h2>Kenshis</h2>
       {requested && <p role="status">Alta pendiente de validación.</p>}
-      {!dojo.archived_at && <form className="filters" action={requestEnrollment.bind(null, dojo.slug)}>
-        <label>Nombre <input name="firstName" required maxLength={100} /></label>
-        <label>Apellidos <input name="lastName" maxLength={100} /></label>
-        <button>Solicitar alta de Adultos</button>
-      </form>}
+      {!dojo.archived_at && <a className="primary-link" href={`/portal/${dojo.slug}/nuevo`}>Nuevo kenshi</a>}
       {formError && <p role="alert">No se pudo guardar el cambio.</p>}
       {!data.length && <p>Todavía no hay kenshis inscritos.</p>}
       <ul className={styles.roster}>{data.map(({ member_id, status, members }) => (

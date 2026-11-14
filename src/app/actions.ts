@@ -797,11 +797,11 @@ export async function updateKenshiAction(formData: FormData) {
   redirect(`/kenshis/${legacyId}?saved=kenshi`);
 }
 
-export async function createKenshiAction(formData: FormData) {
+function readNewKenshi(formData: FormData) {
   const joinedOn = parseDateInput(String(formData.get("joinedOn") ?? ""));
   const birthDate = parseDateInput(String(formData.get("birthDate") ?? ""));
   const freeTrial = resolveFreeTrialFields(formData, joinedOn);
-  const payload = {
+  return {
     first_name: String(formData.get("firstName") ?? "").trim(),
     last_name: String(formData.get("lastName") ?? "").trim() || null,
     ika_id: String(formData.get("ikaId") ?? "").trim() || null,
@@ -822,6 +822,32 @@ export async function createKenshiAction(formData: FormData) {
     free_trial_ends_on: freeTrial.endsOn,
     ficha_token: createFichaToken()
   };
+}
+
+export async function requestDojoKenshiAction(slug: string, formData: FormData) {
+  const { requireDojo } = await import("@/lib/dojo-access");
+  const { db, dojo } = await requireDojo(slug, true);
+  const back = `/portal/${dojo.slug}/nuevo`;
+  const payload = readNewKenshi(formData);
+  if (!payload.first_name || payload.class !== "adults" || !payload.status) redirect(back + "?error=1");
+  const id = crypto.randomUUID();
+  let photoUrl: string | null;
+  try {
+    photoUrl = await uploadMemberPhoto(getPhotoFile(formData), id);
+  } catch {
+    redirect(back + "?error=1");
+  }
+  const { error } = await db.from("dojo_enrollment_requests").insert({
+    id, dojo_slug: dojo.slug, first_name: payload.first_name, last_name: payload.last_name,
+    member_class: payload.class, profile: { ...payload, photo_url: photoUrl }
+  });
+  if (error) redirect(back + "?error=1");
+  redirect(`/portal/${dojo.slug}?requested=1`);
+}
+
+export async function createKenshiAction(formData: FormData) {
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const payload = readNewKenshi(formData);
 
   if (!payload.first_name || !payload.class || !payload.status) {
     redirect("/kenshis/nuevo?error=kenshi");
