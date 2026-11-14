@@ -9,6 +9,35 @@ import { ClassSectionNav } from "@/components/class-section-nav";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
 import { addPortalManualTechnique } from "@/app/actions";
+import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
+
+async function maintainClass(slug: string, id: string, remove: boolean, form: FormData) {
+  "use server";
+  const { db, dojo } = await requireDojo(slug, true);
+  const list = `/portal/${dojo.slug}/clases`;
+  const back = `${list}/${id}`;
+  const field = (key: string) => String(form.get(key) ?? "").trim();
+  const name = field("name");
+  const date = field("date");
+  const type = field("type");
+  if (remove ? field("confirm").toUpperCase() !== "ELIMINAR" :
+    !name || name.length > 100 || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !["NORMAL", "CONJUNTA", "REPASO", "EXAMEN"].includes(type)) {
+    redirect(back + "?error=mantenimiento#mantenimiento");
+  }
+  const { data, error } = await db.rpc("maintain_dojo_class", {
+    p_slug: dojo.slug, p_id: id, p_delete: remove, p_date: remove ? null : date,
+    p_name: name, p_type: type, p_responsible: field("responsible") || null, p_notes: field("notes") || null
+  });
+  if (error) {
+    console.error("Error maintaining dojo class", error);
+    redirect(back + "?error=mantenimiento#mantenimiento");
+  }
+  const attendees: string[] = Array.isArray(data) ? data : [];
+  const results = await Promise.allSettled(attendees.map((memberId) => recalculateMemberExamStatus(memberId)));
+  const warning = results.some((result) => result.status === "rejected") ? "&warning=exam" : "";
+  redirect(remove ? list + "?saved=deleted" + warning : back + "?saved=updated" + warning);
+}
 
 async function selectTechniques(slug: string, id: string, form: FormData) {
   "use server";
@@ -80,14 +109,14 @@ async function createSubstituteLink(slug: string, id: string) {
 
 export default async function SessionPage({ params, searchParams }: {
   params: Promise<{ dojo: string; id: string }>;
-  searchParams: Promise<{ error?: string; modo?: string }>;
+  searchParams: Promise<{ error?: string; modo?: string; saved?: string; warning?: string }>;
 }) {
-  const { error: formError, modo } = await searchParams;
+  const { error: formError, modo, saved, warning } = await searchParams;
   const guided = modo === "plan" || modo === "asistencia" || modo === "cierre";
   const { dojo: slug, id } = await params;
   const { db, dojo } = await requireDojo(slug);
   const { data: session, error } = await db.from("classes")
-    .select("name,class_date,class_group,closed,status,plan_generated")
+    .select("name,class_date,class_group,closed,status,plan_generated,class_type,responsible,notes")
     .eq("dojo_slug", dojo.slug).eq("id", id).maybeSingle();
   if (error || !session) notFound();
   const [roster, attendance] = await Promise.all([
@@ -132,6 +161,36 @@ export default async function SessionPage({ params, searchParams }: {
       <h1>{guided ? (step === "cerrada" ? "Clase cerrada" : step === "plan" ? "Técnicas adultos" : step === "asistencia" ? "Asistencia adultos" : "Cerrar clase") : session.name}</h1>
       <p>{session.class_date} · {present.size} asistentes</p>
       {formError && <p role="alert">No se pudo guardar el cambio.</p>}
+      {saved === "updated" && <p role="status">Clase actualizada.</p>}
+      {warning === "exam" && <p role="alert">Quedó pendiente recalcular la preparación de examen de algún asistente.</p>}
+      {!guided && slug !== "gainberri" && !dojo.archived_at && (
+        <details id="mantenimiento" className="card maintenance-panel" open={formError === "mantenimiento"}>
+          <summary>Editar o eliminar clase</summary>
+          <div className="split-section">
+            <form action={maintainClass.bind(null, slug, id, false)} className="edit-form">
+              <div className="form-grid">
+                <label>Fecha<input type="date" name="date" defaultValue={session.class_date} required /></label>
+                <label>Nombre<input name="name" defaultValue={session.name} maxLength={100} required /></label>
+                <label>Tipo<select name="type" defaultValue={session.class_type ?? "NORMAL"}>
+                  <option value="NORMAL">Normal</option>
+                  <option value="CONJUNTA">Conjunta</option>
+                  <option value="REPASO">Repaso</option>
+                  <option value="EXAMEN">Examen</option>
+                </select></label>
+                <label>Responsable<input name="responsible" defaultValue={session.responsible ?? ""} /></label>
+                <label className="wide">Notas<textarea name="notes" rows={3} defaultValue={session.notes ?? ""} /></label>
+              </div>
+              <div className="form-actions"><button type="submit">Guardar cambios</button></div>
+            </form>
+            <form action={maintainClass.bind(null, slug, id, true)} className="edit-form danger-zone">
+              <h2>Eliminar clase</h2>
+              <p className="muted">Elimina también la asistencia, el plan y el historial técnico de esta clase.</p>
+              <label>Confirmación<input name="confirm" placeholder="Escribe ELIMINAR" required /></label>
+              <div className="form-actions"><button type="submit">Eliminar clase</button></div>
+            </form>
+          </div>
+        </details>
+      )}
       {(!guided || step === "plan" || step === "cerrada") && <h2>Plan técnico</h2>}
       {showManual && <details className="dojo-manual-technique manual-technique-panel">
         <summary><strong>Técnicas fuera del plan</strong></summary>

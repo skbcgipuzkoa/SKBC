@@ -20,10 +20,10 @@ async function createClass(slug: string, form: FormData) {
 
 export default async function DojoClasses({ params, searchParams }: {
   params: Promise<{ dojo: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; warning?: string }>;
 }) {
   const { db, dojo } = await requireDojo((await params).dojo);
-  const { error: formError } = await searchParams;
+  const { error: formError, saved, warning } = await searchParams;
   const [classes, groups] = await Promise.all([
     db.from("classes").select("id,name,class_date,class_group,status")
       .eq("dojo_slug", dojo.slug).order("class_date", { ascending: false }).limit(100),
@@ -47,9 +47,23 @@ export default async function DojoClasses({ params, searchParams }: {
         <button className="primary-link">Crear clase</button>
       </form>}
       {formError && <p role="alert">No se pudo crear la clase.</p>}
-      {classes.data.length ? <ul>{classes.data.map((session) => (
-        <li key={session.id}>{session.class_date} · <a href={`/portal/${dojo.slug}/clases/${session.id}`}>{session.name}</a> · {session.class_group === "kids" ? "Niños" : "Adultos"}</li>
-      ))}</ul> : <p>Todavía no hay clases registradas.</p>}
+      {saved === "deleted" && <p role="status">Clase eliminada.</p>}
+      {warning === "exam" && <p role="alert">Quedó pendiente recalcular la preparación de examen de algún asistente.</p>}
+      {classes.data.length ? <section className="table-wrap">
+        <table>
+          <thead><tr><th>Fecha</th><th>Clase</th><th>Grupo</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>{classes.data.map((session) => {
+            const href = `/portal/${dojo.slug}/clases/${session.id}`;
+            return <tr key={session.id}>
+              <td data-label="Fecha">{session.class_date}</td>
+              <td data-label="Clase"><a className="text-link" href={href}>{session.name}</a></td>
+              <td data-label="Grupo">{session.class_group === "kids" ? "Niños" : "Adultos"}</td>
+              <td data-label="Estado">{session.status === "completed" ? "Cerrada" : session.status === "cancelled" ? "Cancelada" : "Abierta"}</td>
+              <td data-label="Acciones"><a className="text-link" href={href}>Abrir clase</a></td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </section> : <p>Todavía no hay clases registradas.</p>}
     </main>
   );
 }
