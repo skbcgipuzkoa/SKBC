@@ -85,7 +85,7 @@ export default async function SessionPage({ params, searchParams }: {
   const { dojo: slug, id } = await params;
   const { db, dojo } = await requireDojo(slug);
   const { data: session, error } = await db.from("classes")
-    .select("name,class_date,class_group,closed,status")
+    .select("name,class_date,class_group,closed,status,plan_generated")
     .eq("dojo_slug", dojo.slug).eq("id", id).maybeSingle();
   if (error || !session) notFound();
   const [roster, attendance] = await Promise.all([
@@ -106,7 +106,7 @@ export default async function SessionPage({ params, searchParams }: {
     : { data: [], error: null };
   if (substituteError) throw substituteError;
   const path = `/portal/${slug}/clases/${id}`;
-  const step = !editable ? "cerrada" : !plan.length ? "plan" : modo;
+  const step = !editable ? "cerrada" : !plan.length && !session.plan_generated ? "plan" : modo;
   const attendancePath = guided ? path + "?modo=asistencia" : path;
   const grades = [...new Set(plan.map((row) => row.group_grade))];
   return (
@@ -151,6 +151,10 @@ export default async function SessionPage({ params, searchParams }: {
         <form action={preparePlan.bind(null, slug, id, guided)}>
           <DojoSubmitButton pendingLabel="Generando plan…">Generar plan técnico</DojoSubmitButton>
         </form>}
+      {guided && step === "plan" && !plan.length && session.plan_generated && <>
+        <p>No hay técnicas propuestas para esta clase.</p>
+        <a className="dojo-primary-button" href={attendancePath}>Pasar asistencia</a>
+      </>}
       {editable && (!guided || step === "asistencia") && <ClassVisitorForm host={slug} classId={id} group={session.class_group} returnTo={attendancePath} />}
       {editable && (!guided || step === "asistencia") && <ProvisionalAttendanceForm dojo={slug} classId={id} group={session.class_group} returnTo={attendancePath} />}
       {editable && (!guided || step === "asistencia") && <form action={save.bind(null, slug, id, guided)}>
@@ -165,7 +169,7 @@ export default async function SessionPage({ params, searchParams }: {
         </fieldset>
         <button className="primary-link">Guardar asistencia</button>
       </form>}
-      {editable && plan.length > 0 && (!guided || step === "cierre") && <form action={finishClass.bind(null, slug, id, guided)}>
+      {editable && (plan.length > 0 || (guided && session.plan_generated)) && (!guided || step === "cierre") && <form action={finishClass.bind(null, slug, id, guided)}>
         <fieldset>
           <legend>Técnicas trabajadas</legend>
           {plan.map((row) => <div key={row.id}>
