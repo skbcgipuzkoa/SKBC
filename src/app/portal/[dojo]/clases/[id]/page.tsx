@@ -106,7 +106,7 @@ export default async function SessionPage({ params, searchParams }: {
     : { data: [], error: null };
   if (substituteError) throw substituteError;
   const path = `/portal/${slug}/clases/${id}`;
-  const step = !editable ? "cerrada" : !plan.length && !session.plan_generated ? "plan" : modo;
+  const step = !editable ? "cerrada" : modo;
   const attendancePath = guided ? path + "?modo=asistencia" : path;
   const grades = [...new Set(plan.map((row) => row.group_grade))];
   return (
@@ -147,11 +147,11 @@ export default async function SessionPage({ params, searchParams }: {
         </form>
       )}
       {!editable && <ul>{plan.filter((row) => row.completed).map((row) => <li key={row.id}>{row.group_grade} · {row.technique_name}</li>)}</ul>}
-      {editable && session.class_group === "adults" && !plan.length &&
+      {editable && (!guided || step === "plan") && session.class_group === "adults" && !plan.length && !session.plan_generated &&
         <form action={preparePlan.bind(null, slug, id, guided)}>
           <DojoSubmitButton pendingLabel="Generando plan…">Generar plan técnico</DojoSubmitButton>
         </form>}
-      {guided && step === "plan" && !plan.length && session.plan_generated && <>
+      {guided && step === "plan" && !plan.length && <>
         <p>No hay técnicas propuestas para esta clase.</p>
         <a className="dojo-primary-button" href={attendancePath}>Pasar asistencia</a>
       </>}
@@ -169,7 +169,7 @@ export default async function SessionPage({ params, searchParams }: {
         </fieldset>
         <button className="primary-link">Guardar asistencia</button>
       </form>}
-      {editable && (plan.length > 0 || (guided && session.plan_generated)) && (!guided || step === "cierre") && <form action={finishClass.bind(null, slug, id, guided)}>
+      {editable && (guided ? step === "cierre" : plan.length > 0) && <form action={finishClass.bind(null, slug, id, guided)}>
         <fieldset>
           <legend>Técnicas trabajadas</legend>
           {plan.map((row) => <div key={row.id}>
