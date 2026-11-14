@@ -369,11 +369,11 @@ export default async function DojoClassPage({
               <input type="hidden" name="classId" value={adultClass.id} />
               <input type="hidden" name="legacyId" value={adultClass.legacy_id ?? legacyId} />
               <input type="hidden" name="returnTo" value={`/dojo/${adultClass.legacy_id ?? legacyId}?step=techniques&saved=techniques`} />
-              {groupedPlan.map(([grade, items], index) => {
+              {groupedPlan.map(([grade, items]) => {
                 const done = items.filter((item) => item.completed).length;
                 const targetGrade = items[0]?.target_grade ?? nextAdultGrade(grade);
                 return (
-                  <details className={`dojo-grade-panel dojo-grade-${slugGrade(targetGrade)}`} key={grade} open={index === 0}>
+                  <details className={`dojo-grade-panel dojo-grade-${slugGrade(targetGrade)}`} key={grade}>
                     <summary>
                       <span>{grade} <b>para</b> {targetGrade}</span>
                       <em>{done}/{items.length}</em>

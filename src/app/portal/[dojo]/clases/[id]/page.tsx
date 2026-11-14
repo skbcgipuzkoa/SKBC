@@ -203,10 +203,10 @@ export default async function SessionPage({ params, searchParams }: {
       {guided && step === "plan" && plan.length > 0 && (
         <form action={selectTechniques.bind(null, slug, id)} className="dojo-plan-form">
           <span data-class-primary-form="adult-technical" hidden />
-          {grades.map((grade, index) => {
+          {grades.map((grade) => {
             const rows = plan.filter((row) => row.group_grade === grade);
             const colorGrade = normalizeGrade(rows[0].target_grade || grade).toLowerCase().replace(/\s+/g, "-");
-            return <details className={`dojo-grade-panel dojo-grade-${colorGrade}`} key={grade} open={index === 0}>
+            return <details className={`dojo-grade-panel dojo-grade-${colorGrade}`} key={grade}>
               <summary>
                 <span>{grade} {rows[0].target_grade && <> <b>para</b> {rows[0].target_grade}</>}</span>
                 <em>{rows.filter((row) => row.completed).length}/{rows.length}</em>
