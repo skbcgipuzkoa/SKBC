@@ -7,6 +7,8 @@ import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { requireDojo } from "@/lib/dojo-access";
 import { ClassSectionNav } from "@/components/class-section-nav";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
+import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
+import { addPortalManualTechnique } from "@/app/actions";
 
 async function selectTechniques(slug: string, id: string, form: FormData) {
   "use server";
@@ -109,6 +111,12 @@ export default async function SessionPage({ params, searchParams }: {
   const step = !editable ? "cerrada" : modo;
   const attendancePath = guided ? path + "?modo=asistencia" : path;
   const grades = [...new Set(plan.map((row) => row.group_grade))];
+  const showManual = guided && editable && step === "plan" && session.class_group === "adults";
+  const [catalog, groups] = showManual ? await Promise.all([
+    db.from("techniques").select("id,grade,name,base_name,variant,variant_note,category,content_type").eq("active", true).order("name"),
+    db.from("class_technical_groups").select("id,grade").eq("class_id", id).eq("active", true).order("grade")
+  ]) : [{ data: [], error: null }, { data: [], error: null }];
+  if (catalog.error || groups.error) throw catalog.error ?? groups.error;
   return (
     <main className={guided ? "dojo-page" : "main"}>
       <PortalBackLink href={`/portal/${slug}/${guided ? "modo-dojo" : "clases"}`} label={guided ? "Volver a Modo Dojo" : "Volver a clases"} />
@@ -125,6 +133,12 @@ export default async function SessionPage({ params, searchParams }: {
       <p>{session.class_date} · {present.size} asistentes</p>
       {formError && <p role="alert">No se pudo guardar el cambio.</p>}
       {(!guided || step === "plan" || step === "cerrada") && <h2>Plan técnico</h2>}
+      {showManual && <details className="dojo-manual-technique manual-technique-panel">
+        <summary><strong>Técnicas fuera del plan</strong></summary>
+        {groups.data.length ? <ManualTechniqueForm action={addPortalManualTechnique.bind(null, slug, id)}
+          classId={id} legacyId={id} techniques={catalog.data} groups={groups.data} /> :
+          <p>Para añadir técnicas, el dojo necesita al menos un kenshi adulto activo con grado asignado.</p>}
+      </details>}
       {guided && step === "plan" && plan.length > 0 && (
         <form action={selectTechniques.bind(null, slug, id)} className="dojo-plan-form">
           <span data-class-primary-form="adult-technical" hidden />
@@ -147,7 +161,7 @@ export default async function SessionPage({ params, searchParams }: {
         </form>
       )}
       {!editable && <ul>{plan.filter((row) => row.completed).map((row) => <li key={row.id}>{row.group_grade} · {row.technique_name}</li>)}</ul>}
-      {editable && (!guided || step === "plan") && session.class_group === "adults" && !plan.length && !session.plan_generated &&
+      {editable && !guided && session.class_group === "adults" && !plan.length && !session.plan_generated &&
         <form action={preparePlan.bind(null, slug, id, guided)}>
           <DojoSubmitButton pendingLabel="Generando plan…">Generar plan técnico</DojoSubmitButton>
         </form>}

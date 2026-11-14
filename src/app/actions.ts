@@ -1962,28 +1962,39 @@ export async function addManualClassTechniqueAction(formData: FormData) {
     redirect("/");
   }
 
-  const classId = String(formData.get("classId") ?? "");
+  return addManualTechnique(formData);
+}
+
+export async function addPortalManualTechnique(slug: string, id: string, formData: FormData) {
+  const { requireDojo } = await import("@/lib/dojo-access");
+  const { dojo } = await requireDojo(slug, true);
+  if (dojo.slug === "gainberri") redirect("/dojo");
+  return addManualTechnique(formData, { slug: dojo.slug, id });
+}
+
+async function addManualTechnique(formData: FormData, portal?: { slug: string; id: string }) {
+  const classId = portal?.id ?? String(formData.get("classId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
   const techniqueIds = [...new Set((formData.getAll("techniqueIds").length
     ? formData.getAll("techniqueIds")
     : [formData.get("techniqueId")]).map((value) => String(value ?? "").trim()).filter(Boolean))];
-  const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
+  const portalPath = portal ? `/portal/${portal.slug}/clases/${classId}?modo=plan` : null;
+  const returnTo = portalPath ?? safeReturnPath(String(formData.get("returnTo") ?? ""));
   const selectedGrades = formData.getAll("grades").map((value) => String(value)).filter(Boolean);
 
   if (!classId || !legacyId || !techniqueIds.length || techniqueIds.length > 50) {
-    redirect(`/clases/${legacyId || ""}?error=manual-technique`);
+    redirect(portalPath ? portalPath + "&error=manual" : `/clases/${legacyId || ""}?error=manual-technique`);
   }
 
   const supabase = createAdminClient();
 
+  const session = supabase.from("classes").select("id,class_date,class_group,class_type,closed,status").eq("id", classId);
+  if (portal) session.eq("dojo_slug", portal.slug).eq("closed", false).eq("status", "pending");
+
   try {
     const [{ data: clase, error: classError }, { data: techniques, error: techniqueError }, { data: groups, error: groupsError }, { data: maxPlan, error: maxPlanError }, { data: existingManual, error: existingError }] =
       await Promise.all([
-        supabase
-          .from("classes")
-          .select("id,class_date,class_group,class_type,closed,status")
-          .eq("id", classId)
-          .single<{ id: string; class_date: string; class_group: "kids" | "adults"; class_type: string | null; closed: boolean; status: string }>(),
+        session.single<{ id: string; class_date: string; class_group: "kids" | "adults"; class_type: string | null; closed: boolean; status: string }>(),
         supabase
           .from("techniques")
           .select("id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,score,active")
@@ -2073,7 +2084,7 @@ export async function addManualClassTechniqueAction(formData: FormData) {
     }
   } catch (error) {
     console.error("Error adding manual class technique", error);
-    redirect(`/clases/${legacyId}?error=manual-technique&detail=${encodeURIComponent(errorMessage(error))}`);
+    redirect(portalPath ? portalPath + "&error=manual" : `/clases/${legacyId}?error=manual-technique&detail=${encodeURIComponent(errorMessage(error))}`);
   }
 
   revalidatePath(`/clases/${legacyId}`);
