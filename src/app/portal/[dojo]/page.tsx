@@ -2,29 +2,12 @@ import Image from "next/image";
 import type { CSSProperties } from "react";
 import { ArrowUpRight, CalendarDays, ClipboardList, PlayCircle, Award, Trophy, ChartBar, Users, KeyRound } from "lucide-react";
 import styles from "./dashboard.module.css";
-import { redirect } from "next/navigation";
 import { requireDojo } from "@/lib/dojo-access";
 
-async function changeMembership(slug: string, member: string, active: boolean) {
-  "use server";
-  const { db, dojo } = await requireDojo(slug, true);
-  const { error } = await db.rpc("set_dojo_membership_status", {
-    p_slug: dojo.slug, p_member: member, p_active: active
-  });
-  redirect(`/portal/${dojo.slug}${error ? "?error=estado" : ""}`);
-}
-
-export default async function DojoPortal({ params, searchParams }: {
+export default async function DojoPortal({ params }: {
   params: Promise<{ dojo: string }>;
-  searchParams: Promise<{ error?: string; requested?: string }>;
 }) {
-  const { db, dojo } = await requireDojo((await params).dojo);
-  const { error: formError, requested } = await searchParams;
-  const { data, error } = await db.from("dojo_memberships")
-    .select("member_id,status,members!inner(display_name,grade)")
-    .eq("dojo_slug", dojo.slug)
-    .returns<{ member_id: string; status: string; members: { display_name: string; grade: string | null } }[]>();
-  if (error) throw error;
+  const { dojo } = await requireDojo((await params).dojo);
   return (
     <main className={styles.dashboard} style={{ "--dojo-accent": dojo.accent_color } as CSSProperties}>
       <header className={styles.hero}>
@@ -40,6 +23,7 @@ export default async function DojoPortal({ params, searchParams }: {
       </header>
       <nav className={styles.grid} aria-label="Gestión del dojo">
         {[
+          { path: "kenshis", title: "Kenshis", detail: "Consulta las fichas y altas del dojo", Icon: Users },
           { path: "clases", title: "Clases", detail: "Sesiones y planes técnicos", Icon: CalendarDays },
           { path: "control-dia", title: "Control del día", detail: "Asistencia y actividad de hoy", Icon: ClipboardList },
           { path: "modo-dojo", title: "Modo Dojo", detail: "Abre la sesión de entrenamiento", Icon: PlayCircle },
@@ -56,21 +40,6 @@ export default async function DojoPortal({ params, searchParams }: {
         ))}
       </nav>
       {dojo.slug === "anandi" && !dojo.archived_at && <a className={styles.access} href="/portal/anandi-clave"><KeyRound size={16} /> Credenciales de Anandi</a>}
-      <section className={styles.members}>
-      <h2>Kenshis</h2>
-      {requested && <p role="status">Alta pendiente de validación.</p>}
-      {!dojo.archived_at && <a className="primary-link" href={`/portal/${dojo.slug}/nuevo`}>Nuevo kenshi</a>}
-      {formError && <p role="alert">No se pudo guardar el cambio.</p>}
-      {!data.length && <p>Todavía no hay kenshis inscritos.</p>}
-      <ul className={styles.roster}>{data.map(({ member_id, status, members }) => (
-        <li key={member_id}>
-          <a href={`/portal/${dojo.slug}/kenshis/${member_id}`}>{members.display_name}</a> · {members.grade ?? "Sin grado"} · {status === "active" ? "Activo" : "Baja"}
-          {!dojo.archived_at && <form action={changeMembership.bind(null, dojo.slug, member_id, status !== "active")}>
-            <button>{status === "active" ? "Dar de baja en este dojo" : "Reactivar inscripción"}</button>
-          </form>}
-        </li>
-      ))}</ul>
-      </section>
     </main>
   );
 }

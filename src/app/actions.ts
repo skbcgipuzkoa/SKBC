@@ -834,25 +834,40 @@ function readNewKenshi(formData: FormData) {
   };
 }
 
-export async function requestDojoKenshiAction(slug: string, formData: FormData) {
+export async function createDojoKenshiAction(slug: string, formData: FormData) {
   const { requireDojo } = await import("@/lib/dojo-access");
   const { db, dojo } = await requireDojo(slug, true);
   const back = `/portal/${dojo.slug}/nuevo`;
   const payload = readNewKenshi(formData);
-  if (!payload.first_name || payload.class !== "adults" || !payload.status) redirect(back + "?error=1");
-  const id = crypto.randomUUID();
+  if (!payload.first_name || !payload.class || !payload.status) redirect(back + "?error=1");
+  const { data: group, error: groupError } = await db.from("dojo_groups").select("member_class")
+    .eq("dojo_slug", dojo.slug).eq("member_class", payload.class).maybeSingle();
+  if (groupError || !group) redirect(back + "?error=1");
   let photoUrl: string | null;
   try {
-    photoUrl = await uploadMemberPhoto(getPhotoFile(formData), id);
+    photoUrl = await uploadMemberPhoto(getPhotoFile(formData), crypto.randomUUID());
   } catch {
     redirect(back + "?error=1");
   }
-  const { error } = await db.from("dojo_enrollment_requests").insert({
-    id, dojo_slug: dojo.slug, first_name: payload.first_name, last_name: payload.last_name,
-    member_class: payload.class, profile: { ...payload, photo_url: photoUrl }
-  });
-  if (error) redirect(back + "?error=1");
-  redirect(`/portal/${dojo.slug}?requested=1`);
+  let memberId: string;
+  try {
+    const legacyId = await getNextSkbcLegacyId(db);
+    const { data, error } = await db.rpc("create_dojo_kenshi", {
+      p_slug: dojo.slug, p_profile: { ...payload, legacy_id: legacyId, photo_url: photoUrl }
+    });
+    if (error || !data) throw error ?? new Error("Missing member ID");
+    memberId = data;
+  } catch (error) {
+    console.error("Error creating dojo kenshi", error);
+    redirect(back + "?error=1");
+  }
+  try {
+    await recalculateMemberExamStatus(memberId);
+    if (payload.class === "kids") await recalculateChildRankings();
+  } catch (error) {
+    console.error("Error recalculating new dojo kenshi exam status", error);
+  }
+  redirect(`/portal/${dojo.slug}/kenshis?saved=kenshi&status=${payload.status}`);
 }
 
 export async function createKenshiAction(formData: FormData) {
