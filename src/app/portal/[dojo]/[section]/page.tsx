@@ -4,7 +4,6 @@ import { requireDojo } from "@/lib/dojo-access";
 
 const labels = {
   "control-dia": "Control del día",
-  "modo-dojo": "Modo Dojo",
   rankings: "Ranking de asistencia",
   examenes: "Próximos exámenes"
 } as const;
@@ -49,7 +48,7 @@ export default async function DojoSection({ params }: {
       .map(([id, entry]) => ({ id, label: `${entry.name} · ${entry.sessions.size} asistencias` }));
   } else {
     const query = db.from("classes").select("id,name,class_date,status").eq("dojo_slug", slug);
-    const { data, error } = await (section === "control-dia" ? query.eq("class_date", today) : query.eq("status", "pending"))
+    const { data, error } = await query.eq("class_date", today)
       .order("class_date").order("name");
     if (error) throw error;
     rows = data.map((session) => ({ id: session.id, label: `${session.class_date} · ${session.name}`, href: `/portal/${slug}/clases/${session.id}` }));
