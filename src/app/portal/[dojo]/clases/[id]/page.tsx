@@ -5,6 +5,27 @@ import { randomBytes } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { requireDojo } from "@/lib/dojo-access";
+import { ClassSectionNav } from "@/components/class-section-nav";
+import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
+
+async function selectTechniques(slug: string, id: string, form: FormData) {
+  "use server";
+  const { db } = await requireDojo(slug, true);
+  const { data } = await db.from("classes").select("id").eq("id", id)
+    .eq("dojo_slug", slug).eq("closed", false).eq("status", "pending").maybeSingle();
+  if (!data || slug === "gainberri") notFound();
+  const { data: plan, error } = await db.from("technical_plans").select("id,completed").eq("class_id", id);
+  const path = `/portal/${slug}/clases/${id}`;
+  if (error) redirect(path + "?modo=plan&error=plan");
+  const selected = new Set(form.getAll("worked").map(String));
+  for (const completed of [false, true]) {
+    const ids = plan.filter((row) => row.completed !== completed && selected.has(row.id) === completed).map((row) => row.id);
+    if (!ids.length) continue;
+    const { error: updateError } = await db.from("technical_plans").update({ completed }).eq("class_id", id).in("id", ids);
+    if (updateError) redirect(path + "?modo=plan&error=plan");
+  }
+  redirect(path + "?modo=asistencia");
+}
 
 async function save(slug: string, id: string, guided: boolean, form: FormData) {
   "use server";
@@ -74,7 +95,7 @@ export default async function SessionPage({ params, searchParams }: {
   if (roster.error) throw roster.error;
   if (attendance.error) throw attendance.error;
   const { data: plan, error: planError } = await db.from("technical_plans")
-    .select("id,group_grade,technique_name,completed").eq("class_id", id).order("suggested_order");
+    .select("id,group_grade,target_grade,technique_name,category,summary_es,completed").eq("class_id", id).order("suggested_order");
   if (planError) throw planError;
   const present = new Set(attendance.data.map((row) => row.member_id));
   const editable = slug !== "gainberri" && !dojo.archived_at && !session.closed && session.status === "pending";
@@ -87,24 +108,53 @@ export default async function SessionPage({ params, searchParams }: {
   const path = `/portal/${slug}/clases/${id}`;
   const step = !editable ? "cerrada" : !plan.length ? "plan" : modo;
   const attendancePath = guided ? path + "?modo=asistencia" : path;
+  const grades = [...new Set(plan.map((row) => row.group_grade))];
   return (
     <main className={guided ? "dojo-page" : "main"}>
       <PortalBackLink href={`/portal/${slug}/${guided ? "modo-dojo" : "clases"}`} label={guided ? "Volver a Modo Dojo" : "Volver a clases"} />
-      <section className={guided ? "card" : undefined}>
+      {guided && editable && <ClassSectionNav
+        current={step === "plan" ? "adult-technical" : step === "asistencia" ? "adult-attendance" : "close"}
+        links={[
+          { id: "adult-technical", label: "Técnicas adultos", href: path + "?modo=plan", done: plan.some((row) => row.completed) },
+          { id: "adult-attendance", label: "Asistencia adultos", href: attendancePath, done: present.size > 0 },
+          { id: "close", label: "Revisar y cerrar", href: path + "?modo=cierre" }
+        ]}
+      />}
+      <section className={guided ? "dojo-task-card" : undefined}>
       <h1>{guided ? (step === "cerrada" ? "Clase cerrada" : step === "plan" ? "Técnicas adultos" : step === "asistencia" ? "Asistencia adultos" : "Cerrar clase") : session.name}</h1>
       <p>{session.class_date} · {present.size} asistentes</p>
       {formError && <p role="alert">No se pudo guardar el cambio.</p>}
       {(!guided || step === "plan" || step === "cerrada") && <h2>Plan técnico</h2>}
-      {guided && step === "plan" && plan.length > 0 && <>
-        <ul>{plan.map((row) => <li key={row.id}>{row.group_grade} · {row.technique_name}</li>)}</ul>
-        <a className="dojo-primary-button" href={attendancePath}>Pasar asistencia</a>
-      </>}
+      {guided && step === "plan" && plan.length > 0 && (
+        <form action={selectTechniques.bind(null, slug, id)} className="dojo-plan-form">
+          <span data-class-primary-form="adult-technical" hidden />
+          {grades.map((grade, index) => {
+            const rows = plan.filter((row) => row.group_grade === grade);
+            return <details className="dojo-grade-panel" key={grade} open={index === 0}>
+              <summary>
+                <span>{grade} {rows[0].target_grade && <> <b>para</b> {rows[0].target_grade}</>}</span>
+                <em>{rows.filter((row) => row.completed).length}/{rows.length}</em>
+              </summary>
+              <div className="dojo-technique-list">
+                {rows.map((row) => <label className="dojo-technique" key={row.id}>
+                  <input name="worked" type="checkbox" value={row.id} defaultChecked={row.completed} />
+                  <span><strong>{row.technique_name}</strong><small>{row.category}</small>{row.summary_es && <p>{row.summary_es}</p>}</span>
+                </label>)}
+              </div>
+            </details>;
+          })}
+          <DojoSubmitButton pendingLabel="Guardando técnicas…">Guardar técnicas y pasar asistencia</DojoSubmitButton>
+        </form>
+      )}
       {!editable && <ul>{plan.filter((row) => row.completed).map((row) => <li key={row.id}>{row.group_grade} · {row.technique_name}</li>)}</ul>}
       {editable && session.class_group === "adults" && !plan.length &&
-        <form action={preparePlan.bind(null, slug, id, guided)}><button>Generar plan técnico</button></form>}
+        <form action={preparePlan.bind(null, slug, id, guided)}>
+          <DojoSubmitButton pendingLabel="Generando plan…">Generar plan técnico</DojoSubmitButton>
+        </form>}
       {editable && (!guided || step === "asistencia") && <ClassVisitorForm host={slug} classId={id} group={session.class_group} returnTo={attendancePath} />}
       {editable && (!guided || step === "asistencia") && <ProvisionalAttendanceForm dojo={slug} classId={id} group={session.class_group} returnTo={attendancePath} />}
       {editable && (!guided || step === "asistencia") && <form action={save.bind(null, slug, id, guided)}>
+        {guided && <span data-class-primary-form="adult-attendance" hidden />}
         <fieldset>
           <legend>Pasar lista</legend>
           {(Array.isArray(roster.data) ? roster.data : []).map(({member_id, display_name, visit_id}) => (
@@ -119,7 +169,7 @@ export default async function SessionPage({ params, searchParams }: {
         <fieldset>
           <legend>Técnicas trabajadas</legend>
           {plan.map((row) => <div key={row.id}>
-            <label><input name="worked" type="checkbox" value={row.id} /> {row.group_grade} · {row.technique_name}</label>
+            <label><input name="worked" type="checkbox" value={row.id} defaultChecked={row.completed} /> {row.group_grade} · {row.technique_name}</label>
           </div>)}
         </fieldset>
         <button className={guided ? "dojo-primary-button" : undefined}>Cerrar clase</button>
