@@ -2,6 +2,7 @@ import { loadExamOutlooks } from "@/lib/exam-outlook-data";
 import { formatExamOutlookSummary } from "@/lib/exam-outlook";
 import {
   BarChart3,
+  Building2,
   CalendarCheck,
   ClipboardCheck,
   GraduationCap,
@@ -111,6 +112,7 @@ export async function AdminDashboard() {
     { count: activeMembers },
     { count: adultMembers },
     { count: kidsMembers },
+    { data: activeDojos },
     { data: openClasses },
     { data: todayClasses },
     { data: nextClasses },
@@ -120,6 +122,7 @@ export async function AdminDashboard() {
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "adults"),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("status", "active").eq("class", "kids"),
+    supabase.from("dojos").select("name").eq("operational_status", "active").is("archived_at", null).order("name").returns<{ name: string }[]>(),
     supabase
       .from("classes")
       .select("legacy_id,class_date,name,class_group,closed,plan_generated")
@@ -213,6 +216,16 @@ export async function AdminDashboard() {
               </a>
             ) : <article className="card" key={item.label}>{content}</article>;
           })}
+          <a className="card home-stat-link" href="/dojos">
+            <Building2 aria-hidden="true" size={20} />
+            <h2>Dojos activos</h2>
+            {activeDojos ? (
+              <>
+                <div className="metric">{activeDojos.length}</div>
+                {activeDojos.length > 0 && <div className="muted">{activeDojos.map((dojo) => dojo.name).join(" · ")}</div>}
+              </>
+            ) : <div className="muted">No se pudieron cargar los dojos.</div>}
+          </a>
         </section>
 
         <section className="home-grid">
