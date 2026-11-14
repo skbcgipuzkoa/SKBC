@@ -27,6 +27,7 @@ const nextGrade = new Map([
 ]);
 
 type ClassRow = {
+  dojo_slug: string;
   id: string;
   legacy_id: string | null;
   class_date: string;
@@ -87,7 +88,7 @@ export async function generateAdultTechnicalPlan(classId: string) {
 
   const { data: clase, error: classError } = await supabase
     .from("classes")
-    .select("id,legacy_id,class_date,class_group,class_type,plan_generated,closed")
+    .select("id,legacy_id,class_date,class_group,class_type,plan_generated,closed,dojo_slug")
     .eq("id", classId)
     .single<ClassRow>();
 
@@ -136,8 +137,8 @@ export async function generateAdultTechnicalPlan(classId: string) {
     throw new Error("La clase no tiene grupos tecnicos activos.");
   }
 
-  const enrichedTechniques = await addRecentPlanHistory(clase.id, techniques ?? [], clase.class_date);
-  const examContext = await loadExamPriorityContext(clase.id, clase.class_date);
+  const enrichedTechniques = await addRecentPlanHistory(clase.id, techniques ?? [], clase.class_date, clase.dojo_slug);
+  const examContext = await loadExamPriorityContext(clase.id, clase.class_date, clase.dojo_slug);
   const legacyPrefix = `PLA_${Date.now().toString(36).toUpperCase()}`;
   let legacyCounter = 1;
 
@@ -195,11 +196,12 @@ export async function generateAdultTechnicalPlan(classId: string) {
   return inserts.length;
 }
 
-async function addRecentPlanHistory(currentClassId: string, techniques: Technique[], classDate: string) {
+async function addRecentPlanHistory(currentClassId: string, techniques: Technique[], classDate: string, dojo: string) {
   const supabase = createAdminClient();
   const data = await loadAllPages<ExistingPlan>((from,to) => supabase
     .from("technical_plans")
-    .select("legacy_id,class_id,class_date,technique_id,completed,used_for_history")
+    .select("legacy_id,class_id,class_date,technique_id,completed,used_for_history,classes!inner(dojo_slug)")
+    .eq("classes.dojo_slug", dojo)
     .neq("class_id", currentClassId)
     .eq("completed", true)
     .eq("used_for_history", true)
@@ -228,8 +230,8 @@ async function addRecentPlanHistory(currentClassId: string, techniques: Techniqu
     const recent = history.get(technique.id);
     return {
       ...technique,
-      plan_repetitions: (technique.repetitions ?? 0) + (recent?.repetitions ?? 0),
-      plan_last_trained_on: maxDate(technique.last_trained_on && technique.last_trained_on <= classDate ? technique.last_trained_on : null, recent?.lastDate ?? null)
+      plan_repetitions: (dojo === "gainberri" ? technique.repetitions ?? 0 : 0) + (recent?.repetitions ?? 0),
+      plan_last_trained_on: maxDate(dojo === "gainberri" && technique.last_trained_on && technique.last_trained_on <= classDate ? technique.last_trained_on : null, recent?.lastDate ?? null)
     };
   });
 }
@@ -479,7 +481,7 @@ function categoryForDb(value: string | null | undefined) {
   return normalized || null;
 }
 
-async function loadExamPriorityContext(classId: string, classDate: string) {
+async function loadExamPriorityContext(classId: string, classDate: string, dojo: string) {
     const supabase = createAdminClient();
     type Member = {
         id: string;
@@ -491,12 +493,14 @@ async function loadExamPriorityContext(classId: string, classDate: string) {
         missing_attendance: number | null;
     };
     type History = {
+        progress_dojo_slug: string | null;
+        classes: { dojo_slug: string } | null;
         member_id: string;
         technique_id: string | null;
         technique_name: string;
     };
     const [members, attendees, requirements, curriculum, history] = await Promise.all([
-        loadAllPages<Member>((from, to) => supabase.from("members").select("id,legacy_id,display_name,grade,joined_on,last_exam_on,missing_attendance").eq("class", "adults").eq("status", "active").order("id").range(from, to).returns<Member[]>()),
+        loadAllPages<Member>((from, to) => supabase.from("members").select("id,legacy_id,display_name,grade,joined_on,last_exam_on,missing_attendance,dojo_memberships!inner(dojo_slug,status)").eq("class", "adults").eq("dojo_memberships.dojo_slug", dojo).eq("dojo_memberships.status", "active").order("id").range(from, to).returns<Member[]>()),
         loadAllPages<{
             member_id: string;
             trained_grade: string | null;
@@ -508,12 +512,13 @@ async function loadExamPriorityContext(classId: string, classDate: string) {
         }[]>()),
         loadAllPages<ExamPriorityRequirement>((from, to) => supabase.from("skbc_exam_requirements").select("grade_pattern,adult_required_repetitions,min_months").eq("member_class", "adults").eq("active", true).range(from, to).returns<ExamPriorityRequirement[]>()),
         loadAllPages<Technique>((from, to) => supabase.from("techniques").select("id,name,grade,category,content_type").order("id").range(from, to).returns<Technique[]>()),
-        loadAllPages<History>((from, to) => supabase.from("member_technical_history").select("member_id,technique_id,technique_name").eq("completed", true).lte("class_date", classDate).order("id").range(from, to).returns<History[]>())
+        loadAllPages<History>((from, to) => supabase.from("member_technical_history").select("member_id,technique_id,technique_name,progress_dojo_slug,classes(dojo_slug)").eq("completed", true).lte("class_date", classDate).order("id").range(from, to).returns<History[]>())
     ]);
     const cycleAttributions = await loadExamCycleAttributions(members.map((member) => member.id));
     const attendanceKnown = attendees.length > 0, attendeeIds = new Set(attendees.map(row => row.member_id));
     const counts = new Map<string, Map<string, number>>();
     for (const row of history) {
+        if ((row.progress_dojo_slug ?? row.classes?.dojo_slug ?? "gainberri") !== dojo) continue;
         const repetitions = counts.get(row.member_id) ?? new Map<string, number>();
         const key = row.technique_id ?? normalize(row.technique_name);
         repetitions.set(key, (repetitions.get(key) ?? 0) + 1);

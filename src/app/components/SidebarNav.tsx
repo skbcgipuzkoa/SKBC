@@ -17,6 +17,7 @@ const homeItem: NavItem = { label: "Inicio", href: "/skbc-interno" };
 const sectionItems: NavItem[] = [
   { label: "Actividad fichas", href: "/actividad-fichas" },
   { label: "Dojo", href: "/skbc-interno/dojo" },
+  { label: "Gestionar dojos", href: "/dojos" },
   { label: "Control dia", href: "/control-dia" },
   { label: "Sustituto", href: "/clases/nueva?delegado=1" },
   { label: "Dia especial", href: "/clases/nueva?especial=1" },
