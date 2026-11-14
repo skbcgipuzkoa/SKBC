@@ -1,3 +1,4 @@
+import { PortalBackLink } from "@/app/portal/back-link";
 import { requireDojo } from "@/lib/dojo-access";
 
 export default async function DojoSummary({ params }: {
@@ -23,7 +24,7 @@ export default async function DojoSummary({ params }: {
 
   return (
     <main className="main">
-      <a href={`/portal/${dojo.slug}`}>{dojo.name}</a>
+      <PortalBackLink href={`/portal/${dojo.slug}`} label={`Volver a ${dojo.name}`} />
       <h1>Resumen semanal</h1>
       <p>{start} – {today}</p>
       <p>{sessions.data.filter((session) => session.closed).length} clases cerradas · {attendance.count ?? 0} asistencias</p>

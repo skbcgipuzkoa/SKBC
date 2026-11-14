@@ -1,3 +1,4 @@
+import { PortalBackLink } from "@/app/portal/back-link";
 import { notFound } from "next/navigation";
 import { requireDojo } from "@/lib/dojo-access";
 
@@ -21,7 +22,7 @@ export default async function DojoMemberPage({ params }: {
 
   return (
     <main className="main">
-      <a href={`/portal/${dojo.slug}`}>{dojo.name}</a>
+      <PortalBackLink href={`/portal/${dojo.slug}`} label={`Volver a ${dojo.name}`} />
       <h1>{data.members.display_name}</h1>
       <p>{data.members.grade ?? "Sin grado"} · {data.status === "active" ? "Activo" : "Baja"}</p>
       {data.members.free_trial_ends_on && <p>Fin del mes de prueba: {data.members.free_trial_ends_on}</p>}

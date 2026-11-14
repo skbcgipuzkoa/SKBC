@@ -1,3 +1,4 @@
+import { PortalBackLink } from "@/app/portal/back-link";
 import { redirect } from "next/navigation";
 import { requireDojo } from "@/lib/dojo-access";
 import { hasInternalAccess } from "@/lib/auth";
@@ -38,7 +39,7 @@ export default async function Visitors({ params, searchParams }: {
   if (visits.error) throw visits.error;
   if (origins.error) throw origins.error;
   return <main className="main">
-    <a href={`/portal/${slug}`}>{dojo.name}</a>
+    <PortalBackLink href={`/portal/${slug}`} label={`Volver a ${dojo.name}`} />
     <h1>Kenshis visitantes</h1>
     {(await searchParams).error && <p role="alert">No se pudo registrar la visita.</p>}
     {origins.data && <form action={addVisit.bind(null, slug)} className="filters">

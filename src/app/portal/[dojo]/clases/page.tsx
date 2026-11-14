@@ -1,3 +1,4 @@
+import { PortalBackLink } from "@/app/portal/back-link";
 import { redirect } from "next/navigation";
 import { requireDojo } from "@/lib/dojo-access";
 
@@ -33,7 +34,7 @@ export default async function DojoClasses({ params, searchParams }: {
 
   return (
     <main className="main">
-      <a href={`/portal/${dojo.slug}`}>{dojo.name}</a>
+      <PortalBackLink href={`/portal/${dojo.slug}`} label={`Volver a ${dojo.name}`} />
       <h1>Clases</h1>
       {!dojo.archived_at && <form className="filters" action={createClass.bind(null, dojo.slug)}>
         <label>Nombre <input name="name" required maxLength={100} /></label>

@@ -1,3 +1,4 @@
+import { PortalBackLink } from "@/app/portal/back-link";
 import { requestDojoKenshiAction } from "@/app/actions";
 import { KenshiForm } from "@/components/kenshi-form";
 import { getBillingSettings } from "@/lib/billing-settings";
@@ -10,7 +11,7 @@ export default async function NewDojoKenshi({ params, searchParams }: {
   const { dojo } = await requireDojo((await params).dojo, true);
   const billing = await getBillingSettings();
   return <main className="main">
-    <a href={`/portal/${dojo.slug}`}>Volver a {dojo.name}</a>
+    <PortalBackLink href={`/portal/${dojo.slug}`} label={`Volver a ${dojo.name}`} />
     <h1>Nuevo kenshi</h1>
     <section className="card">
       <KenshiForm action={requestDojoKenshiAction.bind(null, dojo.slug)}

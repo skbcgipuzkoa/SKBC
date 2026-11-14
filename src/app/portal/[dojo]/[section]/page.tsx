@@ -1,3 +1,4 @@
+import { PortalBackLink } from "@/app/portal/back-link";
 import { notFound } from "next/navigation";
 import { requireDojo } from "@/lib/dojo-access";
 
@@ -55,7 +56,7 @@ export default async function DojoSection({ params }: {
   }
   return (
     <main className="main">
-      <a href={`/portal/${slug}`}>{dojo.name}</a>
+      <PortalBackLink href={`/portal/${slug}`} label={`Volver a ${dojo.name}`} />
       <h1>{labels[section as keyof typeof labels]}</h1>
       {rows.length ? <ol>{rows.map(({ id, label, href }) => (
         <li key={id}>{href ? <a href={href}>{label}</a> : label}</li>

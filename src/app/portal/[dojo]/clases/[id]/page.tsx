@@ -1,3 +1,4 @@
+import { PortalBackLink } from "@/app/portal/back-link";
 import { randomBytes } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
@@ -81,7 +82,7 @@ export default async function SessionPage({ params, searchParams }: {
   if (substituteError) throw substituteError;
   return (
     <main className="main">
-      <a href={`/portal/${slug}/clases`}>Clases de {dojo.name}</a>
+      <PortalBackLink href={`/portal/${slug}/clases`} label="Volver a clases" />
       <h1>{session.name}</h1>
       <p>{session.class_date} · {present.size} asistentes</p>
       {(await searchParams).error && <p role="alert">No se pudo guardar el cambio.</p>}

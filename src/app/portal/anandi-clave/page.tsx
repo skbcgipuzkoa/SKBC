@@ -1,3 +1,4 @@
+import { PortalBackLink } from "@/app/portal/back-link";
 import { redirect } from "next/navigation";
 import { hasAnandiAccess, readAnandiAccess, setAnandiCredentials } from "@/lib/anandi-auth";
 import { requireDojo } from "@/lib/dojo-access";
@@ -22,7 +23,7 @@ export default async function AccessSettings({ searchParams }: {
   const access = await readAnandiAccess();
   const { error, saved } = await searchParams;
   return <main className="main">
-    <a href="/portal/anandi">Volver a Anandi</a>
+    <PortalBackLink href="/portal/anandi" label="Volver a Anandi" />
     <h1>Credenciales de Anandi</h1>
     {error && <p role="alert">Revisa el usuario y las contraseñas.</p>}
     {saved && <p role="status">Acceso actualizado.</p>}
