@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { requireDojo } from "@/lib/dojo-access";
+import { driveImageUrl } from "@/lib/drive";
 import { normalizeGrade } from "@/lib/adult-groups";
 import { ClassSectionNav } from "@/components/class-section-nav";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
@@ -141,6 +142,13 @@ export default async function SessionPage({ params, searchParams }: {
   const guided = session.class_group === "adults" && slug !== "gainberri";
   const step = !editable ? "cerrada" : fromMode ? modo : "plan";
   const attendancePath = guided ? path + "?modo=asistencia" : path;
+  const rosterRows = Array.isArray(roster.data) ? roster.data : [];
+  const showAttendance = editable && (!guided || step === "asistencia");
+  const profiles = showAttendance && rosterRows.length
+    ? await db.from("members").select("id,photo_url,grade").in("id", rosterRows.map(row => row.member_id))
+    : { data: [], error: null };
+  if (profiles.error) throw profiles.error;
+  const profilesById = new Map(profiles.data.map(profile => [profile.id, profile]));
   const grades = [...new Set(plan.map((row) => row.group_grade))];
   const showManual = guided && editable && step === "plan" && session.class_group === "adults";
   const [catalog, groups] = showManual ? await Promise.all([
@@ -233,15 +241,21 @@ export default async function SessionPage({ params, searchParams }: {
       </>}
       {editable && (!guided || step === "asistencia") && <ClassVisitorForm host={slug} classId={id} group={session.class_group} returnTo={attendancePath} />}
       {editable && (!guided || step === "asistencia") && <ProvisionalAttendanceForm dojo={slug} classId={id} group={session.class_group} returnTo={attendancePath} />}
-      {editable && (!guided || step === "asistencia") && <form action={save.bind(null, slug, id, guided)}>
+      {showAttendance && <form action={save.bind(null, slug, id, guided)} className="dojo-check-list">
         {guided && <span data-class-primary-form="adult-attendance" hidden />}
         <fieldset>
           <legend>Pasar lista</legend>
-          {(Array.isArray(roster.data) ? roster.data : []).map(({member_id, display_name, visit_id}) => (
-            <div key={member_id}>
-              <label><input type="checkbox" name="member" value={member_id} defaultChecked={present.has(member_id)} /> {display_name}{visit_id && " · Visitante"}</label>
-            </div>
-          ))}
+          {rosterRows.map(({ member_id, display_name, visit_id }) => {
+            const profile = profilesById.get(member_id);
+            const photo = driveImageUrl(profile?.photo_url);
+            const initials = display_name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
+            return <label key={member_id} className="dojo-member-row">
+              <input type="checkbox" name="member" value={member_id} defaultChecked={present.has(member_id)} />
+              {photo ? <img className="attendance-avatar" src={photo} alt="" /> :
+                <span className="attendance-avatar attendance-avatar-placeholder" aria-hidden="true">{initials}</span>}
+              <span><strong>{display_name}</strong><small>{profile?.grade ?? "Sin grado"}{visit_id && " · Visitante"}</small></span>
+            </label>;
+          })}
         </fieldset>
         <button className="primary-link">Guardar asistencia</button>
       </form>}
