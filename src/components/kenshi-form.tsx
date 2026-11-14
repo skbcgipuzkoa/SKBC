@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { adultGrades, kidsGrades } from "@/lib/grades";
 import { splitContactValues } from "@/lib/member-contacts";
 
+import { resolveFreeTrialBillingDate } from "@/lib/free-trial";
+
 type Props = {
+  autoTrialBilling?: boolean;
   action: (formData: FormData) => void | Promise<void>;
   submitLabel: string;
   adultsOnly?: boolean;
@@ -33,7 +36,8 @@ type Props = {
   };
 };
 
-export function KenshiForm({ action, submitLabel, hiddenFields = {}, adultsOnly, initial, error, saved }: Props) {
+export function KenshiForm({ action, submitLabel, hiddenFields = {}, adultsOnly, initial, error, saved, autoTrialBilling }: Props) {
+  const firstBillingInput = useRef<HTMLInputElement>(null);
   const [memberClass, setMemberClass] = useState<"kids" | "adults">(initial?.class ?? "adults");
   const gradeOptions = useMemo(() => (memberClass === "kids" ? kidsGrades : adultGrades), [memberClass]);
   const [familyEmail, familyEmail2 = ""] = splitContactValues(initial?.familyEmail, "email");
@@ -106,8 +110,11 @@ export function KenshiForm({ action, submitLabel, hiddenFields = {}, adultsOnly,
           <input type="checkbox" name="freeTrialEnabled" defaultChecked={initial?.freeTrialEnabled ?? false} />
           Aplicar aviso de mes gratis
         </label>
-        <label>Inicio mes gratis<input name="freeTrialStartedOn" type="date" defaultValue={initial?.freeTrialStartedOn ?? initial?.joinedOn ?? ""} /></label>
-        <label>Primer cobro posible<input name="freeTrialEndsOn" type="date" defaultValue={initial?.freeTrialEndsOn ?? ""} /></label>
+        <label>Inicio mes gratis<input name="freeTrialStartedOn" type="date" onChange={autoTrialBilling ? (event) => {
+          const input = firstBillingInput.current;
+          if (input) input.value = resolveFreeTrialBillingDate(event.currentTarget.value) ?? "";
+        } : undefined} defaultValue={initial?.freeTrialStartedOn ?? initial?.joinedOn ?? ""} /></label>
+        <label>Primer cobro posible<input ref={firstBillingInput} name="freeTrialEndsOn" type="date" readOnly={autoTrialBilling} defaultValue={initial?.freeTrialEndsOn ?? ""} /></label>
         <label className="wide">Direccion<input name="address" defaultValue={initial?.address ?? ""} /></label>
         <label className="wide">URL material grado<input name="siteUrl" defaultValue={initial?.siteUrl ?? ""} /></label>
         <label className="wide">Historial examenes<textarea name="examHistory" rows={4} defaultValue={initial?.examHistory ?? ""} /></label>

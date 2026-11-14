@@ -14,7 +14,7 @@ export default async function NewDojoKenshi({ params, searchParams }: {
     <h1>Nuevo kenshi</h1>
     <section className="card">
       <KenshiForm action={requestDojoKenshiAction.bind(null, dojo.slug)}
-        submitLabel="Solicitar alta" adultsOnly error={Boolean((await searchParams).error)}
+        submitLabel="Solicitar alta" adultsOnly autoTrialBilling={dojo.slug === "anandi"} error={Boolean((await searchParams).error)}
         initial={{ class: "adults", status: "active", freeTrialEnabled: billing.freeTrialPromotionEnabled }} />
     </section>
   </main>;
