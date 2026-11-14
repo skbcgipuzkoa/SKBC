@@ -200,6 +200,15 @@ type TechnicalAreaLink = {
 
 type InternalNote = { id: string; note: string; important: boolean; resolved_at: string | null; created_by: string; created_at: string };
 
+async function transferKenshi(memberId: string, legacyId: string, form: FormData) {
+  "use server";
+  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  const { error } = await createAdminClient().rpc("transfer_kenshi", {
+    p_member: memberId, p_destination: String(form.get("dojo") ?? "")
+  });
+  redirect(`/kenshis/${encodeURIComponent(legacyId)}?transfer=${error ? "error" : "ok"}#dojo-kenshi`);
+}
+
 export default async function KenshiDetailPage({
   params,
   searchParams
@@ -344,6 +353,13 @@ export default async function KenshiDetailPage({
   const childTechnicalHistory = childTechnicalHistoryResult.error ? [] : childTechnicalHistoryResult.data ?? [];
   const auditTechniques = buildAuditTechniqueRows(member.class, technicalHistory, childTechnicalHistory);
   const latestTechnique = auditTechniques[0] ?? null;
+  const [currentDojo, destinations] = await Promise.all([
+    supabase.from("members").select("dojo").eq("id", member.id).single(),
+    supabase.from("dojos").select("slug,name,dojo_groups!inner(member_class)")
+      .is("archived_at", null).eq("dojo_groups.member_class", member.class).order("name")
+  ]);
+  if (currentDojo.error || destinations.error) throw currentDojo.error ?? destinations.error;
+
   const examOutlook = (await loadExamOutlooks({ memberIds: [member.id] })).get(member.id);
   const latestExam = exams?.[0] ?? null;
   const latestCourse = courses?.[0] ?? null;
@@ -393,6 +409,15 @@ export default async function KenshiDetailPage({
           <article className="card detail-list" id="datos-kenshi">
             <h2>Datos</h2>
             <p><strong>ID SKBC:</strong> {member.legacy_id}</p>
+            <form id="dojo-kenshi" className="filters" action={transferKenshi.bind(null, member.id, legacyId)}>
+              <label>Dojo de pertenencia
+                <select name="dojo" defaultValue={currentDojo.data?.dojo} required>
+                  <option value="">Seleccionar dojo</option>
+                  {destinations.data?.map(dojo => <option key={dojo.slug} value={dojo.slug}>{dojo.name}</option>)}
+                </select>
+              </label>
+              <button className="primary-link">Guardar dojo</button>
+            </form>
             <KenshiForm
               action={updateKenshiAction}
               submitLabel="Guardar cambios"
