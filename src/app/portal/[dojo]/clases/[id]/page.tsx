@@ -1,3 +1,5 @@
+import { ProvisionalAttendanceForm } from "@/components/provisional-attendance-form";
+import { ClassVisitorForm } from "@/components/class-visitor-form";
 import { PortalBackLink } from "@/app/portal/back-link";
 import { randomBytes } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
@@ -90,6 +92,8 @@ export default async function SessionPage({ params, searchParams }: {
       {!editable && <ul>{plan.filter((row) => row.completed).map((row) => <li key={row.id}>{row.group_grade} · {row.technique_name}</li>)}</ul>}
       {editable && session.class_group === "adults" && !plan.length &&
         <form action={preparePlan.bind(null, slug, id)}><button>Generar plan técnico</button></form>}
+      {editable && <ClassVisitorForm host={slug} classId={id} group={session.class_group} returnTo={`/portal/${slug}/clases/${id}`} />}
+      {editable && <ProvisionalAttendanceForm dojo={slug} classId={id} group={session.class_group} returnTo={`/portal/${slug}/clases/${id}`} />}
       {editable && <form action={save.bind(null, slug, id)}>
         <fieldset>
           <legend>Pasar lista</legend>

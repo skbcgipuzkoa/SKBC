@@ -1,11 +1,11 @@
 import { UserPlus } from "lucide-react";
-import { addProvisionalAttendanceAction } from "@/app/actions";
+import { addDojoGuestAction, addProvisionalAttendanceAction } from "@/app/actions";
 
-export function ProvisionalAttendanceForm({ classId, group, returnTo }: { classId: string; group: "kids" | "adults"; returnTo: string }) {
+export function ProvisionalAttendanceForm({ classId, group, returnTo, dojo }: { classId: string; group: "kids" | "adults"; returnTo: string; dojo?: string }) {
   return (
     <details className="provisional-attendance">
       <summary><UserPlus size={16} aria-hidden="true" /> Anadir invitado</summary>
-      <form action={addProvisionalAttendanceAction} className="inline-form">
+      <form action={dojo ? addDojoGuestAction.bind(null, dojo) : addProvisionalAttendanceAction} className="inline-form">
         <input name="classId" type="hidden" value={classId} />
         <input name="group" type="hidden" value={group} />
         <input name="returnTo" type="hidden" value={returnTo} />

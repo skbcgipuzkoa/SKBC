@@ -1,3 +1,4 @@
+import { ClassVisitorForm } from "@/components/class-visitor-form";
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
 import { TechniqueVideoLink } from "@/components/technique-video-link";
 import { Check, ChevronDown, LogOut } from "lucide-react";
@@ -295,7 +296,7 @@ export default async function DojoClassPage({
                 savedSyllabusItemIds={childClassPlan?.syllabus_item_ids ?? []}
                 open={query.section === "kids-technical"}
               />
-              <ProvisionalAttendanceForm classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} />
+              <ClassVisitorForm host="gainberri" classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} /><ProvisionalAttendanceForm classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} />
               <PersistentAttendanceForm className="dojo-check-list" storageKey={`dojo-attendance:${kidsClass.id}`}>
                 {pendingKids.length ? <input type="hidden" data-class-primary-form="kids-attendance" /> : null}
                 <input type="hidden" name="classId" value={kidsClass.id} />
@@ -404,7 +405,7 @@ export default async function DojoClassPage({
           <h1>Asistencia adultos</h1>
           <p>Marca asistencia y ajusta grupo/rol solo cuando haga falta.</p>
           {adultClass ? (
-            <><ProvisionalAttendanceForm classId={adultClass.id} group="adults" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=adults`} /><form action={addBulkAttendanceAction} className="dojo-check-list" data-class-primary-form={pendingAdults.length ? "adult-attendance" : undefined}>
+            <><ClassVisitorForm host="gainberri" classId={adultClass.id} group="adults" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=adults`} /><ProvisionalAttendanceForm classId={adultClass.id} group="adults" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=adults`} /><form action={addBulkAttendanceAction} className="dojo-check-list" data-class-primary-form={pendingAdults.length ? "adult-attendance" : undefined}>
               <input type="hidden" name="classId" value={adultClass.id} />
               <input type="hidden" name="legacyId" value={adultClass.legacy_id ?? legacyId} />
               <input type="hidden" name="returnTo" value={`/dojo/${adultClass.legacy_id ?? legacyId}?step=adults&saved=adults`} />

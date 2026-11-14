@@ -199,17 +199,27 @@ export async function dismissSelectedAdminAlertsAction(formData: FormData) {
 }
 
 export async function addProvisionalAttendanceAction(formData: FormData) {
-  if (!(await hasInternalAccess())) redirect("/skbc-interno");
+  return saveProvisionalAttendance(formData, "gainberri");
+}
+
+export async function addDojoGuestAction(slug: string, formData: FormData) {
+  const { requireDojo } = await import("@/lib/dojo-access");
+  await requireDojo(slug, true);
+  return saveProvisionalAttendance(formData, slug);
+}
+
+async function saveProvisionalAttendance(formData: FormData, slug: string) {
+  if (slug === "gainberri" && !(await hasInternalAccess())) redirect("/skbc-interno");
   const displayName = String(formData.get("displayName") ?? "").trim().replace(/\s+/g, " ");
   const classId = String(formData.get("classId") ?? "").trim();
   const group = String(formData.get("group") ?? "");
-  const returnTo = safeInternalReturn(String(formData.get("returnTo") ?? "/clases"));
+  const returnTo = slug === "gainberri" ? safeInternalReturn(String(formData.get("returnTo") ?? "/clases")) : `/portal/${slug}/clases/${encodeURIComponent(classId)}`;
   if (displayName.length < 2 || !classId || !["kids", "adults"].includes(group)) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=provisional`);
 
   const supabase = createAdminClient();
-  const { data: clase, error: classError } = await supabase.from("classes").select("id,class_date,class_group").eq("id", classId).single();
+  const { data: clase, error: classError } = await supabase.from("classes").select("id,class_date,class_group").eq("id", classId).eq("dojo_slug", slug).single();
   if (classError || !clase || clase.class_group !== group) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=provisional`);
-  const { data: provisional, error } = await supabase.from("provisional_members").insert({ display_name: displayName, class: group, created_by: "Alvaro" }).select("id").single();
+  const { data: provisional, error } = await supabase.from("provisional_members").insert({ display_name: displayName, class: group, created_by: slug === "gainberri" ? "Alvaro" : "dojo_portal" }).select("id").single();
   if (error || !provisional) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=provisional`);
   const { error: attendanceError } = await supabase.from("provisional_attendance").insert({ provisional_member_id: provisional.id, class_id: classId, attended_on: clase.class_date });
   if (attendanceError) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=provisional`);

@@ -1,3 +1,4 @@
+import { ClassVisitorForm } from "@/components/class-visitor-form";
 import { techniqueHistoryName } from "@/lib/technique-variant-label";
 import { CLASS_PHOTO_ALBUM_LIMIT } from "@/lib/class-photo-limits";
 import { ExamPreparationNotice } from "@/components/exam-preparation-notice";
@@ -596,7 +597,7 @@ export default async function ClaseDetailPage({
       </div>
     </AttendanceDayForm>
     <div className="provisional-group-grid">
-      {attendancePanelClasses.map((dayClass) => <ProvisionalAttendanceForm key={dayClass.id} classId={dayClass.id} group={dayClass.class_group} returnTo={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=${isCombinedDay ? "cierre" : "asistencia"}#asistencia`} />)}
+      {attendancePanelClasses.map((dayClass) => <div key={dayClass.id}><ClassVisitorForm host="gainberri" classId={dayClass.id} group={dayClass.class_group} returnTo={`/clases/${legacyId}?step=${isCombinedDay ? "cierre" : "asistencia"}#asistencia`} /><ProvisionalAttendanceForm classId={dayClass.id} group={dayClass.class_group} returnTo={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=${isCombinedDay ? "cierre" : "asistencia"}#asistencia`} /></div>)}
     </div></>
   );
   const technicalReviewPanel = clase.class_group === "adults" && (activeStep === "attendance" || showCombinedCloseStep || (isCorrectionMode && correctionSection === "adult-technical")) && canEditClosedClass && hasPlan ? (
