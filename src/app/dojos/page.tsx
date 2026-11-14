@@ -1,3 +1,5 @@
+import { DojoSenseiFields } from "./sensei-fields";
+import { driveImageUrl } from "@/lib/drive";
 import styles from "./dojos.module.css";
 import { readAnandiAccess, rotateAnandiLink } from "@/lib/anandi-auth";
 import { redirect } from "next/navigation";
@@ -62,9 +64,20 @@ async function saveDojoDetails(slug: string, form: FormData) {
   const name = field("name");
   const back = "/dojos?edit=" + encodeURIComponent(slug);
   if (!name || name.length > 100 || (count !== null && !/^\d{1,6}$/.test(count))) redirect(back + "&error=ficha");
-  const { error } = await createAdminClient().from("dojos").update({
-    name, opened_on: field("opened_on"), location: field("location"), sensei: field("sensei"),
-    contact: field("contact"), notes: field("notes"), opening_members: count === null ? null : Number(count)
+  const color = field("color");
+  const memberId = field("sensei_member");
+  const photo = field("sensei_photo");
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color) || (photo && !/^https?:\/\//i.test(photo))) redirect(back + "&error=ficha");
+  const db = createAdminClient();
+  const linked = memberId ? await db.from("members").select("display_name,student_phone,family_email,photo_url")
+    .eq("id", memberId).maybeSingle() : null;
+  if (memberId && (!linked?.data || linked.error)) redirect(back + "&error=ficha");
+  const member = linked?.data;
+  const { error } = await db.from("dojos").update({
+    accent_color: color, sensei_member_id: memberId,
+    sensei_photo_url: member ? member.photo_url : photo,
+    name, opened_on: field("opened_on"), location: field("location"), sensei: member ? member.display_name : field("sensei"),
+    contact: member ? [member.student_phone, member.family_email].filter(Boolean).join(" · ") || null : field("contact"), notes: field("notes"), opening_members: count === null ? null : Number(count)
   }).eq("slug", slug);
   redirect(error ? back + "&error=ficha#ficha-dojo" : "/dojos?saved=ficha");
 }
@@ -76,12 +89,20 @@ export default async function DojosPage({ searchParams }: {
   const access = await readAnandiAccess();
   const { error: formError, close, edit, saved } = await searchParams;
   const { data, error } = await createAdminClient().from("dojos")
-    .select("slug,name,accent_color,archived_at,registered_at,opened_on,location,sensei,contact,notes,opening_members").order("name");
+    .select("slug,name,accent_color,archived_at,registered_at,opened_on,location,sensei,contact,notes,opening_members,sensei_member_id,sensei_photo_url").order("name");
   if (error) throw error;
 
   const selected = data.find((dojo) => dojo.slug === close && !dojo.archived_at && dojo.slug !== "gainberri");
   const db = createAdminClient();
   const editable = data.find(dojo => dojo.slug === edit);
+  const members = editable ? await db.from("members")
+    .select("id,display_name,student_phone,family_email,photo_url").order("display_name").order("id") : null;
+  if (members?.error) throw members.error;
+  const senseiOptions = members?.data?.map(member => ({
+    id: member.id, name: member.display_name,
+    contact: [member.student_phone, member.family_email].filter(Boolean).join(" · "),
+    photo: driveImageUrl(member.photo_url)
+  })) ?? [];
   const history = await db.from("dojo_closure_history").select("id,dojo_name,location,closed_on,reason,members").order("closed_on", { ascending: false });
   if (history.error) throw history.error;
   const pending = await db.from("dojo_enrollment_requests")
@@ -134,14 +155,18 @@ export default async function DojosPage({ searchParams }: {
       </div>
       {editable && <section id="ficha-dojo" className="card">
         <h2>Ficha de {editable.name}</h2>
+        {editable.sensei_photo_url && <img className={styles.senseiPhoto} src={driveImageUrl(editable.sensei_photo_url) ?? undefined} alt={editable.sensei ?? "Sensei"} width={88} height={88} />}
         <p>Alta en el sistema · {editable.registered_at?.slice(0, 10) ?? "Fecha sin registrar"}</p>
         {formError === "ficha" && <p role="alert">No se pudo guardar la ficha.</p>}
         <form className={styles.form} action={saveDojoDetails.bind(null, editable.slug)}>
           <label>Nombre <input name="name" required maxLength={100} defaultValue={editable.name} /></label>
           <label>Fecha de apertura <input name="opened_on" type="date" defaultValue={editable.opened_on ?? ""} /></label>
           <label>Lugar o dirección <input name="location" maxLength={240} defaultValue={editable.location ?? ""} /></label>
-          <label>Sensei <input name="sensei" maxLength={160} defaultValue={editable.sensei ?? ""} /></label>
-          <label>Contacto <input name="contact" maxLength={240} defaultValue={editable.contact ?? ""} /></label>
+          <label>Color <input name="color" type="color" defaultValue={editable.accent_color} /></label>
+          <DojoSenseiFields key={editable.slug} members={senseiOptions} initial={{
+            id: editable.sensei_member_id ?? "", name: editable.sensei ?? "",
+            contact: editable.contact ?? "", photo: editable.sensei_photo_url ?? ""
+          }} />
           <label>Kenshis en la apertura <input name="opening_members" type="number" min={0} max={999999} defaultValue={editable.opening_members ?? ""} /></label>
           <label>Notas <textarea name="notes" maxLength={2000} defaultValue={editable.notes ?? ""} /></label>
           <button className="primary-link">Guardar ficha</button>

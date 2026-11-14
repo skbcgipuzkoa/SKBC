@@ -18,3 +18,4 @@
 .form input[type="checkbox"] { min-height: auto; justify-self: start; }
 .access form { margin-top: 10px; }
 .page :is(a, button, input, summary, textarea, select):focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+.senseiPhoto { object-fit: cover; border-radius: 12px; }
