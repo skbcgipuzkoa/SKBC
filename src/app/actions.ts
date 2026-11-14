@@ -536,25 +536,6 @@ function normalizeInternalNoticeStatus(value: string) {
   return "open";
 }
 
-async function getNextSkbcLegacyId(supabase: ReturnType<typeof createAdminClient>) {
-  const { data, error } = await supabase
-    .from("members")
-    .select("legacy_id")
-    .not("legacy_id", "is", null)
-    .limit(10000)
-    .returns<{ legacy_id: string | null }[]>();
-
-  if (error) throw error;
-
-  const highest = data.reduce((max, row) => {
-    const id = row.legacy_id?.trim();
-    if (!id || !/^\d+$/.test(id)) return max;
-    return Math.max(max, Number(id));
-  }, 0);
-
-  return String(highest + 1);
-}
-
 export async function updateIkaIdAction(formData: FormData) {
   const memberId = String(formData.get("memberId") ?? "");
   const legacyId = String(formData.get("legacyId") ?? "");
@@ -851,9 +832,8 @@ export async function createDojoKenshiAction(slug: string, formData: FormData) {
   }
   let memberId: string;
   try {
-    const legacyId = await getNextSkbcLegacyId(db);
     const { data, error } = await db.rpc("create_dojo_kenshi", {
-      p_slug: dojo.slug, p_profile: { ...payload, legacy_id: legacyId, photo_url: photoUrl }
+      p_slug: dojo.slug, p_profile: { ...payload, photo_url: photoUrl }
     });
     if (error || !data) throw error ?? new Error("Missing member ID");
     memberId = data;
@@ -879,17 +859,9 @@ export async function createKenshiAction(formData: FormData) {
   }
 
   const supabase = createAdminClient();
-  let nextLegacyId: string;
-  try {
-    nextLegacyId = await getNextSkbcLegacyId(supabase);
-  } catch (error) {
-    console.error("Error resolving next SKBC legacy id", error);
-    redirect("/kenshis/nuevo?error=kenshi");
-  }
-
   const { data, error } = await supabase
     .from("members")
-    .insert({ ...payload, legacy_id: nextLegacyId })
+    .insert(payload)
     .select("id,legacy_id")
     .single();
 
