@@ -140,6 +140,7 @@ export default async function DojosPage({ searchParams }: {
               <span>Sensei · {dojo.sensei}</span>
             </p>}
             {dojo.opened_on && <p>Apertura · {dojo.opened_on}</p>}
+            {dojo.training_schedule && <p className={styles.schedule}><strong>Entrenamientos</strong><br />{dojo.training_schedule}</p>}
             <div className={styles.actions}>
               <a className="primary-link" href={`/dojos?edit=${dojo.slug}#ficha-dojo`}>Ficha del dojo</a>
               <a className={styles.pill} href={`/portal/${dojo.slug}`}>Abrir portal ↗</a>

@@ -21,3 +21,4 @@
 .senseiPhoto { object-fit: cover; border-radius: 12px; }
 .sensei { display: flex; align-items: center; gap: 10px; }
 .sensei img { flex: none; border-radius: 50%; object-fit: cover; }
+.schedule { white-space: pre-line; overflow-wrap: anywhere; }
