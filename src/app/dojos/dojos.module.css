@@ -19,3 +19,5 @@
 .access form { margin-top: 10px; }
 .page :is(a, button, input, summary, textarea, select):focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 .senseiPhoto { object-fit: cover; border-radius: 12px; }
+.sensei { display: flex; align-items: center; gap: 10px; }
+.sensei img { flex: none; border-radius: 50%; object-fit: cover; }

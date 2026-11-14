@@ -135,7 +135,10 @@ export default async function DojosPage({ searchParams }: {
             <span className={styles.status}>{dojo.archived_at ? "Archivado" : "Activo"}</span>
             <h2>{dojo.name}</h2>
             {dojo.location && <p>{dojo.location}</p>}
-            {dojo.sensei && <p>Sensei · {dojo.sensei}</p>}
+            {dojo.sensei && <p className={styles.sensei}>
+              {dojo.sensei_photo_url && <img src={driveImageUrl(dojo.sensei_photo_url) ?? undefined} alt="" width={44} height={44} loading="lazy" />}
+              <span>Sensei · {dojo.sensei}</span>
+            </p>}
             {dojo.opened_on && <p>Apertura · {dojo.opened_on}</p>}
             <div className={styles.actions}>
               <a className="primary-link" href={`/dojos?edit=${dojo.slug}#ficha-dojo`}>Ficha del dojo</a>
