@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { requireDojo } from "@/lib/dojo-access";
+import { normalizeGrade } from "@/lib/adult-groups";
 import { ClassSectionNav } from "@/components/class-section-nav";
 import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
@@ -204,7 +205,8 @@ export default async function SessionPage({ params, searchParams }: {
           <span data-class-primary-form="adult-technical" hidden />
           {grades.map((grade, index) => {
             const rows = plan.filter((row) => row.group_grade === grade);
-            return <details className="dojo-grade-panel" key={grade} open={index === 0}>
+            const colorGrade = normalizeGrade(rows[0].target_grade || grade).toLowerCase().replace(/\s+/g, "-");
+            return <details className={`dojo-grade-panel dojo-grade-${colorGrade}`} key={grade} open={index === 0}>
               <summary>
                 <span>{grade} {rows[0].target_grade && <> <b>para</b> {rows[0].target_grade}</>}</span>
                 <em>{rows.filter((row) => row.completed).length}/{rows.length}</em>
