@@ -66,15 +66,15 @@ async function saveDojoDetails(slug: string, form: FormData) {
     name, opened_on: field("opened_on"), location: field("location"), sensei: field("sensei"),
     contact: field("contact"), notes: field("notes"), opening_members: count === null ? null : Number(count)
   }).eq("slug", slug);
-  redirect(back + (error ? "&error=ficha" : ""));
+  redirect(error ? back + "&error=ficha#ficha-dojo" : "/dojos?saved=ficha");
 }
 
 export default async function DojosPage({ searchParams }: {
-  searchParams: Promise<{ error?: string; close?: string; edit?: string }>;
+  searchParams: Promise<{ error?: string; close?: string; edit?: string; saved?: string }>;
 }) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
   const access = await readAnandiAccess();
-  const { error: formError, close, edit } = await searchParams;
+  const { error: formError, close, edit, saved } = await searchParams;
   const { data, error } = await createAdminClient().from("dojos")
     .select("slug,name,accent_color,archived_at,registered_at,opened_on,location,sensei,contact,notes,opening_members").order("name");
   if (error) throw error;
@@ -106,6 +106,7 @@ export default async function DojosPage({ searchParams }: {
         <a className={styles.pill} href="#altas">Altas pendientes ({pending.data.length})</a>
         {history.data.length > 0 && <a className={styles.pill} href="#historial">Historial de cierres</a>}
       </nav>
+      {saved === "ficha" && <p role="status">Ficha del dojo guardada.</p>}
       <div className={styles.grid}>
         {data.map((dojo) => (
           <article key={dojo.slug} className={styles.dojo} style={{ borderTopColor: dojo.accent_color }}>
@@ -181,7 +182,7 @@ export default async function DojosPage({ searchParams }: {
       </form>)}
       </section>
       <section id="crear-dojo" className="card"><h2>Crear dojo</h2>
-      {formError && formError !== "cierre" && formError !== "alta" && <p role="alert">No se pudo crear el dojo. Revisa los datos y el identificador.</p>}
+      {(formError === "datos" || formError === "guardar") && <p role="alert">No se pudo crear el dojo. Revisa los datos y el identificador.</p>}
       <form action={createDojo} className={styles.form}>
         <label>Nombre <input name="name" required maxLength={100} /></label>
         <label>Identificador <input name="slug" required maxLength={60} pattern="[a-z0-9]+(-[a-z0-9]+)*" /></label>
