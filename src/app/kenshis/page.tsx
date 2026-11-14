@@ -7,8 +7,7 @@ import { driveImageUrl } from "@/lib/drive";
 import { splitContactValues } from "@/lib/member-contacts";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const dojoLabels = { gainberri: "Gainberri", anandi: "Anandi" } as const;
-type Dojo = keyof typeof dojoLabels;
+type Dojo = string;
 
 type Kenshi = {
   dojo: Dojo;
@@ -38,10 +37,16 @@ export default async function KenshisPage({
   }
 
   const params = await searchParams;
-  const dojo = params.dojo === "gainberri" || params.dojo === "anandi" ? params.dojo : undefined;
+  const { data: dojos, error: dojoError } = await createAdminClient().from("dojos")
+    .select("slug,name,dojo_groups(member_class)").order("name");
+  if (dojoError) throw dojoError;
+  const dojoLabels = new Map(dojos.map(item => [item.slug, item.name]));
+  const selectedDojo = dojos.find(item => item.slug === params.dojo);
+  const dojo = selectedDojo?.slug;
+  const allowsKids = !selectedDojo || selectedDojo.dojo_groups.some(group => group.member_class === "kids");
   const selectedFilter: KenshiFilter = params.status === "inactive"
     ? "inactive"
-    : (params.class === "kids" && dojo !== "anandi") || params.class === "adults"
+    : (params.class === "kids" && allowsKids) || params.class === "adults"
       ? params.class
       : "active";
   const selectedStatus = selectedFilter === "inactive" ? "inactive" : "active";
@@ -132,7 +137,7 @@ export default async function KenshisPage({
               <h2>Activos</h2>
               <div className="metric">{activeCount ?? 0}</div>
             </a>
-            {dojo !== "anandi" && <a className={`card kenshi-filter-card${selectedFilter === "kids" ? " selected" : ""}`} href={kenshiFilterHref("kids", searchValue, dojo)} aria-current={selectedFilter === "kids" ? "page" : undefined}>
+            {allowsKids && <a className={`card kenshi-filter-card${selectedFilter === "kids" ? " selected" : ""}`} href={kenshiFilterHref("kids", searchValue, dojo)} aria-current={selectedFilter === "kids" ? "page" : undefined}>
               <UserRound aria-hidden="true" size={19} />
               <h2>Niños</h2>
               <div className="metric">{activeKidsCount ?? 0}</div>
@@ -144,11 +149,11 @@ export default async function KenshisPage({
             </a>
           </section>
           <div className="kenshi-secondary-filter-row" role="group" aria-label="Filtros de dojo y estado">
-            {([undefined, "gainberri", "anandi"] as const).map((option) => (
+            {[undefined, ...dojos.map(item => item.slug)].map((option) => (
               <a key={option ?? "all"} className={`kenshi-inactive-filter${dojo === option ? " selected" : ""}`}
                 href={kenshiFilterHref(option === "anandi" && selectedFilter === "kids" ? "active" : selectedFilter, searchValue, option)}
                 aria-current={dojo === option ? "page" : undefined}>
-                {option ? dojoLabels[option] : "Todos los dojos"}
+                {option ? dojoLabels.get(option) : "Todos los dojos"}
               </a>
             ))}
             <a className={`kenshi-inactive-filter${selectedFilter === "inactive" ? " selected" : ""}`} href={kenshiFilterHref("inactive", searchValue, dojo)} aria-current={selectedFilter === "inactive" ? "page" : undefined}>
@@ -197,7 +202,7 @@ export default async function KenshisPage({
                       {kenshi.first_name} {kenshi.last_name}
                     </a>
                   </td>
-                  <td data-label="Dojo">{dojoLabels[kenshi.dojo]}</td>
+                  <td data-label="Dojo">{dojoLabels.get(kenshi.dojo) ?? kenshi.dojo}</td>
                   <td data-label="Clase">{kenshi.class === "kids" ? "Niños" : "Adultos"}</td>
                   <td data-label="Estado">
                     <span className={`pill ${kenshi.status}`}>{kenshi.status === "active" ? "Activo" : "Inactivo"}</span>
