@@ -8,26 +8,34 @@ const labels = {
   examenes: "Próximos exámenes"
 } as const;
 
-export default async function DojoSection({ params }: {
+export default async function DojoSection({ params, searchParams }: {
   params: Promise<{ dojo: string; section: string }>;
+  searchParams: Promise<{ fecha?: string; q?: string }>;
 }) {
   const { dojo: slug, section } = await params;
   if (!Object.hasOwn(labels, section)) notFound();
   const { db, dojo } = await requireDojo(slug);
   const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date());
-  let rows: { id: string; label: string; href?: string }[];
+  const filters = await searchParams;
+  const parsedDate = filters.fecha && /^\d{4}-\d{2}-\d{2}$/.test(filters.fecha) ? new Date(filters.fecha + "T00:00:00Z") : null;
+  const date = parsedDate && Number.isFinite(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === filters.fecha ? filters.fecha : today;
+  const search = (filters.q ?? "").trim().toLocaleLowerCase("es");
+  let rows: { id: string; cells: string[]; href?: string }[];
+  let columns: string[];
   if (section === "examenes") {
+    columns = ["Fecha", "Convocatoria", "Kenshi", "Grado previsto"];
     const { data, error } = await db.from("exam_event_students")
-      .select("id,target_grade,members!inner(display_name,dojo_memberships!inner(dojo_slug,status)),exam_events!inner(title,exam_date,status)")
-      .eq("members.dojo_memberships.dojo_slug", slug).eq("members.dojo_memberships.status", "active")
+      .select("id,target_grade,members!inner(display_name,dojo,dojo_memberships!inner(dojo_slug,status)),exam_events!inner(title,exam_date,status)")
+      .eq("members.dojo", slug).eq("members.dojo_memberships.dojo_slug", slug).eq("members.dojo_memberships.status", "active")
       .gte("exam_events.exam_date", today).eq("exam_events.status", "active")
       .returns<{id: string; target_grade: string | null; members: {display_name: string}; exam_events: {title: string; exam_date: string}}[]>();
     if (error) throw error;
     rows = data.sort((a, b) => a.exam_events.exam_date.localeCompare(b.exam_events.exam_date))
       .map(({ id, members, exam_events, target_grade }) => ({
-        id, label: [exam_events.exam_date, exam_events.title, members.display_name, target_grade].filter(Boolean).join(" · ")
+        id, cells: [exam_events.exam_date, exam_events.title, members.display_name, target_grade ?? "—"]
       }));
   } else if (section === "rankings") {
+    columns = ["Puesto", "Kenshi", "Asistencias"];
     const standings = new Map<string, { name: string; sessions: Set<string> }>();
     for (let start = 0; ; start += 500) {
       const { data, error } = await db.from("attendance_logs")
@@ -45,21 +53,39 @@ export default async function DojoSection({ params }: {
     }
     rows = [...standings.entries()]
       .sort(([, a], [, b]) => b.sessions.size - a.sessions.size || a.name.localeCompare(b.name, "es"))
-      .map(([id, entry]) => ({ id, label: `${entry.name} · ${entry.sessions.size} asistencias` }));
+      .map(([id, entry], index) => ({ id, cells: [String(index + 1), entry.name, String(entry.sessions.size)] }));
   } else {
+    columns = ["Clase", "Fecha", "Estado"];
     const query = db.from("classes").select("id,name,class_date,status").eq("dojo_slug", slug);
-    const { data, error } = await query.eq("class_date", today)
+    const { data, error } = await query.eq("class_date", date)
       .order("class_date").order("name");
     if (error) throw error;
-    rows = data.map((session) => ({ id: session.id, label: `${session.class_date} · ${session.name}`, href: `/portal/${slug}/clases/${session.id}` }));
+    rows = data.map((session) => ({ id: session.id, cells: [session.name, session.class_date, session.status === "completed" ? "Cerrada" : session.status === "cancelled" ? "Cancelada" : "Abierta"], href: `/portal/${slug}/clases/${session.id}` }));
   }
+  if (search && section !== "control-dia") rows = rows.filter(row => row.cells.some(cell => cell.toLocaleLowerCase("es").includes(search)));
   return (
     <main className="main">
       <PortalBackLink href={`/portal/${slug}`} label={`Volver a ${dojo.name}`} />
-      <h1>{labels[section as keyof typeof labels]}</h1>
-      {rows.length ? <ol>{rows.map(({ id, label, href }) => (
-        <li key={id}>{href ? <a href={href}>{label}</a> : label}</li>
-      ))}</ol> : <p>No hay registros para mostrar.</p>}
+      <div className="topbar">
+        <div><p className="eyebrow">{dojo.name}</p><h1>{labels[section as keyof typeof labels]}</h1></div>
+        {section === "control-dia" && <a className="primary-link" href={`/portal/${slug}/modo-dojo`}>Modo dojo</a>}
+      </div>
+      <form method="get" className="card filters">
+        {section === "control-dia"
+          ? <label>Fecha<input name="fecha" type="date" defaultValue={date} required /></label>
+          : <label>Buscar kenshi<input name="q" type="search" defaultValue={filters.q ?? ""} /></label>}
+        <button type="submit" className="primary-link">Aplicar</button>
+      </form>
+      {rows.length ? <section className="table-wrap">
+        <table>
+          <thead><tr>{columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead>
+          <tbody>{rows.map(({ id, cells, href }) => <tr key={id}>
+            {cells.map((cell, index) => <td key={columns[index]} data-label={columns[index]}>
+              {index === 0 && href ? <a className="text-link" href={href}>{cell}</a> : cell}
+            </td>)}
+          </tr>)}</tbody>
+        </table>
+      </section> : <p className="card">No hay registros para mostrar.</p>}
     </main>
   );
 }

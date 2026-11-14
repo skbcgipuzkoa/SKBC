@@ -40,7 +40,7 @@ export default async function Visitors({ params, searchParams }: {
   if (origins.error) throw origins.error;
   return <main className="main">
     <PortalBackLink href={`/portal/${slug}`} label={`Volver a ${dojo.name}`} />
-    <h1>Kenshis visitantes</h1>
+    <div className="topbar"><h1>Kenshis visitantes</h1><a className="primary-link" href={`/portal/${slug}/clases`}>Ir a clases</a></div>
     {(await searchParams).error && <p role="alert">No se pudo registrar la visita.</p>}
     {origins.data && <form action={addVisit.bind(null, slug)} className="filters">
       <label>Kenshi <select name="member" required>
@@ -53,10 +53,16 @@ export default async function Visitors({ params, searchParams }: {
       </select></label>
       <label>Desde <input type="date" name="start" required /></label>
       <label>Hasta <input type="date" name="end" required /></label>
-      <button>Registrar visita</button>
+      <button className="primary-link">Registrar visita</button>
     </form>}
-    <ul>{visits.data.map(visit => <li key={visit.id}>
-      {visit.members.display_name} · {visit.members.grade ?? "Sin grado"} · {visit.origin_slug} · {visit.starts_on} a {visit.ends_on}
-    </li>)}</ul>
+    {visits.data.length ? <section className="table-wrap"><table>
+      <thead><tr><th>Kenshi</th><th>Grado</th><th>Dojo de origen</th><th>Desde</th><th>Hasta</th></tr></thead>
+      <tbody>{visits.data.map((visit) => <tr key={visit.id}>
+        <td data-label="Kenshi">{visit.members.display_name}</td>
+        <td data-label="Grado">{visit.members.grade ?? "Sin grado"}</td>
+        <td data-label="Dojo de origen">{visit.origin_slug}</td>
+        <td data-label="Desde">{visit.starts_on}</td><td data-label="Hasta">{visit.ends_on}</td>
+      </tr>)}</tbody>
+    </table></section> : <p className="card">Todavía no hay visitas registradas.</p>}
   </main>;
 }
