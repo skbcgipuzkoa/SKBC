@@ -1,3 +1,4 @@
+import { UnreadSection } from "./UnreadSection";
 import { techniqueHistoryName, type TechniqueVariant } from "@/lib/technique-variant-label";
 import { BirthdayCelebration } from "@/components/birthday-celebration";
 import { groupTechnicalProgress } from "@/lib/technical-progress-display";
@@ -187,6 +188,8 @@ type ChildNotice = {
 };
 
 type ChildNote = {
+  id: string;
+  updated_at: string;
   note_date: string | null;
   note_type: string | null;
   note: string | null;
@@ -194,6 +197,8 @@ type ChildNote = {
 };
 
 type ChildBehavior = {
+  id: string;
+  updated_at: string;
   report_date: string | null;
   attitude: string | null;
   attention: string | null;
@@ -368,7 +373,7 @@ export default async function PublicFichaPage({
         .returns<ChildNotice[]>(),
       supabase
         .from("child_notes")
-        .select("note_date,note_type,note,author")
+        .select("id,updated_at,note_date,note_type,note,author")
         .eq("member_id", member.id)
         .eq("visible_family", true)
         .or(`legacy_id.is.null,legacy_id.not.like.CLASS-NOTES-*,note_date.lte.${new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date())}`)
@@ -378,7 +383,7 @@ export default async function PublicFichaPage({
         .maybeSingle<ChildNote>(),
       supabase
         .from("child_behavior_reports")
-        .select("report_date,attitude,attention,respect,effort,companionship,observation")
+        .select("id,updated_at,report_date,attitude,attention,respect,effort,companionship,observation")
         .eq("member_id", member.id)
         .or(`legacy_id.is.null,legacy_id.not.like.CLASS-NOTES-*,report_date.lte.${new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date())}`)
         .order("report_date", { ascending: false, nullsFirst: false })
@@ -930,15 +935,15 @@ function KidsFicha({
         </div>
       </FoldableSection>
 
-      <FoldableSection title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
+      <UnreadSection storageKey={`skbc:ficha:${member.id}:sensei`} version={!adminBackUrl && note ? `${note.id}:${note.updated_at}` : undefined} title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
         <div className="ficha-card ficha-fields">
           <p>{note?.note ?? "Sin nota visible para familia."}</p>
           <Field label="Ultima actualizacion" value={note?.note_date ? formatDate(note.note_date) : null} />
           <Field label="Tipo de nota" value={note?.note_type ?? null} />
         </div>
-      </FoldableSection>
+      </UnreadSection>
 
-      <FoldableSection title="Comportamiento en clase" meta={behavior?.report_date ? `Actualizado: ${formatDate(behavior.report_date)}` : behavior ? "Ver detalle" : "Sin detalle"}>
+      <UnreadSection storageKey={`skbc:ficha:${member.id}:behavior`} version={!adminBackUrl && behavior ? `${behavior.id}:${behavior.updated_at}` : undefined} title="Comportamiento en clase" meta={behavior?.report_date ? `Actualizado: ${formatDate(behavior.report_date)}` : behavior ? "Ver detalle" : "Sin detalle"}>
         <div className="ficha-card ficha-fields behavior-fields">
           <BehaviorField label="Actitud" value={behavior?.attitude} />
           <BehaviorField label="Atención" value={behavior?.attention} />
@@ -948,7 +953,7 @@ function KidsFicha({
           <Field label="Última actualización" value={behavior?.report_date ? formatDate(behavior.report_date) : null} />
           <Field label="Observación" value={behavior?.observation} />
         </div>
-      </FoldableSection>
+      </UnreadSection>
 
       <ClassPhotoHistory fichaToken={fichaToken} />
       <FoldableSection title="Historial de examenes" meta={`${exams.length} registros`}>

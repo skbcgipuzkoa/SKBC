@@ -1,0 +1,14 @@
+.unread {
+  background: #fff1bf !important;
+  color: #634100 !important;
+  animation: unread-pulse 1.8s ease-out 3;
+}
+
+@keyframes unread-pulse {
+  from { box-shadow: 0 0 0 0 #d79e0866; }
+  to { box-shadow: 0 0 0 7px #d79e0800; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .unread { animation: none; }
+}
