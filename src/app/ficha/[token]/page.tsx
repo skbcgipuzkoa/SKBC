@@ -1017,19 +1017,19 @@ function InactiveFichaNotice() {
 
 function HeaderLogos({ member, photoSrc, eyebrow }: { member: Member; photoSrc: string | null; eyebrow: string }) {
   return (
-    <section className="ficha-hero">
-      <div className="logo-box"><img src={LOGO_IKA_URL} alt="IKA" /></div>
-      <div className="student-box">
-        {photoSrc ? <img src={photoSrc} alt="" /> : <div className="student-placeholder" />}
-        <div className="japanese-mark" aria-label="Shorinji Kempo en japones">
-          <strong>少林寺拳法</strong>
-          <span>Shorinji Kempo</span>
-        </div>
-        <p>{eyebrow}</p>
+    <section className="ficha-kanji-header">
+      {photoSrc ? <img className="ficha-kanji-portrait" src={photoSrc} alt="" /> : <div className="ficha-kanji-portrait" aria-hidden="true" />}
+      <div className="ficha-kanji-identity">
+        <p><span lang="ja">少林寺拳法</span> · Shorinji Kempo</p>
         <h1>{member.display_name}</h1>
-        <span>{member.status === "active" ? "ACTIVO" : "INACTIVO"} · ID SKBC {member.legacy_id ?? "-"} · ID IKA {member.ika_id ?? "pendiente"}</span>
+        <p>{eyebrow}</p>
+        <p>{member.status === "active" ? "Activo" : "Inactivo"} · ID SKBC {member.legacy_id ?? "-"}</p>
       </div>
-      <div className="logo-box"><img src={LOGO_SKBC_URL} alt="SKBC Gipuzkoa" /></div>
+      <img className="ficha-kanji-club" src="/ficha-skbc.png" alt="SKBC Gipuzkoa" />
+      <div className="ficha-kanji-affiliation">
+        <img src="/ficha-ika.png" alt="" />
+        <span>Afiliado a IKA<br /><small>ID IKA {member.ika_id ?? "pendiente"}</small></span>
+      </div>
     </section>
   );
 }

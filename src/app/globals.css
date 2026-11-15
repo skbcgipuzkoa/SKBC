@@ -13157,3 +13157,87 @@ tbody tr:hover {
 @keyframes birthday-wind { 0%, 100% { transform: perspective(700px) rotateY(-1deg) skewY(-.35deg); } 50% { transform: perspective(700px) rotateY(1deg) skewY(.35deg) translateY(2px); } }
 @keyframes birthday-fall { 0% { opacity: 0; transform: translateY(-10px) rotate(0); } 10% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--drift), 330px) rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .birthday-celebration .birthday-ribbon { animation: none; transform: none; } .birthday-celebration .birthday-confetti, .birthday-celebration .birthday-motion-toggle { display: none; } .birthday-celebration .birthday-confetti i { animation: none; } }
+
+.ficha-kanji-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px clamp(14px, 3vw, 28px);
+  padding: clamp(18px, 4vw, 42px);
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-radius: 20px;
+  background: linear-gradient(115deg, #101c31, #153f69);
+  color: #fff;
+}
+
+.ficha-kanji-header::before {
+  content: "少林寺拳法";
+  position: absolute;
+  z-index: -1;
+  right: 2%;
+  bottom: -18%;
+  font-size: clamp(80px, 19vw, 230px);
+  color: #e2efff;
+  opacity: .13;
+  filter: blur(3px);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ficha-kanji-portrait {
+  width: clamp(104px, 21vw, 190px);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #dce8f6;
+}
+
+.ficha-kanji-identity h1 {
+  margin: 4px 0;
+  font-size: clamp(1.4rem, 4vw, 2rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.ficha-kanji-identity p {
+  margin: 4px 0;
+  color: #e2efff;
+}
+
+.ficha-kanji-club {
+  width: clamp(105px, 22vw, 188px);
+  aspect-ratio: 1;
+  padding: 8px;
+  object-fit: contain;
+}
+
+.ficha-kanji-affiliation {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid #ffffff29;
+  font-size: .75rem;
+  line-height: 1.2;
+  color: #e2efff;
+}
+
+.ficha-kanji-affiliation img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+@media (max-width: 600px) {
+  .ficha-kanji-header { grid-template-columns: 1fr 1fr; }
+  .ficha-kanji-portrait, .ficha-kanji-club { justify-self: center; }
+  .ficha-kanji-club { grid-column: 2; grid-row: 1; }
+  .ficha-kanji-identity { grid-column: 1 / -1; text-align: center; }
+}
