@@ -13216,8 +13216,16 @@ tbody tr:hover {
   object-fit: contain;
 }
 
+.ficha-kanji-profile,
+.ficha-kanji-club-info {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
 .ficha-kanji-affiliation {
-  grid-column: 1 / -1;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13238,6 +13246,6 @@ tbody tr:hover {
 @media (max-width: 600px) {
   .ficha-kanji-header { grid-template-columns: 1fr 1fr; }
   .ficha-kanji-portrait, .ficha-kanji-club { justify-self: center; }
-  .ficha-kanji-club { grid-column: 2; grid-row: 1; }
+  .ficha-kanji-club-info { grid-column: 2; grid-row: 1; }
   .ficha-kanji-identity { grid-column: 1 / -1; text-align: center; }
 }
