@@ -1022,7 +1022,7 @@ function HeaderLogos({ member, photoSrc, eyebrow }: { member: Member; photoSrc: 
         {photoSrc ? <img className="ficha-kanji-portrait" src={photoSrc} alt="" /> : <div className="ficha-kanji-portrait" aria-hidden="true" />}
         <div className="ficha-kanji-affiliation">
           <img src="/ficha-ika.png" alt="" />
-          <span>Afiliado a IKA<br /><small>ID IKA {member.ika_id ?? "pendiente"}</small></span>
+          <span>Afiliado a IKA<br /><small>ID IKA {member.ika_id?.trim().replace(/^IKA(?:[\s-]+|$)/i, "") || "pendiente"}</small></span>
         </div>
       </div>
       <div className="ficha-kanji-identity">
