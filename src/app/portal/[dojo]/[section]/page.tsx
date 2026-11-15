@@ -68,14 +68,22 @@ export default async function DojoSection({ params, searchParams }: {
       <PortalBackLink href={`/portal/${slug}`} label={`Volver a ${dojo.name}`} />
       <div className="topbar">
         <div><p className="eyebrow">{dojo.name}</p><h1>{labels[section as keyof typeof labels]}</h1></div>
-        {section === "control-dia" && <a className="primary-link" href={`/portal/${slug}/modo-dojo`}>Modo dojo</a>}
       </div>
-      <form method="get" className="card filters">
-        {section === "control-dia"
-          ? <label>Fecha<input name="fecha" type="date" defaultValue={date} required /></label>
-          : <label>Buscar kenshi<input name="q" type="search" defaultValue={filters.q ?? ""} /></label>}
+      {section === "control-dia" ? <section className={`control-hero control-${rows.length ? "ok" : "neutral"}`}>
+        <div><span className="tag">{date.split("-").reverse().join("/")}</span>
+          <h2>{rows.length ? "Clases del día" : "No hay clases registradas para este día"}</h2>
+        </div>
+        <div className="control-date-form">
+          <form method="get">
+            <label>Fecha<input name="fecha" type="date" defaultValue={date} required /></label>
+            <button type="submit">Ver</button>
+          </form>
+          <a className="primary-link" href={`/portal/${slug}/modo-dojo`}>Modo dojo</a>
+        </div>
+      </section> : <form method="get" className="card filters">
+        <label>Buscar kenshi<input name="q" type="search" defaultValue={filters.q ?? ""} /></label>
         <button type="submit" className="primary-link">Aplicar</button>
-      </form>
+      </form>}
       {rows.length ? <section className="table-wrap">
         <table>
           <thead><tr>{columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead>
