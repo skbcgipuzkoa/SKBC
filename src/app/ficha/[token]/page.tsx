@@ -188,6 +188,7 @@ type ChildNotice = {
 };
 
 type ChildNote = {
+  legacy_id: string | null;
   id: string;
   updated_at: string;
   note_date: string | null;
@@ -197,6 +198,7 @@ type ChildNote = {
 };
 
 type ChildBehavior = {
+  legacy_id: string | null;
   id: string;
   updated_at: string;
   report_date: string | null;
@@ -373,7 +375,7 @@ export default async function PublicFichaPage({
         .returns<ChildNotice[]>(),
       supabase
         .from("child_notes")
-        .select("id,updated_at,note_date,note_type,note,author")
+        .select("id,updated_at,legacy_id,note_date,note_type,note,author")
         .eq("member_id", member.id)
         .eq("visible_family", true)
         .or(`legacy_id.is.null,legacy_id.not.like.CLASS-NOTES-*,note_date.lte.${new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date())}`)
@@ -383,7 +385,7 @@ export default async function PublicFichaPage({
         .maybeSingle<ChildNote>(),
       supabase
         .from("child_behavior_reports")
-        .select("id,updated_at,report_date,attitude,attention,respect,effort,companionship,observation")
+        .select("id,updated_at,legacy_id,report_date,attitude,attention,respect,effort,companionship,observation")
         .eq("member_id", member.id)
         .or(`legacy_id.is.null,legacy_id.not.like.CLASS-NOTES-*,report_date.lte.${new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date())}`)
         .order("report_date", { ascending: false, nullsFirst: false })
@@ -810,6 +812,21 @@ function AdultFicha({
   );
 }
 
+// Notes already visible at rollout start as read.
+const unreadStartsAt = Date.parse("2026-11-15T11:57:03.503Z");
+const unreadStartsOn = "2026-11-15";
+
+function unreadVersion(
+  entry: { id: string; updated_at: string; legacy_id: string | null } | null,
+  publicationDate: string | null | undefined
+) {
+  if (!entry) return undefined;
+  const publishedAfterRollout = entry.legacy_id?.startsWith("CLASS-NOTES-") &&
+    publicationDate && publicationDate > unreadStartsOn;
+  if (!publishedAfterRollout && Date.parse(entry.updated_at) <= unreadStartsAt) return undefined;
+  return `${entry.id}:${entry.updated_at}`;
+}
+
 function KidsFicha({
   examRegistration,
   member,
@@ -935,7 +952,7 @@ function KidsFicha({
         </div>
       </FoldableSection>
 
-      <UnreadSection storageKey={`skbc:ficha:${member.id}:sensei`} version={!adminBackUrl && note ? `${note.id}:${note.updated_at}` : undefined} title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
+      <UnreadSection storageKey={`skbc:ficha:${member.id}:sensei`} version={adminBackUrl ? undefined : unreadVersion(note, note?.note_date)} title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
         <div className="ficha-card ficha-fields">
           <p>{note?.note ?? "Sin nota visible para familia."}</p>
           <Field label="Ultima actualizacion" value={note?.note_date ? formatDate(note.note_date) : null} />
@@ -943,7 +960,7 @@ function KidsFicha({
         </div>
       </UnreadSection>
 
-      <UnreadSection storageKey={`skbc:ficha:${member.id}:behavior`} version={!adminBackUrl && behavior ? `${behavior.id}:${behavior.updated_at}` : undefined} title="Comportamiento en clase" meta={behavior?.report_date ? `Actualizado: ${formatDate(behavior.report_date)}` : behavior ? "Ver detalle" : "Sin detalle"}>
+      <UnreadSection storageKey={`skbc:ficha:${member.id}:behavior`} version={adminBackUrl ? undefined : unreadVersion(behavior, behavior?.report_date)} title="Comportamiento en clase" meta={behavior?.report_date ? `Actualizado: ${formatDate(behavior.report_date)}` : behavior ? "Ver detalle" : "Sin detalle"}>
         <div className="ficha-card ficha-fields behavior-fields">
           <BehaviorField label="Actitud" value={behavior?.attitude} />
           <BehaviorField label="Atención" value={behavior?.attention} />
