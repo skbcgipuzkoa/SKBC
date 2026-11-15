@@ -63,7 +63,7 @@ export default async function ClassNotes({ searchParams }: {
       const photo = driveImageUrl(member.photo_url);
       const scheduled = note?.legacy_id?.startsWith("CLASS-NOTES-") && note.note_date && note.note_date > today ? note.note_date : null;
       const updated = [note?.updated_at, behavior?.updated_at].filter((value): value is string => Boolean(value)).sort().at(-1);
-      return <details className="card maintenance-panel" key={member.id} id={member.id}>
+      return <details className="card maintenance-panel" key={member.id} id={member.id} style={scheduled ? { background: "#effaf2", borderColor: "#a4ceb0" } : undefined}>
         <summary>
           {photo && <img className="mini-avatar" src={photo} alt="" />}
           {" "}{member.display_name} · {scheduled ? `Programada para el ${scheduled.split("-").reverse().join("/")}` : "Publicada"}
