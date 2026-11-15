@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
 
-export function CopyLinkButton({ value }: { value: string }) {
+export function CopyLinkButton({ value, label = "Copiar link" }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copyLink() {
@@ -15,7 +15,7 @@ export function CopyLinkButton({ value }: { value: string }) {
   return (
     <button className="copy-link-button" type="button" onClick={copyLink}>
       <Copy aria-hidden="true" size={16} />
-      {copied ? "Copiado" : "Copiar link"}
+      {copied ? "Copiado" : label}
     </button>
   );
 }

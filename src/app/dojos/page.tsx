@@ -1,3 +1,4 @@
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { clubMilestones, formatMilestoneDate, gainberriTrainingStart } from "@/lib/club-milestones";
 import { DojoSenseiFields } from "./sensei-fields";
 import { driveImageUrl } from "@/lib/drive";
@@ -166,7 +167,10 @@ export default async function DojosPage({ searchParams }: {
             </div>
             {dojo.slug === "anandi" && !dojo.archived_at && <details className={styles.access}>
               <summary>Enlace privado</summary>
-              {access?.token && <label>Selecciona y copia el enlace<input readOnly value={`https://skbc.vercel.app/portal/enlace?enlace=${access.token}`} /></label>}
+              {access?.token && <>
+                <label>Enlace de acceso<input readOnly value={`https://skbc.vercel.app/portal/enlace?enlace=${access.token}`} /></label>
+                <CopyLinkButton value={`https://skbc.vercel.app/portal/enlace?enlace=${access.token}`} label="Copiar enlace" />
+              </>}
               <form action={manageAnandiLink} className={styles.actions}>
                 <button className={styles.pill}>{access?.token ? "Generar otro enlace" : "Generar enlace"}</button>
                 {access?.token && <button className={styles.pill} name="mode" value="revoke">Anular enlace</button>}
