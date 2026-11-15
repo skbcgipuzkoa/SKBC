@@ -70,7 +70,7 @@ export default async function ClassNotes({ searchParams }: {
           {" · "}Última modificación {updated ? new Date(updated).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid" }) : "—"}
         </summary>
         <form className="edit-form" action={save.bind(null, member.id)}>
-          <label>Nota del sensei<textarea name="note" defaultValue={note?.note ?? ""} rows={4} required /></label>
+          <div className="form-grid"><label className="wide">Nota del sensei<textarea name="note" defaultValue={note?.note ?? ""} rows={9} required /></label></div>
           <fieldset>
             <legend>Comportamiento en clase</legend>
             <div className="form-grid">{behaviorFields.map(({ name, label, options }) => {
@@ -80,10 +80,10 @@ export default async function ClassNotes({ searchParams }: {
                 {value && !options.some(option => option === value) && <option>{value}</option>}
                 {options.map(option => <option key={option}>{option}</option>)}
               </select></label>;
-            })}</div>
-            <label>Observación<textarea name="observation" defaultValue={behavior?.observation ?? ""} rows={3} /></label>
+            })}
+            <label className="wide">Observación<textarea name="observation" defaultValue={behavior?.observation ?? ""} rows={5} /></label></div>
           </fieldset>
-          <label>Fecha de publicación<input type="date" name="date" min={today} defaultValue={scheduled ?? ""} /></label>
+          <div className="form-grid"><label>Fecha de publicación<input type="date" name="date" min={today} defaultValue={scheduled ?? ""} /></label></div>
           <div className="form-actions">
             <button name="mode" value="now">Publicar ahora</button>
             <button name="mode" value="schedule">Programar publicación</button>
