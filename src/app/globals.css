@@ -13186,8 +13186,9 @@ tbody tr:hover {
   font-family: "Ficha Kanji", serif;
   position: absolute;
   z-index: -1;
-  right: 2%;
-  bottom: -18%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-24deg);
   font-size: clamp(80px, 19vw, 230px);
   color: #e2efff;
   opacity: .13;
@@ -13295,8 +13296,7 @@ tbody tr:hover {
 
 @media (max-width: 600px) {
   .ficha-kanji-header::before {
-    bottom: 8%;
-    font-size: clamp(48px, 18vw, 100px);
+    font-size: clamp(76px, 25vw, 150px);
   }
 
   .ficha-kanji-identity h1 { font-size: clamp(1rem, 5vw, 1.35rem); }
