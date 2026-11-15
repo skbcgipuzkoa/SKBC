@@ -8,7 +8,6 @@ import { notFound } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { buildAutomaticChildNotices } from "@/lib/child-notices";
 import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
 import { driveImageUrl } from "@/lib/drive";
 import { activeCalendarDaysBetween } from "@/lib/activity-calendar";
@@ -403,13 +402,12 @@ export default async function PublicFichaPage({
 
     const childProgramHistoryRows = await loadChildProgramHistoryRows(supabase, member.id, attendance, childSyllabusHistory);
     const visibleChildRanking = buildVisibleChildRanking(childRanking, attendance, closures, member.joined_on);
-    const automaticNotices = buildAutomaticChildNotices(visibleChildRanking, member.joined_on);
     const familyNotices = filterChildFamilyNotices(childNotices ?? []);
     return (
       <>
         {!isInternalAccess ? <FichaAccessTracker token={token} /> : null}
         <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-        <KidsFicha examRegistration={examRegistration} member={member} attendance={attendance} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={[...automaticNotices, ...familyNotices]} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
+        <KidsFicha examRegistration={examRegistration} member={member} attendance={attendance} exams={fichaExams} courses={courses ?? []} ranking={visibleChildRanking} notices={familyNotices} note={childNote} behavior={behavior} childSyllabusHistory={childProgramHistoryRows} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaToken={token} />
       </>
     );
   }
@@ -940,19 +938,19 @@ function KidsFicha({
         {ranking?.motivational_message ? <p className="ficha-ranking">{ranking.motivational_message}</p> : null}
       </section>
 
-      <FoldableSection title="Avisos importantes" meta={`${notices.length} activos`}>
+      {notices.length > 0 && <section className="ficha-section" aria-label="Avisos del sistema">
         <div className="notice-stack">
-          {notices.length ? notices.map((notice) => (
+          {notices.map((notice) => (
             <article className="ficha-notice" key={`${notice.notice_date}-${notice.title}`} style={{ borderLeftColor: notice.color ?? "#e5e7eb" }}>
               <strong>{notice.title}</strong>
               <p>{notice.body ?? ""}</p>
               <span>{formatDate(notice.notice_date)}</span>
             </article>
-          )) : <div className="ficha-card">Sin avisos activos.</div>}
+          ))}
         </div>
-      </FoldableSection>
+      </section>}
 
-      <UnreadSection storageKey={`skbc:ficha:${member.id}:sensei`} version={adminBackUrl ? undefined : unreadVersion(note, note?.note_date)} title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
+      <UnreadSection storageKey={`skbc:ficha:${member.id}:sensei`} preview={Boolean(adminBackUrl)} version={unreadVersion(note, note?.note_date)} title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
         <div className="ficha-card ficha-fields">
           <p>{note?.note ?? "Sin nota visible para familia."}</p>
           <Field label="Ultima actualizacion" value={note?.note_date ? formatDate(note.note_date) : null} />
@@ -960,7 +958,7 @@ function KidsFicha({
         </div>
       </UnreadSection>
 
-      <UnreadSection storageKey={`skbc:ficha:${member.id}:behavior`} version={adminBackUrl ? undefined : unreadVersion(behavior, behavior?.report_date)} title="Comportamiento en clase" meta={behavior?.report_date ? `Actualizado: ${formatDate(behavior.report_date)}` : behavior ? "Ver detalle" : "Sin detalle"}>
+      <UnreadSection storageKey={`skbc:ficha:${member.id}:behavior`} preview={Boolean(adminBackUrl)} version={unreadVersion(behavior, behavior?.report_date)} title="Comportamiento en clase" meta={behavior?.report_date ? `Actualizado: ${formatDate(behavior.report_date)}` : behavior ? "Ver detalle" : "Sin detalle"}>
         <div className="ficha-card ficha-fields behavior-fields">
           <BehaviorField label="Actitud" value={behavior?.attitude} />
           <BehaviorField label="Atención" value={behavior?.attention} />

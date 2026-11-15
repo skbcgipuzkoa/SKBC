@@ -3,12 +3,16 @@
 import { useEffect, useState, type ReactNode } from "react";
 import styles from "./unread-section.module.css";
 
-export function UnreadSection({ title, meta, storageKey, version, children }: {
-  title: string; meta: string; storageKey: string; version?: string; children: ReactNode;
+export function UnreadSection({ title, meta, storageKey, version, preview = false, children }: {
+  title: string; meta: string; storageKey: string; version?: string; preview?: boolean; children: ReactNode;
 }) {
   const [seen, setSeen] = useState<string | null>(null);
   useEffect(() => {
     if (!version) return;
+    if (preview) {
+      setSeen("");
+      return;
+    }
     const refresh = () => {
       try { setSeen(localStorage.getItem(storageKey) ?? ""); }
       catch { setSeen(""); }
@@ -16,11 +20,12 @@ export function UnreadSection({ title, meta, storageKey, version, children }: {
     refresh();
     window.addEventListener("storage", refresh);
     return () => window.removeEventListener("storage", refresh);
-  }, [storageKey, version]);
+  }, [storageKey, version, preview]);
 
   function markRead() {
     if (!version) return;
     setSeen(version);
+    if (preview) return;
     try { localStorage.setItem(storageKey, version); } catch { /* Reading still works in this visit. */ }
   }
 
