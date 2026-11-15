@@ -950,6 +950,8 @@ function KidsFicha({
         </div>
       </section>}
 
+      <ClassPhotoHistory fichaToken={fichaToken} />
+
       <UnreadSection storageKey={`skbc:ficha:${member.id}:sensei`} preview={Boolean(adminBackUrl)} version={unreadVersion(note, note?.note_date)} title="Nota del Sensei" meta={note?.note_date ? `Actualizado: ${formatDate(note.note_date)}` : note?.note ? "Visible" : "Sin nota"}>
         <div className="ficha-card ficha-fields">
           <p>{note?.note ?? "Sin nota visible para familia."}</p>
