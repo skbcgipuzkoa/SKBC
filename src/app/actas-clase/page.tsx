@@ -80,7 +80,46 @@ export default async function ActasClasePage({
     : [[], []];
 
   const summaries = filteredClasses.map((clase) => summarizeClass(clase, attendance, plans));
-  const months = buildMonths(summaries);
+  const currentMonth = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date()).slice(0, 7);
+  const start = new Date(currentMonth + "-01T00:00:00Z");
+  const recentKeys = [0, 1, 2].map(offset =>
+    new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - offset, 1)).toISOString().slice(0, 7)
+  );
+  const filtered = Boolean(selectedDate || search);
+  const recentSet = new Set(recentKeys);
+  const months = buildMonths(summaries, filtered ? [] : recentKeys);
+  const calendars = months.map((month) => (
+    <article className="class-audit-month" key={month.key}>
+      <header className="class-audit-month-head">
+        <CalendarDays aria-hidden="true" size={18} />
+        <h2>{month.label}</h2>
+        <span>{month.totalClasses}</span>
+      </header>
+      <div className="class-audit-weekdays" aria-hidden="true">
+        {["L", "M", "X", "J", "V", "S", "D"].map((day) => <span key={day}>{day}</span>)}
+      </div>
+      <div className="class-audit-days">
+        {month.days.map((day) => (
+          <div className={`class-audit-day${day.inMonth ? "" : " muted-day"}`} key={day.key}>
+            <span className="calendar-number">{day.date.getDate()}</span>
+            <div className="class-audit-day-events">
+              {day.items.map((summary) => (
+                <a
+                  className={`class-audit-event ${summary.combined ? "combined" : summary.group}`}
+                  href={`/clases/${summary.legacyId}`}
+                  key={summary.id}
+                  title={`${summary.name} - ${summary.totalAttendance} asistentes`}
+                >
+                  <strong>{summary.name}</strong>
+                  <span>{summary.totalAttendance} asis. · {summary.completedTechniques}/{summary.totalTechniques} tec.</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </article>
+  ));
 
   return (
     <div className="shell">
@@ -112,44 +151,18 @@ export default async function ActasClasePage({
         </section>
 
         <section className="class-audit-calendar-grid" aria-label="Calendario de actas">
-          {months.length ? months.map((month) => (
-            <article className="class-audit-month" key={month.key}>
-              <header className="class-audit-month-head">
-                <CalendarDays aria-hidden="true" size={18} />
-                <h2>{month.label}</h2>
-                <span>{month.totalClasses}</span>
-              </header>
-              <div className="class-audit-weekdays" aria-hidden="true">
-                {["L", "M", "X", "J", "V", "S", "D"].map((day) => <span key={day}>{day}</span>)}
-              </div>
-              <div className="class-audit-days">
-                {month.days.map((day) => (
-                  <div className={`class-audit-day${day.inMonth ? "" : " muted-day"}`} key={day.key}>
-                    <span className="calendar-number">{day.date.getDate()}</span>
-                    <div className="class-audit-day-events">
-                      {day.items.map((summary) => (
-                        <a
-                          className={`class-audit-event ${summary.combined ? "combined" : summary.group}`}
-                          href={`/clases/${summary.legacyId}`}
-                          key={summary.id}
-                          title={`${summary.name} - ${summary.totalAttendance} asistentes`}
-                        >
-                          <strong>{summary.name}</strong>
-                          <span>{summary.totalAttendance} asis. · {summary.completedTechniques}/{summary.totalTechniques} tec.</span>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </article>
-          )) : (
-            <article className="card">
-              <h2>Sin resultados</h2>
-              <p className="muted">Prueba con otra fecha o deja el buscador vacio para ver las ultimas clases.</p>
-            </article>
-          )}
+          {calendars.filter((_, index) => filtered || recentSet.has(months[index].key))}
+          {!months.length && <p className="card">Sin resultados para los filtros seleccionados.</p>}
         </section>
+        {!filtered && months.some(month => !recentSet.has(month.key)) && (
+          <details>
+            <summary className="mini-action">Ver más meses</summary>
+            <section className="class-audit-calendar-grid" aria-label="Más meses">
+              {calendars.filter((_, index) => !recentSet.has(months[index].key))}
+            </section>
+          </details>
+        )}
+
       </main>
     </div>
   );
@@ -179,8 +192,8 @@ function summarizeClass(clase: Clase, attendance: Attendance[], plans: Plan[]) {
 
 type ClassSummary = ReturnType<typeof summarizeClass>;
 
-function buildMonths(summaries: ClassSummary[]) {
-  const monthKeys = [...new Set(summaries.map((summary) => summary.date.slice(0, 7)))].sort().reverse();
+function buildMonths(summaries: ClassSummary[], extraMonths: string[]) {
+  const monthKeys = [...new Set([...extraMonths, ...summaries.map((summary) => summary.date.slice(0, 7))])].sort().reverse();
   return monthKeys.map((key) => {
     const [year, month] = key.split("-").map(Number);
     const first = new Date(year, month - 1, 1);
