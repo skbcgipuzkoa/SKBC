@@ -6970,13 +6970,15 @@ tbody tr:hover {
   border: 2px solid rgba(200, 155, 60, 0.55);
   border-radius: 16px;
   min-height: 154px;
-  padding: 8px;
+  overflow: hidden;
+  padding: 4px;
 }
 
 .logo-box img {
-  max-height: 136px;
-  max-width: 136px;
+  width: 100%;
+  max-height: 144px;
   object-fit: contain;
+  transform: scale(1.5);
 }
 
 .inactive-ficha {
@@ -9763,8 +9765,8 @@ tbody tr:hover {
   }
 
   .logo-box img {
-    max-height: 104px;
-    max-width: 104px;
+    max-height: 120px;
+    max-width: 120px;
   }
 
   .student-box img,
