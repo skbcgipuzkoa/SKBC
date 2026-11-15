@@ -13269,3 +13269,50 @@ tbody tr:hover {
   .ficha-kanji-portrait, .ficha-kanji-club { width: clamp(96px, 29vw, 166px); }
   .ficha-kanji-identity { text-align: center; }
 }
+
+@media (max-width: 600px) {
+  .ficha-kanji-header {
+    grid-template-areas: "identity identity" "photo club";
+    gap: 14px 10px;
+    padding: 18px 12px 14px;
+  }
+
+  .ficha-kanji-header::before {
+    right: 0;
+    bottom: 10%;
+    font-size: clamp(48px, 18vw, 100px);
+  }
+
+  .ficha-kanji-identity {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #ffffff35;
+  }
+
+  .ficha-kanji-identity h1 {
+    font-size: clamp(1.35rem, 5.8vw, 2rem);
+  }
+
+  .ficha-kanji-identity p {
+    font-size: .82rem;
+  }
+
+  .ficha-kanji-portrait,
+  .ficha-kanji-club {
+    width: min(100%, clamp(96px, 30vw, 150px));
+    height: auto;
+  }
+
+  .ficha-kanji-club { padding: 4px; }
+
+  .ficha-kanji-affiliation,
+  .ficha-kanji-club-info small {
+    font-size: .75rem;
+    line-height: 1.35;
+  }
+
+  .ficha-kanji-affiliation img {
+    flex: none;
+    width: 28px;
+    height: 28px;
+  }
+}
