@@ -972,7 +972,6 @@ function KidsFicha({
         </div>
       </UnreadSection>
 
-      <ClassPhotoHistory fichaToken={fichaToken} />
       <FoldableSection title="Historial de examenes" meta={`${exams.length} registros`}>
         <div className="exam-card-list">
           {exams.length ? exams.map((exam) => (
