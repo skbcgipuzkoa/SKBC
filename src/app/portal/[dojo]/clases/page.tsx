@@ -26,13 +26,21 @@ async function createClass(slug: string, form: FormData) {
 
 export default async function DojoClasses({ params, searchParams }: {
   params: Promise<{ dojo: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; warning?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; warning?: string; month?: string }>;
 }) {
   const { db, dojo } = await requireDojo((await params).dojo);
-  const { error: formError, saved, warning } = await searchParams;
+  const { error: formError, saved, warning, month } = await searchParams;
+  const selectedMonth = month && /^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(month)
+    ? month : new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date()).slice(0, 7);
+  const first = new Date(selectedMonth + "-01T00:00:00Z");
+  const shift = (offset: number) => new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + offset, 1)).toISOString().slice(0, 7);
+  const offset = (first.getUTCDay() + 6) % 7;
+  const days = Array.from({ length: 42 }, (_, index) =>
+    new Date(first.getTime() + (index - offset) * 86_400_000).toISOString().slice(0, 10));
+  const path = `/portal/${dojo.slug}/clases`;
   const [classes, groups] = await Promise.all([
     db.from("classes").select("id,name,class_date,class_group,status")
-      .eq("dojo_slug", dojo.slug).order("class_date", { ascending: false }).limit(100),
+      .eq("dojo_slug", dojo.slug).gte("class_date", days[0]).lte("class_date", days[41]).order("class_date", { ascending: false }),
     db.from("dojo_groups").select("member_class").eq("dojo_slug", dojo.slug).order("member_class")
   ]);
   if (classes.error) throw classes.error;
@@ -55,10 +63,33 @@ export default async function DojoClasses({ params, searchParams }: {
       {formError && <p role="alert">No se pudo crear la clase.</p>}
       {saved === "deleted" && <p role="status">Clase eliminada.</p>}
       {warning === "exam" && <p role="alert">Quedó pendiente recalcular la preparación de examen de algún asistente.</p>}
-      {classes.data.length ? <section className="table-wrap">
+      <section className="class-calendar" aria-label="Calendario de clases">
+        <div className="calendar-head">
+          <a className="mini-action" href={`${path}?month=${shift(-1)}`}>Anterior</a>
+          <h2>{first.toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" })}</h2>
+          <a className="mini-action" href={`${path}?month=${shift(1)}`}>Siguiente</a>
+        </div>
+        <div className="calendar-weekdays" aria-hidden="true">
+          <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+        </div>
+        <div className="calendar-grid">{days.map(date => <article className={date.startsWith(selectedMonth) ? "calendar-day" : "calendar-day muted-day"} key={date}>
+          <span className="calendar-number">{Number(date.slice(8))}</span>
+          <div className="calendar-events">{classes.data.filter(session => session.class_date === date).map(session =>
+            <a className={`calendar-event ${session.class_group}`} href={`${path}/${session.id}`} key={session.id}>{session.name}</a>
+          )}</div>
+        </article>)}</div>
+      </section>
+      <section className="mobile-class-list" aria-label="Navegación por mes">
+        <nav className="calendar-head">
+          <a className="mini-action" href={`${path}?month=${shift(-1)}`}>Anterior</a>
+          <span>{selectedMonth}</span>
+          <a className="mini-action" href={`${path}?month=${shift(1)}`}>Siguiente</a>
+        </nav>
+      </section>
+      {classes.data.some(session => session.class_date.startsWith(selectedMonth)) ? <section className="table-wrap">
         <table>
           <thead><tr><th>Fecha</th><th>Clase</th><th>Grupo</th><th>Estado</th><th>Acciones</th></tr></thead>
-          <tbody>{classes.data.map((session) => {
+          <tbody>{classes.data.filter(session => session.class_date.startsWith(selectedMonth)).map((session) => {
             const href = `/portal/${dojo.slug}/clases/${session.id}`;
             return <tr key={session.id}>
               <td data-label="Fecha">{session.class_date}</td>
@@ -69,7 +100,7 @@ export default async function DojoClasses({ params, searchParams }: {
             </tr>;
           })}</tbody>
         </table>
-      </section> : <p>Todavía no hay clases registradas.</p>}
+      </section> : <p>No hay clases registradas en este mes.</p>}
     </main>
   );
 }
