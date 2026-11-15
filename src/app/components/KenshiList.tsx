@@ -147,6 +147,7 @@ export async function KenshiList({ searchParams, portal }: {
         </a>
       </section>
       <div className="kenshi-secondary-filter-row" role="group" aria-label="Filtros de dojo y estado">
+        {!portal && <a className="kenshi-inactive-filter" href="/kenshis/notas-de-clase">Notas de clase</a>}
         {!portal && [undefined, ...dojos.map(item => item.slug)].map((option) => (
           <a key={option ?? "all"} className={`kenshi-inactive-filter${dojo === option ? " selected" : ""}`}
             href={filterHref(option === "anandi" && selectedFilter === "kids" ? "active" : selectedFilter, searchValue, option)}

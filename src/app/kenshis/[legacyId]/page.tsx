@@ -286,7 +286,9 @@ export default async function KenshiDetailPage({
           .select("note_date,note_type,note,author")
           .eq("member_id", member.id)
           .eq("visible_family", true)
+          .or(`legacy_id.is.null,legacy_id.not.like.CLASS-NOTES-*,note_date.lte.${new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date())}`)
           .order("note_date", { ascending: false, nullsFirst: false })
+          .order("updated_at", { ascending: false })
           .limit(3)
           .returns<ChildNote[]>()
       : Promise.resolve({ data: [], error: null }),
@@ -305,7 +307,9 @@ export default async function KenshiDetailPage({
           .from("child_behavior_reports")
           .select("report_date,attitude,attention,respect,effort,companionship,observation")
           .eq("member_id", member.id)
+          .or(`legacy_id.is.null,legacy_id.not.like.CLASS-NOTES-*,report_date.lte.${new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(new Date())}`)
           .order("report_date", { ascending: false, nullsFirst: false })
+          .order("updated_at", { ascending: false })
           .limit(1)
           .returns<ChildBehavior[]>()
       : Promise.resolve({ data: [], error: null }),
