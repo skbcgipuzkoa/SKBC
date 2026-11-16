@@ -234,7 +234,7 @@ export default async function DojosPage({ searchParams }: {
       {formError === "alta" && <p role="alert">No se pudo validar el alta.</p>}
       {!pending.data.length && <p>Sin solicitudes pendientes.</p>}
       {pending.data.map((request) => <form key={request.id} className={styles.form} action={approveEnrollment.bind(null, request.id)}>
-        <strong>{request.first_name} {request.last_name} · {request.dojo_slug}</strong>
+        <strong>{request.first_name} {request.last_name} · {data.find((dojo) => dojo.slug === request.dojo_slug)?.name ?? request.dojo_slug}</strong>
         <label>Identificador de la ficha existente, si la hay <input name="existing" /></label>
         <button className="primary-link">Validar alta</button>
       </form>)}

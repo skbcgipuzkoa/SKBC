@@ -15,7 +15,7 @@ export default async function PortalLogin({ searchParams }: {
   const { enlace, error } = await searchParams;
   const token = enlace ?? "";
   return <main className="main">
-    <h1>Acceso a Anandi</h1>
+    <h1>Acceso a Seishin Dojo</h1>
     {error && <p role="alert">{error === "limited" ? "Espera unos minutos y vuelve a intentarlo." : "Revisa el usuario y la contraseña."}</p>}
     {/^[a-f0-9]{64}$/.test(token) ? <form action={login.bind(null, token)}>
       <label>Usuario <input name="username" autoComplete="username" /></label>

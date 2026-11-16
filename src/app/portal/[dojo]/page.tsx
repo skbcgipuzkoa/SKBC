@@ -16,7 +16,6 @@ export default async function DojoPortal({ params }: {
           <div>
             <p>SKBC Gipuzkoa</p>
             <h1>{dojo.name}</h1>
-            {dojo.slug === "anandi" && <span className={styles.dojoLabel}>Dojo</span>}
           </div>
         </div>
         <a href={`/portal/${dojo.slug}/clases`}><CalendarDays size={19} /> Ver clases <ArrowUpRight size={17} /></a>
@@ -39,7 +38,7 @@ export default async function DojoPortal({ params }: {
           </a>
         ))}
       </nav>
-      {dojo.slug === "anandi" && !dojo.archived_at && <a className={styles.access} href="/portal/anandi-clave"><KeyRound size={16} /> Credenciales de Anandi</a>}
+      {dojo.slug === "anandi" && !dojo.archived_at && <a className={styles.access} href="/portal/anandi-clave"><KeyRound size={16} /> Credenciales de Seishin Dojo</a>}
     </main>
   );
 }

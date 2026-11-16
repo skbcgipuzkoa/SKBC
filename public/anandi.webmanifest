@@ -1,7 +1,7 @@
 {
-  "name": "Anandi Tolosa · SKBC Gipuzkoa",
-  "short_name": "Anandi",
-  "description": "Portal del dojo de Anandi Tolosa",
+  "name": "Seishin Dojo · SKBC Gipuzkoa",
+  "short_name": "Seishin",
+  "description": "Portal de Seishin Dojo",
   "start_url": "/portal/anandi",
   "scope": "/portal/",
   "display": "standalone",

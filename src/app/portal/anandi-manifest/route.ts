@@ -9,8 +9,8 @@ export async function GET() {
 
   return Response.json({
     id: "/portal/anandi",
-    name: "Anandi Tolosa · SKBC Gipuzkoa",
-    short_name: "Anandi",
+    name: "Seishin Dojo · SKBC Gipuzkoa",
+    short_name: "Seishin",
     start_url: "/portal/enlace?enlace=" + encodeURIComponent(access.token),
     scope: "/portal/",
     display: "standalone",
