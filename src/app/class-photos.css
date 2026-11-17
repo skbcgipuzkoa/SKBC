@@ -44,3 +44,27 @@
 .class-photo-view-switch button[aria-pressed=true] { background:#075bb5;color:#fff;border-color:#075bb5 }
 .class-photo-date-group>summary:focus-visible { outline:3px solid #2563eb;outline-offset:3px }
 .class-photo-date-label { font-size:.9rem;font-weight:600 }
+/* Photo entry points share the club palette and comfortable touch targets. */
+.class-photo-actions > .class-photo-shortcut {
+  --photo-accent:#075bb5;--photo-surface:#edf5ff;--photo-border:#b9d5f5;
+  display:flex;align-items:center;gap:14px;flex:1 1 280px;min-width:0;max-width:100%;
+  padding:16px 18px;min-height:84px;border:1px solid var(--photo-border);border-radius:16px;
+  background:var(--photo-surface);color:#153351;text-align:left;white-space:normal;
+  box-shadow:0 3px 10px rgb(18 49 82 / 6%);cursor:pointer;
+  transition:box-shadow .15s ease,border-color .15s ease;
+}
+.class-photo-actions > .class-photo-shortcut--kids { --photo-accent:#137453;--photo-surface:#edf9f3;--photo-border:#b7ddcd }
+.class-photo-shortcut-icon { display:grid;place-items:center;flex:0 0 48px;height:48px;border-radius:14px;background:var(--photo-accent);color:#fff }
+.class-photo-shortcut-copy { display:grid;gap:5px;flex:1;min-width:0 }
+.class-photo-shortcut-copy strong { font-size:1rem;line-height:1.35;color:var(--photo-accent) }
+.class-photo-shortcut-copy > span { font-size:.82rem;font-weight:400;line-height:1.4;color:#475569 }
+.class-photo-shortcut-plus { flex-shrink:0;color:var(--photo-accent) }
+.class-photo-actions > .class-photo-shortcut:hover { border-color:var(--photo-accent);box-shadow:0 5px 16px rgb(18 49 82 / 12%) }
+.class-photo-shortcut:focus-visible,.class-photo-upload-button:focus-visible { outline:3px solid #075bb5;outline-offset:4px }
+.class-photo-uploader .class-photo-upload-button { display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:13px 22px;border:1px solid #075bb5;border-radius:12px;background:#075bb5;color:#fff;font-weight:700;line-height:1.4;white-space:normal;cursor:pointer }
+.class-photo-upload-hint { font-size:.85rem;color:#475569 }
+@media (max-width:480px) {
+  .class-photo-actions > .class-photo-shortcut { flex-basis:100%;padding:14px;gap:12px }
+  .class-photo-uploader .class-photo-upload-button { width:100%;box-sizing:border-box }
+}
+@media (prefers-reduced-motion:reduce) { .class-photo-actions > .class-photo-shortcut { transition:none } }

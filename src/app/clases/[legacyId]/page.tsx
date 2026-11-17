@@ -899,9 +899,9 @@ export default async function ClaseDetailPage({
 
         <div className="class-photo-actions" aria-label="Añadir fotos de la clase">
           {clase.class_group === "adults" && kidsDayClass?.legacy_id ? (
-            <ClassPhotoShortcut classId={kidsDayClass.id} label="Añadir fotos · Niños" />
+            <ClassPhotoShortcut classId={kidsDayClass.id} label="Añadir fotos · Niños" group="kids" />
           ) : null}
-          <ClassPhotoShortcut classId={clase.id} label={clase.class_group === "kids" ? "Añadir fotos · Niños" : "Añadir fotos · Adultos"} />
+          <ClassPhotoShortcut classId={clase.id} label={clase.class_group === "kids" ? "Añadir fotos · Niños" : "Añadir fotos · Adultos"} group={clase.class_group} />
         </div>
 
         {query.historyPending ? <p className="notice" role="status">Asistencia guardada. El historial técnico queda pendiente de actualizar al cerrar la clase.</p> : null}

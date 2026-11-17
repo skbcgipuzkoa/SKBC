@@ -3,6 +3,7 @@ import { CLASS_PHOTO_ALBUM_LIMIT, CLASS_PHOTO_UPLOAD_BATCH_LIMIT } from "@/lib/c
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { uploadClassPhotoBatch } from "@/lib/class-photo-client";
+import { ImagePlus, LoaderCircle } from "lucide-react";
 
 export function ClassPhotoUploader({ classId }: { classId: string }) {
   const router = useRouter();
@@ -30,7 +31,12 @@ export function ClassPhotoUploader({ classId }: { classId: string }) {
   }
   return <div className="class-photo-uploader">
     <h3>Subir fotos desde este dispositivo</h3><p>Se optimizan y guardan en Drive. Se publican automáticamente en las fichas de quienes asistieron a esta clase. Máximo {CLASS_PHOTO_ALBUM_LIMIT} fotos publicadas por clase.</p>
-    <label>Elegir y subir fotos · máximo {CLASS_PHOTO_UPLOAD_BATCH_LIMIT} por envío<input ref={input} type="file" accept="image/*" multiple disabled={busy} onChange={(event) => { const selection = Array.from(event.target.files ?? []); if (!selection.length) return; event.target.value = ""; if (inFlight.current) return; setFiles([]); setProgress({ completed: 0, uploaded: 0, total: 0 }); void upload(selection); }} /></label>
+    <input ref={input} type="file" aria-label="Seleccionar fotos de la clase" hidden accept="image/*" multiple disabled={busy} onChange={(event) => { const selection = Array.from(event.target.files ?? []); if (!selection.length) return; event.target.value = ""; if (inFlight.current) return; setFiles([]); setProgress({ completed: 0, uploaded: 0, total: 0 }); void upload(selection); }} />
+    <button type="button" className="class-photo-upload-button" disabled={busy} onClick={() => input.current?.click()}>
+      {busy ? <LoaderCircle size={23} aria-hidden="true" /> : <ImagePlus size={23} aria-hidden="true" />}
+      {busy ? "Subiendo fotos…" : "Elegir y subir fotos"}
+    </button>
+    <span className="class-photo-upload-hint">Puedes elegir varias · hasta {CLASS_PHOTO_UPLOAD_BATCH_LIMIT} por envío</span>
     {files.length ? <button type="button" disabled={busy} onClick={() => upload(files)}>Reintentar {files.length} fotos</button> : null}
     <p role="status" aria-live="polite">{progress.total ? `${progress.uploaded} subidas · ${progress.completed} de ${progress.total} procesadas.${busy ? " Mantén esta página abierta." : ` ${published} publicadas en las fichas.`}` : files.length ? `${files.length} fotos seleccionadas.` : ""}</p>
     {errors.length ? <div role="alert"><p>No se han reintentado archivos automáticamente. Revisa la lista antes de repetir una subida no confirmada.</p><ul>{errors.map((error, index) => <li key={index}>{error}</li>)}</ul></div> : null}
