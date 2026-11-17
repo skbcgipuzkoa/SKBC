@@ -1,6 +1,7 @@
 import { withIndividualWorkSnapshot } from "@/lib/individual-work-snapshot";
 import { applyIndividualWork, loadIndividualWork, type IndividualWork } from "@/lib/attendance-individual-work";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recalculateClassExamStatus } from "@/lib/member-exam-status";
 
 type ClassRow = {
   id: string;
@@ -106,9 +107,9 @@ async function rebuildAdultClass(classId: string, onPhase?: (phase: AdultClassCl
 
   const individual = validAttendance.length ? await loadIndividualWork(clase.id) : new Map<string, IndividualWork>();
   const overrides = await getTechnicalOverrides(clase.id, validAttendance);
-  if (wasClosed) {
-    await clearGeneratedClassTechnicalHistory(supabase, clase.id);
-  }
+  // A failed first close may already have written rows. Replace generated work
+  // on every attempt so removed techniques cannot survive a retry.
+  await clearGeneratedClassTechnicalHistory(supabase, clase.id);
 
   await onPhase?.("technical");
 
@@ -122,16 +123,17 @@ async function rebuildAdultClass(classId: string, onPhase?: (phase: AdultClassCl
     dojoHistoryCount = await generateDojoHistory(clase, validAttendance, progressionPlan);
     await onPhase?.("profiles");
     memberHistoryCount = await generateMemberHistory(clase);
-    if (!wasClosed) await updateTechniqueMetrics(completedPlan);
   } else {
     await onPhase?.("profiles");
   }
 
   await onPhase?.("finalizing");
 
+  await recalculateClassExamStatus(clase.id);
+
   const { error: updateError } = await supabase
     .from("classes")
-    .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+    .update({ closed: onPhase ? wasClosed : true, status: onPhase ? "pending" : "completed", updated_at: new Date().toISOString() })
     .eq("id", clase.id);
 
   if (updateError) throw updateError;
@@ -387,35 +389,6 @@ async function generateMemberHistory(clase: ClassRow) {
   const { error: insertError } = await supabase.from("member_technical_history").insert(inserts);
   if (insertError) throw insertError;
   return inserts.length;
-}
-
-async function updateTechniqueMetrics(plan: PlanRow[]) {
-  const supabase = createAdminClient();
-  const byTechnique = new Map<string, string>();
-  plan.forEach((row) => {
-    if (row.technique_id) byTechnique.set(row.technique_id, row.class_date);
-  });
-
-  for (const [techniqueId, date] of byTechnique) {
-    const { data, error } = await supabase
-      .from("techniques")
-      .select("repetitions")
-      .eq("id", techniqueId)
-      .single<{ repetitions: number | null }>();
-
-    if (error) throw error;
-
-    const { error: updateError } = await supabase
-      .from("techniques")
-      .update({
-        repetitions: (data?.repetitions ?? 0) + 1,
-        last_trained_on: date,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", techniqueId);
-
-    if (updateError) throw updateError;
-  }
 }
 
 function normalize(value: string | null | undefined) {

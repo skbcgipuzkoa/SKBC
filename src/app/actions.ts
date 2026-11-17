@@ -2391,7 +2391,6 @@ export async function saveDelegateChildPlanAction(formData: FormData) {
       .update({
         delegate_name: delegateName,
         started_at: link.started_at ?? now,
-        ...(closeAfter ? { closed_at: finishedAt } : {}),
         updated_at: finishedAt
       })
       .eq("id", link.id)
@@ -2402,7 +2401,12 @@ export async function saveDelegateChildPlanAction(formData: FormData) {
     if (linkUpdateError || !updatedLink) {
       throw linkUpdateError ?? new Error("El enlace cambio durante el guardado. Recarga la pagina para comprobar el resultado.");
     }
-    if (closeAfter) await finishClassClosureProgress(progressId);
+    if (closeAfter) {
+      await finishClassClosureProgress(progressId, [kidsClass.id]);
+      const { error: closeLinkError } = await supabase.from("class_delegate_links")
+        .update({ closed_at: finishedAt }).eq("id", link.id);
+      if (closeLinkError) console.error("Class closed; delegate link cleanup pending", closeLinkError);
+    }
   } catch (error) {
     console.error("Error saving delegate child plan", error);
     if (closeAfter) await failClassClosureProgress(progressId, errorMessage(error));
@@ -2497,11 +2501,11 @@ export async function submitDelegateClassAction(formData: FormData) {
         .update({ delegate_name: delegateName, started_at: link.started_at ?? new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("id", link.id);
     } else {
+      await finishClassClosureProgress(progressId, classesToProcess.map((clase) => clase.id));
       await supabase
         .from("class_delegate_links")
         .update({ delegate_name: delegateName, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("id", link.id);
-      await finishClassClosureProgress(progressId);
     }
   } catch (error) {
     console.error("Error submitting delegate class", error);
@@ -3009,7 +3013,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
       }
       if (closeAfter) {
         await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
-        await finishClassClosureProgress(progressId);
+        await finishClassClosureProgress(progressId, classIds);
       }
     } catch (error) {
       console.error("Error saving grouped attendance", error);
@@ -3092,7 +3096,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
       await recalculateClassExamStatus(classId);
     } catch (closeError) {
       console.error("Error recalculating closed adult class after attendance update", closeError);
-      redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
+      redirect(classClosureFailurePath(returnTo, `/clases/${returnLegacyId || legacyId}?${returnStepQuery.slice(1)}`, closeError));
     }
   }
 
@@ -3112,11 +3116,11 @@ export async function addBulkAttendanceAction(formData: FormData) {
         await recalculateChildRankings();
       }
       await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
-      await finishClassClosureProgress(progressId);
+      await finishClassClosureProgress(progressId, [classId]);
     } catch (closeError) {
       console.error("Error closing class after bulk attendance", closeError);
       await failClassClosureProgress(progressId, errorMessage(closeError));
-      redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
+      redirect(classClosureFailurePath(returnTo, `/clases/${returnLegacyId || legacyId}?${returnStepQuery.slice(1)}`, closeError));
     }
 
     redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=close${returnStepQuery}`);
@@ -3353,7 +3357,7 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
       await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
       await recalculateClassExamStatus(classId);
       await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
-      await finishClassClosureProgress(progressId);
+      await finishClassClosureProgress(progressId, [classId]);
     }
   } catch (error) {
     console.error("Error saving attendance technical review", error);
@@ -3469,11 +3473,11 @@ export async function closeAdultClassAction(formData: FormData) {
     await advanceClassClosureProgress(progressId, "rankings", CLOSURE_PROFILES);
     await recalculateClassExamStatus(classId);
     await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
-    await finishClassClosureProgress(progressId);
+    await finishClassClosureProgress(progressId, [classId]);
   } catch (error) {
     console.error("Error closing adult class", error);
     await failClassClosureProgress(progressId, errorMessage(error));
-    redirect(returnTo || `/clases/${legacyId}?error=close`);
+    redirect(classClosureFailurePath(returnTo, `/clases/${legacyId}`, error));
   }
 
   redirect(returnTo || `/clases/${legacyId}?saved=close`);
@@ -3568,12 +3572,7 @@ export async function finishClassCorrectionAction(formData: FormData) {
     }
 
     await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
-    const { error: finishError } = await supabase
-      .from("classes")
-      .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
-      .in("id", correctionClassIds);
-    if (finishError) throw finishError;
-    await finishClassClosureProgress(progressId);
+    await finishClassClosureProgress(progressId, correctionClassIds);
   } catch (error) {
     console.error("Error finishing class correction", error);
     await failClassClosureProgress(progressId, errorMessage(error));
@@ -3615,11 +3614,11 @@ export async function closeKidsClassAction(formData: FormData) {
     await recalculateClassExamStatus(classId);
     await recalculateChildRankings();
     await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
-    await finishClassClosureProgress(progressId);
+    await finishClassClosureProgress(progressId, [classId]);
   } catch (error) {
     console.error("Error recalculating kids class exam status", error);
     await failClassClosureProgress(progressId, errorMessage(error));
-    redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=close${returnStepQuery}`);
+    redirect(classClosureFailurePath(returnTo, `/clases/${returnLegacyId || legacyId}?${returnStepQuery.slice(1)}`, error));
   }
 
   redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=kids-skipped${returnStepQuery}`);
@@ -5829,6 +5828,15 @@ function getPhotoFile(formData: FormData) {
   return file instanceof File ? file : null;
 }
 
+function classClosureFailurePath(returnTo: string, fallback: string, error: unknown) {
+  const url = new URL(returnTo || fallback, "https://skbc.vercel.app");
+  url.searchParams.delete("saved");
+  url.searchParams.delete("historyPending");
+  url.searchParams.set("error", "close");
+  url.searchParams.set("detail", errorMessage(error).slice(0, 600));
+  return url.pathname + url.search + url.hash;
+}
+
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   if (error && typeof error === "object") {
@@ -6143,7 +6151,7 @@ async function closeChildClassWithHistory(supabase: ReturnType<typeof createAdmi
   await withIndividualWorkSnapshot(classId, async () => {
     await rebuildChildSyllabusHistory(supabase, classId);
     const { error } = await supabase.from("classes")
-      .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+      .update({ status: "pending", updated_at: new Date().toISOString() })
       .eq("id", classId).eq("class_group", "kids");
     if (error) throw error;
   });
@@ -6218,6 +6226,8 @@ async function rebuildChildSyllabusHistory(supabase: ReturnType<typeof createAdm
   if (overrideError) throw overrideError;
 
   const syllabusById = new Map(syllabusItems.map((item) => [item.id, item]));
+  const missingSyllabusId = syllabusItemIds.find((id) => !syllabusById.has(id));
+  if (missingSyllabusId) throw new Error(`No se encuentra el contenido infantil ${missingSyllabusId}. Revisa el plan antes de cerrar la clase.`);
   const generalItems = syllabusItems.filter((item) => planSyllabusItemIds.includes(item.id));
   const overridesByAttendance = new Map((overrides ?? []).map((item) => [item.attendance_id, item]));
   const now = new Date().toISOString();
@@ -6245,7 +6255,7 @@ async function rebuildChildSyllabusHistory(supabase: ReturnType<typeof createAdm
     const itemIds = adjustment ? applyIndividualWork(baseIds, adjustment) : baseIds;
     for (const id of itemIds) {
       const item = syllabusById.get(id);
-      if (!item) continue;
+      if (!item) throw new Error(`No se encuentra el contenido infantil ${id}. Revisa el plan antes de cerrar la clase.`);
       const key = `${attendance.member_id}:${item.id}`;
       if (desiredKeys.has(key)) continue;
       desiredKeys.add(key);

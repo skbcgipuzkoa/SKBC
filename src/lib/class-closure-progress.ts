@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
 
 export type ClosureStep = "attendance" | "technical" | "profiles" | "rankings" | "finalizing";
 
@@ -33,7 +34,17 @@ export async function failClassClosureProgress(id: string, message: string) {
   if (error) console.error("Error failing class closure progress", error);
 }
 
-export async function finishClassClosureProgress(id: string) {
+export async function finishClassClosureProgress(id: string, classIds: string[]) {
+  if (!classIds.length) throw new Error("No hay clases para finalizar.");
+  const { error: closeError } = await createAdminClient().from("classes")
+    .update({ closed: true, status: "completed", updated_at: new Date().toISOString() })
+    .in("id", classIds);
+  if (closeError) throw closeError;
+  revalidatePath("/ficha/[token]", "page");
+  revalidatePath("/kenshis/[legacyId]", "page");
+  revalidatePath("/clases/[legacyId]", "page");
+  revalidatePath("/dojo/[legacyId]", "page");
+  revalidatePath("/rankings");
   if (!id) return;
   const { error } = await createAdminClient().from("class_closure_progress").delete().eq("id", id);
   if (error) console.error("Error deleting class closure progress", error);
