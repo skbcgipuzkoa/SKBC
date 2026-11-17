@@ -2969,11 +2969,15 @@ export async function addBulkAttendanceAction(formData: FormData) {
       redirect(`/clases/${returnLegacyId || legacyId}?error=attendance${returnStepQuery}`);
     }
 
+    let childHistoryPending = false;
     try {
       if (closeAfter) await beginClassClosureProgress(progressId, classIds[0]);
       for (const dayClass of classes) {
         const ids = memberIdsByClass.get(dayClass.id) ?? [];
-        if (ids.length) await addAttendanceRows(dayClass.id, ids, "WEB SKBC", formData);
+        if (ids.length) {
+          const pending = await addAttendanceRows(dayClass.id, ids, "WEB SKBC", formData);
+          childHistoryPending = childHistoryPending || pending;
+        }
       }
 
       if (closeAfter) {
@@ -2997,7 +3001,11 @@ export async function addBulkAttendanceAction(formData: FormData) {
         }
       }
       if (classes.some((dayClass) => dayClass.class_group === "kids")) {
-        await recalculateChildRankings();
+        try { await recalculateChildRankings(); } catch (rankingError) {
+          if (closeAfter) throw rankingError;
+          console.error("Attendance saved; child rankings pending", rankingError);
+          childHistoryPending = true;
+        }
       }
       if (closeAfter) {
         await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
@@ -3006,10 +3014,16 @@ export async function addBulkAttendanceAction(formData: FormData) {
     } catch (error) {
       console.error("Error saving grouped attendance", error);
       if (closeAfter) await failClassClosureProgress(progressId, errorMessage(error));
-      redirect(returnTo || `/clases/${returnLegacyId || legacyId}?error=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
+      const failure = new URL(returnTo || `/clases/${returnLegacyId || legacyId}`, "https://skbc.vercel.app");
+      failure.searchParams.delete("saved");
+      failure.searchParams.set("error", closeAfter ? "close" : "attendance");
+      failure.searchParams.set("detail", errorMessage(error).slice(0, 600));
+      redirect(failure.pathname + failure.search + failure.hash);
     }
 
-    redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=${closeAfter ? "close" : "attendance"}${returnStepQuery}`);
+    const destination = new URL(returnTo || `/clases/${returnLegacyId || legacyId}?saved=${closeAfter ? "close" : "attendance"}${returnStepQuery}`, "https://skbc.vercel.app");
+    if (childHistoryPending && !closeAfter) destination.searchParams.set("historyPending", "1");
+    redirect(destination.pathname + destination.search + destination.hash);
   }
 
   const supabase = createAdminClient();
@@ -3061,9 +3075,15 @@ export async function addBulkAttendanceAction(formData: FormData) {
     console.error("Error syncing bulk attendance to legacy sheet", syncError);
   }
 
+  let childHistoryPending = false;
   if (clase.class_group === "kids") {
-    await syncChildSyllabusHistoryForClass(supabase, classId);
-    await recalculateChildRankings();
+    try {
+      await syncChildSyllabusHistoryForClass(supabase, classId);
+      await recalculateChildRankings();
+    } catch (historyError) {
+      console.error("Attendance saved; child history update pending", historyError);
+      childHistoryPending = true;
+    }
   }
 
   if (clase.class_group === "adults" && clase.closed && !closeAfter) {
@@ -3102,7 +3122,9 @@ export async function addBulkAttendanceAction(formData: FormData) {
     redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=close${returnStepQuery}`);
   }
 
-  redirect(returnTo || `/clases/${returnLegacyId || legacyId}?saved=attendance${returnStepQuery}`);
+  const destination = new URL(returnTo || `/clases/${returnLegacyId || legacyId}?saved=attendance${returnStepQuery}`, "https://skbc.vercel.app");
+  if (childHistoryPending) destination.searchParams.set("historyPending", "1");
+  redirect(destination.pathname + destination.search + destination.hash);
 }
 
 export async function removeAttendanceAction(formData: FormData) {
@@ -6107,8 +6129,12 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
   if (clase.class_group === "adults") {
     await addTeachingBonuses(supabase, classId, clase.class_date, rows.filter((row) => row.technical_role === "teaching").map((row) => row.member_id));
   } else {
-    await syncChildSyllabusHistoryForClass(supabase, classId);
+    try { await syncChildSyllabusHistoryForClass(supabase, classId); } catch (historyError) {
+      console.error("Attendance saved; child history pending", historyError);
+      return true;
+    }
   }
+  return false;
 }
 
 const CHILD_TARGETED_SYLLABUS_PREFIX = "SKBC_SYLLABUS_ITEM:";

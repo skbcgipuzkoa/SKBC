@@ -106,7 +106,7 @@ export default async function DojoClassPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ step?: string; section?: string; saved?: string; error?: string; detail?: string }>;
+  searchParams: Promise<{ step?: string; section?: string; historyPending?: string; saved?: string; error?: string; detail?: string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -276,7 +276,8 @@ export default async function DojoClassPage({
         />
       ) : null}
 
-      {query.error ? <p className="dojo-error">No se ha podido guardar. Revisa la clase completa si necesitas corregir algo.</p> : null}
+      {query.historyPending ? <p className="notice" role="status">Asistencia guardada. El historial técnico queda pendiente de actualizar al cerrar la clase.</p> : null}
+      {query.error ? <p className="dojo-error">No se ha podido guardar. {query.detail || "Revisa los datos y vuelve a intentarlo."}</p> : null}
       {query.saved === "close" ? <ClassClosureSuccess /> : query.saved ? <p className="dojo-ok">{savedMessage(query.saved)}</p> : null}
 
       {step === "kids" ? (
@@ -305,7 +306,7 @@ export default async function DojoClassPage({
                 <input type="hidden" name="classId" value={kidsClass.id} />
                 <input type="hidden" name="legacyId" value={kidsClass.legacy_id ?? legacyId} />
                 <input type="hidden" name="returnLegacyId" value={mainClass.legacy_id ?? legacyId} />
-                <input type="hidden" name="returnTo" value={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids&saved=kids`} />
+                <input type="hidden" name="returnTo" value={`/dojo/${mainClass.legacy_id ?? legacyId}?step=techniques&saved=kids`} />
                 <input type="hidden" name="groupClassIds" value={kidsClass.id} />
                 {pendingKids.map((member) => <DojoCheck key={member.id} name={`memberIds:${kidsClass.id}`} member={member} />)}
                 {pendingKids.length ? <DojoSubmitButton pendingLabel="Guardando niños...">Guardar asistencia</DojoSubmitButton> : <p className="muted">Asistencia infantil completa.</p>}
@@ -368,7 +369,7 @@ export default async function DojoClassPage({
             <PlanTechniqueForm action={updateClassPlanTechniquesAction} classId={adultClass.id} serverSelection={Object.fromEntries(groupedPlan.flatMap(([, items]) => items.map((item) => [item.id, item.completed])))} className="dojo-plan-form" primaryForm={groupedPlan.length ? "adult-technical" : undefined}>
               <input type="hidden" name="classId" value={adultClass.id} />
               <input type="hidden" name="legacyId" value={adultClass.legacy_id ?? legacyId} />
-              <input type="hidden" name="returnTo" value={`/dojo/${adultClass.legacy_id ?? legacyId}?step=techniques&saved=techniques`} />
+              <input type="hidden" name="returnTo" value={`/dojo/${adultClass.legacy_id ?? legacyId}?step=adults&saved=techniques`} />
               {groupedPlan.map(([grade, items]) => {
                 const done = items.filter((item) => item.completed).length;
                 const targetGrade = items[0]?.target_grade ?? nextAdultGrade(grade);
@@ -411,7 +412,7 @@ export default async function DojoClassPage({
             <><ClassVisitorForm host="gainberri" classId={adultClass.id} group="adults" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=adults`} /><ProvisionalAttendanceForm classId={adultClass.id} group="adults" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=adults`} /><form action={addBulkAttendanceAction} className="dojo-check-list" data-class-primary-form={pendingAdults.length ? "adult-attendance" : undefined}>
               <input type="hidden" name="classId" value={adultClass.id} />
               <input type="hidden" name="legacyId" value={adultClass.legacy_id ?? legacyId} />
-              <input type="hidden" name="returnTo" value={`/dojo/${adultClass.legacy_id ?? legacyId}?step=adults&saved=adults`} />
+              <input type="hidden" name="returnTo" value={`/dojo/${adultClass.legacy_id ?? legacyId}?step=close&saved=adults`} />
               <input type="hidden" name="groupClassIds" value={adultClass.id} />
               {pendingAdults.map((member) => (
                 <DojoCheck key={member.id} name={`memberIds:${adultClass.id}`} member={member}>

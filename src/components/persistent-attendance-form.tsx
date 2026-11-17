@@ -20,11 +20,11 @@ export function PersistentAttendanceForm({ storageKey, className, children }: { 
     if (!form) return;
     const checked = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'))
       .map((input) => `${input.name}:${input.value}`);
-    window.sessionStorage.setItem(storageKey, JSON.stringify(checked));
+    try { window.sessionStorage.setItem(storageKey, JSON.stringify(checked)); } catch { /* The form remains usable when storage is unavailable. */ }
   }
 
   return (
-    <form action={addBulkAttendanceAction} className={className} ref={formRef} onChange={saveDraft} onSubmit={() => window.sessionStorage.removeItem(storageKey)}>
+    <form action={addBulkAttendanceAction} className={className} ref={formRef} onChange={saveDraft}>
       {children}
     </form>
   );

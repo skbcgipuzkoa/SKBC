@@ -185,7 +185,7 @@ export default async function ClaseDetailPage({
   searchParams
 }: {
   params: Promise<{ legacyId: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string; photoSaved?:string; photoSyncBlocked?:string; photoSyncFull?:string; photoSyncPending?:string; photoError?:string; photoFolderPending?:string }>;
+  searchParams: Promise<{ historyPending?: string; saved?: string; error?: string; detail?: string; step?: string; edit?: string; section?: string; photoSaved?:string; photoSyncBlocked?:string; photoSyncFull?:string; photoSyncPending?:string; photoError?:string; photoFolderPending?:string }>;
 }) {
   if (!(await hasInternalAccess())) {
     redirect("/skbc-interno");
@@ -489,7 +489,7 @@ export default async function ClaseDetailPage({
         <input type="hidden" name="legacyId" value={kidsDayClass.legacy_id ?? legacyId} />
         <input type="hidden" name="returnLegacyId" value={legacyId} />
         <input type="hidden" name="returnStep" value="" />
-        <input type="hidden" name="returnTo" value={`/clases/${legacyId}?saved=kids-attendance#asistencia`} />
+        <input type="hidden" name="returnTo" value={`/clases/${legacyId}?saved=kids-attendance&section=adult-technical#plan-tecnico`} />
         <input type="hidden" name="groupClassIds" value={kidsDayClass.id} />
         <div className="attendance-checklist">
           {pendingKidsDayMembers.length ? pendingKidsDayMembers.map((member) => (
@@ -748,7 +748,7 @@ export default async function ClaseDetailPage({
           <form action={addBulkAttendanceAction} className="quick-form" data-class-primary-form={pendingClassMembers.length ? (clase.class_group === "kids" ? "kids-attendance" : "adult-attendance") : undefined}>
             <input type="hidden" name="classId" value={clase.id} />
             <input type="hidden" name="legacyId" value={legacyId} />
-            <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=asistencia#asistencia`} />
+            <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=${isCombinedDay ? "cierre" : "asistencia"}#asistencia`} />
             <div className="attendance-checklist">
               {pendingClassMembers.length ? pendingClassMembers.map((member) => (
                 <label className="check-row" key={member.id}>
@@ -904,6 +904,7 @@ export default async function ClaseDetailPage({
           <ClassPhotoShortcut classId={clase.id} label={clase.class_group === "kids" ? "Añadir fotos · Niños" : "Añadir fotos · Adultos"} />
         </div>
 
+        {query.historyPending ? <p className="notice" role="status">Asistencia guardada. El historial técnico queda pendiente de actualizar al cerrar la clase.</p> : null}
         {query.saved === "plan" ? <p className="save-ok">Plan tecnico generado.</p> : null}
         {query.saved === "class" ? <p className="save-ok">Clase creada.</p> : null}
         {query.saved === "class-updated" ? <p className="save-ok">Clase actualizada.</p> : null}
@@ -1253,7 +1254,7 @@ export default async function ClaseDetailPage({
               <input type="hidden" name="classId" value={clase.id} />
               <input type="hidden" name="legacyId" value={legacyId} />
               <input type="hidden" name="nextStep" value="attendance" />
-              <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=adult-technical&saved=techniques#plan-tecnico` : `/clases/${legacyId}?step=tecnicas&saved=techniques#plan-tecnico`} />
+              <input type="hidden" name="returnTo" value={isCorrectionMode ? `/clases/${legacyId}?edit=adult-technical&saved=techniques#plan-tecnico` : `/clases/${legacyId}?step=asistencia&saved=techniques#asistencia`} />
               {canEditClosedClass && groupedPlan.length ? (
                 <div className="plan-save-row">
                   <p className="muted">Marca todas las tecnicas realizadas y guarda cuando quieras.</p>
