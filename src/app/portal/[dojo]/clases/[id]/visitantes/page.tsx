@@ -30,7 +30,7 @@ export default async function PlanVisitors({ params, searchParams }: {
   const query = await searchParams;
   if (slug === "gainberri" && !session.legacy_id) notFound();
   const destination = slug === "gainberri"
-    ? query.origin === "dojo" ? `/dojo/${session.legacy_id}?step=techniques` : `/clases/${session.legacy_id}`
+    ? query.origin === "dojo" ? `/dojo/${session.legacy_id}` : `/clases/${session.legacy_id}`
     : `/portal/${slug}/clases/${id}?modo=plan`;
   const back = `/portal/${slug}/clases/${id}/visitantes${query.origin === "dojo" ? "?origin=dojo" : ""}`;
   return <main className="dojo-page">
@@ -41,7 +41,7 @@ export default async function PlanVisitors({ params, searchParams }: {
       {query.saved && <p role="status">Visitantes previstos guardados. Puedes añadir más o continuar.</p>}
       {query.error && <p role="alert">{query.error === "plan" ? "No se pudo preparar el plan." : "No se pudieron guardar los visitantes."}</p>}
       <form action={continueToPlan.bind(null, slug, id, destination, back)}>
-        <button className="dojo-primary-button">Continuar al plan técnico</button>
+        <button className="dojo-primary-button">{slug === "gainberri" && query.origin === "dojo" ? "Continuar con la clase" : "Continuar al plan técnico"}</button>
       </form>
     </section>
   </main>;
