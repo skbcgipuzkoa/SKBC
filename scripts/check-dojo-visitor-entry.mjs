@@ -22,3 +22,23 @@ assert.equal(context.resolve(undefined,{...initial,kidsAttendance:12,completedPl
 assert.equal(context.resolve(undefined,{...initial,kidsAttendance:12,completedPlan:4,adultAttendance:10}),'close');
 assert.equal(context.resolve(undefined,{...initial,kidsClosed:true,adultClosed:true}),'done');
 console.log('PASS: visitor entry starts with children and Dojo resumes through adult plan, attendance and closure');
+assert(source.includes('?step=kids&section=kids-technical&saved=kids`'),'Saving child attendance must open the child plan');
+assert(source.includes('continueTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=${adultClass ? "techniques" : "close"}&saved=kids-plan`}'),'Saving child plan must advance to adults or closing');
+assert(source.includes('name="returnTo" value={continueTo ?? returnTo}'),'Child plan save must use its continuation destination');
+assert(source.includes('?step=adults&saved=techniques`'),'Saving adult plan must open adult attendance');
+assert(source.includes('?step=close&saved=adults`'),'Saving adult attendance must open closing');
+assert(source.includes('{query.section === "kids-technical" ? <DojoChildPlanPanel'),'Child plan must have its own view');
+assert(source.includes('{query.section !== "kids-technical" ? <>'),'Child attendance must be hidden in the technical view');
+console.log('PASS: every Dojo save follows the five-stage child/adult sequence');
+const actionSource=read('src/app/actions.ts');
+const actionAst=ts.createSourceFile('actions.ts',actionSource,ts.ScriptTarget.Latest,true);
+const action=actionAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='saveChildClassPlanAction');
+const actionCode=ts.transpileModule(action.getText(actionAst).replace('export ',''),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+const actionContext=vm.createContext({URL,hasInternalAccess:async()=>true,safeReturnPath:path=>path,emptyToNull:value=>value||null,redirect:path=>{throw new Error('REDIRECT:'+path);}});
+vm.runInContext(actionCode+';this.save=saveChildClassPlanAction;',actionContext);
+const form=new FormData();form.set('classId','kids');form.set('legacyId','123');form.set('returnTo','/dojo/123?step=techniques&saved=kids-plan');form.set('errorReturnTo','/dojo/123?step=kids&section=kids-technical&saved=kids-plan');form.set('targetedSyllabusItemId','kata');
+await assert.rejects(actionContext.save(form),error=>{
+ const url=new URL(error.message.replace('REDIRECT:',''),'https://skbc.vercel.app');
+ assert.equal(url.searchParams.get('step'),'kids');assert.equal(url.searchParams.get('section'),'kids-technical');assert.equal(url.searchParams.get('error'),'kids-plan');assert(!url.searchParams.has('saved'));return true;
+});
+console.log('PASS: invalid child plan stays in child technique view and never reports success or advances to adults');

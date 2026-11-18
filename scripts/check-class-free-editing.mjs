@@ -25,7 +25,7 @@ const checks = [
   ["normal saves do not rewrite returnTo before submission", !/returnTo\.value\s*=/.test(files.nav)],
   ["the action bar has mobile safe-area spacing", /class-context-actions[\s\S]*env\(safe-area-inset-bottom\)/.test(files.css)],
   ["mobile pages reserve space for the fixed action bar", /@media\s*\(max-width:\s*760px\)[\s\S]*class-workspace-with-actions[\s\S]*padding-bottom/.test(files.css)],
-  ["Dojo child attendance advances to adult techniques", /name="returnTo" value=\{`\/dojo\/\$\{mainClass\.legacy_id \?\? legacyId\}\?step=techniques&saved=kids`\}/.test(files.dojo)],
+  ["Dojo child attendance advances to child techniques", /name="returnTo" value=\{`\/dojo\/\$\{mainClass\.legacy_id \?\? legacyId\}\?step=kids&section=kids-technical&saved=kids`\}/.test(files.dojo)],
   ["Dojo adult techniques advance to adult attendance", /name="returnTo" value=\{`\/dojo\/\$\{adultClass\.legacy_id \?\? legacyId\}\?step=adults&saved=techniques`\}/.test(files.dojo)],
   ["Dojo adult attendance advances to close", /name="returnTo" value=\{`\/dojo\/\$\{adultClass\.legacy_id \?\? legacyId\}\?step=close&saved=adults`\}/.test(files.dojo)],
   ["Dojo declares a primary form marker for every editable section", ["kids-attendance", "kids-technical", "adult-technical", "adult-attendance"].every((section) => files.dojo.includes(`"${section}"`))],

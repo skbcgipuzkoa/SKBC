@@ -282,15 +282,16 @@ export default async function DojoClassPage({
 
       {step === "kids" ? (
         <section className="dojo-task-card">
-          <p className="eyebrow">Paso 1</p>
-          <h1>Asistencia niños</h1>
-          <p>Marca los niños que han venido. Si hoy no hay clase infantil, puedes saltar este paso.</p>
+          <p className="eyebrow">{query.section === "kids-technical" ? "Paso 2" : "Paso 1"}</p>
+          <h1>{query.section === "kids-technical" ? "Plan técnico de niños" : "Asistencia niños"}</h1>
+          <p>{query.section === "kids-technical" ? "Marca el trabajo realizado antes de continuar con el plan de adultos." : "Marca los niños que han venido. Si hoy no hay clase infantil, puedes saltar este paso."}</p>
           {kidsClass ? (
             <>
-              <DojoChildPlanPanel
+              {query.section === "kids-technical" ? <DojoChildPlanPanel
                 classId={kidsClass.id}
                 legacyId={kidsClass.legacy_id ?? legacyId}
-                returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids&saved=kids-plan`}
+                returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids&section=kids-technical&saved=kids-plan`}
+                continueTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=${adultClass ? "techniques" : "close"}&saved=kids-plan`}
                 plan={childClassPlan}
                 groupWork={childClassGroupWork ?? []}
                 members={kids}
@@ -298,18 +299,19 @@ export default async function DojoClassPage({
                 targetedSyllabusItems={rawChildSyllabusItems ?? []}
                 historicalSyllabusItems={historicalChildSyllabusItems ?? []}
                 savedSyllabusItemIds={childClassPlan?.syllabus_item_ids ?? []}
-                open={query.section === "kids-technical"}
-              />
+                open
+              /> : null}
+              {query.section !== "kids-technical" ? <>
               <ClassVisitorForm host="gainberri" classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} /><ProvisionalAttendanceForm classId={kidsClass.id} group="kids" returnTo={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids`} />
               <PersistentAttendanceForm className="dojo-check-list" storageKey={`dojo-attendance:${kidsClass.id}`}>
                 {pendingKids.length ? <input type="hidden" data-class-primary-form="kids-attendance" /> : null}
                 <input type="hidden" name="classId" value={kidsClass.id} />
                 <input type="hidden" name="legacyId" value={kidsClass.legacy_id ?? legacyId} />
                 <input type="hidden" name="returnLegacyId" value={mainClass.legacy_id ?? legacyId} />
-                <input type="hidden" name="returnTo" value={`/dojo/${mainClass.legacy_id ?? legacyId}?step=techniques&saved=kids`} />
+                <input type="hidden" name="returnTo" value={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids&section=kids-technical&saved=kids`} />
                 <input type="hidden" name="groupClassIds" value={kidsClass.id} />
                 {pendingKids.map((member) => <DojoCheck key={member.id} name={`memberIds:${kidsClass.id}`} member={member} />)}
-                {pendingKids.length ? <DojoSubmitButton pendingLabel="Guardando niños...">Guardar asistencia</DojoSubmitButton> : <p className="muted">Asistencia infantil completa.</p>}
+                {pendingKids.length ? <DojoSubmitButton pendingLabel="Guardando niños...">Guardar asistencia</DojoSubmitButton> : <><p className="muted">Asistencia infantil completa.</p><a className="dojo-primary-button" href={`/dojo/${mainClass.legacy_id ?? legacyId}?step=kids&section=kids-technical`}>Continuar al plan técnico de niños</a></>}
               </PersistentAttendanceForm>
               {!kidsClass.closed ? (
                 <form action={closeKidsClassAction} className="dojo-secondary-form">
@@ -320,6 +322,7 @@ export default async function DojoClassPage({
                   <DojoSubmitButton className="dojo-secondary-button" pendingLabel="Saltando...">Saltar niños hoy</DojoSubmitButton>
                 </form>
               ) : null}
+              </> : null}
             </>
           ) : <a className="dojo-primary-button" href={`/dojo/${mainClass.legacy_id ?? legacyId}?step=techniques`}>Seguir a técnicas</a>}
         </section>
@@ -327,7 +330,7 @@ export default async function DojoClassPage({
 
       {step === "techniques" ? (
         <section className="dojo-task-card">
-          <p className="eyebrow">Paso 2</p>
+          <p className="eyebrow">Paso 3</p>
           <h1>Técnicas adultos</h1>
           <p>Despliega solo el grado que necesitas y marca lo realizado.</p>
           {adultClass ? (
@@ -405,7 +408,7 @@ export default async function DojoClassPage({
 
       {step === "adults" ? (
         <section className="dojo-task-card">
-          <p className="eyebrow">Paso 3</p>
+          <p className="eyebrow">Paso 4</p>
           <h1>Asistencia adultos</h1>
           <p>Marca asistencia y ajusta grupo/rol solo cuando haga falta.</p>
           {adultClass ? (
@@ -435,7 +438,7 @@ export default async function DojoClassPage({
 
       {step === "close" ? (
         <section className="dojo-task-card">
-          <p className="eyebrow">Paso 4</p>
+          <p className="eyebrow">Paso 5</p>
           <h1>Cerrar todo</h1>
           <DojoCorrectionLinks
             legacyId={mainClass.legacy_id ?? legacyId}
@@ -513,6 +516,7 @@ function DojoChildPlanPanel({
   classId,
   legacyId,
   returnTo,
+  continueTo,
   plan,
   groupWork,
   members,
@@ -525,6 +529,7 @@ function DojoChildPlanPanel({
   classId: string;
   legacyId: string;
   returnTo: string;
+  continueTo?: string;
   plan: ChildClassPlanRow | null;
   groupWork: ChildClassGroupWorkRow[];
   members: MemberRow[];
@@ -581,7 +586,8 @@ function DojoChildPlanPanel({
       <form action={saveChildClassPlanAction} className="dojo-child-plan-form" data-class-primary-form="kids-technical">
         <input type="hidden" name="classId" value={classId} />
         <input type="hidden" name="legacyId" value={legacyId} />
-        <input type="hidden" name="returnTo" value={returnTo} />
+        <input type="hidden" name="returnTo" value={continueTo ?? returnTo} />
+        <input type="hidden" name="errorReturnTo" value={returnTo} />
         {savedSyllabusItemIds.map((id) => <input key={id} type="hidden" name="savedSyllabusItemIds" value={id} />)}
         {historicalSyllabusItems.length ? (
           <p className="muted">Contenido historico conservado: {historicalSyllabusItems.map((item) => item.title).join(", ")}.</p>
@@ -677,7 +683,7 @@ function DojoChildPlanPanel({
             ))}
           </div>
         </details>
-        <DojoSubmitButton pendingLabel="Guardando plan...">Guardar plan infantil</DojoSubmitButton>
+        <DojoSubmitButton pendingLabel="Guardando plan...">{continueTo ? "Guardar plan infantil y continuar" : "Guardar plan infantil"}</DojoSubmitButton>
       </form>
     </details>
   );

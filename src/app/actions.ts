@@ -3632,6 +3632,14 @@ export async function saveChildClassPlanAction(formData: FormData) {
   const classId = String(formData.get("classId") ?? "").trim();
   const legacyId = String(formData.get("legacyId") ?? "").trim();
   const returnTo = safeReturnPath(String(formData.get("returnTo") ?? ""));
+  const errorReturnTo = safeReturnPath(String(formData.get("errorReturnTo") ?? ""));
+  const failurePath = (message: string) => {
+    const url = new URL(errorReturnTo || returnTo || (legacyId ? `/clases/${legacyId}` : "/clases"), "https://skbc.vercel.app");
+    url.searchParams.delete("saved");
+    url.searchParams.set("error", "kids-plan");
+    url.searchParams.set("detail", message.slice(0, 600));
+    return url.pathname + url.search + url.hash;
+  };
   const objective = emptyToNull(String(formData.get("objective") ?? ""));
   const notes = emptyToNull(String(formData.get("notes") ?? ""));
   const activities = Array.from(new Set(
@@ -3652,10 +3660,10 @@ export async function saveChildClassPlanAction(formData: FormData) {
   ));
 
   if (!classId || !legacyId) {
-    redirect(returnTo || "/clases?error=kids-plan");
+    redirect(failurePath("Faltan los datos de la clase."));
   }
   if (targetedSyllabusItemId && !targetedMemberIds.length) {
-    redirect(returnTo || `/clases/${legacyId}?error=kids-plan&detail=${encodeURIComponent("Selecciona al menos un alumno para esa tecnica.")}`);
+    redirect(failurePath("Selecciona al menos un alumno para esa tecnica."));
   }
 
   const supabase = createAdminClient();
@@ -3666,7 +3674,7 @@ export async function saveChildClassPlanAction(formData: FormData) {
     .single<{ id: string; class_group: "kids" | "adults" }>();
 
   if (classError || !clase || clase.class_group !== "kids") {
-    redirect(returnTo || `/clases/${legacyId}?error=kids-plan`);
+    redirect(failurePath("No se ha podido cargar la clase infantil."));
   }
 
   try {
@@ -3752,7 +3760,7 @@ export async function saveChildClassPlanAction(formData: FormData) {
     await syncChildSyllabusHistoryForClass(supabase, classId);
   } catch (error) {
     console.error("Error saving child class plan", error);
-    redirect(returnTo || `/clases/${legacyId}?error=kids-plan&detail=${encodeURIComponent(errorMessage(error))}`);
+    redirect(failurePath(errorMessage(error)));
   }
 
   revalidatePath(`/clases/${legacyId}`);
