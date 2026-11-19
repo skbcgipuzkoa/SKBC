@@ -1,3 +1,7 @@
+import { activityTechniqueLabel } from "@/lib/ficha-activity";
+import { FichaActivityTracker } from "@/components/ficha-activity-tracker";
+import { StudentVideoPreview } from "@/components/student-video-preview";
+import { hasInternalAccess } from "@/lib/auth";
 import { ArrowLeft, ExternalLink, FileText, Library, PlayCircle } from "lucide-react";
 import { notFound } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
@@ -71,6 +75,7 @@ export default async function StudentTechnicalAreaPage({
 }) {
   noStore();
   const { token } = await params;
+  const internal = await hasInternalAccess();
   const query = await searchParams;
   const supabase = createAdminClient();
 
@@ -105,7 +110,7 @@ export default async function StudentTechnicalAreaPage({
     member.class === "adults"
       ? supabase
           .from("techniques")
-          .select("id,grade,base_name,name,variant,variant_note,category,summary_es,video_url,video_title")
+          .select("id,grade,base_name,name,variant,variant_note,category,content_type,summary_es,video_url,video_title")
           .in("grade", allowedGrades)
           .eq("active", true)
           .order("grade", { ascending: true })
@@ -148,7 +153,8 @@ export default async function StudentTechnicalAreaPage({
   ].filter(Boolean) as Array<{ id: string; label: string; count: number }>;
 
   return (
-    <main className="student-area-page">
+    <main className="student-area-page" data-ficha-section="technical-area">
+      {!internal ? <FichaActivityTracker token={token} defaultSection="technical-area" /> : null}
       <section className="student-area-hero">
         <a className="consult-back-link" href={`/ficha/${encodeURIComponent(token)}`}><ArrowLeft size={16} aria-hidden="true" /> Volver a mi ficha</a>
         <p className="eyebrow">SKBC Gipuzkoa - Area tecnica personal</p>
@@ -189,7 +195,7 @@ export default async function StudentTechnicalAreaPage({
                   </summary>
                   <div className="student-child-program-list">
                     {rows.map((item) => (
-                      <article className="student-child-program-item" key={item.id}>
+                      <article className="student-child-program-item" key={item.id} data-ficha-technique={item.id} data-ficha-label={`${item.title} · ${item.grade}`}>
                         <div>
                           <span>{childSyllabusCategoryLabel(item.category)}</span>
                           <h3>{item.title}</h3>
@@ -254,14 +260,14 @@ export default async function StudentTechnicalAreaPage({
                     </summary>
                     <div className="student-technique-video-list">
                       {visibleRows.map((technique) => (
-                        <article className="student-technique-video" key={technique.id}>
+                        <article className="student-technique-video" key={technique.id} data-ficha-technique={technique.id} data-ficha-label={activityTechniqueLabel(technique)}>
                           <div>
                             <span>{technique.grade} - {technique.category}</span>
                             <h3>{technique.name}</h3>
                             <p>{effectiveTechniqueSummary(technique) || "Video de apoyo tecnico."}</p>
                           </div>
                           {technique.video_url ? (
-                            <VideoPreview url={technique.video_url} title={technique.video_title ?? technique.name} />
+                            <VideoPreview url={technique.video_url} title={activityTechniqueLabel(technique)} />
                           ) : (
                             <span className="student-video-pending">Video pendiente</span>
                           )}
@@ -315,7 +321,7 @@ function MaterialCard({ material }: { material: DisplayTechnicalAreaMaterial }) 
         </span>
       </div>
       {material.material_type === "youtube" ? <VideoPreview url={material.url} title={material.title} /> : (
-        <a className="student-open-link" href={material.url} target="_blank" rel="noopener noreferrer external">
+        <a data-ficha-video={material.material_type === "playlist" ? material.title : undefined} className="student-open-link" href={material.url} target="_blank" rel="noopener noreferrer external">
           Abrir <ExternalLink aria-hidden="true" size={16} />
         </a>
       )}
@@ -324,27 +330,7 @@ function MaterialCard({ material }: { material: DisplayTechnicalAreaMaterial }) 
 }
 
 function VideoPreview({ url, title }: { url: string; title: string }) {
-  const embedUrl = youtubeEmbedUrl(url);
-  if (!embedUrl) {
-    return (
-      <a className="student-open-link" href={url} target="_blank" rel="noopener noreferrer external">
-        Ver video <ExternalLink aria-hidden="true" size={16} />
-      </a>
-    );
-  }
-  return (
-    <div className="student-video-embed">
-      <iframe
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen
-        loading="lazy"
-        referrerPolicy="strict-origin-when-cross-origin"
-        src={embedUrl}
-        title={title}
-      />
-      <a href={url} target="_blank" rel="noopener noreferrer external">Abrir en YouTube <ExternalLink aria-hidden="true" size={14} /></a>
-    </div>
-  );
+  return <StudentVideoPreview url={url} title={title} embedUrl={youtubeEmbedUrl(url)} />;
 }
 
 function nextGrade(grades: string[], grade: string | null) {

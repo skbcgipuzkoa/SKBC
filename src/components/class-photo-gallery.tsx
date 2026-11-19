@@ -9,7 +9,7 @@ export function ClassPhotoCollection({albums,fichaToken}:CollectionProps) {
   const [open,setOpen]=useState(false);
   const [view,setView]=useState<"dates"|"all">("dates");
   const available=orderedClassPhotoAlbums(albums);
-  return <details className="class-photo-collection" onToggle={event=>{setOpen(event.currentTarget.open);if(!event.currentTarget.open)setView("dates");}}>
+  return <details data-ficha-section="gallery" className="class-photo-collection" onToggle={event=>{setOpen(event.currentTarget.open);if(!event.currentTarget.open)setView("dates");}}>
     <summary><strong>Galería de entrenamientos</strong><span className="class-photo-count">{available.length} {available.length===1?"clase con fotos":"clases con fotos"}</span><span className="class-photo-collection-hint">Elegir año, mes y día · o ver todas las fotos</span></summary>
     {open ? <div className="class-photo-days">
       <div className="class-photo-view-switch" role="group" aria-label="Organizar fotos">

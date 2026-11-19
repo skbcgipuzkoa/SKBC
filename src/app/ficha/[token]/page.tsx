@@ -1,3 +1,4 @@
+import { sectionFromTitle } from "@/lib/ficha-activity";
 import { UnreadSection } from "./UnreadSection";
 import { techniqueHistoryName, type TechniqueVariant } from "@/lib/technique-variant-label";
 import { BirthdayCelebration } from "@/components/birthday-celebration";
@@ -723,7 +724,7 @@ function AdultFicha({
             <ResponsiveTable
               columns={["Contenido", "Categoría", "Progreso", "Faltan", "Estado"]}
               rows={group.items.map((technique) => [
-                technique.name,
+                <span data-ficha-technique={technique.id} data-ficha-label={technique.name}>{technique.name}</span>,
                 technique.label,
                 `${technique.repetitions}/${REPETITION_GOAL}`,
                 String(technique.missing),
@@ -912,7 +913,7 @@ function KidsFicha({
                 <ResponsiveTable
                   columns={["Contenido", "Categoria", "Veces", "Ultima vez"]}
                   rows={group.items.map((item) => [
-                    item.title,
+                    <span data-ficha-technique="" data-ficha-label={item.title}>{item.title}</span>,
                     childSyllabusCategoryLabel(item.category),
                     String(item.repetitions),
                     formatDate(item.lastDate)
@@ -1339,7 +1340,7 @@ function Field({ label, value }: { label: string; value: string | number | null 
 
 function FoldableSection({ title, meta, children }: { title: string; meta: string; children: ReactNode }) {
   return (
-    <section className="ficha-section">
+    <section className="ficha-section" data-ficha-section={sectionFromTitle(title)}>
       <details className="ficha-foldable">
         <summary>
           <span>

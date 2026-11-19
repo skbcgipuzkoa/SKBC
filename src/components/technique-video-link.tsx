@@ -10,6 +10,7 @@ export function TechniqueVideoLink({ url, name }: { url: string | null | undefin
   return (
     <a
       className="technical-progress-video-link"
+      data-ficha-video={name}
       href={videoUrl.href}
       target="_blank"
       rel="noopener noreferrer"

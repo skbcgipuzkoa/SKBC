@@ -13314,3 +13314,22 @@ tbody tr:hover {
 .class-visitor-disclosure > summary:hover,.class-visitor-disclosure[open] > summary { background:#dfeeff;border-color:#075bb5 }
 .class-visitor-disclosure > summary:focus-visible { outline:3px solid #075bb5;outline-offset:3px }
 .class-visitor-disclosure > form { margin-top:12px }
+.ficha-activity-search { flex-wrap:wrap }
+.ficha-activity-detail { display:grid;gap:16px;margin-bottom:24px }
+.activity-section-time { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;padding:10px 0 }
+.activity-section-time small,.activity-resource-list .notice-row small { display:block;color:var(--muted);font-size:.8rem;margin-top:4px }
+.activity-time-bar { grid-column:1/-1;display:block;height:7px;background:#e0eaf4;border-radius:8px;overflow:hidden }
+.activity-time-bar>span { display:block;height:100%;background:#075bb5;border-radius:8px }
+.activity-resource-list { border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;min-width:0 }
+.activity-resource-list>summary { cursor:pointer;min-height:32px;font-weight:700;overflow-wrap:anywhere }
+.activity-resource-list>summary strong { display:inline-block;margin-left:8px;background:#e7f1ff;color:#075bb5;padding:3px 10px;border-radius:20px }
+.activity-resource-list .notice-row { gap:12px;overflow-wrap:anywhere }
+.activity-resource-list .notice-row>span:first-child { min-width:0;flex:1 }
+.activity-resource-list>summary:focus-visible,.ficha-activity-row>summary:focus-visible { outline:3px solid #075bb5;outline-offset:3px }
+.student-video-open { display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:140px;border:1px solid #bdd6ef;border-radius:12px;background:#edf5ff;color:#075bb5;font-weight:700;cursor:pointer }
+.student-video-open:focus-visible { outline:3px solid #075bb5;outline-offset:3px }
+@media(max-width:600px) { .activity-resource-list .notice-row { display:grid } }
+.ficha-activity-search { grid-template-columns:minmax(200px,1fr) minmax(180px,.5fr) auto auto }
+@media(max-width:900px) { .ficha-activity-search { grid-template-columns:minmax(0,1fr) minmax(150px,.6fr) auto } }
+@media(max-width:600px) { .ficha-activity-search { grid-template-columns:minmax(0,1fr) } }
+.ficha-activity-history > .stack-list .notice-row { display:flex;flex-wrap:wrap;gap:6px 12px }

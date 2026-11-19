@@ -217,7 +217,7 @@ function TechniqueCard({ technique, canEdit = false, editing = false, isPending 
   onSave?: (formData: FormData) => void;
 }) {
   return (
-    <article className="consult-card">
+    <article className="consult-card" data-ficha-technique={technique.id} data-ficha-label={`${technique.name} · ${technique.grade} · ${detectVariants(technique).join(" / ")}`}>
             {editing && canEdit && onSave ? (
               <form action={onSave} className="consult-edit-form">
                 <input type="hidden" name="id" value={technique.id} />
@@ -256,7 +256,7 @@ function TechniqueCard({ technique, canEdit = false, editing = false, isPending 
                 <div className="consult-summary">
                   <p>{technique.effective_summary_es || "Descripcion pendiente de completar."}</p>
                   {technique.video_url ? (
-                    <a className="consult-video-link" href={technique.video_url} target="_blank" rel="noopener noreferrer">
+                    <a data-ficha-video={`${technique.name} · ${technique.grade} · ${detectVariants(technique).join(" / ")}`} className="consult-video-link" href={technique.video_url} target="_blank" rel="noopener noreferrer">
                       <Play aria-hidden="true" size={16} />
                       Ver video
                       <ExternalLink aria-hidden="true" size={14} />
