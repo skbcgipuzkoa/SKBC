@@ -21,7 +21,7 @@ async function createClass(slug: string, form: FormData) {
       console.error("Error preparing new dojo class", error);
       redirect(`${back}/${data.id}?error=plan`);
     }
-    redirect(`${back}/${data.id}`);
+    redirect(`${back}/${data.id}?modo=plan`);
   }
 
   const { error } = await db.rpc("create_dojo_class", {

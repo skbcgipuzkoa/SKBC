@@ -12,6 +12,7 @@ import { DojoSubmitButton } from "@/app/dojo/DojoSubmitButton";
 import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm";
 import { addPortalManualTechnique } from "@/app/actions";
 import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
+import { closePortalAdultClass } from "@/lib/portal-adult-class-close";
 
 async function maintainClass(slug: string, id: string, remove: boolean, form: FormData) {
   "use server";
@@ -90,10 +91,24 @@ async function preparePlan(slug: string, id: string, guided: boolean) {
 async function finishClass(slug: string, id: string, guided: boolean, form: FormData) {
   "use server";
   const { db, dojo } = await requireDojo(slug, true);
-  const { error } = await db.rpc("finish_dojo_class", {
-    p_slug: dojo.slug, p_class: id, p_worked: form.getAll("worked").map(String)
-  });
-  redirect(`/portal/${dojo.slug}/clases/${id}${guided ? "?modo=cierre" + (error ? "&error=cierre" : "") : error ? "?error=cierre" : ""}`);
+  let failed = false;
+  try {
+    const { data: session, error } = await db.from("classes").select("class_group")
+      .eq("id", id).eq("dojo_slug", dojo.slug).maybeSingle();
+    if (error || !session) throw error ?? new Error("Clase no disponible.");
+    if (session.class_group === "adults") {
+      await closePortalAdultClass(dojo.slug, id, form.getAll("worked").map(String));
+    } else {
+      const { error: closeError } = await db.rpc("finish_dojo_class", {
+        p_slug: dojo.slug, p_class: id, p_worked: form.getAll("worked").map(String)
+      });
+      if (closeError) throw closeError;
+    }
+  } catch (error) {
+    console.error("Error closing portal class", error);
+    failed = true;
+  }
+  redirect(`/portal/${dojo.slug}/clases/${id}${guided ? "?modo=cierre" + (failed ? "&error=cierre" : "&saved=closed") : failed ? "?error=cierre" : "?saved=closed"}`);
 }
 
 async function createSubstituteLink(slug: string, id: string) {
@@ -172,6 +187,7 @@ export default async function SessionPage({ params, searchParams }: {
       <p>{guided && <>{session.name} · </>}{session.class_date} · {present.size} asistentes</p>
       {formError && <p role="alert">No se pudo guardar el cambio.</p>}
       {saved === "updated" && <p role="status">Clase actualizada.</p>}
+      {saved === "closed" && <p className="dojo-ok" role="status">Clase cerrada. Historial técnico y fichas de los asistentes actualizados.</p>}
       {warning === "exam" && <p role="alert">Quedó pendiente recalcular la preparación de examen de algún asistente.</p>}
       {slug !== "gainberri" && !dojo.archived_at && (
         <details id="mantenimiento" className="card maintenance-panel" open={formError === "mantenimiento"}>
@@ -266,7 +282,7 @@ export default async function SessionPage({ params, searchParams }: {
             <label><input name="worked" type="checkbox" value={row.id} defaultChecked={row.completed} /> {row.group_grade} · {row.technique_name}</label>
           </div>)}
         </fieldset>
-        <button className={guided ? "dojo-primary-button" : undefined}>Cerrar clase</button>
+        <DojoSubmitButton className={guided ? "dojo-primary-button" : undefined} pendingLabel="Cerrando y actualizando fichas…">Cerrar clase</DojoSubmitButton>
       </form>}
       {editable && (!guided || step === "plan") && <section className="card">
         <h2>Sustituto</h2>

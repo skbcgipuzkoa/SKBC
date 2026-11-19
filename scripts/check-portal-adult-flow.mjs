@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
+function load(path,name,bindings){const source=read(path);const ast=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);const fn=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name);assert(fn);const code=ts.transpileModule(fn.getText(ast).replace('export ',''),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;const scope=vm.createContext({...bindings,Date,Set});vm.runInContext(code+';this.run='+name+';',scope);return scope.run;}
+let events=[],failHistory=false;
+const session={id:'class',dojo_slug:'seishin',class_group:'adults',closed:false,status:'pending'};
+const plans=[{id:'tanen',class_id:'class',completed:false},{id:'sotai',class_id:'class',completed:true}];
+const db={from(table){let filters=[],payload;const q={select(){return q;},eq(key,value){filters.push(row=>row[key]===value);return q;},in(key,values){filters.push(row=>values.includes(row[key]));return q;},update(value){payload=value;return q;},maybeSingle(){return q.then(result=>({...result,data:result.data[0]??null}));},then(resolve,reject){return Promise.resolve().then(()=>{const rows=(table==='classes'?[session]:plans).filter(row=>filters.every(filter=>filter(row)));if(payload){events.push(['update',table,rows.map(row=>row.id),payload.completed]);rows.forEach(row=>Object.assign(row,payload));}return {data:rows,error:null};}).then(resolve,reject);}};return q;}};
+const close=load('src/lib/portal-adult-class-close.ts','closePortalAdultClass',{createAdminClient:()=>db,closeAdultClass:async(id,phase)=>{events.push(['history',id]);await phase('profiles');if(failHistory)throw Error('history failed');},finishClassClosureProgress:async(token,ids)=>events.push(['finish',token,...ids])});
+await close('seishin','class',['tanen']);assert.equal(plans[0].completed,true);assert.equal(plans[1].completed,false);assert.deepEqual(events.slice(-2),[['history','class'],['finish','','class']]);
+events=[];await assert.rejects(close('other-dojo','class',['tanen']),/no disponible/);assert.equal(events.length,0);
+await assert.rejects(close('gainberri','class',['tanen']),/principal/);assert.equal(events.length,0);
+await assert.rejects(close('seishin','class',['foreign-technique']),/ajenas/);assert.equal(events.length,0);
+failHistory=true;await assert.rejects(close('seishin','class',['tanen']),/history failed/);assert(!events.some(event=>event[0]==='finish'),'No finalization when history/profile fails');
+const page=read('src/app/portal/[dojo]/clases/[id]/page.tsx');assert(page.includes('redirect(path + "?modo=asistencia")'));assert(page.includes('"?modo=cierre"'));assert(page.includes('closePortalAdultClass(dojo.slug, id'));assert(page.includes('requireDojo(slug, true)'));assert(page.includes('Historial técnico y fichas de los asistentes actualizados.'));
+assert(read('src/app/portal/[dojo]/clases/page.tsx').includes('redirect(`${back}/${data.id}?modo=plan`)'));
+assert(!read('src/app/portal/[dojo]/modo-dojo/page.tsx').includes('/visitantes`'));
+console.log('PASS: Seishin adult flow, shared closure, exact selected variants, host ownership, foreign technique rejection and failure prevents finalization');
