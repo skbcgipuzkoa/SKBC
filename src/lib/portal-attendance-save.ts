@@ -19,9 +19,9 @@ export async function savePortalAttendance(slug: string, classId: string, select
       p_slug: slug, p_class: classId, p_members: members
     });
     if (saveError) throw saveError;
+    const selected = new Set(selectedIds);
+    for (const memberId of new Set(renderedIds.filter(id => !selected.has(id)))) {
+      await recalculateMemberExamStatus(memberId);
+    }
   });
-  const selected = new Set(selectedIds);
-  for (const memberId of new Set(renderedIds.filter(id => !selected.has(id)))) {
-    await recalculateMemberExamStatus(memberId);
-  }
 }
