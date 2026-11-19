@@ -95,7 +95,7 @@ export async function recalculateMemberExamStatus(memberId: string) {
   if (updateError) throw updateError;
 }
 
-export async function recalculateClassExamStatus(classId: string) {
+export async function recalculateClassExamStatus(classId: string, previousMemberIds: string[] = []) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("attendance_logs")
@@ -105,7 +105,7 @@ export async function recalculateClassExamStatus(classId: string) {
 
   if (error) throw error;
 
-  const memberIds = Array.from(new Set((data ?? []).map((row) => row.member_id).filter(Boolean)));
+  const memberIds = Array.from(new Set([...previousMemberIds, ...(data ?? []).map((row) => row.member_id)].filter(Boolean)));
   for (const memberId of memberIds) {
     await recalculateMemberExamStatus(memberId);
   }
@@ -375,6 +375,7 @@ async function calculateTechnicalStatus(member: MemberRow, requiredRepetitions: 
       .select("technique_id,technique_name")
       .eq("member_id", member.id)
       .eq("completed", true)
+      .eq("counts_as_progression", true)
       .order("class_date", { ascending: true })
       .range(from, to)
       .returns<TechniqueProgressRow[]>())

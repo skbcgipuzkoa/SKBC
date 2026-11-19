@@ -1,5 +1,6 @@
 "use server";
-import { withIndividualWorkSnapshot } from "@/lib/individual-work-snapshot";
+import { saveClassAttendanceRows } from "@/lib/class-attendance-save";
+import { withIndividualWorkSnapshot, withIndividualWorkSnapshots } from "@/lib/individual-work-snapshot";
 import { identifyIntegratedExaminer } from "@/lib/integrated-exams";
 import { parseExamSubmissionExtras } from "@/lib/integrated-exam-session";
 
@@ -2306,6 +2307,8 @@ export async function saveDelegateChildPlanAction(formData: FormData) {
     const { link, classes } = await getValidDelegateContext(token, "kids");
     const kidsClass = classes.find((clase) => clase.class_group === "kids");
     if (!kidsClass) throw new Error("No hay una clase infantil abierta para este enlace.");
+    await withIndividualWorkSnapshots(closeAfter ? [kidsClass.id] : [], async () => {
+    await getValidDelegateContext(token, "kids");
     if (objective && !delegateChildObjectives.includes(objective as (typeof delegateChildObjectives)[number])) {
       throw new Error("El objetivo infantil seleccionado no es valido.");
     }
@@ -2408,6 +2411,8 @@ export async function saveDelegateChildPlanAction(formData: FormData) {
         .update({ closed_at: finishedAt }).eq("id", link.id);
       if (closeLinkError) console.error("Class closed; delegate link cleanup pending", closeLinkError);
     }
+
+    });
   } catch (error) {
     console.error("Error saving delegate child plan", error);
     if (closeAfter) await failClassClosureProgress(progressId, errorMessage(error));
@@ -2440,6 +2445,8 @@ export async function submitDelegateClassAction(formData: FormData) {
     const { link, classes } = await getValidDelegateContext(token, mode);
     const submission = delegateClassesForSubmission(classes, mode, nextStep);
     const classesToProcess = submission.classes;
+    await withIndividualWorkSnapshots(submission.closeClasses ? classesToProcess.map(clase => clase.id) : [], async () => {
+    await getValidDelegateContext(token, mode);
     if (!totalMembers) {
       const classIds = classesToProcess.map((clase) => clase.id);
       const { data: existingAttendance, error: attendanceError } = await createAdminClient()
@@ -2508,6 +2515,8 @@ export async function submitDelegateClassAction(formData: FormData) {
         .update({ delegate_name: delegateName, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("id", link.id);
     }
+
+    });
   } catch (error) {
     console.error("Error submitting delegate class", error);
     if (error instanceof DelegateAttendanceRequiredError) {
@@ -2903,7 +2912,7 @@ export async function addAttendanceAction(formData: FormData) {
   officialGrade = officialGrade || member?.grade || "";
   trainedGrade = trainedGrade || resolveTrainingGroupGrade(officialGrade);
 
-  const { data: attendanceRow, error } = await supabase.from("attendance_logs").upsert(
+  const { data: savedAttendance, error } = await saveClassAttendanceRows(classId, [
     {
       legacy_id: `NEW-ASIS-${classId}-${memberId}`,
       class_id: classId,
@@ -2913,9 +2922,9 @@ export async function addAttendanceAction(formData: FormData) {
       trained_grade: trainedGrade || null,
       technical_role: "student",
       use_for_history: true
-    },
-    { onConflict: "legacy_id" }
-  ).select("id").single<{ id: string }>();
+    }
+  ], clase.closed);
+  const attendanceRow = savedAttendance?.[0];
 
   if (error) {
     redirect(`/clases/${legacyId}?error=attendance`);
@@ -2977,6 +2986,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
 
     let childHistoryPending = false;
     try {
+    await withIndividualWorkSnapshots(closeAfter ? classIds : [], async () => {
       if (closeAfter) await beginClassClosureProgress(progressId, classIds[0]);
       for (const dayClass of classes) {
         const ids = memberIdsByClass.get(dayClass.id) ?? [];
@@ -3017,7 +3027,9 @@ export async function addBulkAttendanceAction(formData: FormData) {
         await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
         await finishClassClosureProgress(progressId, classIds);
       }
-    } catch (error) {
+
+    });
+  } catch (error) {
       console.error("Error saving grouped attendance", error);
       if (closeAfter) await failClassClosureProgress(progressId, errorMessage(error));
       const failure = new URL(returnTo || `/clases/${returnLegacyId || legacyId}`, "https://skbc.vercel.app");
@@ -3065,11 +3077,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
     };
   });
 
-  const { data: attendanceRows, error } = await supabase
-    .from("attendance_logs")
-    .upsert(rows, { onConflict: "legacy_id" })
-    .select("id")
-    .returns<Array<{ id: string }>>();
+  const { data: attendanceRows, error } = await saveClassAttendanceRows(classId, rows, clase.closed);
 
   if (error) {
     redirect(`/clases/${returnLegacyId || legacyId}?error=attendance${returnStepQuery}`);
@@ -3104,6 +3112,7 @@ export async function addBulkAttendanceAction(formData: FormData) {
 
   if (closeAfter) {
     try {
+    await withIndividualWorkSnapshots([classId], async () => {
       await beginClassClosureProgress(progressId, classId);
       await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
       if (clase.class_group === "adults") {
@@ -3119,7 +3128,9 @@ export async function addBulkAttendanceAction(formData: FormData) {
       }
       await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
       await finishClassClosureProgress(progressId, [classId]);
-    } catch (closeError) {
+
+    });
+  } catch (closeError) {
       console.error("Error closing class after bulk attendance", closeError);
       await failClassClosureProgress(progressId, errorMessage(closeError));
       redirect(classClosureFailurePath(returnTo, `/clases/${returnLegacyId || legacyId}?${returnStepQuery.slice(1)}`, closeError));
@@ -3312,6 +3323,7 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
   const supabase = createAdminClient();
 
   try {
+    await withIndividualWorkSnapshots(closeAfter ? [classId] : [], async () => {
     if (closeAfter) {
       await beginClassClosureProgress(progressId, classId);
       await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
@@ -3361,6 +3373,8 @@ export async function saveAttendanceTechnicalReviewAction(formData: FormData) {
       await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
       await finishClassClosureProgress(progressId, [classId]);
     }
+
+    });
   } catch (error) {
     console.error("Error saving attendance technical review", error);
     if (closeAfter) await failClassClosureProgress(progressId, errorMessage(error));
@@ -3469,6 +3483,7 @@ export async function closeAdultClassAction(formData: FormData) {
   }
 
   try {
+    await withIndividualWorkSnapshots([classId], async () => {
     await beginClassClosureProgress(progressId, classId);
     await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
     await closeAdultClass(classId, adultClosureProgress(progressId));
@@ -3476,6 +3491,8 @@ export async function closeAdultClassAction(formData: FormData) {
     await recalculateClassExamStatus(classId);
     await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
     await finishClassClosureProgress(progressId, [classId]);
+
+    });
   } catch (error) {
     console.error("Error closing adult class", error);
     await failClassClosureProgress(progressId, errorMessage(error));
@@ -3554,6 +3571,7 @@ export async function finishClassCorrectionAction(formData: FormData) {
   const correctionClassIds = correctionClasses.map((dayClass) => dayClass.id);
 
   try {
+    await withIndividualWorkSnapshots(correctionClassIds, async () => {
     await beginClassClosureProgress(progressId, correctionClassIds[0]);
     await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
     for (const dayClass of correctionClasses) {
@@ -3575,6 +3593,8 @@ export async function finishClassCorrectionAction(formData: FormData) {
 
     await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
     await finishClassClosureProgress(progressId, correctionClassIds);
+
+    });
   } catch (error) {
     console.error("Error finishing class correction", error);
     await failClassClosureProgress(progressId, errorMessage(error));
@@ -3608,6 +3628,7 @@ export async function closeKidsClassAction(formData: FormData) {
 
   const supabase = createAdminClient();
   try {
+    await withIndividualWorkSnapshots([classId], async () => {
     await beginClassClosureProgress(progressId, classId);
     await advanceClassClosureProgress(progressId, "technical", CLOSURE_ATTENDANCE);
     await closeChildClassWithHistory(supabase, classId);
@@ -3617,6 +3638,8 @@ export async function closeKidsClassAction(formData: FormData) {
     await recalculateChildRankings();
     await advanceClassClosureProgress(progressId, "finalizing", CLOSURE_RANKINGS);
     await finishClassClosureProgress(progressId, [classId]);
+
+    });
   } catch (error) {
     console.error("Error recalculating kids class exam status", error);
     await failClassClosureProgress(progressId, errorMessage(error));
@@ -6086,9 +6109,9 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
   const [{ data: clase, error: classError }, { data: members, error: membersError }] = await Promise.all([
     supabase
       .from("classes")
-      .select("class_date,class_group")
+      .select("class_date,class_group,closed")
       .eq("id", classId)
-      .single<{ class_date: string; class_group: "kids" | "adults" }>(),
+      .single<{ class_date: string; class_group: "kids" | "adults"; closed: boolean }>(),
     supabase
       .from("members")
       .select("id,grade")
@@ -6130,11 +6153,7 @@ async function addAttendanceRows(classId: string, memberIds: string[], technical
     };
   });
 
-  const { data: attendanceRows, error } = await supabase
-    .from("attendance_logs")
-    .upsert(rows, { onConflict: "legacy_id" })
-    .select("id")
-    .returns<Array<{ id: string }>>();
+  const { data: attendanceRows, error } = await saveClassAttendanceRows(classId, rows);
 
   if (error) throw error;
 

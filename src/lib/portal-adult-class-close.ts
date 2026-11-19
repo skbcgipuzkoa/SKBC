@@ -1,3 +1,4 @@
+import { withIndividualWorkSnapshot } from "@/lib/individual-work-snapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { closeAdultClass } from "@/lib/adult-class-close";
 import { finishClassClosureProgress } from "@/lib/class-closure-progress";
@@ -11,6 +12,10 @@ export async function closePortalAdultClass(slug: string, classId: string, worke
     .eq("closed", false).eq("status", "pending").maybeSingle();
   if (error || !session) throw error ?? new Error("Clase adulta no disponible en este dojo.");
 
+  await withIndividualWorkSnapshot(classId, async () => {
+  const { data: current, error: currentError } = await db.from("classes").select("id")
+    .eq("id", classId).eq("dojo_slug", slug).eq("closed", false).eq("status", "pending").maybeSingle();
+  if (currentError || !current) throw currentError ?? new Error("La clase ya se ha cerrado. Recarga la página.");
   const { data: plan, error: planError } = await db.from("technical_plans")
     .select("id").eq("class_id", classId);
   if (planError) throw planError;
@@ -28,4 +33,5 @@ export async function closePortalAdultClass(slug: string, classId: string, worke
   // Keep the class retryable until histories and member status have succeeded.
   await closeAdultClass(classId, async () => {});
   await finishClassClosureProgress("", [classId]);
+  });
 }

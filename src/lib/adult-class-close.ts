@@ -2,6 +2,7 @@ import { withIndividualWorkSnapshot } from "@/lib/individual-work-snapshot";
 import { applyIndividualWork, loadIndividualWork, type IndividualWork } from "@/lib/attendance-individual-work";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recalculateClassExamStatus } from "@/lib/member-exam-status";
+import { loadAllPages } from "@/lib/load-all-pages";
 
 type ClassRow = {
   id: string;
@@ -107,6 +108,11 @@ async function rebuildAdultClass(classId: string, onPhase?: (phase: AdultClassCl
 
   const individual = validAttendance.length ? await loadIndividualWork(clase.id) : new Map<string, IndividualWork>();
   const overrides = await getTechnicalOverrides(clase.id, validAttendance);
+  const previousHistory = await loadAllPages<{ id: string; member_id: string; assignment_id: string | null; [key: string]: unknown }>((from, to) => supabase
+    .from("member_technical_history").select("*").eq("class_id", clase.id).order("id").range(from, to));
+  const currentMemberIds = new Set(validAttendance.map(row => row.member_id));
+  const removedHistory = previousHistory.filter(row => !currentMemberIds.has(row.member_id));
+  try {
   // A failed first close may already have written rows. Replace generated work
   // on every attempt so removed techniques cannot survive a retry.
   await clearGeneratedClassTechnicalHistory(supabase, clase.id);
@@ -129,7 +135,7 @@ async function rebuildAdultClass(classId: string, onPhase?: (phase: AdultClassCl
 
   await onPhase?.("finalizing");
 
-  await recalculateClassExamStatus(clase.id);
+  await recalculateClassExamStatus(clase.id, previousHistory.map(row => row.member_id));
 
   const { error: updateError } = await supabase
     .from("classes")
@@ -139,6 +145,17 @@ async function rebuildAdultClass(classId: string, onPhase?: (phase: AdultClassCl
   if (updateError) throw updateError;
 
   return { assignments: assignmentCount, dojoHistory: dojoHistoryCount, memberHistory: memberHistoryCount };
+  } catch (error) {
+    // Preserve the identities of removed attendees across a failed profile
+    // update, so the next close can recalculate them again. Their old generated
+    // assignments may have been replaced, so do not restore that FK.
+    if (removedHistory.length) {
+      const { error: restoreError } = await supabase.from("member_technical_history")
+        .upsert(removedHistory.map(row => ({ ...row, assignment_id: null })), { onConflict: "id" });
+      if (restoreError) console.error("Could not restore removed attendees for closure retry", restoreError);
+    }
+    throw error;
+  }
 }
 
 async function clearGeneratedClassTechnicalHistory(

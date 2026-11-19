@@ -13,6 +13,7 @@ import { ManualTechniqueForm } from "@/app/clases/[legacyId]/ManualTechniqueForm
 import { addPortalManualTechnique } from "@/app/actions";
 import { recalculateMemberExamStatus } from "@/lib/member-exam-status";
 import { closePortalAdultClass } from "@/lib/portal-adult-class-close";
+import { savePortalAttendance } from "@/lib/portal-attendance-save";
 
 async function maintainClass(slug: string, id: string, remove: boolean, form: FormData) {
   "use server";
@@ -63,11 +64,15 @@ async function selectTechniques(slug: string, id: string, form: FormData) {
 
 async function save(slug: string, id: string, guided: boolean, form: FormData) {
   "use server";
-  const { db, dojo } = await requireDojo(slug, true);
-  const { error } = await db.rpc("save_dojo_attendance", {
-    p_slug: dojo.slug, p_class: id, p_members: form.getAll("member").map(String)
-  });
-  redirect(`/portal/${dojo.slug}/clases/${id}${guided ? (error ? "?modo=asistencia&error=1" : "?modo=cierre") : error ? "?error=1" : ""}`);
+  const { dojo } = await requireDojo(slug, true);
+  let failed = false;
+  try {
+    await savePortalAttendance(dojo.slug, id, form.getAll("member").map(String), form.getAll("rosterMember").map(String));
+  } catch (error) {
+    console.error("Error saving portal attendance", error);
+    failed = true;
+  }
+  redirect(`/portal/${dojo.slug}/clases/${id}${guided ? (failed ? "?modo=asistencia&error=1" : "?modo=cierre") : failed ? "?error=1" : ""}`);
 }
 
 async function preparePlan(slug: string, id: string, guided: boolean) {
@@ -266,6 +271,7 @@ export default async function SessionPage({ params, searchParams }: {
             const photo = driveImageUrl(profile?.photo_url);
             const initials = display_name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
             return <label key={member_id} className="dojo-member-row">
+              <input type="hidden" name="rosterMember" value={member_id} />
               <input type="checkbox" name="member" value={member_id} defaultChecked={present.has(member_id)} />
               {photo ? <img className="attendance-avatar" src={photo} alt="" /> :
                 <span className="attendance-avatar attendance-avatar-placeholder" aria-hidden="true">{initials}</span>}
