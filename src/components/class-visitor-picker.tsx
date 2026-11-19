@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users } from "lucide-react";
+import { UserPlus } from "lucide-react";
 
 export type VisitorOption = { id: string; name: string };
 export type VisitorGroup = { slug: string; name: string; members: VisitorOption[] };
@@ -12,8 +12,8 @@ export function ClassVisitorPicker({ groups, action }: {
 }) {
   const [origin, setOrigin] = useState("");
   const selected = groups.find(group => group.slug === origin);
-  return <details className="provisional-attendance">
-    <summary><Users size={16} aria-hidden="true" /> Kenshis de otros dojos</summary>
+  return <details className="provisional-attendance class-visitor-disclosure">
+    <summary><UserPlus size={20} aria-hidden="true" /> Añadir kenshis de otro dojo</summary>
     <form action={action} className="inline-form">
       <label>Dojo de origen
         <select name="origin" required value={origin} onChange={event => setOrigin(event.target.value)}>

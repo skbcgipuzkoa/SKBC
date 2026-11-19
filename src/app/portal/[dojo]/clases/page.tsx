@@ -1,6 +1,7 @@
 import { PortalBackLink } from "@/app/portal/back-link";
 import { redirect } from "next/navigation";
 import { requireDojo } from "@/lib/dojo-access";
+import { prepareVisitorPlan } from "@/lib/visitor-plan";
 
 async function createClass(slug: string, form: FormData) {
   "use server";
@@ -15,7 +16,12 @@ async function createClass(slug: string, form: FormData) {
   if (group === "adults" && dojo.slug !== "gainberri") {
     const { data, error } = await db.from("classes").insert({ dojo_slug: dojo.slug, name, class_date: date, class_group: group }).select("id").single();
     if (error || !data) redirect(back + "?error=1");
-    redirect(`${back}/${data.id}/visitantes`);
+    try { await prepareVisitorPlan(slug, data.id); }
+    catch (error) {
+      console.error("Error preparing new dojo class", error);
+      redirect(`${back}/${data.id}?error=plan`);
+    }
+    redirect(`${back}/${data.id}`);
   }
 
   const { error } = await db.rpc("create_dojo_class", {

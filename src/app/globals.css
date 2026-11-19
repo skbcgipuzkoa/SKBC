@@ -13304,3 +13304,13 @@ tbody tr:hover {
   .ficha-kanji-affiliation, .ficha-kanji-club-info small { font-size: .68rem; }
   .ficha-kanji-affiliation img { width: 28px; height: 28px; }
 }
+.class-visitor-disclosure > summary {
+  display:inline-flex;align-items:center;gap:10px;min-height:48px;max-width:100%;box-sizing:border-box;
+  padding:12px 16px;border:1px solid #b8d3ee;border-radius:12px;background:#edf5ff;color:#075bb5;
+  font-weight:700;line-height:1.4;cursor:pointer;list-style:none;
+}
+.class-visitor-disclosure > summary::-webkit-details-marker { display:none }
+.class-visitor-disclosure > summary svg { flex-shrink:0 }
+.class-visitor-disclosure > summary:hover,.class-visitor-disclosure[open] > summary { background:#dfeeff;border-color:#075bb5 }
+.class-visitor-disclosure > summary:focus-visible { outline:3px solid #075bb5;outline-offset:3px }
+.class-visitor-disclosure > form { margin-top:12px }

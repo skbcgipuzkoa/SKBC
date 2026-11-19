@@ -432,7 +432,7 @@ export default async function ClaseDetailPage({
     Boolean(kidsDayClass) &&
     !kidsDayClass?.closed &&
     kidsDayMembers.length > 0 &&
-    kidsRegisteredCount === 0;
+    (kidsRegisteredCount === 0 || query.section === "kids-attendance");
   const combinedStep = isCombinedDay
     ? (clase.closed && !isCorrectionMode) || query.step === "cierre"
       ? "close"
@@ -484,6 +484,7 @@ export default async function ClaseDetailPage({
         compact
         open={query.section === "kids-technical"}
       />
+      <ClassVisitorForm host="gainberri" classId={kidsDayClass.id} group="kids" returnTo={`/clases/${legacyId}?section=kids-attendance#asistencia-ninos-rapida`} />
       <form action={addBulkAttendanceAction} className="attendance-day-form" data-class-primary-form={pendingKidsDayMembers.length ? "kids-attendance" : undefined}>
         <input type="hidden" name="classId" value={kidsDayClass.id} />
         <input type="hidden" name="legacyId" value={kidsDayClass.legacy_id ?? legacyId} />
@@ -744,6 +745,7 @@ export default async function ClaseDetailPage({
     <article className="card">
       <h2>Asistencia final</h2>
       <>
+          {canEditClosedClass ? <ClassVisitorForm host="gainberri" classId={clase.id} group={clase.class_group} returnTo={isCorrectionMode ? `/clases/${legacyId}?edit=${correctionSection}#asistencia` : `/clases/${legacyId}?step=asistencia#asistencia`} /> : null}
           {clase.closed ? <p className="muted">Acta cerrada: puedes anadir asistencias que faltaban como correccion.</p> : null}
           <form action={addBulkAttendanceAction} className="quick-form" data-class-primary-form={pendingClassMembers.length ? (clase.class_group === "kids" ? "kids-attendance" : "adult-attendance") : undefined}>
             <input type="hidden" name="classId" value={clase.id} />

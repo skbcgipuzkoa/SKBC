@@ -10,6 +10,7 @@ import { z } from "zod";
 import { closeAdultClass, setPlanTechniqueCompleted } from "@/lib/adult-class-close";
 import { applyIndividualWork, loadIndividualWork } from "@/lib/attendance-individual-work";
 import { generateAdultTechnicalGroups, resolveTrainingGroupGrade } from "@/lib/adult-groups";
+import { prepareVisitorPlan } from "@/lib/visitor-plan";
 import { generateAdultTechnicalPlan } from "@/lib/adult-plan";
 import { runSkbcBackup } from "@/lib/backups";
 import { grantInternalAccess, hasInternalAccess, revokeInternalAccess } from "@/lib/auth";
@@ -2596,13 +2597,14 @@ export async function createClassAction(formData: FormData) {
   }
 
 
-  if (classGroup === "adults" && !specialClass && !delegateFlow) {
-    redirect(`/portal/gainberri/clases/${data.id}/visitantes${dojoFlow ? "?origin=dojo" : ""}`);
-  }
-  if (classGroup === "adults" && !specialClass && delegateFlow) {
+  if (classGroup === "adults" && !specialClass) {
     try {
-      await generateAdultTechnicalGroups(data.id);
-      await generateAdultTechnicalPlan(data.id);
+      if (delegateFlow) {
+        await generateAdultTechnicalGroups(data.id);
+        await generateAdultTechnicalPlan(data.id);
+      } else {
+        await prepareVisitorPlan("gainberri", data.id);
+      }
     } catch (prepareError) {
       console.error("Error auto preparing adult class", prepareError);
       if (dojoFlow) redirect(`/skbc-interno/dojo/${data.legacy_id}?error=prepare&detail=${encodeURIComponent(errorMessage(prepareError))}`);
