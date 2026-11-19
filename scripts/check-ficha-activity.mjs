@@ -18,6 +18,8 @@ for(const args of [[1000,2000,1000,false,true],[1000,2000,1000,true,false],[1000
 const row={id:sample.id,member_id:'member',session_id:sessionId,kind:'time',section:'progress',active_seconds:15,resource_id:null,resource_label:null,created_at:'2026-11-19T10:00:00Z'};
 const summary=core.summarizeFichaActivity([row,row,{...row,id:randomUUID(),kind:'video',active_seconds:0,resource_label:'Giwa · Tan-en'},{...row,id:randomUUID(),kind:'technique',active_seconds:0,resource_label:'Giwa · Sotai'}]);
 assert.equal(summary.seconds,15);assert.equal(summary.sessions,1);assert.equal(summary.videoCount,1);assert.equal(summary.techniqueCount,1);
+const sameTechnique=core.summarizeFichaActivity([{...row,id:randomUUID(),kind:'technique',resource_id:'same-technique',resource_label:'Giwa · Tan-en',active_seconds:0},{...row,id:randomUUID(),kind:'technique',resource_id:'same-technique',resource_label:'Giwa · 1 DAN · Tan-en',active_seconds:0}]);assert.equal(sameTechnique.techniqueCount,1);assert.equal(sameTechnique.techniques[0].count,2);
+
 assert.notEqual(core.activityTechniqueLabel({name:'Giwa',content_type:'KATA_TANEN'}),core.activityTechniqueLabel({name:'Giwa',content_type:'KATA_SOTAI'}));
 // Execute the actual browser effect with a deterministic clock and DOM surface.
 let now=1000,cleanup,focused=true,visible='visible';const timers=new Map(),listeners=new Map(),requests=[],beacons=[];let timerId=0;

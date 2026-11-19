@@ -78,7 +78,7 @@ export function summarizeFichaActivity(rows: FichaActivityRow[]) {
     if (row.kind === "video" || row.kind === "technique") {
       const target = row.kind === "video" ? videos : techniques;
       const label = row.resource_label || "Recurso sin título";
-      const key = `${row.resource_id ?? label}:${label}`;
+      const key = row.resource_id || label;
       const entry = target.get(key) ?? { label, count: 0, lastAt: row.created_at };
       entry.count++; if (row.created_at > entry.lastAt) entry.lastAt = row.created_at;
       target.set(key, entry);
