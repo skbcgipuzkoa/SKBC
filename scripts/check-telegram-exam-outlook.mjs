@@ -59,7 +59,7 @@ const compiled=ts.transpileModule(source.slice(start,end),{compilerOptions:{modu
 const mod={exports:{}};
 const data={examOutlooks:[row]};
 const scope={exports:mod.exports,buildDailyDigest:async()=>data,buildPeriodStats:async()=>data,formatTelegramExamOutlooks,todayIso:()=> '2026-11-05',formatHumanDate:x=>x,html:x=>x};
-for(const name of ['formatTodayClasses','formatBirthdayAlerts','formatFreeTrialAlerts','formatRanking','formatClubNumbers','formatYearGrowth','formatActiveGrades','formatAttendanceStats','formatTechnicalStats','formatCourseStats','formatExamStats','formatPeriodAttendance'])scope[name]=()=>'';
+for(const name of ['formatDojoMilestones','formatTodayClasses','formatBirthdayAlerts','formatFreeTrialAlerts','formatRanking','formatClubNumbers','formatYearGrowth','formatActiveGrades','formatAttendanceStats','formatTechnicalStats','formatCourseStats','formatExamStats','formatPeriodAttendance'])scope[name]=()=>'';
 vm.runInNewContext(compiled,scope);
 for(const type of ['daily_ranking','monthly_stats','semester_stats','yearly_stats']){
  const text=await mod.exports.buildNotificationMessage(type,{start:'2026-10-01',end:'2026-10-31'});

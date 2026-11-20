@@ -1,3 +1,4 @@
+import { evaluateExamContinuity, validContinuityException } from "@/lib/exam-continuity";
 import { buildAdultExamStatusPanel } from "@/lib/adult-exam-status-panel";
 import type { ApprovalScope } from "@/lib/exam-invitations";
 import {
@@ -83,15 +84,15 @@ export async function loadExamOutlooks(
     deferrals,
     approvals,
   ] = await Promise.all([
-    loadScoped<{ member_id: string; attended_on: string }>((ids, f, t) =>
+    loadScoped<{ id: string; class_id: string | null; member_id: string; attended_on: string }>((ids, f, t) =>
       db
         .from("attendance_logs")
-        .select("id,member_id,attended_on")
+        .select("id,class_id,member_id,attended_on")
         .in("member_id", ids)
         .lte("attended_on", today)
         .order("id")
         .range(f, t)
-        .returns<Array<{ member_id: string; attended_on: string }>>(),
+        .returns<Array<{ id: string; class_id: string | null; member_id: string; attended_on: string }>>(),
     ),
     loadScoped<OutlookHistory>((ids, f, t) =>
       db
@@ -318,14 +319,23 @@ export async function loadExamOutlooks(
         const approved = (approvalsByMember.get(member.id) ?? [])
           .filter(row => row.response !== "deferred" && approvalValid?.(row, options.now))
           .sort((a, b) => a.exam_events!.exam_date.localeCompare(b.exam_events!.exam_date))[0];
-        if (approved?.exam_events) outlook.notificationApproval = {
+        const continuity = evaluateExamContinuity({ today, memberClass: member.class, closures,
+          attendance: attendanceByMember.get(member.id) ?? [],
+          exceptionAuthorized: Boolean(approved?.exam_events && validContinuityException(approved.snapshot.continuityException,
+            approved.exam_events.call_month ?? approved.exam_events.exam_date.slice(0,7), member.grade, approved.teacher_approved_at)) });
+        if (approved?.exam_events && continuity.allowed) outlook.notificationApproval = {
           date: approved.exam_events.exam_date,
           targetGrade: approved.snapshot.targetGrade,
           confirmed: approved.exam_events.date_confirmed !== false
         };
         outlook.notificationReady = member.class === "adults"
-          ? hasFourCompleteCriteria(member, outlook.targetGrade, curriculum, evaluation.history, evaluation.attendance, today)
+          ? hasFourCompleteCriteria(member, outlook.targetGrade, curriculum, evaluation.history, evaluation.attendance, today, closures)
           : String(member.semaphore ?? "").trim().toUpperCase() === "VERDE";
+        if (approved && !continuity.allowed) {
+          outlook.notificationReady = false; outlook.currentReady = false;
+          outlook.candidate = false; outlook.preparationCandidate = false; outlook.classification = "notyet";
+          outlook.deficits.push("Convocatoria pendiente de revalidación: recuperar constancia o autorización excepcional del profesor.");
+        }
       }
       return [member.id, outlook];
     }),
@@ -339,6 +349,7 @@ function hasFourCompleteCriteria(
   history: OutlookHistory[],
   attendance: string[],
   today: string,
+  closures: OutlookClosure[] = [],
 ) {
   const normalize = (value: string) => value.trim().toUpperCase();
   const program = curriculum.filter(item => item.active && item.grade === targetGrade);
@@ -357,7 +368,7 @@ function hasFourCompleteCriteria(
     .filter(item => ["GOHO", "JUHO"].includes(normalize(item.category ?? "")))
     .map(item => repetitions.get("id:" + item.id) ??
       (nameCounts.get(normalize(item.name)) === 1 ? repetitions.get("name:" + normalize(item.name)) : 0) ?? 0);
-  const ages = [...new Set(attendance)].map(date => (Date.parse(today) - Date.parse(date)) / 86400000);
+  const recent = evaluateExamContinuity({ today, memberClass: member.class, closures, attendance: [...new Set(attendance)].map(attended_on => ({ attended_on })) });
   const panel = buildAdultExamStatusPanel({
     semaphore: member.semaphore,
     nextExamOn: null,
@@ -367,8 +378,8 @@ function hasFourCompleteCriteria(
     minimumAttendance: member.minimum_attendance,
     fundamentalRepetitions,
     progressRepetitionGoal: 3,
-    recentAttendance60: ages.filter(days => days >= 0 && days <= 60).length,
-    recentAttendance21: ages.filter(days => days >= 0 && days <= 21).length,
+    recentAttendance60: recent.count60,
+    recentAttendance21: recent.count21,
     currentOn: today
   });
   return panel.criteria.every(criterion => criterion.tone === "complete");

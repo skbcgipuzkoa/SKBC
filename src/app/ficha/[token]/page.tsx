@@ -1,3 +1,6 @@
+import { getExamContinuity } from "@/lib/exam-continuity-data";
+import { ExamContinuityNotice } from "@/components/exam-continuity-notice";
+import type { ExamContinuity } from "@/lib/exam-continuity";
 import { sectionFromTitle } from "@/lib/ficha-activity";
 import { UnreadSection } from "./UnreadSection";
 import { techniqueHistoryName, type TechniqueVariant } from "@/lib/technique-variant-label";
@@ -313,7 +316,8 @@ export default async function PublicFichaPage({
   if (error || !member) notFound();
   if (member.status !== "active") return <InactiveFichaNotice />;
   const [studentInvitation, upcomingCalls] = await Promise.all([getStudentExamInvitation(member.id), getUpcomingExamCalls()]);
-  const examRegistration = <StudentExamRegistration invitation={studentInvitation} fichaToken={token} error={queryParams.examError ?? queryParams.error} responded={queryParams.examResponded ?? queryParams.responded} />;
+  const continuity = studentInvitation?.continuity ?? await getExamContinuity(member.id, member.class);
+  const examRegistration = studentInvitation ? <StudentExamRegistration invitation={studentInvitation} fichaToken={token} error={queryParams.examError ?? queryParams.error} responded={queryParams.examResponded ?? queryParams.responded} /> : <section className="ficha-section"><ExamContinuityNotice continuity={continuity} approved={false} /></section>;
 
   const { data: technicalAreaLink } = await supabase
     .from("technical_area_links")
@@ -502,13 +506,13 @@ export default async function PublicFichaPage({
     <>
       {!isInternalAccess ? <FichaAccessTracker token={token} /> : null}
       <StudentFichaReturnCookie path={`/ficha/${encodeURIComponent(token)}`} enabled={!adminBackUrl} />
-      <AdultFicha examRegistration={examRegistration} studentInvitation={studentInvitation} configuredCallDates={upcomingCalls.map((call) => call.call_date)} member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} fichaToken={token} />
+      <AdultFicha continuity={continuity} examRegistration={examRegistration} studentInvitation={studentInvitation} configuredCallDates={upcomingCalls.map((call) => call.call_date)} member={member} attendance={attendance ?? []} exams={fichaExams} courses={courses ?? []} activity={adultActivity} technicalProgress={technicalProgress} fullTechnicalHistory={fullTechnicalHistory} ranking={ranking} childTransition={childTransition ?? null} blackBeltSpecial={blackBeltResult.error ? [] : blackBeltResult.data ?? []} showBusen={Boolean(!busenEligibilityResult.error && busenEligibilityResult.data?.active)} shakujoAttendance={shakujoResult.error ? [] : shakujoResult.data ?? []} technicalArea={technicalArea} adminBackUrl={adminBackUrl} fichaUrl={`/ficha/${encodeURIComponent(token)}`} fichaToken={token} />
     </>
   );
 }
 
 function AdultFicha({
-  examRegistration, studentInvitation, configuredCallDates,
+  examRegistration, studentInvitation, configuredCallDates, continuity,
   member,
   attendance,
   exams,
@@ -527,6 +531,7 @@ function AdultFicha({
   fichaToken
 }: {
   examRegistration: ReactNode;
+  continuity: ExamContinuity;
   member: Member;
   attendance: Attendance[];
   exams: Exam[];
@@ -550,10 +555,10 @@ function AdultFicha({
   const nacionales = courses.filter((course) => course.kind === "national");
   const internacionales = courses.filter((course) => course.kind === "international");
   const taikai = courses.filter((course) => course.kind === "taikai");
-  const recentAttendance = recentAttendanceCounts(attendance);
   const examPanel = buildAdultExamStatusPanel({
     configuredCallDates,
-    approvedExamOn: studentInvitation?.teacherApprovedAt && studentInvitation.teacherApprovedBy ? studentInvitation.currentExamDate : null,
+    approvedExamOn: studentInvitation?.response !== "deferred" && studentInvitation?.teacherApprovedAt && studentInvitation.teacherApprovedBy ? studentInvitation.currentExamDate : null,
+    continuity,
     approvedDateConfirmed: studentInvitation?.dateConfirmed,
     approvedCallMonth: studentInvitation?.callMonth,
     semaphore: member.semaphore,
@@ -567,8 +572,8 @@ function AdultFicha({
       .filter((item) => item.category === "GOHO" || item.category === "JUHO")
       .map((item) => item.repetitions),
     progressRepetitionGoal: REPETITION_GOAL,
-    recentAttendance60: recentAttendance.total60,
-    recentAttendance21: recentAttendance.total21
+    recentAttendance60: continuity.count60,
+    recentAttendance21: continuity.count21
   });
 
   return (

@@ -62,6 +62,8 @@ export default async function ProximosExamenesPage({
   const members = await loadAllPages<ExamCandidate>((from, to) => query.order("id").range(from, to).returns<ExamCandidate[]>());
   const calls = await getUpcomingExamCalls();
   const approvals = await listPlanningExamApprovals();
+  const continuityPending = new Set(approvals.flatMap(event => event.participants.filter(person => person.response !== "deferred" && !person.continuity.allowed).map(person => person.memberId)));
+  for (const member of members) if (continuityPending.has(member.id)) member.semaphore = "AMARILLO";
   const minDate = new Date(Date.parse(madridCallToday() + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
   const callFilter = resolveCallFilter(params.call, calls.map((call) => call.call_date));
   const candidateByMember = await loadExamOutlooks({ memberIds: members.map((member) => member.id) });

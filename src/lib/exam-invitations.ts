@@ -1,3 +1,5 @@
+import { getExamContinuity } from "@/lib/exam-continuity-data";
+import { validContinuityException, type ExamContinuity, type ExamContinuityException } from "@/lib/exam-continuity";
 import {
   madridCallToday,
   examCallMonthEnd,
@@ -14,6 +16,7 @@ import { loadExamOutlooks } from "@/lib/exam-outlook-data";
 import { createIntegratedExamEvent } from "@/lib/integrated-exams";
 import { createTransporter } from "@/lib/email-notifications";
 export type InvitationSnapshot = {
+  continuityException?: ExamContinuityException;
   additionalMessage?: string;
   dateConfirmed?: boolean;
   callMonth?: string;
@@ -109,7 +112,7 @@ export async function getPublicExamInvitation(token: string) {
   const { data, error } = await createAdminClient()
     .from("exam_invitations")
     .select(
-      "id,snapshot,subject,body,response,message,exam_fee,belt_fee,expires_at,revoked_at,delivery_status,teacher_approved_at,teacher_approved_by,teacher_approved_exam_date,exam_events(exam_date,title,status,date_confirmed,call_month),members(grade,class,status)",
+      "id,member_id,snapshot,subject,body,response,message,exam_fee,belt_fee,expires_at,revoked_at,delivery_status,teacher_approved_at,teacher_approved_by,teacher_approved_exam_date,exam_events(exam_date,title,status,date_confirmed,call_month),members(grade,class,status)",
     )
     .eq("token_hash", hashInvitationToken(token))
     .maybeSingle();
@@ -121,8 +124,11 @@ export async function getPublicExamInvitation(token: string) {
     !isExamInvitationApprovalValid(data as unknown as ApprovalScope)
   )
     return null;
+  const { continuityException: _privateException, ...publicSnapshot } = data.snapshot as InvitationSnapshot;
   return {
     ...data,
+    snapshot: publicSnapshot,
+    continuity: await invitationContinuity(data as unknown as ApprovalScope),
     currentExamDate:
       (data.exam_events as unknown as { exam_date: string } | null)
         ?.exam_date ?? data.snapshot.examDate,
@@ -147,6 +153,7 @@ export async function getPublicExamInvitation(token: string) {
     | "belt_fee"
     | "expires_at"
   > & {
+    continuity: ExamContinuity;
     expired: boolean;
     currentExamDate: string;
     dateConfirmed: boolean;
@@ -645,6 +652,10 @@ export async function respondExamInvitation(
     message.length > 2000
   )
     throw new Error("Respuesta inválida.");
+  if (response === "accepted") {
+    const current = await getPublicExamInvitation(token);
+    if (!current?.continuity.allowed) throw new Error("Convocatoria pendiente de revalidación por constancia.");
+  }
   const { error } = await createAdminClient().rpc("respond_exam_invitation", {
     p_hash: hashInvitationToken(token),
     p_response: response,
@@ -689,6 +700,7 @@ export async function updateExamInvitationEvent(input: {
 }
 
 export type StudentExamInvitation = {
+  continuity: ExamContinuity;
   invitationId: string;
   memberId: string;
   currentExamDate: string;
@@ -716,6 +728,30 @@ export type ApprovalScope = ExamInvitation & {
   } | null;
   members: { grade: string | null; class: string; status: string } | null;
 };
+export async function invitationContinuity(inv: ApprovalScope) {
+  const month = inv.exam_events?.call_month ?? inv.exam_events?.exam_date.slice(0, 7) ?? inv.snapshot.callMonth ?? inv.snapshot.callKey.slice(0, 7);
+  return getExamContinuity(inv.member_id, inv.snapshot.memberClass,
+    validContinuityException(inv.snapshot.continuityException, month, inv.members?.grade ?? inv.snapshot.currentGrade, inv.teacher_approved_at));
+}
+
+export async function setExamContinuityException(invitationId: string, authorize: boolean, reason: string) {
+  await requireInvitationAdmin();
+  if (!/^[0-9a-f-]{36}$/i.test(invitationId) || (authorize && (reason.trim().length < 5 || reason.length > 1000))) throw new Error("Indica el motivo de la autorización excepcional.");
+  const db = createAdminClient();
+  const { data, error } = await db.from("exam_invitations")
+    .select("*,exam_events(exam_date,status,title,date_confirmed,call_month),members(grade,class,status)").eq("id", invitationId).maybeSingle();
+  if (error || !data || !isExamInvitationApprovalValid(data as ApprovalScope) || data.response === "deferred") throw error ?? new Error("Convocatoria no disponible.");
+  const inv = data as ApprovalScope;
+  const snapshot = { ...inv.snapshot };
+  if (authorize) snapshot.continuityException = {
+    callMonth: inv.exam_events!.call_month ?? inv.exam_events!.exam_date.slice(0, 7),
+    currentGrade: inv.members!.grade, approvalAt: inv.teacher_approved_at!, authorizedAt: new Date().toISOString(), authorizedBy: "Profesor · WEB SKBC", reason: reason.trim()
+  };
+  else delete snapshot.continuityException;
+  const { data: saved, error: saveError } = await db.from("exam_invitations").update({ snapshot })
+    .eq("id", inv.id).eq("teacher_approved_at", inv.teacher_approved_at!).is("revoked_at", null).eq("snapshot", JSON.stringify(inv.snapshot)).select("id").maybeSingle();
+  if (saveError || !saved) throw saveError ?? new Error("La convocatoria ha cambiado. Recarga antes de autorizar.");
+}
 export function isExamInvitationApprovalValid(
   inv: ApprovalScope,
   now = new Date(),
@@ -765,6 +801,7 @@ export async function getStudentExamInvitation(
   const inv = valid.find((row) => row.response !== "deferred") ?? valid[0];
   if (!inv) return null;
   return {
+    continuity: await invitationContinuity(inv),
     invitationId: inv.id,
     memberId: inv.member_id,
     currentExamDate: inv.exam_events!.exam_date,
@@ -880,12 +917,15 @@ export async function respondExamInvitationFromFicha(input: {
   if (member.error || !member.data) throw new Error("Ficha no disponible.");
   const inv = await db
     .from("exam_invitations")
-    .select("id,member_id")
+    .select("*,exam_events(exam_date,status,title,date_confirmed,call_month),members(grade,class,status)")
     .eq("id", input.invitationId)
     .eq("member_id", member.data.id)
     .maybeSingle();
   if (inv.error || !inv.data || inv.data.member_id !== member.data.id)
     throw new Error("Invitación no disponible.");
+  if (input.response === "accepted") {
+    if (!isExamInvitationApprovalValid(inv.data as ApprovalScope) || !(await invitationContinuity(inv.data as ApprovalScope)).allowed) throw new Error("Convocatoria pendiente de revalidación por constancia.");
+  }
   const result = await db.rpc("respond_exam_invitation_from_ficha", {
     p_ficha_token: input.fichaToken,
     p_invitation_id: input.invitationId,
@@ -1019,6 +1059,7 @@ export type PlanningExamApproval = {
     memberId: string;
     name: string;
     response: "accepted" | "deferred" | null;
+    continuity: ExamContinuity;
   }>;
   acceptedCount: number;
   deferredCount: number;
@@ -1031,7 +1072,7 @@ export async function listPlanningExamApprovals(): Promise<
   const result = await createAdminClient()
     .from("exam_invitations")
     .select(
-      "id,member_id,exam_event_id,response,snapshot,revoked_at,teacher_approved_at,exam_events(id,title,exam_date,call_month,date_confirmed,status,target_grade,program_type)",
+      "id,member_id,exam_event_id,response,snapshot,revoked_at,teacher_approved_at,teacher_approved_by,teacher_approved_exam_date,exam_events(id,title,exam_date,call_month,date_confirmed,status,target_grade,program_type),members(grade,class,status)",
     )
     .order("teacher_approved_at", { ascending: false });
   if (result.error) throw result.error;
@@ -1076,6 +1117,7 @@ export async function listPlanningExamApprovals(): Promise<
       memberId: row.member_id,
       name: row.snapshot.name,
       response: row.response,
+      continuity: await invitationContinuity(row as unknown as ApprovalScope),
     });
     if (row.response === "accepted") group.acceptedCount++;
     else if (row.response === "deferred") group.deferredCount++;

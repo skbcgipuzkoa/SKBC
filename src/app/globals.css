@@ -13333,3 +13333,11 @@ tbody tr:hover {
 @media(max-width:900px) { .ficha-activity-search { grid-template-columns:minmax(0,1fr) minmax(150px,.6fr) auto } }
 @media(max-width:600px) { .ficha-activity-search { grid-template-columns:minmax(0,1fr) } }
 .ficha-activity-history > .stack-list .notice-row { display:flex;flex-wrap:wrap;gap:6px 12px }
+.exam-continuity-notice { border:1px solid #d6e2ee;border-left:5px solid #178644;border-radius:12px;padding:16px;margin:16px 0;background:#f2faf6;overflow-wrap:anywhere }
+.exam-continuity-notice.continuity-pending { border-left-color:#b77900;background:#fff8e6 }
+.exam-continuity-notice>strong { display:block;font-size:1.05rem }
+.exam-continuity-notice p { margin:10px 0 0;line-height:1.5 }
+.planning-continuity { flex-basis:100%;min-width:0;border-top:1px solid #d6e2ee;padding-top:10px }
+.planning-continuity form { display:grid;gap:10px;max-width:600px;margin:10px 0 }
+.planning-continuity textarea { width:100%;box-sizing:border-box }
+.planning-continuity summary { cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700;color:#075bb5 }

@@ -2,7 +2,19 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { approveExamCallFromPlanning, confirmPlanningExamDate } from "@/lib/exam-invitations";
+import { approveExamCallFromPlanning, confirmPlanningExamDate, setExamContinuityException } from "@/lib/exam-invitations";
+
+export async function setExamContinuityExceptionAction(form: FormData) {
+  try {
+    await setExamContinuityException(String(form.get("invitationId") ?? ""), form.get("authorize") === "true", String(form.get("reason") ?? ""));
+  } catch {
+    redirect("/proximos-examenes?view=called&call=all&error=" + encodeURIComponent("No se pudo cambiar la excepción. Indica un motivo y comprueba que la convocatoria siga vigente."));
+  }
+  for (const path of ["/proximos-examenes", "/notificaciones/examenes"]) revalidatePath(path);
+  revalidatePath("/ficha/[token]", "page");
+  revalidatePath("/convocatoria/[token]", "page");
+  redirect("/proximos-examenes?view=called&call=all&saved=continuity");
+}
 
 export async function approvePlanningExamCallAction(form: FormData) {
   const callKey = String(form.get("callKey") ?? "");

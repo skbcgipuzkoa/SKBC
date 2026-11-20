@@ -5,6 +5,8 @@ import { loadAllPages } from "../src/lib/load-all-pages.ts";
 import * as outlook from "../src/lib/exam-outlook.ts";
 import { findDeferredExamCall } from "../src/lib/exam-call-deferral.ts";
 import { examCallMonthEnd } from "../src/lib/exam-call.ts";
+import {evaluateExamContinuity,validContinuityException} from "../src/lib/exam-continuity.ts";
+import {buildAdultExamStatusPanel} from "../src/lib/adult-exam-status-panel.ts";
 let calls = [];
 let fail = false;
 let scheduledFixture = [];
@@ -87,6 +89,7 @@ const db = {
   },
 };
 globalThis.__outlookTest = {
+  evaluateExamContinuity,validContinuityException,buildAdultExamStatusPanel,
   createAdminClient: () => db,
   loadAllPages,
   examCallMonthEnd,
@@ -116,7 +119,7 @@ source = source
   )
   .replace(
     /import[\s\S]*?from "@\/lib\/supabase\/admin";/,
-    "const {createAdminClient}=globalThis.__outlookTest;",
+    "const loadExamCycleAttributions=async()=>new Map(); const withExamCycleAttribution=m=>m; const findDeferredExamCall=globalThis.__outlookTest.findDeferredExamCall; const {createAdminClient,evaluateExamContinuity,validContinuityException,buildAdultExamStatusPanel}=globalThis.__outlookTest;",
   )
   .replace(
     /import[\s\S]*?from "@\/lib\/load-all-pages";/,

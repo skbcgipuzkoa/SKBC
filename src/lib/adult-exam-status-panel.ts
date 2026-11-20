@@ -1,5 +1,6 @@
 import { parseExamNotice } from "./exam-notice.ts";
 import { resolveStudentExamCall, studentExamCallLabel } from "./student-exam-call.ts";
+import type { ExamContinuity } from "./exam-continuity.ts";
 
 export type AdultExamCriterion = {
   id: "time" | "attendance" | "fundamentals" | "activity";
@@ -28,6 +29,7 @@ export type AdultExamStatusPanel = {
 };
 
 export type AdultExamStatusPanelInput = {
+  continuity?: ExamContinuity;
   approvedExamOn?: string | null;
   approvedDateConfirmed?: boolean;
   approvedCallMonth?: string | null;
@@ -119,13 +121,15 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
     percentage(input.recentAttendance21, 1)
   );
   const call = resolveStudentExamCall({ storedNextExamOn: input.nextExamOn, configuredDates: input.configuredCallDates, approvedExamOn: input.approvedExamOn, today: input.currentOn ?? undefined });
+  const pendingContinuity = call.approved && !(input.continuity?.allowed ?? activityReady);
+  const inactiveReadiness = !call.approved && semaphore === "VERDE" && Boolean(input.continuity && !input.continuity.allowed);
 
   return {
-    semaphore: call.approved ? "VERDE" : semaphore,
-    title: call.approved ? input.approvedDateConfirmed === false ? "Convocado · día pendiente de confirmar" : "Apto para presentarse" : timeKnown && !timePending && attendanceReady && programRepetitionsReady && activityReady ? "Requisitos completos · pendiente de valoración del profesor" : copy.title,
+    semaphore: pendingContinuity || inactiveReadiness ? "AMARILLO" : call.approved ? "VERDE" : semaphore,
+    title: pendingContinuity ? "Convocatoria pendiente de revalidación" : inactiveReadiness ? "Pendiente de recuperar constancia" : call.approved ? input.approvedDateConfirmed === false ? "Convocado · día pendiente de confirmar" : "Apto para presentarse" : timeKnown && !timePending && attendanceReady && programRepetitionsReady && activityReady ? "Requisitos completos · pendiente de valoración del profesor" : copy.title,
     nextExamLabel: studentExamCallLabel(call.date, call.approved, { dateConfirmed: input.approvedDateConfirmed, callMonth: input.approvedCallMonth }),
-    summary: call.approved ? "El profesor ha autorizado esta convocatoria. La aceptación reserva plaza y no acredita el pago." : copy.summary,
-    reactivationNotice: needsReactivation
+    summary: pendingContinuity ? "Se conserva la convocatoria prevista, pero necesitas recuperar la constancia o una autorización excepcional del profesor." : inactiveReadiness ? "Recupera la actividad reciente antes de valorar la siguiente convocatoria." : call.approved ? "El profesor ha autorizado esta convocatoria. La aceptación reserva plaza y no acredita el pago." : copy.summary,
+    reactivationNotice: !pendingContinuity && !input.continuity?.exceptionAuthorized && needsReactivation
       ? buildReactivationNotice(input.recentAttendance60, input.recentAttendance21)
       : null,
     criteria: [
@@ -176,8 +180,8 @@ export function buildAdultExamStatusPanel(input: AdultExamStatusPanelInput): Adu
       {
         id: "activity",
         label: "Actividad reciente",
-        value: `${nonNegative(input.recentAttendance60)} de 6 en 60 dias`,
-        detail: `${nonNegative(input.recentAttendance21)} de 1 en los ultimos 21 dias.`,
+        value: `${nonNegative(input.recentAttendance60)} de 6 en 60 dias${input.continuity ? " activos" : ""}`,
+        detail: `${nonNegative(input.recentAttendance21)} de 1 en los ultimos 21 dias${input.continuity ? " activos. Se descuentan vacaciones y cierres oficiales" : ""}.`,
         progress: activityProgress,
         tone: activityReady ? "complete" : "blocked"
       }

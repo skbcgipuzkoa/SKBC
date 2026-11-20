@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {evaluateExamContinuity as evaluate,examContinuityWindows as windows,validContinuityException as valid} from '../src/lib/exam-continuity.ts';
+import {buildAdultExamStatusPanel} from '../src/lib/adult-exam-status-panel.ts';
+const base={today:'2026-11-20',memberClass:'adults',closures:[],attendance:['2026-10-01','2026-10-10','2026-10-20','2026-11-01','2026-11-10','2026-11-20'].map((attended_on,i)=>({attended_on,class_id:String(i)}))};
+assert.equal(evaluate(base).allowed,true);
+assert.equal(evaluate({...base,attendance:base.attendance.slice(1)}).allowed,false);
+assert.equal(evaluate({...base,attendance:[...base.attendance,base.attendance[0],{class_id:'future',attended_on:'2027-01-01'}]}).count60,6);
+assert.equal(evaluate({...base,today:'2026-12-15'}).allowed,false,'fresh date detects inactivity without a new class');
+assert.equal(evaluate({...base,attendance:[],exceptionAuthorized:true}).allowed,true);
+assert.equal(evaluate({...base,attendance:[],exceptionAuthorized:true}).complies,false);
+assert.equal(windows('2026-09-10',[],'adults').from21,'2026-06-19');
+assert.equal(windows('2027-01-10',[],'adults').from21,'2026-12-06');
+const closure={starts_on:'2026-11-01',ends_on:'2026-11-10',applies_to:'adults'};
+assert.equal(windows(base.today,[closure,closure],'adults').from21,'2026-10-20');
+assert.equal(windows(base.today,[closure],'kids').from21,'2026-10-30');
+const exception={callMonth:'2026-12',currentGrade:'3 KYU',approvalAt:'2026-11-01',authorizedAt:'2026-11-20',authorizedBy:'teacher',reason:'Justified absence'};
+assert.equal(valid(exception,'2026-12','3 KYU','2026-11-01'),true);
+for(const args of [['2027-06','3 KYU','2026-11-01'],['2026-12','2 KYU','2026-11-01'],['2026-12','3 KYU','2026-11-02']])assert.equal(valid(exception,...args),false);
+const panel={semaphore:'VERDE',nextExamOn:'2026-12-05',approvedExamOn:'2026-12-05',currentOn:base.today,attendanceCount:30,minimumAttendance:18,fundamentalRepetitions:[3],progressRepetitionGoal:3,recentAttendance60:0,recentAttendance21:0};
+const pending=buildAdultExamStatusPanel({...panel,continuity:evaluate({...base,attendance:[]})});
+assert.equal(pending.title,'Convocatoria pendiente de revalidación');assert.equal(pending.semaphore,'AMARILLO');
+assert.equal(buildAdultExamStatusPanel({...panel,continuity:evaluate({...base,attendance:[],exceptionAuthorized:true})}).semaphore,'VERDE');
+console.log('Continuity boundaries, vacations, closures, deduplication, live revalidation and scoped teacher exceptions passed.');
+

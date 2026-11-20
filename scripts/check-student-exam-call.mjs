@@ -31,10 +31,10 @@ assert.equal(buildAdultExamStatusPanel({...input,nextExamOn:null,configuredCallD
 let mutations=0;
 const output=ts.transpileModule(fs.readFileSync('src/app/ficha/[token]/StudentExamRegistration.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 const module={exports:{}};
-vm.runInNewContext(output,{module,exports:module.exports,require:(name)=>name==='@/lib/student-exam-call'?{resolveStudentExamCall,studentExamCallLabel}:name==='@/app/notificaciones/examenes/actions'?{respondExamInvitationFromFichaAction:()=>mutations++}:require(name)});
+vm.runInNewContext(output,{module,exports:module.exports,require:(name)=>name==='@/components/exam-continuity-notice'?{ExamContinuityNotice:()=>null}:name==='@/lib/student-exam-call'?{resolveStudentExamCall,studentExamCallLabel}:name==='@/app/notificaciones/examenes/actions'?{respondExamInvitationFromFichaAction:()=>mutations++}:require(name)});
 const Registration=module.exports.StudentExamRegistration;
 const render=(invitation)=>renderToStaticMarkup(React.createElement(Registration,{invitation,fichaToken:'own-ficha-token'}));
-const invitation={invitationId:'own-invitation',currentExamDate:'2099-12-12',targetGrade:'AMARILLO',teacherApprovedAt:'2026-11-05',teacherApprovedBy:'teacher',examFee:10,beltFee:5,response:null};
+const invitation={continuity:{allowed:true,complies:true,count60:6,count21:1},invitationId:'own-invitation',currentExamDate:'2099-12-12',targetGrade:'AMARILLO',teacherApprovedAt:'2026-11-05',teacherApprovedBy:'teacher',examFee:10,beltFee:5,response:null};
 assert.equal(render(null),'');
 assert.equal(render({...invitation,teacherApprovedAt:null}),'');
 assert.equal(render({...invitation,currentExamDate:'2020-01-01'}),'');

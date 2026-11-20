@@ -169,7 +169,10 @@ const db = {
     return { data: "invite", error: null };
   },
 };
+let continuityAllowed = true;
 const deps = {
+ "@/lib/exam-continuity-data": {getExamContinuity: async (id)=>{assert.ok(id);return {allowed:continuityAllowed,complies:continuityAllowed}}},
+ "@/lib/exam-continuity": {validContinuityException:()=>false},
   "@/lib/exam-call": { madridCallToday, examCallMonthEnd, formatExamCallMonth },
   "@/lib/auth": { hasInternalAccess: async () => admin },
   "@/lib/supabase/admin": { createAdminClient: () => db },
@@ -480,6 +483,7 @@ await api.updateExamInvitationEvent({
 });
 assert.equal(rpcCalls.at(-1).args.p_notes, "Existing human notes");
 assert.equal(rpcCalls.at(-1).name, "update_exam_invitation_event");
+rows[0].delivery_status = "sent";
 const before = rpcCalls.length;
 await api.getPublicExamInvitation(api.createInvitationToken());
 assert.equal(rpcCalls.length, before);
@@ -538,6 +542,12 @@ assert.equal(dto.invitationId, "invite");
 for (const secret of ["token_hash", "snapshot", "email", "body", "subject"])
   assert.equal(secret in dto, false);
 assert.equal(rpcCalls.length, dtoReadBefore, "Approval GET never mutates");
+continuityAllowed = false;
+const blockedBefore=rpcCalls.length;
+await assert.rejects(()=>api.respondExamInvitation(api.createInvitationToken(),"accepted",""),/revalidación/);
+await assert.rejects(()=>api.respondExamInvitationFromFicha({fichaToken:"a".repeat(32),invitationId:"invite",response:"accepted",message:""}),/revalidación/);
+assert.equal(rpcCalls.length,blockedBefore,"Pending continuity must never reach response RPC");
+continuityAllowed = true;
 rows[0].member_id = "another-member";
 const bindingBefore = rpcCalls.length;
 await assert.rejects(
