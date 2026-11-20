@@ -18,3 +18,8 @@ export function studentExamCallLabel(date: string | null, approved = false, opti
   const formatted = `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
   return `Convocatoria autorizada por el profesor: ${formatted}`;
 }
+
+/** A deferred call moves to a later configured month, never an invented date. */
+export function resolveDeferredStudentExamCall(deferredDate: string, configuredDates: string[], today = madridCallToday()) {
+  return configuredDates.filter(date => isIsoDate(date) && date.slice(0,7) > deferredDate.slice(0,7) && date.slice(0,7) >= today.slice(0,7)).sort()[0] ?? null;
+}

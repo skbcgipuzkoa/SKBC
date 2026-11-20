@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import ts from 'typescript';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {resolveStudentExamCall,studentExamCallLabel} from '../src/lib/student-exam-call.ts';
+import {resolveDeferredStudentExamCall,resolveStudentExamCall,studentExamCallLabel} from '../src/lib/student-exam-call.ts';
 import {buildAdultExamStatusPanel} from '../src/lib/adult-exam-status-panel.ts';
 const require=createRequire(import.meta.url);
 const today='2026-11-05';
@@ -31,7 +31,7 @@ assert.equal(buildAdultExamStatusPanel({...input,nextExamOn:null,configuredCallD
 let mutations=0;
 const output=ts.transpileModule(fs.readFileSync('src/app/ficha/[token]/StudentExamRegistration.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 const module={exports:{}};
-vm.runInNewContext(output,{module,exports:module.exports,require:(name)=>name==='@/components/exam-continuity-notice'?{ExamContinuityNotice:()=>null}:name==='@/lib/student-exam-call'?{resolveStudentExamCall,studentExamCallLabel}:name==='@/app/notificaciones/examenes/actions'?{respondExamInvitationFromFichaAction:()=>mutations++}:require(name)});
+vm.runInNewContext(output,{module,exports:module.exports,require:(name)=>name==='@/components/exam-continuity-notice'?{ExamContinuityNotice:()=>null}:name==='@/lib/student-exam-call'?{resolveDeferredStudentExamCall,resolveStudentExamCall,studentExamCallLabel}:name==='@/app/notificaciones/examenes/actions'?{respondExamInvitationFromFichaAction:()=>mutations++}:require(name)});
 const Registration=module.exports.StudentExamRegistration;
 const render=(invitation)=>renderToStaticMarkup(React.createElement(Registration,{invitation,fichaToken:'own-ficha-token'}));
 const invitation={continuity:{allowed:true,complies:true,count60:6,count21:1},invitationId:'own-invitation',currentExamDate:'2099-12-12',targetGrade:'AMARILLO',teacherApprovedAt:'2026-11-05',teacherApprovedBy:'teacher',examFee:10,beltFee:5,response:null};
@@ -86,3 +86,17 @@ const currentMonthCall=resolveStudentExamCall({today:'2026-12-10',configuredDate
 assert.equal(currentMonthCall.date,'2026-12-05');
 assert.equal(studentExamCallLabel(currentMonthCall.date),'Próxima convocatoria prevista si se cumplen todos los requisitos: Diciembre de 2026');
 console.log('Monthly approvals, hidden provisional anchors, response preservation and current-month call semantics passed.');
+
+assert.equal(resolveDeferredStudentExamCall('2026-12-17',['2027-12-05','2026-12-20','invalid','2027-06-05'],'2026-11-20'),'2027-06-05');
+assert.equal(resolveDeferredStudentExamCall('2026-12-17',['2026-12-20'],'2026-11-20'),null);
+assert.equal(resolveDeferredStudentExamCall('2026-12-17',['2027-06-05','2027-12-05'],'2027-07-01'),'2027-12-05');
+const deferredHtml=renderToStaticMarkup(React.createElement(Registration,{invitation:{...invitation,response:'deferred'},fichaToken:'own-ficha-token',configuredCallDates:['2099-12-20','2100-06-05','2100-12-05']}));
+assert.match(deferredHtml,/Junio de 2100/);
+assert.match(deferredHtml,/Convocatoria aplazada: 12\/12\/2099/);
+assert.doesNotMatch(deferredHtml,/Convocatoria autorizada|ha autorizado tu participación|Sí, me inscribo|Abono anticipado/);
+assert.match(render({...invitation,response:'deferred'}),/Convocatoria pendiente de definir/);
+console.log('Deferred ficha shows only next configured month, labels previous call, and never implies renewed approval.');
+
+const deferredPanel=buildAdultExamStatusPanel({...input,approvedExamOn:null,approvedCallMonth:null,nextExamOn:resolveDeferredStudentExamCall('2026-12-17',['2027-06-05'],today),configuredCallDates:['2027-06-05']});
+assert.match(deferredPanel.nextExamLabel,/Junio de 2027/);
+assert.doesNotMatch(deferredPanel.nextExamLabel,/Diciembre de 2026/);

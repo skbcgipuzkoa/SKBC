@@ -1,3 +1,4 @@
+import { resolveDeferredStudentExamCall } from "@/lib/student-exam-call";
 import { getExamContinuity } from "@/lib/exam-continuity-data";
 import { ExamContinuityNotice } from "@/components/exam-continuity-notice";
 import type { ExamContinuity } from "@/lib/exam-continuity";
@@ -317,7 +318,7 @@ export default async function PublicFichaPage({
   if (member.status !== "active") return <InactiveFichaNotice />;
   const [studentInvitation, upcomingCalls] = await Promise.all([getStudentExamInvitation(member.id), getUpcomingExamCalls()]);
   const continuity = studentInvitation?.continuity ?? await getExamContinuity(member.id, member.class);
-  const examRegistration = studentInvitation ? <StudentExamRegistration invitation={studentInvitation} fichaToken={token} error={queryParams.examError ?? queryParams.error} responded={queryParams.examResponded ?? queryParams.responded} /> : <section className="ficha-section"><ExamContinuityNotice continuity={continuity} approved={false} /></section>;
+  const examRegistration = studentInvitation ? <StudentExamRegistration configuredCallDates={upcomingCalls.map(call => call.call_date)} invitation={studentInvitation} fichaToken={token} error={queryParams.examError ?? queryParams.error} responded={queryParams.examResponded ?? queryParams.responded} /> : <section className="ficha-section"><ExamContinuityNotice continuity={continuity} approved={false} /></section>;
 
   const { data: technicalAreaLink } = await supabase
     .from("technical_area_links")
@@ -556,13 +557,13 @@ function AdultFicha({
   const internacionales = courses.filter((course) => course.kind === "international");
   const taikai = courses.filter((course) => course.kind === "taikai");
   const examPanel = buildAdultExamStatusPanel({
-    configuredCallDates,
+    configuredCallDates: studentInvitation?.response === "deferred" ? configuredCallDates.filter(date => date.slice(0, 7) > studentInvitation.currentExamDate.slice(0, 7)) : configuredCallDates,
     approvedExamOn: studentInvitation?.response !== "deferred" && studentInvitation?.teacherApprovedAt && studentInvitation.teacherApprovedBy ? studentInvitation.currentExamDate : null,
     continuity,
     approvedDateConfirmed: studentInvitation?.dateConfirmed,
-    approvedCallMonth: studentInvitation?.callMonth,
+    approvedCallMonth: studentInvitation?.response === "deferred" ? null : studentInvitation?.callMonth,
     semaphore: member.semaphore,
-    nextExamOn: member.next_exam_on,
+    nextExamOn: studentInvitation?.response === "deferred" ? resolveDeferredStudentExamCall(studentInvitation.currentExamDate, configuredCallDates) : member.next_exam_on,
     cycleStartOn: member.last_exam_on ?? member.joined_on,
     examNotice: member.exam_notice,
     attendanceCount: member.attendance_count,
