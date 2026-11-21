@@ -1,3 +1,4 @@
+import { rankingDates, type RankingDates } from "@/lib/ranking-dates";
 ﻿import { Award, LogOut, Medal } from "lucide-react";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { redirect } from "next/navigation";
@@ -99,11 +100,7 @@ type CalendarClosure = {
   applies_to: "all" | "kids" | "adults";
 };
 
-const today = new Date();
-const date30 = daysAgo(30);
-const date60 = daysAgo(60);
-const date90 = daysAgo(90);
-const date180 = daysAgo(180);
+
 
 export default async function RankingsPage({
   searchParams
@@ -114,6 +111,8 @@ export default async function RankingsPage({
     redirect("/skbc-interno");
   }
 
+  const dates = rankingDates();
+  const { date60, date90, date180 } = dates;
   const params = await searchParams;
   const supabase = createAdminClient();
   const [{ data: members, error: membersError }, { data: courses, error: coursesError }, { data: childRankings, error: childError }, blackBeltResult, blackBeltEligibilityResult, shakujoResult, closuresResult] =
@@ -155,7 +154,7 @@ export default async function RankingsPage({
         .from("skbc_calendar_closures")
         .select("starts_on,ends_on,applies_to")
         .eq("active", true)
-        .lte("starts_on", new Date().toISOString().slice(0, 10))
+        .lte("starts_on", dates.today)
         .gte("ends_on", "2000-01-01")
         .returns<CalendarClosure[]>()
     ]);
@@ -201,15 +200,15 @@ export default async function RankingsPage({
   const blackBeltEligibleIds = new Set((blackBeltEligibilityResult.error ? [] : blackBeltEligibilityResult.data ?? []).map((row) => row.member_id));
   const shakujoRows = shakujoResult.error ? [] : shakujoResult.data ?? [];
   const closures = closuresResult.error ? [] : closuresResult.data ?? [];
-  const allAdults = buildAdultRanking(members ?? [], recentAdultAttendance, technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, blackBeltEligibleIds, shakujoRows, closures);
+  const allAdults = buildAdultRanking(members ?? [], recentAdultAttendance, technical ?? [], courses ?? [], bonuses ?? [], blackBeltRows, blackBeltEligibleIds, shakujoRows, closures, dates);
   const adults = allAdults.slice(0, 10);
   const adultMembers = (members ?? []).filter((member) => member.class === "adults" && member.legacy_id !== "13");
-  const childAttendance = summarizeChildAttendance(recentChildAttendance, closures);
+  const childAttendance = summarizeChildAttendance(recentChildAttendance, closures, dates);
   const allKids = (childRankings ?? [])
     .filter((row) => row.members?.status === "active")
     .map((row) => {
       const liveAttendance = childAttendance.get(row.member_id);
-      if (!liveAttendance) return row;
+      if (!liveAttendance) return { ...row, attendance_30d: 0, attendance_90d: 0, score: 0 };
       return {
         ...row,
         ...liveAttendance,
@@ -533,7 +532,8 @@ export default async function RankingsPage({
   );
 }
 
-function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], blackBeltEligibleIds: Set<string>, shakujoRows: any[], closures: CalendarClosure[]): AdultRankingRow[] {
+function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], blackBeltEligibleIds: Set<string>, shakujoRows: any[], closures: CalendarClosure[], dates: RankingDates = rankingDates()): AdultRankingRow[] {
+  const { date30, date90, date180 } = dates;
   const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
@@ -573,7 +573,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const a180 = attendance180.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
       const last = lastAttendance.get(member.id);
-      const daysWithoutAttendance = last ? trainingDaysBetween(last, new Date().toISOString().slice(0, 10), closures, "adults") : 999;
+      const daysWithoutAttendance = last ? trainingDaysBetween(last, dates.today, closures, "adults") : 999;
       const possible30 = possibleClubDays(clubTrainingDates, date30, member.joined_on);
       const possible90 = possibleClubDays(clubTrainingDates, date90, member.joined_on);
       const possible180 = possibleClubDays(clubTrainingDates, date180, member.joined_on);
@@ -838,7 +838,8 @@ function latestAttendanceByMember(rows: Attendance[]) {
   return latest;
 }
 
-function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[]) {
+function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[], dates: RankingDates = rankingDates()) {
+  const { date30 } = dates;
   const summaries = new Map<string, {
     attendance_30d: number;
     attendance_90d: number;
@@ -851,7 +852,7 @@ function summarizeChildAttendance(rows: Attendance[], closures: CalendarClosure[
     dates.push(row.attended_on);
     grouped.set(row.member_id, dates);
   }
-  const currentDate = new Date().toISOString().slice(0, 10);
+  const currentDate = dates.today;
   for (const [memberId, dates] of grouped) {
     dates.sort((a, b) => b.localeCompare(a));
     const lastAttendanceOn = dates[0];
@@ -941,10 +942,4 @@ function adultInactivityPenalty(daysWithoutAttendance: number) {
   if (daysWithoutAttendance <= 60) return 15;
   if (daysWithoutAttendance <= 90) return 25;
   return 35;
-}
-
-function daysAgo(days: number) {
-  const date = new Date(today);
-  date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
 }

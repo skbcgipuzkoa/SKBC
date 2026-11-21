@@ -1,3 +1,4 @@
+import { rankingDates, type RankingDates } from "@/lib/ranking-dates";
 import { clubMilestones } from "@/lib/club-milestones";
 import { loadExamOutlooks } from "@/lib/exam-outlook-data";
 import { getUpcomingExamCalls } from "@/lib/exam-calls-data";
@@ -136,12 +137,6 @@ type NotificationSetting = {
   pause_starts_on: string | null;
   pause_ends_on: string | null;
 };
-
-const today = new Date();
-const date30 = daysAgo(30);
-const date60 = daysAgo(60);
-const date90 = daysAgo(90);
-const date180 = daysAgo(180);
 
 export async function sendTelegramDigest(notificationType: NotificationType, options: { force?: boolean } = {}): Promise<NotificationResult> {
   const period = resolvePeriod(notificationType);
@@ -304,6 +299,8 @@ async function loadNextTelegramExamOutlooks() {
 }
 
 async function buildDailyDigest() {
+  const dates = rankingDates();
+  const { date30, date60, date90, date180 } = dates;
   const supabase = createAdminClient();
   const [
     membersResult,
@@ -374,7 +371,8 @@ async function buildDailyDigest() {
     bonusesResult.error ? [] : bonusesResult.data ?? [],
     blackBeltResult.error ? [] : blackBeltResult.data ?? [],
     shakujoResult.error ? [] : shakujoResult.data ?? [],
-    closuresResult.error ? [] : closuresResult.data ?? []
+    closuresResult.error ? [] : closuresResult.data ?? [],
+    dates
   ).slice(0, 10);
 
   const attendanceByKid = new Map<string, { attendance30: number; attendance90: number }>();
@@ -612,7 +610,8 @@ async function upsertNotificationLog(input: {
   if (error) throw error;
 }
 
-function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], shakujoRows: any[], closures: CalendarClosure[]) {
+function buildAdultRanking(members: Member[], attendance: Attendance[], technical: TechnicalHistory[], courses: Course[], bonuses: AdultBonus[], blackBeltRows: any[], shakujoRows: any[], closures: CalendarClosure[], dates: RankingDates = rankingDates()) {
+  const { date30, date90, date180 } = dates;
   const adults = members.filter((member) => member.class === "adults" && member.legacy_id !== "13");
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
@@ -652,7 +651,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const a180 = attendance180.get(member.id) ?? 0;
       const t90 = technical90.get(member.id) ?? 0;
       const last = lastAttendance.get(member.id);
-      const daysWithoutAttendance = last ? trainingDaysBetween(last, todayIso(), closures) : 999;
+      const daysWithoutAttendance = last ? trainingDaysBetween(last, dates.today, closures) : 999;
       const c30 = attendanceRate(a30, possibleClubDays(clubTrainingDates, date30, member.joined_on));
       const c90 = attendanceRate(a90, possibleClubDays(clubTrainingDates, date90, member.joined_on));
       const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
@@ -1293,12 +1292,6 @@ function formatDeltaWords(delta: number) {
   if (delta > 0) return `${delta} mas que el año anterior`;
   if (delta < 0) return `${Math.abs(delta)} menos que el año anterior`;
   return "igual que el año anterior";
-}
-
-function daysAgo(days: number) {
-  const date = new Date(today);
-  date.setDate(date.getDate() - days);
-  return isoDate(date);
 }
 
 function addDays(date: Date, days: number) {

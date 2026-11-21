@@ -1,3 +1,4 @@
+import { rankingDates, type RankingDates } from "@/lib/ranking-dates";
 import { resolveDeferredStudentExamCall } from "@/lib/student-exam-call";
 import { getExamContinuity } from "@/lib/exam-continuity-data";
 import { ExamContinuityNotice } from "@/components/exam-continuity-notice";
@@ -419,8 +420,8 @@ export default async function PublicFichaPage({
   }
 
   const targetGrade = nextAdultGrade(member.grade);
-  const date60 = daysAgo(60);
-  const date180 = daysAgo(180);
+  const rankingDay = rankingDates();
+  const { date60, date180 } = rankingDay;
   const [{ data: techniques }, technicalHistory, { data: allAdults }, allAttendance, { data: recentCourses }, bonusResult, { data: childTransition }, blackBeltResult, shakujoResult, closuresResult, busenEligibilityResult] = await Promise.all([
     supabase
       .from("techniques")
@@ -501,7 +502,7 @@ export default async function PublicFichaPage({
   const technicalProgress = buildTechnicalProgress(targetGrade, techniques ?? [], technicalHistory);
   const fullTechnicalHistory = buildFullTechnicalHistory(technicalHistory);
   const adultActivity = buildAdultActivity(attendance ?? [], courses ?? [], closures, member.joined_on);
-  const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance, recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? []);
+  const ranking = buildAdultRanking(member.id, allAdults ?? [], allAttendance, recentCourses ?? [], bonusResult.error ? [] : bonusResult.data ?? [], closuresResult.error ? [] : closuresResult.data ?? [], rankingDay);
 
   return (
     <>
@@ -633,8 +634,6 @@ function AdultFicha({
           </div>
         </section>
       ) : null}
-
-
 
       <section className="ficha-section">
         <h2>Actividad e implicación</h2>
@@ -1537,7 +1536,7 @@ function Footer() {
 }
 
 function buildVisibleChildRanking(ranking: ChildRanking | null, attendance: Attendance[], closures: CalendarClosure[], joinedOn: string | null): ChildRanking | null {
-  const today = startOfDay(new Date());
+  const today = parseDate(rankingDates().today)!;
   const dates = attendance
     .map((row) => parseDate(row.attended_on))
     .filter((date): date is Date => Boolean(date))
@@ -1748,10 +1747,8 @@ function adultGradeIndex(grade: string | null | undefined) {
   return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
 }
 
-function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string; joined_on?: string | null }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" | "taikai" }>, bonuses: AdultBonus[], closures: CalendarClosure[]) {
-  const date30 = daysAgo(30);
-  const date90 = daysAgo(90);
-  const date180 = daysAgo(180);
+function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy_id: string | null; display_name: string; joined_on?: string | null }>, attendance: Array<{ member_id: string; attended_on: string }>, courses: Array<{ member_id: string; course_date: string; kind: "national" | "international" | "taikai" }>, bonuses: AdultBonus[], closures: CalendarClosure[], dates: RankingDates = rankingDates()) {
+  const { date30, date90, date180 } = dates;
   const attendance30 = countByMember(attendance.filter((row) => row.attended_on >= date30));
   const attendance90 = countByMember(attendance.filter((row) => row.attended_on >= date90));
   const attendance180 = countByMember(attendance.filter((row) => row.attended_on >= date180));
@@ -1767,7 +1764,7 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
       const a30 = attendance30.get(member.id) ?? 0;
       const a90 = attendance90.get(member.id) ?? 0;
       const a180 = attendance180.get(member.id) ?? 0;
-      const daysWithoutAttendance = lastAttendance.get(member.id) ? trainingDaysBetween(lastAttendance.get(member.id) as string, new Date().toISOString().slice(0, 10), closures) : 999;
+      const daysWithoutAttendance = lastAttendance.get(member.id) ? trainingDaysBetween(lastAttendance.get(member.id) as string, dates.today, closures) : 999;
       const c30 = attendanceRate(a30, possibleClubDays(clubTrainingDates, date30, member.joined_on));
       const c90 = attendanceRate(a90, possibleClubDays(clubTrainingDates, date90, member.joined_on));
       const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
@@ -2194,12 +2191,6 @@ function addMonths(date: Date, months: number) {
   return startOfDay(next);
 }
 
-function daysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
-}
-
 function daysBetween(from: string, to: string) {
   const start = new Date(`${from}T00:00:00`).getTime();
   const end = new Date(`${to}T00:00:00`).getTime();
@@ -2217,5 +2208,4 @@ function normalize(value: string | null | undefined) {
 function normalizeCss(value: string) {
   return normalize(value).toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
-
 
