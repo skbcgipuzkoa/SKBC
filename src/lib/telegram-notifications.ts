@@ -657,7 +657,7 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
       const attendanceVolume = Math.min(a90, 12);
-      const bonusScore = ((fixedBonus.get(member.id) ?? 0) * 8) + ((oneTimeBonus.get(member.id) ?? 0) * 4);
+      const bonusScore = (fixedBonus.get(member.id) ?? 0) + (oneTimeBonus.get(member.id) ?? 0);
       const score = Math.max(
         0,
         constancyScore +

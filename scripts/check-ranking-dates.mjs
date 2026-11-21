@@ -18,3 +18,15 @@ clock=new Date('2027-05-21T12:00:00Z');const aged=scores(attendance);assert.equa
 for(const path of ['src/app/rankings/page.tsx','src/lib/telegram-notifications.ts'])assert.doesNotMatch(fs.readFileSync(path,'utf8'),/^const (today|date30|date60|date90|date180) =/m);
 console.log('Madrid dates, DST, long-lived module refresh, all three ranking formulas unchanged, and missed-class score differentiation passed.');
 
+
+clock=new Date('2026-11-21T12:00:00Z');
+function bonusScores(bonuses){return [admin.buildAdultRanking(members,attendance,[],[],bonuses,[],new Set(),[],[]).find(r=>r.id==='one').score,telegram.buildAdultRanking(members,attendance,[],[],bonuses,[],[],[]).find(r=>r.name==='one').score,ficha.buildAdultRanking('one',members,attendance,[],bonuses,[]).score];}
+const fixed={member_id:'one',points:3,active:true,permanent:true,bonus_date:'2026-09-08'};
+const punctual={...fixed,permanent:false,bonus_date:'2026-11-17'};
+assert.deepEqual(bonusScores([fixed]),[120,120,120]);
+assert.deepEqual(bonusScores([punctual]),[120,120,120]);
+assert.deepEqual(bonusScores([fixed,punctual]),[123,123,123]);
+assert.deepEqual(bonusScores([{...punctual,bonus_date:'2026-11-16'}]),[117,117,117]);
+assert.deepEqual(bonusScores([{...fixed,active:false}]),[117,117,117]);
+assert.deepEqual(bonusScores([{...fixed,points:-3}]),[114,114,114]);
+console.log('Fixed and punctual bonuses add their exact signed points across admin, ficha and Telegram; lifetime and activation rules preserved.');
