@@ -350,8 +350,8 @@ export default async function RankingsPage({
                     <AuditMetric label="Base constancia" value={`+${row.constancyScore}`} detail="30/90/180 ponderado" />
                     <AuditMetric label="Volumen asistencia" value={`+${row.attendanceVolume}`} detail="maximo 12" />
                     <AuditMetric label="Cursos 60 dias" value={`+${row.nationalCoursePoints + row.internationalCoursePoints + row.taikaiCoursePoints}`} detail={`N ${row.nationalCoursePoints} Ã‚· I ${row.internationalCoursePoints} Ã‚· T ${row.taikaiCoursePoints}`} />
-                    <AuditMetric label="Bonus fijo" value={`+${row.fixedBonusScore}`} detail="Puntos asignados, sin multiplicador" />
-                    <AuditMetric label="Bonus puntual" value={`+${row.oneTimeBonusScore}`} detail="Puntos asignados, solo clase actual" />
+                    <AuditMetric label="Bonus fijo" value={`+${row.fixedBonusScore}`} detail={`${row.fixedBonus} × 2`} />
+                    <AuditMetric label="Bonus puntual" value={`+${row.oneTimeBonusScore}`} detail={`${row.oneTimeBonus} × 2, solo clase actual`} />
                     <AuditMetric label="Busen / Shakujo" value={`${row.isBlackBeltEligible ? signed(row.blackBeltPoints) : "-"} / ${signed(row.shakujoPoints)}`} detail="ultimos 180 dias" />
                     <AuditMetric label="Inactividad" value={`-${row.inactivityPenalty}`} detail={formatDaysWithout(row.daysWithoutAttendance)} />
                     <AuditMetric label="Tecnicas" value={`${row.technical90}`} detail="solo informativo" />
@@ -585,8 +585,8 @@ function buildAdultRanking(members: Member[], attendance: Attendance[], technica
       const taikai = taikaiCoursePoints.get(member.id) ?? 0;
       const fixed = fixedBonus.get(member.id) ?? 0;
       const oneTime = oneTimeBonus.get(member.id) ?? 0;
-      const fixedBonusScore = fixed;
-      const oneTimeBonusScore = oneTime;
+      const fixedBonusScore = fixed * 2;
+      const oneTimeBonusScore = oneTime * 2;
       const bonusScore = fixedBonusScore + oneTimeBonusScore;
       const black = blackBeltPoints.get(member.id) ?? 0;
       const isBlackBeltEligible = blackBeltEligibleIds.has(member.id);

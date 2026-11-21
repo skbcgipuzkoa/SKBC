@@ -1770,7 +1770,7 @@ function buildAdultRanking(memberId: string, members: Array<{ id: string; legacy
       const c180 = attendanceRate(a180, possibleClubDays(clubTrainingDates, date180, member.joined_on));
       const constancyScore = Math.round(c30 * 45 + c90 * 35 + c180 * 25);
       const attendanceVolume = Math.min(a90, 12);
-      const bonusScore = (fixedBonusPoints.get(member.id) ?? 0) + (oneTimeBonusPoints.get(member.id) ?? 0);
+      const bonusScore = ((fixedBonusPoints.get(member.id) ?? 0) + (oneTimeBonusPoints.get(member.id) ?? 0)) * 2;
       const activityScore = constancyScore + attendanceVolume + (coursePoints.get(member.id) ?? 0) + bonusScore;
       const score = Math.max(0, activityScore - (onboardingMessage(member.joined_on) ? 0 : adultInactivityPenalty(daysWithoutAttendance)));
       return { ...member, score, constancy90: c90, attendance30: a30 };
