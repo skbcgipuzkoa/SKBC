@@ -35,10 +35,14 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
   function selectProfile(row: PromotionEditorRow, label: string) {
     const profile = promotionSizeProfiles.find(item => item.label === label);
     const previous = row.sizes ?? [{ id: row.id, variant: row.variant }];
+    const assignedIds = new Set(expandPromotionRows(rows.filter(item => item.id !== row.id)).map(item => item.id));
     const sizes = profile?.sizes.map(size => {
       const variant = promotionSizeLabel(profile, size);
-      const existing = previous.find(item => item.variant === variant);
-      return existing ?? { id: crypto.randomUUID(), variant };
+      const existing = previous.find(item => item.variant === variant || item.variant === size);
+      const matchingCatalog = catalog.filter(item => item.product === row.product && !assignedIds.has(item.id) &&
+        (item.variant === variant || item.variant === size));
+      const id = existing?.id ?? (matchingCatalog.length === 1 ? matchingCatalog[0].id : crypto.randomUUID());
+      return { id, variant };
     });
     setRows(current => current.map(item => item.id === row.id
       ? { ...item, variant: sizes?.[0]?.variant ?? "Única", sizes } : item));

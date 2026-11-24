@@ -25,3 +25,5 @@ assert.deepEqual(expandPromotionRows(grouped), variants);
 assert.deepEqual(groupPromotionRows(variants.slice(0, 2)), variants.slice(0, 2));
 const variedPrices = variants.map((item, index) => index === 0 ? { ...item, offer: "12.00" } : item);
 assert.deepEqual(expandPromotionRows(groupPromotionRows(variedPrices)), variedPrices);
+const interleaved = [variants[0], { ...variants[0], id: "custom", variant: "Única" }, ...variants.slice(1)];
+assert.deepEqual(expandPromotionRows(groupPromotionRows(interleaved)), interleaved);

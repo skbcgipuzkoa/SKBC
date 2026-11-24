@@ -69,14 +69,11 @@ export function groupPromotionRows(variants: PromotionEditorVariant[]): Promotio
     const profile = promotionSizeProfiles.find(item => item.sizes.some(size => row.variant === promotionSizeLabel(item, size)));
     if (!profile) return [row];
 
-    const candidates = variants.slice(index).filter(item =>
-      !used.has(item.id) && item.product === row.product && item.image === row.image &&
-      item.original === row.original && item.offer === row.offer
-    );
-    const sizes = profile.sizes.map(size => candidates.find(item => item.variant === promotionSizeLabel(profile, size)));
-    if (sizes.some(size => !size)) return [row];
-    const included = sizes.filter(size => size !== undefined);
-    if (!included.some(size => size.id === row.id)) return [row];
+    const included = variants.slice(index, index + profile.sizes.length);
+    if (included.length !== profile.sizes.length || !included.every((item, position) =>
+      item.product === row.product && item.image === row.image && item.original === row.original &&
+      item.offer === row.offer && item.variant === promotionSizeLabel(profile, profile.sizes[position])
+    )) return [row];
     included.forEach(size => used.add(size.id));
     return [{ ...row, sizes: included.map(({ id, variant }) => ({ id, variant })) }];
   });
