@@ -44,3 +44,40 @@ export const promotionSizeProfiles = [
 export function promotionSizeLabel(profile: typeof promotionSizeProfiles[number], size: string) {
   return profile.label + " · " + size;
 }
+
+export type PromotionEditorVariant = {
+  id: string;
+  product: string;
+  variant: string;
+  image: string;
+  original: string;
+  offer: string;
+};
+
+export type PromotionEditorRow = PromotionEditorVariant & {
+  sizes?: { id: string; variant: string }[];
+};
+
+export function expandPromotionRows(rows: PromotionEditorRow[]): PromotionEditorVariant[] {
+  return rows.flatMap(({ sizes, ...row }) => sizes ? sizes.map(size => ({ ...row, ...size })) : [row]);
+}
+
+export function groupPromotionRows(variants: PromotionEditorVariant[]): PromotionEditorRow[] {
+  const used = new Set<string>();
+  return variants.flatMap((row, index) => {
+    if (used.has(row.id)) return [];
+    const profile = promotionSizeProfiles.find(item => item.sizes.some(size => row.variant === promotionSizeLabel(item, size)));
+    if (!profile) return [row];
+
+    const candidates = variants.slice(index).filter(item =>
+      !used.has(item.id) && item.product === row.product && item.image === row.image &&
+      item.original === row.original && item.offer === row.offer
+    );
+    const sizes = profile.sizes.map(size => candidates.find(item => item.variant === promotionSizeLabel(profile, size)));
+    if (sizes.some(size => !size)) return [row];
+    const included = sizes.filter(size => size !== undefined);
+    if (!included.some(size => size.id === row.id)) return [row];
+    included.forEach(size => used.add(size.id));
+    return [{ ...row, sizes: included.map(({ id, variant }) => ({ id, variant })) }];
+  });
+}
