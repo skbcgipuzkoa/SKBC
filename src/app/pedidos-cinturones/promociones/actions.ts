@@ -80,3 +80,23 @@ export async function publishCatalog(form: FormData) {
   redirect("/pedidos-cinturones/promociones?promo=" + encodeURIComponent(slug) +
     (error || !data ? "&error=publish" : "&published=1"));
 }
+export async function uploadPromotionImage(form: FormData) {
+  await requirePromotionAdmin();
+  const file = form.get("image");
+  if (!(file instanceof File) || !file.size || file.size > 4_000_000) {
+    return { error: "Selecciona una imagen de hasta 4 MB." };
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const format = bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255])) ? { mime: "image/jpeg", ext: "jpg" }
+    : bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ? { mime: "image/png", ext: "png" }
+    : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP" ? { mime: "image/webp", ext: "webp" }
+    : null;
+  if (!format) return { error: "Usa una imagen JPG, PNG o WebP." };
+
+  const storage = createAdminClient().storage.from("skbc-shop-images");
+  const path = randomUUID() + "." + format.ext;
+  const { error } = await storage.upload(path, bytes, { contentType: format.mime, cacheControl: "31536000" });
+  if (error) return { error: "No se pudo subir la imagen. Inténtalo de nuevo." };
+  return { url: storage.getPublicUrl(path).data.publicUrl };
+}

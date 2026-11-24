@@ -35,8 +35,10 @@ Después de guardar la promoción, selecciona las variantes que quieres añadir 
 
 ### Enlace común y límite por alumno
 
-Abre una promoción publicada y comparte el mismo enlace con el club desde «Compartir por WhatsApp». El comprador elige directamente a un alumno activo, separado en el selector por adultos y niños. El enlace compartido permite consultar ese selector. El servidor valida que el alumno siga inscrito antes de registrar el pedido. El administrador conserva la lista de adultos y niños.
+Abre una promoción publicada y comparte el mismo enlace con el club desde «Compartir por WhatsApp». El comprador escribe el nombre y los apellidos del alumno. El servidor valida que coincida con un único alumno activo antes de registrar el pedido. El listado de adultos y niños se consulta desde el panel de administración. El administrador conserva la lista de adultos y niños.
 
 Cada promoción permite cinco prendas acumuladas a precio promocional por alumno inscrito, incluidas las compradas con su código desde la tienda general. Un pedido se asigna a un alumno concreto. El enlace común no contiene credenciales de ningún miembro.
 
 Aplica también supabase/migrations/20261124160000_shop_member_quota.sql y supabase/migrations/20261124163000_shop_shared_link_access.sql. La migración conserva los pedidos anteriores y bloquea el checkout de promociones en versiones anteriores de la aplicación.
+
+En el editor puedes pegar una URL de imagen directa o subir un JPG, PNG o WebP desde tu dispositivo, de hasta 4 MB. Aplica también supabase/migrations/20261124170000_shop_image_uploads.sql para habilitar el almacenamiento de imágenes.

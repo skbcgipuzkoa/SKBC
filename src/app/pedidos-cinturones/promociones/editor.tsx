@@ -8,6 +8,7 @@ import {
 } from "@/lib/shop/promotion-editor-options";
 import type { Promotion } from "@/lib/shop/repository";
 import { savePromotion } from "./actions";
+import { PromotionImageField } from "./promotion-image-field";
 import styles from "./promotions.module.css";
 
 type CatalogOption = Omit<PromotionEditorVariant, "offer">;
@@ -17,6 +18,9 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
     ...variant, image: variant.image ?? "", original: (variant.original / 100).toFixed(2), offer: (variant.offer / 100).toFixed(2)
   })) ?? []));
   const [catalogId, setCatalogId] = useState("");
+  const [coverImage, setCoverImage] = useState(promotion?.cover_image ?? "");
+  const [uploads, setUploads] = useState(0);
+  const onUploading = (change: number) => setUploads(count => count + change);
   const variants = expandPromotionRows(rows);
   const deadline = promotionDeadlineFields(promotion?.expires_at ?? "");
 
@@ -57,7 +61,7 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
         <label>Título <input name="title" required maxLength={160} defaultValue={promotion?.title} /></label>
         <label>Identificador del enlace <input name="slug" readOnly={!!promotion} required pattern="[a-z0-9]+(-[a-z0-9]+)*" defaultValue={promotion?.slug} placeholder="equipacion-invierno" /></label>
         <label className="wide">Descripción <textarea name="description" rows={3} maxLength={2000} defaultValue={promotion?.description} /></label>
-        <label className="wide">URL de la imagen de portada <input name="cover_image" defaultValue={promotion?.cover_image} placeholder="https://" /></label>
+        <PromotionImageField label="URL de la imagen de portada" name="cover_image" value={coverImage} onChange={setCoverImage} onUploading={onUploading} />
       </div>
     </section>
 
@@ -105,11 +109,12 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
             </label>
             {profile ? <p className={`wide ${styles.empty}`}><strong>Todas las tallas incluidas</strong> {profile.sizes.join(", ")}</p>
               : <label className="wide">Talla o variante<input required value={row.variant} onChange={event => updateRow(row.id, "variant", event.target.value)} /></label>}
-            {([["original", "Precio original (€)"], ["offer", "Precio con código (€)"], ["image", "URL de imagen"]] as const)
-              .map(([field, label]) => <label key={field} className={field === "image" ? "wide" : undefined}>{label}
-                <input required={field !== "image"} value={row[field]} inputMode={field === "image" ? undefined : "decimal"}
+            {([["original", "Precio original (€)"], ["offer", "Precio con código (€)"]] as const)
+              .map(([field, label]) => <label key={field}>{label}
+                <input required value={row[field]} inputMode="decimal"
                   onChange={event => updateRow(row.id, field, event.target.value)} />
               </label>)}
+            <PromotionImageField label="URL de imagen del producto" value={row.image} onChange={value => updateRow(row.id, "image", value)} onUploading={onUploading} />
           </div>
           <button className="secondary-link" type="button" onClick={() => setRows(current => current.filter(item => item.id !== row.id))}>
             <Trash2 size={16} aria-hidden="true" /> Quitar producto {index + 1}
@@ -119,7 +124,7 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
     </section>
     {variants.length > 200 ? <p className="form-error" role="alert">La promoción admite hasta 200 variantes. Quita algún producto para poder guardarla.</p> : null}
     <div className={styles.footer}>
-      <button className="primary-link" disabled={!variants.length || variants.length > 200}><Save size={17} aria-hidden="true" /> Guardar promoción</button>
+      <button className="primary-link" disabled={!variants.length || variants.length > 200 || uploads > 0}><Save size={17} aria-hidden="true" /> Guardar promoción</button>
     </div>
   </form>;
 }

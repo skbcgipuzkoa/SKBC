@@ -1,15 +1,19 @@
 import "server-only";
+import { normalizeClubMemberName } from "./promotion";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ClubMember = { id: string; display_name: string; class: "adults" | "kids" };
 type LinkedMember = ClubMember & { family_unit_members: { family_unit_id: string } | null };
 const memberFields = "id,display_name,class,family_unit_members(family_unit_id)";
 
-export async function getActiveClubMember(id: string) {
-  const { data, error } = await createAdminClient().from("members").select(memberFields)
-    .eq("id", id).eq("status", "active").in("class", ["adults", "kids"]).maybeSingle<LinkedMember>();
-  if (error) throw error;
-  return data;
+export async function getActiveClubMemberByName(name: string) {
+  const normalizedName = normalizeClubMemberName(name);
+  if (!normalizedName) return null;
+  const members = await listClubMembers();
+  const matches = members.filter(member => normalizeClubMemberName(member.display_name) === normalizedName);
+  if (matches.length === 1) return matches[0];
+  const exact = matches.filter(member => member.display_name.trim().toLocaleLowerCase("es") === name.trim().toLocaleLowerCase("es"));
+  return exact.length === 1 ? exact[0] : null;
 }
 
 export async function listClubMembers() {

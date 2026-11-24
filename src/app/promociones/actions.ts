@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getActiveClubMember, listClubMembers } from "@/lib/shop/club-access";
+import { getActiveClubMemberByName } from "@/lib/shop/club-access";
 import { getCatalogOffer, getPromotion, type Promotion } from "@/lib/shop/repository";
 import { generalShopSlug, quotePromotion, type Selection } from "@/lib/shop/promotion";
 
@@ -30,26 +30,17 @@ export async function promotionQuote(input: unknown) {
   if (!promotion?.active) throw new Error("Promoción no disponible.");
   const { quote, offer } = await priceBasket(promotion, basket.code, promotion.variants.map(({ id }) => ({ id, quantity: 1 })));
   const eligible = new Set(offer?.variants.map(variant => variant.id));
+  const live = promotion.slug !== generalShopSlug && Date.parse(promotion.expires_at) > Date.now();
   return {
     revision: promotion.revision,
     offerRevision: offer?.revision ?? null,
     status: quote.status,
     total: quote.total,
-    lines: quote.lines.map(({ id, price, quantity }) => ({ id, price, quantity, eligible: eligible.has(id) }))
+    lines: quote.lines.map(({ id, original, offer, price, quantity }) => ({
+      id, original, price, quantity, eligible: eligible.has(id),
+      advertisedOffer: live || (quote.status === "applied" && eligible.has(id)) ? offer : undefined
+    }))
   };
-}
-
-export async function promotionClubMembers(input: unknown) {
-  const parsed = basketSchema.pick({ slug: true, code: true }).safeParse(input);
-  if (!parsed.success) return [];
-  const { slug, code } = parsed.data;
-  if (slug === generalShopSlug) {
-    const offer = await getCatalogOffer(code);
-    if (!offer || Date.parse(offer.expires_at) <= Date.now()) return [];
-  } else if (!(await getPromotion(slug))?.active) {
-    return [];
-  }
-  return (await listClubMembers()).map(({ id, display_name, class: group }) => ({ id, display_name, class: group }));
 }
 
 const checkoutSchema = basketSchema.extend({
@@ -59,7 +50,6 @@ const checkoutSchema = basketSchema.extend({
   total: z.number().int().nonnegative().safe(),
   status: z.enum(["none", "invalid", "expired", "applied"]),
   customer: z.string().trim().max(160),
-  memberId: z.string().uuid().or(z.literal("")).optional(),
   contact: z.string().trim().max(160),
   notes: z.string().trim().max(1000)
 });
@@ -67,7 +57,7 @@ const checkoutSchema = basketSchema.extend({
 export async function submitPromotion(input: unknown) {
   const parsed = checkoutSchema.safeParse(input);
   if (!parsed.success || !parsed.data.selection.length) return "invalid";
-  const { id, slug, revision, offerRevision, total, status, code, selection, customer, contact, notes, memberId } = parsed.data;
+  const { id, slug, revision, offerRevision, total, status, code, selection, customer, contact, notes } = parsed.data;
   const hash = createHash("sha256").update(JSON.stringify(parsed.data)).digest("hex");
   const client = createAdminClient();
   const existing = await client.from("shop_promotion_orders").select("request_hash").eq("id", id).maybeSingle();
@@ -83,7 +73,7 @@ export async function submitPromotion(input: unknown) {
   const eligible = new Set(offer?.variants.map(variant => variant.id));
   const attributed = status === "applied" && offer && quote.lines.some(line => eligible.has(line.id));
   const restricted = slug !== generalShopSlug || !!attributed;
-  const member = restricted && memberId ? await getActiveClubMember(memberId) : null;
+  const member = restricted ? await getActiveClubMemberByName(customer) : null;
   if (restricted && !member) return "member";
   if (!restricted && (customer.length < 2 || contact.length < 5)) return "invalid";
   const { data, error } = await client.rpc("shop_submit_promotion_order", {
@@ -94,7 +84,7 @@ export async function submitPromotion(input: unknown) {
     })), p_total: total, p_discount: status === "applied" && (!offer || !!attributed), p_hash: hash,
     p_offer_slug: attributed ? offer.slug : null,
     p_offer_revision: attributed ? offer.revision : null,
-    p_member_id: member?.id ?? null, p_family_id: member?.family_unit_members?.family_unit_id ?? null
+    p_member_id: member?.id ?? null, p_family_id: member?.familyId ?? null
   });
   if (error) throw error;
   return data as "saved" | "conflict" | "changed" | "limit" | "member";

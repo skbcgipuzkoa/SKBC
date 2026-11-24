@@ -50,3 +50,26 @@ export function summarizePromotion(orders: QuotedLine[][]) {
 }
 
 export const euros = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" });
+
+export function normalizeClubMemberName(name: string) {
+  return name.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase("es")
+    .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+export function promotionPriceSummary(variants: PromotionVariant[], includeOffer: boolean) {
+  const groups = new Map<string, { original: number[]; offer: number[] }>();
+  for (const variant of variants) {
+    const group = groups.get(variant.product) ?? { original: [], offer: [] };
+    group.original.push(variant.original);
+    group.offer.push(variant.offer);
+    groups.set(variant.product, group);
+  }
+  const range = (amounts: number[]) => {
+    const min = Math.min(...amounts);
+    const max = Math.max(...amounts);
+    return min === max ? euros.format(min / 100) : euros.format(min / 100) + " – " + euros.format(max / 100);
+  };
+  return [...groups].map(([product, prices]) =>
+    product + " · PVP " + range(prices.original) + (includeOffer ? " · Con código " + range(prices.offer) : "")
+  );
+}

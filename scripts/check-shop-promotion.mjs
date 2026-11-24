@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { quotePromotion, summarizePromotion } from "../src/lib/shop/promotion.ts";
+import { normalizeClubMemberName, promotionPriceSummary, quotePromotion, summarizePromotion } from "../src/lib/shop/promotion.ts";
 
 const variant = { id: "v", product: "Camiseta", variant: "M", original: 2500, offer: 1700 };
 const promo = { code: "CLUB", expires_at: "2026-12-01T10:00:00Z", variants: [variant] };
@@ -15,3 +15,8 @@ assert.throws(() => quotePromotion(promo, "", [{ id: "other", quantity: 1 }], be
 assert.throws(() => quotePromotion(promo, "", [...lines, ...lines], before));
 assert.throws(() => quotePromotion(promo, "", [{ id: "v", quantity: 0 }], before));
 assert.deepEqual(summarizePromotion([expired.lines, expired.lines]), [{ ...variant, quantity: 6, price: 2500 }]);
+
+assert.equal(normalizeClubMemberName("  María José Pérez-López "), "maria jose perez lopez");
+assert.equal(normalizeClubMemberName("MARIA  JOSE PEREZ LÓPEZ"), "maria jose perez lopez");
+assert.match(promotionPriceSummary([variant], true)[0], /PVP 25,00.*Con código 17,00/);
+assert.doesNotMatch(promotionPriceSummary([variant], false)[0], /Con código/);

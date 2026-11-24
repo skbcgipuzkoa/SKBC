@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generalShopSlug, type PromotionPricing } from "./promotion";
+import { generalShopSlug, promotionPriceSummary, type PromotionPricing } from "./promotion";
 
 export type Promotion = PromotionPricing & {
   slug: string;
@@ -30,8 +30,11 @@ export function promotionUrl(slug: string, host?: string) {
   return new URL(promotionPath(slug), origin);
 }
 
-export function sharePromotion(title: string, slug: string) {
-  return "https://wa.me/?text=" + encodeURIComponent(title + "\n" + promotionUrl(slug).href);
+export function sharePromotion(promotion: Promotion) {
+  const includeOffer = promotion.slug !== generalShopSlug && Date.parse(promotion.expires_at) > Date.now();
+  const prices = promotion.slug === generalShopSlug ? [] : promotionPriceSummary(promotion.variants, includeOffer);
+  const message = [promotion.title, ...prices.slice(0, 8), promotionUrl(promotion.slug).href].join("\n");
+  return "https://wa.me/?text=" + encodeURIComponent(message);
 }
 
 export async function getCatalogOffer(code: string): Promise<Promotion | null> {

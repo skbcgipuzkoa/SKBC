@@ -118,13 +118,13 @@ export default async function ManagePromotions({ searchParams }: {
                 <Link className="secondary-link" href={promotionPath(promotion.slug)}>
                   {isStorefront ? "Abrir tienda general" : "Abrir página de la promoción"} <ArrowUpRight size={16} aria-hidden="true" />
                 </Link>
-                <a className="primary-link" href={sharePromotion(promotion.title, promotion.slug)}>Compartir por WhatsApp</a>
+                <a className="primary-link" href={sharePromotion(promotion)}>Compartir por WhatsApp</a>
                 <CopyPromotionLink url={promotionUrl(promotion.slug).href} />
               </div> : null}
               {promotion.active ? <details className={styles.order}>
                 <summary><strong>Lista del club</strong></summary>
                 <div className={styles.orderBody}>
-                  <p>Comparte el mismo enlace con todo el club. Cada comprador selecciona a nombre de qué alumno inscrito hace el pedido.</p>
+                  <p>Comparte el mismo enlace con todo el club. Cada comprador escribe el nombre y los apellidos del alumno inscrito a cuyo nombre hace el pedido.</p>
                   {(["adults", "kids"] as const).map(group => <section key={group}>
                     <h3>{group === "adults" ? "Adultos" : "Niños"}</h3>
                     <ul className={styles.lines}>

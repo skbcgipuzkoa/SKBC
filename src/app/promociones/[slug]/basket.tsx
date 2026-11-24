@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { euros, generalShopSlug, type PromotionVariant } from "@/lib/shop/promotion";
-import { promotionClubMembers, promotionQuote, submitPromotion } from "../actions";
+import { promotionQuote, submitPromotion } from "../actions";
+import { PromotionPhoto } from "./photo";
 import styles from "./promotion.module.css";
 
 const messages = {
@@ -12,9 +13,9 @@ const messages = {
   invalid: "El código no es válido para esta promoción."
 };
 
-type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; offerRevision: string | null; status: string; total: number; customer: string; contact: string; notes: string; memberId?: string };
+type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; offerRevision: string | null; status: string; total: number; customer: string; contact: string; notes: string };
 
-export function PromotionBasket({ slug, variants, initialRevision }: { slug: string; initialRevision: string; variants: Omit<PromotionVariant, "offer">[] }) {
+export function PromotionBasket({ slug, variants, initialRevision }: { slug: string; initialRevision: string; variants: (Omit<PromotionVariant, "offer"> & { advertisedOffer?: number })[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [code, setCode] = useState("");
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof promotionQuote>>>();
@@ -22,41 +23,21 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState("");
-  const [accessError, setAccessError] = useState("");
-  const [members, setMembers] = useState<Awaited<ReturnType<typeof promotionClubMembers>>>([]);
-  const [memberId, setMemberId] = useState("");
-  const [checkingMember, setCheckingMember] = useState(false);
   const [attempt, setAttempt] = useState<Attempt>();
   const selection = variants.flatMap(({ id }) => quantities[id] > 0 ? [{ id, quantity: quantities[id] }] : []);
   const selectedIds = new Set(selection.map(line => line.id));
   const restricted = slug !== generalShopSlug || (quote?.status === "applied" && quote.lines.some(line => line.eligible && selectedIds.has(line.id)));
-  const rosterCode = slug === generalShopSlug ? code : "";
   const groups = new Map<string, typeof variants>();
+  const quotedPrices = new Map(quote?.lines.map(line => [line.id, line]));
   for (const variant of variants) {
+    const livePrice = quotedPrices.get(variant.id);
+    const display = livePrice ? { ...variant, original: livePrice.original, advertisedOffer: livePrice.advertisedOffer } : variant;
     const group = groups.get(variant.product);
-    if (group) group.push(variant);
-    else groups.set(variant.product, [variant]);
+    if (group) group.push(display);
+    else groups.set(variant.product, [display]);
   }
   const currentTotal = variants.reduce((total, variant) => total + (quantities[variant.id] ?? 0) *
     (quote?.lines.find(line => line.id === variant.id)?.price ?? variant.original), 0);
-
-  useEffect(() => {
-    if (!restricted) return;
-    let cancelled = false;
-    setCheckingMember(true);
-    setAccessError("");
-    promotionClubMembers({ slug, code: rosterCode }).then(list => {
-      if (cancelled) return;
-      setMembers(list);
-      setMemberId(current => list.some(member => member.id === current) ? current : "");
-      if (!list.length) setAccessError("No hay alumnos disponibles para esta promoción.");
-    }).catch(() => {
-      if (!cancelled) setAccessError("No se pudo cargar la lista de alumnos. Recarga la página para intentarlo de nuevo.");
-    }).finally(() => {
-      if (!cancelled) setCheckingMember(false);
-    });
-    return () => { cancelled = true; };
-  }, [restricted, rosterCode, slug]);
 
   async function apply() {
     setBusy(true);
@@ -92,8 +73,7 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
       if (latest.status === "invalid") return;
       const body = {
         slug, code, selection, revision: latest.revision, offerRevision: latest.offerRevision, status: latest.status, total: currentTotal,
-        customer: String(fields.get("customer") ?? ""), contact: String(fields.get("contact") ?? ""), notes: String(fields.get("notes") ?? ""),
-        memberId
+        customer: String(fields.get("customer") ?? ""), contact: String(fields.get("contact") ?? ""), notes: String(fields.get("notes") ?? "")
       };
       await send({ ...body, id: crypto.randomUUID() });
     } catch {
@@ -109,7 +89,7 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
     setAttempt(undefined);
     if (result === "saved") setReceipt(body.id);
     else if (result === "limit") setError("Este alumno tiene un máximo de 5 prendas al precio promocional, contando sus pedidos anteriores. Reduce la cantidad.");
-    else if (result === "member") setError("Selecciona un alumno inscrito en el club.");
+    else if (result === "member") setError("Comprueba que el nombre y los apellidos coincidan con tu inscripción en el club.");
     else if (result === "changed") setError("El precio o la disponibilidad ha cambiado. Revisa tu pedido e inténtalo de nuevo.");
     else setError("No se pudo confirmar el pedido. Comprueba los datos e inténtalo de nuevo.");
   }
@@ -120,34 +100,34 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
     <fieldset disabled={busy || !!attempt} className={styles.stack}>
       {restricted ? <section className={styles.card}>
         <h2>¿A nombre de quién es el pedido?</h2>
-        <label>Alumno del club
-          <select required disabled={checkingMember || !members.length} value={memberId} onChange={event => setMemberId(event.target.value)}>
-            <option value="">{checkingMember ? "Cargando alumnos…" : "Selecciona un alumno"}</option>
-            {(["adults", "kids"] as const).map(group => {
-              const options = members.filter(member => member.class === group);
-              return options.length ? <optgroup key={group} label={group === "adults" ? "Adultos" : "Niños"}>
-                {options.map(member => <option key={member.id} value={member.id}>{member.display_name}</option>)}
-              </optgroup> : null;
-            })}
-          </select>
+        <label>Nombre y apellidos del alumno
+          <input name="customer" required minLength={2} maxLength={160} autoComplete="name" />
         </label>
-        {accessError ? <p role="alert">{accessError}</p> : null}
         <p>Máximo 5 prendas al precio promocional por alumno inscrito, sumando sus pedidos de esta promoción.</p>
       </section> : null}
       <div className={styles.grid}>
-        {[...groups].map(([product, options]) => <section className={styles.card} key={product}>
-          {options[0].image ? <img className={styles.photo} src={options[0].image} alt={product} loading="lazy" /> : null}
-          <h2>{product}</h2>
-          {options.map(({ id, variant, original, image }) => {
-            const price = quote?.lines.find(line => line.id === id)?.price ?? original;
-            return <div className={styles.line} key={id}>
-              <label htmlFor={id}>{image && image !== options[0].image ? <img src={image} width={64} height={64} alt="" loading="lazy" /> : null}{variant}<span className={styles.price}>{price < original ? <del>{euros.format(original / 100)}</del> : null} {euros.format(price / 100)}</span></label>
-              <input id={id} aria-label={"Cantidad de " + product + " " + variant} type="number" min={0} max={2147483647} step={1} value={quantities[id] ?? 0} onChange={event =>
-                setQuantities({ ...quantities, [id]: Number(event.target.value) })
-              } />
-            </div>;
-          })}
-        </section>)}
+        {[...groups].map(([product, options]) => {
+          const first = options[0];
+          const uniform = options.every(option => option.original === first.original && option.advertisedOffer === first.advertisedOffer);
+          const cover = options.find(option => option.image)?.image;
+          return <section className={styles.card} key={product}>
+            <h2>{product}</h2>
+            {uniform ? <ProductPrice original={first.original} offer={first.advertisedOffer} /> : null}
+            {cover ? <PromotionPhoto className={styles.photo} src={cover} alt={product} /> : null}
+            {options.map(({ id, variant, original, image, advertisedOffer }) => {
+              return <div className={styles.line} key={id}>
+                <label htmlFor={id}>
+                  {image && image !== cover ? <PromotionPhoto src={image} alt="" thumbnail /> : null}
+                  {variant}
+                  {!uniform ? <ProductPrice original={original} offer={advertisedOffer} /> : null}
+                </label>
+                <input id={id} aria-label={"Cantidad de " + product + " " + variant} type="number" min={0} max={2147483647} step={1} value={quantities[id] ?? 0} onChange={event =>
+                  setQuantities({ ...quantities, [id]: Number(event.target.value) })
+                } />
+              </div>;
+            })}
+          </section>;
+        })}
       </div>
       <section className={styles.card}>
         <h2>Tu pedido</h2>
@@ -169,9 +149,16 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
         </> : null}
         <label>Observaciones<textarea name="notes" maxLength={1000} /></label>
         {error ? <p role="alert">{error}</p> : null}
-        <button disabled={!selection.length || quote?.status === "invalid" || (restricted && (!memberId || checkingMember || !!accessError))}>Confirmar pedido</button>
+        <button disabled={!selection.length || quote?.status === "invalid"}>Confirmar pedido</button>
       </section>
     </fieldset>
     {attempt && !busy ? <button type="submit">Comprobar o reintentar el envío</button> : null}
   </form>;
+}
+
+function ProductPrice({ original, offer }: { original: number; offer?: number }) {
+  return <span className={styles.pricePair}>
+    <span>PVP <strong>{euros.format(original / 100)}</strong></span>
+    {offer !== undefined ? <span className={styles.offerPrice}>Con código <strong>{euros.format(offer / 100)}</strong></span> : null}
+  </span>;
 }
