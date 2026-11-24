@@ -8,6 +8,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { listCatalog } from "@/lib/web-orders/repository";
 import { PromotionEditor } from "./editor";
 
+export const dynamic = "force-dynamic";
+
 const route = "/pedidos-cinturones/promociones";
 type Order = { id: string; customer: string; contact: string; notes: string; created_at: string; lines: QuotedLine[]; total_cents: number; discount_applied: boolean };
 const date = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Madrid" });

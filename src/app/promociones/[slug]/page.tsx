@@ -4,6 +4,8 @@ import { getPromotion, promotionUrl, sharePromotion } from "@/lib/shop/repositor
 import { PromotionBasket } from "./basket";
 import styles from "./promotion.module.css";
 
+export const dynamic = "force-dynamic";
+
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
