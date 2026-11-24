@@ -17,3 +17,17 @@ intacto hasta que la nueva aplicacion este validada.
 ## Estado
 
 Fase inicial: base tecnica, modelo de datos y plan de migracion.
+
+## Promociones de material
+
+En **Pedidos → Gestionar pedidos de promociones**, crea una promoción, añade las variantes, define el precio original y el precio con código y marca la página como publicada. Copia el enlace o abre «Compartir por WhatsApp». Introduce la caducidad en ISO 8601 con el desfase horario correspondiente. Por ejemplo, 2026-12-01T23:59:00+01:00.
+
+La página compartida muestra la selección de la promoción. El comprador indica su nombre y un contacto. La administración consulta los pedidos con su detalle y el resumen por variante. Los enlaces son de acceso por posesión y la página pide a los buscadores que no la indexen. Cualquiera a quien se reenvíe el enlace puede abrir la página y enviar un pedido. El código fija el precio y se puede desactivar la página desde la administración.
+
+### Configuración de prueba y recuperación
+
+- Aplica supabase/migrations/20261124150000_shop_promotions.sql en un Supabase de prueba antes de habilitar el entorno Preview.
+- En Vercel Preview configura NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY con los valores del proyecto aislado. Define SKBC_INTERNAL_ACCESS_CODE para la administración de prueba. El servidor usa VERCEL_URL para los enlaces compartidos de Preview y SKBC_PUBLIC_URL para el dominio de producción cuando corresponda.
+- Opcionalmente configura WEB_ORDERS_SUPABASE_URL y WEB_ORDERS_SUPABASE_SERVICE_ROLE_KEY con el catálogo aislado para importar datos de variantes existentes al editor. El editor también acepta variantes manuales.
+- Ejecuta node scripts/check-shop-promotion.mjs, npm run typecheck y npm run build. Comprueba un código vigente, uno caducado y la recepción del pedido desde el panel.
+- Para detener la recepción de una promoción, desmarca «Página publicada». Los pedidos ya guardados siguen visibles en administración. Para revertir una versión conserva las tablas y exporta o respalda los pedidos antes de cualquier restauración. Una reversión del código no requiere borrar las tablas agregadas.

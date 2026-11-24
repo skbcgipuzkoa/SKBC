@@ -44,6 +44,7 @@ export default async function PedidosPage({ searchParams }: {
       {returnTo ? <a className="class-return-banner" href={returnTo}>Volver a la clase</a> : null}
       {params.saved ? <p className="save-ok">Cambios guardados correctamente.</p> : null}
       {params.error && params.error !== "belt-measure" ? <p className="form-error">No se pudo guardar el cambio.</p> : null}
+      <p><a href="/pedidos-cinturones/promociones">Gestionar pedidos de promociones</a></p>
       <MaterialOrdersDashboard {...materialData} returnTo={returnTo} initialTab={params.tab === "payments" ? "payments" : params.tab === "belts" || params.saved || params.error || params.status || params.q ? "belts" : undefined}>
         <BeltOrdersPanel members={members ?? []} lines={lines ?? []} params={params} />
       </MaterialOrdersDashboard>
