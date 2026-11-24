@@ -1,3 +1,5 @@
+export const generalShopSlug = "tienda-general";
+
 export type PromotionVariant = {
   id: string;
   product: string;

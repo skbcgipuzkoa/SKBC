@@ -26,8 +26,9 @@ La página compartida muestra la selección de la promoción. El comprador indic
 
 ### Configuración de prueba y recuperación
 
-- Aplica supabase/migrations/20261124150000_shop_promotions.sql en un Supabase de prueba antes de habilitar el entorno Preview.
+- Aplica supabase/migrations/20261124150000_shop_promotions.sql seguida de supabase/migrations/20261124151500_shop_general_catalog.sql en un Supabase de prueba antes de habilitar el entorno Preview.
 - En Vercel Preview configura NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY con los valores del proyecto aislado. Define SKBC_INTERNAL_ACCESS_CODE para la administración de prueba. El servidor usa VERCEL_URL para los enlaces compartidos de Preview y SKBC_PUBLIC_URL para el dominio de producción cuando corresponda.
 - Opcionalmente configura WEB_ORDERS_SUPABASE_URL y WEB_ORDERS_SUPABASE_SERVICE_ROLE_KEY con el catálogo aislado para importar datos de variantes existentes al editor. El editor también acepta variantes manuales.
 - Ejecuta node scripts/check-shop-promotion.mjs, npm run typecheck y npm run build. Comprueba un código vigente, uno caducado y la recepción del pedido desde el panel.
 - Para detener la recepción de una promoción, desmarca «Página publicada». Los pedidos ya guardados siguen visibles en administración. Para revertir una versión conserva las tablas y exporta o respalda los pedidos antes de cualquier restauración. Una reversión del código no requiere borrar las tablas agregadas.
+Después de guardar la promoción, selecciona las variantes que quieres añadir a la tienda y pulsa «Publicar variantes seleccionadas». La tienda general está en /tienda y también se puede compartir por WhatsApp. Desde la tienda se puede usar el código vigente en las variantes publicadas que pertenecen a su promoción.

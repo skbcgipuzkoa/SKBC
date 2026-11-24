@@ -12,7 +12,7 @@ const messages = {
   invalid: "El código no es válido para esta promoción."
 };
 
-type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; status: string; total: number; customer: string; contact: string; notes: string };
+type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; offerRevision: string | null; status: string; total: number; customer: string; contact: string; notes: string };
 
 export function PromotionBasket({ slug, variants, initialRevision }: { slug: string; initialRevision: string; variants: Omit<PromotionVariant, "offer">[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -37,7 +37,7 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
     setBusy(true);
     setError("");
     try {
-      const result = await promotionQuote({ slug, code, selection: variants.map(({ id }) => ({ id, quantity: 1 })) });
+      const result = await promotionQuote({ slug, code });
       setQuote(result);
       setRevision(result.revision);
     } catch {
@@ -57,16 +57,16 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
         await send(attempt);
         return;
       }
-      const latest = await promotionQuote({ slug, code, selection: variants.map(({ id }) => ({ id, quantity: 1 })) });
+      const latest = await promotionQuote({ slug, code });
       setQuote(latest);
       setRevision(latest.revision);
-      if ((quote && quote.status !== latest.status) || (revision && revision !== latest.revision) || (!quote && code.trim())) {
+      if ((quote && (quote.status !== latest.status || quote.offerRevision !== latest.offerRevision)) || (revision && revision !== latest.revision) || (!quote && code.trim())) {
         setError("Revisa el total actualizado y confirma de nuevo.");
         return;
       }
       if (latest.status === "invalid") return;
       const body = {
-        slug, code, selection, revision: latest.revision, status: latest.status, total: currentTotal,
+        slug, code, selection, revision: latest.revision, offerRevision: latest.offerRevision, status: latest.status, total: currentTotal,
         customer: String(fields.get("customer")), contact: String(fields.get("contact")), notes: String(fields.get("notes"))
       };
       await send({ ...body, id: crypto.randomUUID() });

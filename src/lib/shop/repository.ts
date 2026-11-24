@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { PromotionPricing } from "./promotion";
+import { generalShopSlug, type PromotionPricing } from "./promotion";
 
 export type Promotion = PromotionPricing & {
   slug: string;
@@ -19,6 +19,7 @@ export const getPromotion = cache(async (slug: string): Promise<Promotion | null
 });
 
 export function promotionPath(slug: string) {
+  if (slug === generalShopSlug) return "/tienda";
   return "/promociones/" + encodeURIComponent(slug);
 }
 
@@ -31,4 +32,13 @@ export function promotionUrl(slug: string, host?: string) {
 
 export function sharePromotion(title: string, slug: string) {
   return "https://wa.me/?text=" + encodeURIComponent(title + "\n" + promotionUrl(slug).href);
+}
+
+export async function getCatalogOffer(code: string): Promise<Promotion | null> {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return null;
+  const { data, error } = await createAdminClient().from("shop_promotions").select("*")
+    .eq("code", normalized).eq("active", true).neq("slug", generalShopSlug).maybeSingle();
+  if (error) throw error;
+  return data;
 }

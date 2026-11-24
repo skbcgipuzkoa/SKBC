@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { generalShopSlug } from "@/lib/shop/promotion";
 import { getPromotion, promotionUrl, sharePromotion } from "@/lib/shop/repository";
 import { PromotionBasket } from "./basket";
 import styles from "./promotion.module.css";
@@ -34,8 +35,8 @@ export default async function PromotionPage({ params }: Props) {
       {promotion.cover_image ? <img className={styles.photo} src={promotion.cover_image} alt="" /> : null}
       <a href={sharePromotion(promotion.title, promotion.slug)}>Compartir por WhatsApp</a>
     </header>
-    <PromotionBasket slug={promotion.slug} initialRevision={promotion.revision} variants={promotion.variants.map(({ id, product, variant, original, image }) => ({
+    {promotion.slug === generalShopSlug && !promotion.variants.length ? <p>Todavía no hay productos publicados.</p> : <PromotionBasket slug={promotion.slug} initialRevision={promotion.revision} variants={promotion.variants.map(({ id, product, variant, original, image }) => ({
       id, product, variant, original, image
-    }))} />
+    }))} />}
   </main>;
 }

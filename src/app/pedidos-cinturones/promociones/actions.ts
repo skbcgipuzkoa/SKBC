@@ -10,8 +10,9 @@ const money = z.string().trim().regex(/^\d{1,5}([.,]\d{1,2})?$/)
   .transform(value => Math.round(Number(value.replace(",", ".")) * 100));
 const image = z.string().trim().max(2048).refine(value => !value || /^\/(?!\/)[\w/.-]+$/.test(value) ||
   /^https:\/\/[^\s]+$/.test(value));
+const slugSchema = z.string().max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const schema = z.object({
-  slug: z.string().max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  slug: slugSchema,
   revision: z.string().uuid().or(z.literal("")),
   title: z.string().trim().min(2).max(160),
   description: z.string().trim().max(2000),
@@ -60,4 +61,17 @@ export async function savePromotion(form: FormData) {
     : await table.insert(next).select("slug").single();
   if (result.error || !result.data) redirect(back + "&error=save");
   redirect(base + "?promo=" + encodeURIComponent(next.slug) + "&saved=1");
+}
+
+export async function publishCatalog(form: FormData) {
+  await requirePromotionAdmin();
+  const parsed = z.object({ slug: slugSchema, revision: z.string().uuid(), ids: z.array(z.string().uuid()).min(1).max(200) })
+    .safeParse({ slug: form.get("slug"), revision: form.get("revision"), ids: form.getAll("catalog_variant") });
+  if (!parsed.success) redirect("/pedidos-cinturones/promociones?error=publish");
+  const { slug, revision, ids } = parsed.data;
+  const { data, error } = await createAdminClient().rpc("shop_publish_catalog", {
+    p_slug: slug, p_revision: revision, p_variants: ids
+  });
+  redirect("/pedidos-cinturones/promociones?promo=" + encodeURIComponent(slug) +
+    (error || !data ? "&error=publish" : "&published=1"));
 }
