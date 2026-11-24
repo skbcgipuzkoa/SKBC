@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowUpRight, ChevronRight, Package, Plus, ShoppingBag, Tag 
 import Link from "next/link";
 import { CopyPromotionLink } from "@/app/promociones/copy-link";
 import { SidebarNav } from "@/app/components/SidebarNav";
-import { clubInvitation, listClubInvitationMembers } from "@/lib/shop/club-access";
+import { listClubMembers } from "@/lib/shop/club-access";
 import { requirePromotionAdmin } from "@/lib/shop/admin";
 import { euros, generalShopSlug, summarizePromotion, type QuotedLine } from "@/lib/shop/promotion";
 import { getPromotion, promotionPath, promotionUrl, sharePromotion } from "@/lib/shop/repository";
@@ -47,7 +47,7 @@ export default async function ManagePromotions({ searchParams }: {
   ]);
   if (list.error) throw list.error;
   const [orders, club] = await Promise.all([
-    promotion ? loadOrders(promotion.slug) : [], promotion?.active ? listClubInvitationMembers() : []
+    promotion ? loadOrders(promotion.slug) : [], promotion?.active ? listClubMembers() : []
   ]);
   const selectedLines = orders.map(order => order.promotion_slug === promotion?.slug
     ? order.lines : order.lines.filter(line => line.offer === promotion?.slug));
@@ -122,24 +122,15 @@ export default async function ManagePromotions({ searchParams }: {
                 <CopyPromotionLink url={promotionUrl(promotion.slug).href} />
               </div> : null}
               {promotion.active ? <details className={styles.order}>
-                <summary><strong>Lista del club y enlaces privados</strong></summary>
+                <summary><strong>Lista del club</strong></summary>
                 <div className={styles.orderBody}>
-                  <p>Envía a cada familia su enlace privado para que pueda seleccionar al alumno. Los alumnos sin unidad familiar tienen un enlace individual.</p>
+                  <p>Comparte el mismo enlace con todo el club. Cada comprador valida su acceso y selecciona a un alumno de su unidad familiar.</p>
                   {(["adults", "kids"] as const).map(group => <section key={group}>
                     <h3>{group === "adults" ? "Adultos" : "Niños"}</h3>
                     <ul className={styles.lines}>
-                      {club.filter(member => member.class === group).map(member => {
-                        const url = promotionUrl(promotion.slug);
-                        url.hash = new URLSearchParams({ acceso: clubInvitation(member.familyId, member.id) }).toString();
-                        const message = promotion.title + "\n" + url.href;
-                        return <li key={member.id}>
-                          <span>{member.display_name}{member.familyId ? "" : " · Sin unidad familiar"}</span>
-                          <div className={styles.actions}>
-                            <CopyPromotionLink url={url.href} />
-                            <a className="secondary-link" href={"https://wa.me/?text=" + encodeURIComponent(message)}>WhatsApp</a>
-                          </div>
-                        </li>;
-                      })}
+                      {club.filter(member => member.class === group).map(member => <li key={member.id}>
+                        <span>{member.display_name}{member.familyId ? "" : " · Sin unidad familiar"}</span>
+                      </li>)}
                     </ul>
                   </section>)}
                 </div>

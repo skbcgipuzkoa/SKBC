@@ -35,8 +35,8 @@ Después de guardar la promoción, selecciona las variantes que quieres añadir 
 
 ### Acceso del club y límite por alumno
 
-Abre una promoción publicada y despliega «Lista del club y enlaces privados». Envía a cada familia su enlace desde el listado de alumnos. Ese enlace permite seleccionar a sus miembros activos, separados entre adultos y niños. El enlace general sirve para consultar la promoción. Enlaza previamente en el sistema a los miembros de una misma unidad familiar. Un alumno sin unidad familiar tiene un enlace individual.
+Abre una promoción publicada y comparte el mismo enlace con el club desde «Compartir por WhatsApp». El comprador verifica su correo registrado con un código de seis cifras enviado por la infraestructura de correo del club. Después puede elegir a un miembro activo asociado a ese correo o a su unidad familiar. El administrador conserva la lista de adultos y niños.
 
-Cada promoción permite cinco prendas acumuladas a precio promocional por alumno inscrito, incluidas las compradas con su código desde la tienda general. Un pedido se asigna a un alumno concreto. El enlace privado es una credencial de compra transferible, así que compártelo directamente con su familia.
+Cada promoción permite cinco prendas acumuladas a precio promocional por alumno inscrito, incluidas las compradas con su código desde la tienda general. Un pedido se asigna a un alumno concreto. El enlace común no contiene credenciales de ningún miembro.
 
-Aplica también supabase/migrations/20261124160000_shop_member_quota.sql. La migración conserva los pedidos anteriores y bloquea el checkout de promociones en versiones anteriores de la aplicación.
+Aplica también supabase/migrations/20261124160000_shop_member_quota.sql y supabase/migrations/20261124163000_shop_shared_link_access.sql. La migración conserva los pedidos anteriores y bloquea el checkout de promociones en versiones anteriores de la aplicación.

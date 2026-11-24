@@ -1,42 +1,87 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
+import { after } from "next/server";
+import { createTransporter } from "@/lib/email-notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type ClubMember = { id: string; display_name: string; class: "adults" | "kids" };
+type VerifiedClubMember = ClubMember & { family_id: string | null };
+const pendingCookie = "skbc_shop_access_pending";
+const sessionCookie = "skbc_shop_access";
+const uuid = /^[a-f0-9-]{36}$/;
 
-function signature(scope: string) {
+function digest(value: string) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!key) throw new Error("Missing club invitation signing key.");
-  return createHmac("sha256", key).update("skbc-shop-invitation-v1:" + scope).digest("base64url");
+  if (!key) throw new Error("Missing shop access signing key.");
+  return createHmac("sha256", key).update("skbc-shop-access-v2:" + value).digest("hex");
 }
 
-export function clubInvitation(familyId: string | null, memberId: string) {
-  const scope = familyId ? "family." + familyId : "member." + memberId;
-  return scope + "." + signature(scope);
+async function saveAccessCookie(name: string, value: string, maxAge: number) {
+  const jar = await cookies();
+  jar.set(name, value, {
+    httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge
+  });
 }
 
-export async function resolveClubInvitation(token: string): Promise<ClubMember[]> {
-  const match = /^(family|member)\.([a-f0-9-]{36})\.([A-Za-z0-9_-]{43})$/.exec(token);
-  if (!match) return [];
-  const [, kind, id, mac] = match;
-  if (!timingSafeEqual(Buffer.from(mac), Buffer.from(signature(kind + "." + id)))) return [];
-
-  const client = createAdminClient();
-  const membership = client.from("family_unit_members").select("member_id");
-  const { data: links, error: linkError } = kind === "family"
-    ? await membership.eq("family_unit_id", id)
-    : await membership.eq("member_id", id);
-  if (linkError) throw linkError;
-  const ids = kind === "family" ? (links ?? []).map(row => row.member_id) : links?.length ? [] : [id];
-  if (!ids.length) return [];
-
-  const { data, error } = await client.from("members").select("id,display_name,class").in("id", ids)
-    .eq("status", "active").in("class", ["adults", "kids"]).order("display_name").returns<ClubMember[]>();
+async function membersForEmail(email: string) {
+  const { data, error } = await createAdminClient().rpc("shop_members_for_email", { p_email: email })
+    .returns<VerifiedClubMember[]>();
   if (error) throw error;
-  return data ?? [];
+  return Array.isArray(data) ? data : [];
 }
 
-export async function listClubInvitationMembers() {
+export async function getShopClubMembers(): Promise<VerifiedClubMember[]> {
+  const jar = await cookies();
+  const [id, mac] = (jar.get(sessionCookie)?.value ?? "").split(".");
+  if (!uuid.test(id) || !mac || !/^[a-f0-9]{64}$/.test(mac)) return [];
+  if (!timingSafeEqual(Buffer.from(mac), Buffer.from(digest("session:" + id)))) return [];
+  const { data, error } = await createAdminClient().from("shop_email_access").select("email")
+    .eq("id", id).gt("verified_at", new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString()).maybeSingle<{ email: string }>();
+  if (error) throw error;
+  return data ? membersForEmail(data.email) : [];
+}
+
+export async function requestShopAccess(email: string) {
+  const id = randomUUID();
+  const code = String(randomInt(1_000_000)).padStart(6, "0");
+  await saveAccessCookie(pendingCookie, id, 600);
+  const { data, error } = await createAdminClient().rpc("shop_request_email_access", {
+    p_id: id, p_email: email, p_code_hash: digest(id + ":" + code)
+  });
+  if (error) throw error;
+  if (!data) return;
+
+  after(async () => {
+    try {
+      const transport = createTransporter();
+      await transport.sendMail({
+        from: process.env.SKBC_EMAIL_FROM?.trim() || process.env.SKBC_EMAIL_USER?.trim() || "skbcgipuzkoa@gmail.com",
+        to: email,
+        subject: "Código de acceso a la tienda SKBC",
+        text: "Tu código de acceso a la tienda SKBC es " + code + ". Caduca en 10 minutos."
+      });
+    } catch {
+      console.error("SKBC shop access email could not be sent.");
+    }
+  });
+}
+
+export async function verifyShopAccess(code: string) {
+  const jar = await cookies();
+  const id = jar.get(pendingCookie)?.value ?? "";
+  if (!uuid.test(id)) return [];
+  const { data, error } = await createAdminClient().rpc("shop_verify_email_access", {
+    p_id: id, p_code_hash: digest(id + ":" + code)
+  });
+  if (error) throw error;
+  if (!data) return [];
+  await saveAccessCookie(sessionCookie, id + "." + digest("session:" + id), 8 * 60 * 60);
+  jar.delete(pendingCookie);
+  return getShopClubMembers();
+}
+
+export async function listClubMembers() {
   const client = createAdminClient();
   type LinkedMember = ClubMember & { family_unit_members: { family_unit_id: string } | null };
   const members: Array<ClubMember & { familyId: string | null }> = [];
