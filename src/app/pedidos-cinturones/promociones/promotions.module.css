@@ -1,0 +1,75 @@
+.main :is(:global(.primary-link), :global(.secondary-link)) {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  text-align: center;
+}
+
+.main button:disabled { cursor: not-allowed; opacity: .54; }
+.workspace { display: grid; grid-template-columns: minmax(210px, 270px) minmax(0, 1fr); align-items: start; gap: 18px; }
+.stack { display: grid; gap: 16px; min-width: 0; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.actions output { overflow-wrap: anywhere; }
+.navigation, .panel { min-width: 0; padding: clamp(14px, 2vw, 22px); }
+.panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.navigation h2, .panel h2 { margin: 0; font-size: 1.2rem; }
+.navigationList, .lines { list-style: none; padding: 0; margin: 0; }
+.navigationList { display: grid; gap: 6px; margin-top: 12px; }
+.navigationLink {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  border: 1px solid var(--line, #d9e2ec);
+  border-radius: 8px;
+}
+.navigationLink:hover, .navigationLink[aria-current] { background: #edf5ff; border-color: #adc7e5; }
+.navIcon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; color: var(--brand); background: #edf3fb; }
+.navText { display: grid; gap: 3px; overflow-wrap: anywhere; }
+.navText small, .muted, .dateField { display: grid; gap: 5px; min-width: 0; }
+.fields small { color: #505f73; }
+.muted { margin-bottom: 0; }
+.panelHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.panelHeading h2 { min-width: 0; overflow-wrap: anywhere; }
+.badge { padding: 4px 9px; font-size: .8rem; font-weight: 700; background: #f0f3f7; color: #34465e; border-radius: 100px; }
+.badge[data-active="true"] { color: #155637; background: #e7f6eb; }
+.fields label { min-width: 0; font-weight: 650; }
+.fields label :is(input:not([type="checkbox"]), select, textarea) { width: 100%; font-size: 1rem; }
+.dateField { display: grid; gap: 5px; min-width: 0; }
+.fields small { font-weight: 400; overflow-wrap: anywhere; }
+.publishToggle { padding: 9px 12px; border: 1px solid var(--line, #d9e2ec); border-radius: 8px; }
+.publishToggle input, .checklist input { accent-color: var(--brand); }
+.addVariant { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+.variant { min-width: 0; margin: 0; border: 1px solid var(--line, #d9e2ec); border-radius: 8px; padding: 12px; background: #f8fafd; }
+.variant legend { padding: 0 5px; font-weight: 700; overflow-wrap: anywhere; max-width: 100%; }
+.variant button { margin-top: 12px; }
+.empty { display: flex; align-items: center; gap: 9px; margin: 0; padding: 12px; border: 1px dashed #bac9da; border-radius: 8px; color: #40546d; background: #f7fafe; }
+.empty svg { flex: none; }
+.footer { display: flex; justify-content: flex-end; }
+.publish { padding-top: 12px; border-top: 1px solid var(--line, #d9e2ec); display: grid; gap: 10px; justify-items: start; }
+.publish h3 { margin: 0; }
+.checklist { display: flex; flex-wrap: wrap; gap: 8px 10px; }
+.checklist label { display: flex; align-items: center; gap: 5px; padding: 7px 10px; border-radius: 8px; background: #f0f5fb; overflow-wrap: anywhere; }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; gap: 8px; }
+.metrics > div { padding: 9px 12px; border-radius: 8px; background: #eef4fb; overflow-wrap: anywhere; }
+.metrics dt { color: #40546d; font-size: .85rem; }
+.metrics dd { margin: 2px 0 0; font-size: 1.12rem; font-weight: 750; }
+.lines li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line, #d9e2ec); overflow-wrap: anywhere; }
+.order { border: 1px solid var(--line, #d9e2ec); border-radius: 8px; background: #f8fafd; overflow-wrap: anywhere; }
+.order summary { padding: 11px 12px; cursor: pointer; }
+.order summary span, .order summary b { margin-inline-start: 10px; }
+.orderBody { padding: 10px 12px; border-top: 1px solid var(--line, #d9e2ec); }
+.orderBody p { margin: 4px 0; }
+
+@media (max-width: 950px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 620px) {
+  .fields, .addVariant { grid-template-columns: minmax(0, 1fr); }
+  .footer > button { width: 100%; }
+  .metrics > div { padding: 8px 6px; }
+}

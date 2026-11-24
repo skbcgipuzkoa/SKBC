@@ -5,7 +5,7 @@ import { useState } from "react";
 export function CopyPromotionLink({ url }: { url: string }) {
   const [status, setStatus] = useState("");
   return <>
-    <button type="button" onClick={async () => {
+    <button className="secondary-link" type="button" onClick={async () => {
       try {
         await navigator.clipboard.writeText(url);
         setStatus("Enlace copiado.");
