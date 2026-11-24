@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getShopClubMembers, requestShopAccess, verifyShopAccess } from "@/lib/shop/club-access";
+import { getActiveClubMember, listClubMembers } from "@/lib/shop/club-access";
 import { getCatalogOffer, getPromotion, type Promotion } from "@/lib/shop/repository";
 import { generalShopSlug, quotePromotion, type Selection } from "@/lib/shop/promotion";
 
@@ -39,23 +39,17 @@ export async function promotionQuote(input: unknown) {
   };
 }
 
-export async function promotionClubMembers() {
-  return (await getShopClubMembers()).map(({ id, display_name, class: group }) => ({ id, display_name, class: group }));
-}
-
-export async function requestPromotionClubAccess(input: unknown) {
-  const email = z.string().trim().toLowerCase().email().max(254).safeParse(input);
-  if (!email.success) return;
-  try {
-    await requestShopAccess(email.data);
-  } catch {
-    console.error("SKBC shop access request could not be created.");
+export async function promotionClubMembers(input: unknown) {
+  const parsed = basketSchema.pick({ slug: true, code: true }).safeParse(input);
+  if (!parsed.success) return [];
+  const { slug, code } = parsed.data;
+  if (slug === generalShopSlug) {
+    const offer = await getCatalogOffer(code);
+    if (!offer || Date.parse(offer.expires_at) <= Date.now()) return [];
+  } else if (!(await getPromotion(slug))?.active) {
+    return [];
   }
-}
-
-export async function verifyPromotionClubAccess(input: unknown) {
-  if (typeof input !== "string" || !/^\d{6}$/.test(input)) return [];
-  return (await verifyShopAccess(input)).map(({ id, display_name, class: group }) => ({ id, display_name, class: group }));
+  return (await listClubMembers()).map(({ id, display_name, class: group }) => ({ id, display_name, class: group }));
 }
 
 const checkoutSchema = basketSchema.extend({
@@ -89,7 +83,7 @@ export async function submitPromotion(input: unknown) {
   const eligible = new Set(offer?.variants.map(variant => variant.id));
   const attributed = status === "applied" && offer && quote.lines.some(line => eligible.has(line.id));
   const restricted = slug !== generalShopSlug || !!attributed;
-  const member = restricted ? (await getShopClubMembers()).find(item => item.id === memberId) : undefined;
+  const member = restricted && memberId ? await getActiveClubMember(memberId) : null;
   if (restricted && !member) return "member";
   if (!restricted && (customer.length < 2 || contact.length < 5)) return "invalid";
   const { data, error } = await client.rpc("shop_submit_promotion_order", {
@@ -100,7 +94,7 @@ export async function submitPromotion(input: unknown) {
     })), p_total: total, p_discount: status === "applied" && (!offer || !!attributed), p_hash: hash,
     p_offer_slug: attributed ? offer.slug : null,
     p_offer_revision: attributed ? offer.revision : null,
-    p_member_id: member?.id ?? null, p_family_id: member?.family_id ?? null
+    p_member_id: member?.id ?? null, p_family_id: member?.family_unit_members?.family_unit_id ?? null
   });
   if (error) throw error;
   return data as "saved" | "conflict" | "changed" | "limit" | "member";

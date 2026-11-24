@@ -124,7 +124,7 @@ export default async function ManagePromotions({ searchParams }: {
               {promotion.active ? <details className={styles.order}>
                 <summary><strong>Lista del club</strong></summary>
                 <div className={styles.orderBody}>
-                  <p>Comparte el mismo enlace con todo el club. Cada comprador valida su acceso y selecciona a un alumno de su unidad familiar.</p>
+                  <p>Comparte el mismo enlace con todo el club. Cada comprador selecciona a nombre de qué alumno inscrito hace el pedido.</p>
                   {(["adults", "kids"] as const).map(group => <section key={group}>
                     <h3>{group === "adults" ? "Adultos" : "Niños"}</h3>
                     <ul className={styles.lines}>

@@ -33,9 +33,9 @@ La página compartida muestra la selección de la promoción. El comprador indic
 - Para detener la recepción de una promoción, desmarca «Página publicada». Los pedidos ya guardados siguen visibles en administración. Para revertir una versión conserva las tablas y exporta o respalda los pedidos antes de cualquier restauración. Una reversión del código no requiere borrar las tablas agregadas.
 Después de guardar la promoción, selecciona las variantes que quieres añadir a la tienda y pulsa «Publicar variantes seleccionadas». La tienda general está en /tienda y también se puede compartir por WhatsApp. Desde la tienda se puede usar el código vigente en las variantes publicadas que pertenecen a su promoción.
 
-### Acceso del club y límite por alumno
+### Enlace común y límite por alumno
 
-Abre una promoción publicada y comparte el mismo enlace con el club desde «Compartir por WhatsApp». El comprador verifica su correo registrado con un código de seis cifras enviado por la infraestructura de correo del club. Después puede elegir a un miembro activo asociado a ese correo o a su unidad familiar. El administrador conserva la lista de adultos y niños.
+Abre una promoción publicada y comparte el mismo enlace con el club desde «Compartir por WhatsApp». El comprador elige directamente a un alumno activo, separado en el selector por adultos y niños. El enlace compartido permite consultar ese selector. El servidor valida que el alumno siga inscrito antes de registrar el pedido. El administrador conserva la lista de adultos y niños.
 
 Cada promoción permite cinco prendas acumuladas a precio promocional por alumno inscrito, incluidas las compradas con su código desde la tienda general. Un pedido se asigna a un alumno concreto. El enlace común no contiene credenciales de ningún miembro.
 
