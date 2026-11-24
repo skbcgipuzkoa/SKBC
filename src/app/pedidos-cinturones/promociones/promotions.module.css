@@ -29,8 +29,7 @@
 .navigationLink:hover, .navigationLink[aria-current] { background: #edf5ff; border-color: #adc7e5; }
 .navIcon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; color: var(--brand); background: #edf3fb; }
 .navText { display: grid; gap: 3px; overflow-wrap: anywhere; }
-.navText small, .muted, .dateField { display: grid; gap: 5px; min-width: 0; }
-.fields small { color: #505f73; }
+.navText small, .muted, .fields small { color: #505f73; }
 .muted { margin-bottom: 0; }
 .panelHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .panelHeading h2 { min-width: 0; overflow-wrap: anywhere; }
@@ -39,6 +38,7 @@
 .fields label { min-width: 0; font-weight: 650; }
 .fields label :is(input:not([type="checkbox"]), select, textarea) { width: 100%; font-size: 1rem; }
 .dateField { display: grid; gap: 5px; min-width: 0; }
+.dateInputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .fields small { font-weight: 400; overflow-wrap: anywhere; }
 .publishToggle { padding: 9px 12px; border: 1px solid var(--line, #d9e2ec); border-radius: 8px; }
 .publishToggle input, .checklist input { accent-color: var(--brand); }

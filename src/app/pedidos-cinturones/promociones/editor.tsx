@@ -2,6 +2,7 @@
 
 import { PackagePlus, Plus, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { promotionDeadlineFields, promotionSizeLabel, promotionSizeProfiles } from "@/lib/shop/promotion-editor-options";
 import type { Promotion } from "@/lib/shop/repository";
 import { savePromotion } from "./actions";
 import styles from "./promotions.module.css";
@@ -14,6 +15,12 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
     ...variant, image: variant.image ?? "", original: (variant.original / 100).toFixed(2), offer: (variant.offer / 100).toFixed(2)
   })) ?? []);
   const [catalogId, setCatalogId] = useState("");
+  const [profiles, setProfiles] = useState<Record<string, string>>({});
+  const deadline = promotionDeadlineFields(promotion?.expires_at ?? "");
+
+  function updateRow(id: string, field: keyof Omit<Row, "id">, value: string) {
+    setRows(current => current.map(item => item.id === id ? { ...item, [field]: value } : item));
+  }
 
   function addRow() {
     const option = catalog.find(item => item.id === catalogId);
@@ -21,6 +28,15 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
     setRows([...rows, option ? { ...option, offer: option.original } : {
       id: crypto.randomUUID(), product: "", variant: "Única", image: "", original: "", offer: ""
     }]);
+  }
+
+  function removeRow(id: string) {
+    setRows(current => current.filter(item => item.id !== id));
+    setProfiles(current => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
   }
 
   return <form action={savePromotion} className={styles.stack}>
@@ -41,10 +57,12 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
       <div className={`form-grid ${styles.fields}`}>
         <label>Código de descuento <input name="code" required maxLength={50} defaultValue={promotion?.code} /></label>
         <div className={styles.dateField}>
-          <label>Fecha y hora de caducidad
-            <input name="expires_at" required defaultValue={promotion?.expires_at} aria-describedby="promotion-expiry-format" />
-          </label>
-          <small id="promotion-expiry-format">Incluye la zona horaria. Ejemplo: 2026-12-01T23:59:00+01:00</small>
+          <div className={styles.dateInputs}>
+            <label>Día de caducidad<input name="expiry_day" type="date" required defaultValue={deadline.day} aria-describedby="promotion-expiry-zone" /></label>
+            <label>Hora de caducidad<input name="expiry_time" type="time" step={1} required defaultValue={deadline.time} aria-describedby="promotion-expiry-zone" /></label>
+          </div>
+          <input type="hidden" name="previous_expiry" value={promotion?.expires_at ?? ""} />
+          <small id="promotion-expiry-zone">Hora peninsular</small>
         </div>
         <label className={`checkbox-line wide ${styles.publishToggle}`}><input type="checkbox" name="active" defaultChecked={promotion?.active ?? false} /> Página publicada</label>
       </div>
@@ -64,19 +82,41 @@ export function PromotionEditor({ promotion, catalog, catalogAvailable }: { prom
       </div>
       {!catalogAvailable ? <p className={styles.muted}>El catálogo existente no está disponible. Puedes introducir los productos manualmente.</p> : null}
       {!rows.length ? <p className={styles.empty}><PackagePlus size={20} aria-hidden="true" /> Añade al menos una variante para guardar la promoción.</p> : null}
-      {rows.map((row, index) => <fieldset className={styles.variant} key={row.id}>
-        <legend>{row.product || `Variante ${index + 1}`}</legend>
-        <div className={`form-grid ${styles.fields}`}>
-          {([["product", "Producto"], ["variant", "Talla o variante"], ["original", "Precio original (€)"], ["offer", "Precio con código (€)"], ["image", "URL de imagen"]] as const)
-            .map(([field, label]) => <label key={field} className={field === "image" ? "wide" : undefined}>{label}
-              <input required={field !== "image"} value={row[field]} inputMode={field === "offer" || field === "original" ? "decimal" : undefined}
-                onChange={event => setRows(rows.map(item => item.id === row.id ? { ...item, [field]: event.target.value } : item))} />
-            </label>)}
-        </div>
-        <button className="secondary-link" type="button" onClick={() => setRows(rows.filter(item => item.id !== row.id))}>
-          <Trash2 size={16} aria-hidden="true" /> Quitar variante {index + 1}
-        </button>
-      </fieldset>)}
+      {rows.map((row, index) => {
+        const profileName = profiles[row.id] ?? promotionSizeProfiles.find(item =>
+          item.sizes.some(size => row.variant === promotionSizeLabel(item, size)))?.label ?? "";
+        const profile = promotionSizeProfiles.find(item => item.label === profileName);
+        return <fieldset className={styles.variant} key={row.id}>
+          <legend>{row.product || `Variante ${index + 1}`}</legend>
+          <div className={`form-grid ${styles.fields}`}>
+            <label>Producto<input required value={row.product} onChange={event => updateRow(row.id, "product", event.target.value)} /></label>
+            <label>Prenda y grupo de tallas
+              <select value={profileName} onChange={event => {
+                const value = event.target.value;
+                setProfiles(current => ({ ...current, [row.id]: value }));
+                updateRow(row.id, "variant", "");
+              }}>
+                <option value="">Otra variante o talla única</option>
+                {promotionSizeProfiles.map(item => <option key={item.label}>{item.label}</option>)}
+              </select>
+            </label>
+            <label className="wide">{profile ? "Talla" : "Talla o variante"}
+              {profile ? <select required value={row.variant} onChange={event => updateRow(row.id, "variant", event.target.value)}>
+                <option value="">Seleccionar talla</option>
+                {profile.sizes.map(size => <option key={size} value={promotionSizeLabel(profile, size)}>{size}</option>)}
+              </select> : <input required value={row.variant} onChange={event => updateRow(row.id, "variant", event.target.value)} />}
+            </label>
+            {([["original", "Precio original (€)"], ["offer", "Precio con código (€)"], ["image", "URL de imagen"]] as const)
+              .map(([field, label]) => <label key={field} className={field === "image" ? "wide" : undefined}>{label}
+                <input required={field !== "image"} value={row[field]} inputMode={field === "image" ? undefined : "decimal"}
+                  onChange={event => updateRow(row.id, field, event.target.value)} />
+              </label>)}
+          </div>
+          <button className="secondary-link" type="button" onClick={() => removeRow(row.id)}>
+            <Trash2 size={16} aria-hidden="true" /> Quitar variante {index + 1}
+          </button>
+        </fieldset>;
+      })}
     </section>
     <div className={styles.footer}>
       <button className="primary-link" disabled={!rows.length}><Save size={17} aria-hidden="true" /> Guardar promoción</button>

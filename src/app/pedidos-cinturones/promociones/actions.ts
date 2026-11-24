@@ -3,6 +3,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { promotionDeadline } from "@/lib/shop/promotion-editor-options";
 import { requirePromotionAdmin } from "@/lib/shop/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -41,6 +42,10 @@ export async function savePromotion(form: FormData) {
   } catch {
     redirect(back + "&error=invalid");
   }
+  const expiresAt = form.has("expiry_day")
+    ? promotionDeadline(String(form.get("expiry_day") ?? ""), String(form.get("expiry_time") ?? ""), String(form.get("previous_expiry") ?? ""))
+    : form.get("expires_at");
+  if (!expiresAt) redirect(back + "&error=expiry");
   const parsed = schema.safeParse({
     slug, variants,
     revision: form.get("revision"),
@@ -48,7 +53,7 @@ export async function savePromotion(form: FormData) {
     description: form.get("description"),
     cover_image: form.get("cover_image"),
     code: form.get("code"),
-    expires_at: form.get("expires_at"),
+    expires_at: expiresAt,
     active: form.has("active")
   });
   if (!parsed.success) redirect(back + "&error=invalid");

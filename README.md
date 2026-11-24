@@ -20,7 +20,7 @@ Fase inicial: base tecnica, modelo de datos y plan de migracion.
 
 ## Promociones de material
 
-En **Pedidos → Gestionar pedidos de promociones**, crea una promoción, añade las variantes, define el precio original y el precio con código y marca la página como publicada. Copia el enlace o abre «Compartir por WhatsApp». Introduce la caducidad en ISO 8601 con el desfase horario correspondiente. Por ejemplo, 2026-12-01T23:59:00+01:00.
+En **Pedidos → Gestionar pedidos de promociones**, crea una promoción, añade las variantes, define el precio original y el precio con código y marca la página como publicada. Copia el enlace o abre «Compartir por WhatsApp». Selecciona el día y la hora de caducidad en horario peninsular. Para camisetas y sudaderas selecciona el grupo de tallas de niños o adultos en cada variante.
 
 La página compartida muestra la selección de la promoción. El comprador indica su nombre y un contacto. La administración consulta los pedidos con su detalle y el resumen por variante. Los enlaces son de acceso por posesión y la página pide a los buscadores que no la indexen. Cualquiera a quien se reenvíe el enlace puede abrir la página y enviar un pedido. El código fija el precio y se puede desactivar la página desde la administración.
 
