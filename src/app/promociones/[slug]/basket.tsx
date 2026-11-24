@@ -15,18 +15,21 @@ const messages = {
 
 type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; offerRevision: string | null; status: string; total: number; customer: string; contact: string; notes: string };
 
-export function PromotionBasket({ slug, variants, initialRevision }: { slug: string; initialRevision: string; variants: (Omit<PromotionVariant, "offer"> & { advertisedOffer?: number })[] }) {
+type PaymentDetails = { deadline: string; bizumPhone: string };
+
+export function PromotionBasket({ slug, variants, initialRevision, payment }: { slug: string; initialRevision: string; payment?: PaymentDetails; variants: (Omit<PromotionVariant, "offer"> & { advertisedOffer?: number })[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [code, setCode] = useState("");
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof promotionQuote>>>();
   const [revision, setRevision] = useState(initialRevision);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [receipt, setReceipt] = useState("");
+  const [receipt, setReceipt] = useState<{ id: string; total: number; payment?: PaymentDetails }>();
   const [attempt, setAttempt] = useState<Attempt>();
   const selection = variants.flatMap(({ id }) => quantities[id] > 0 ? [{ id, quantity: quantities[id] }] : []);
   const selectedIds = new Set(selection.map(line => line.id));
   const restricted = slug !== generalShopSlug || (quote?.status === "applied" && quote.lines.some(line => line.eligible && selectedIds.has(line.id)));
+  const paymentNotice = restricted ? (quote ? quote.payment : payment) : undefined;
   const groups = new Map<string, typeof variants>();
   const quotedPrices = new Map(quote?.lines.map(line => [line.id, line]));
   for (const variant of variants) {
@@ -60,7 +63,7 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
     setError("");
     try {
       if (attempt) {
-        await send(attempt);
+        await send(attempt, paymentNotice);
         return;
       }
       const latest = await promotionQuote({ slug, code });
@@ -75,7 +78,7 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
         slug, code, selection, revision: latest.revision, offerRevision: latest.offerRevision, status: latest.status, total: currentTotal,
         customer: String(fields.get("customer") ?? ""), contact: String(fields.get("contact") ?? ""), notes: String(fields.get("notes") ?? "")
       };
-      await send({ ...body, id: crypto.randomUUID() });
+      await send({ ...body, id: crypto.randomUUID() }, restricted ? latest.payment : undefined);
     } catch {
       setError("No se ha podido verificar la confirmación. Puedes reintentarlo.");
     } finally {
@@ -83,18 +86,25 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
     }
   }
 
-  async function send(body: Attempt) {
+  async function send(body: Attempt, instructions: PaymentDetails | undefined) {
     setAttempt(body);
     const result = await submitPromotion(body);
     setAttempt(undefined);
-    if (result === "saved") setReceipt(body.id);
+    if (result === "saved") setReceipt({ id: body.id, total: body.total, payment: instructions });
     else if (result === "limit") setError("Este alumno tiene un máximo de 5 prendas al precio promocional, contando sus pedidos anteriores. Reduce la cantidad.");
     else if (result === "member") setError("Comprueba que el nombre y los apellidos coincidan con tu inscripción en el club.");
     else if (result === "changed") setError("El precio o la disponibilidad ha cambiado. Revisa tu pedido e inténtalo de nuevo.");
     else setError("No se pudo confirmar el pedido. Comprueba los datos e inténtalo de nuevo.");
   }
 
-  if (receipt) return <section className={styles.card} role="status"><h2>Pedido recibido</h2><p>Referencia {receipt}</p></section>;
+  if (receipt) return <section className={styles.card} role="status">
+    <h2>Pedido recibido</h2>
+    <p>Referencia {receipt.id}</p>
+    {receipt.payment ? <>
+      <p className={styles.total}>Importe a pagar {euros.format(receipt.total / 100)}</p>
+      <PaymentNotice payment={receipt.payment} />
+    </> : null}
+  </section>;
 
   return <form className={styles.stack} onSubmit={checkout}>
     <fieldset disabled={busy || !!attempt} className={styles.stack}>
@@ -149,6 +159,7 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
         </> : null}
         <label>Observaciones<textarea name="notes" maxLength={1000} /></label>
         {error ? <p role="alert">{error}</p> : null}
+        {paymentNotice ? <PaymentNotice payment={paymentNotice} /> : null}
         <button disabled={!selection.length || quote?.status === "invalid"}>Confirmar pedido</button>
       </section>
     </fieldset>
@@ -161,4 +172,12 @@ function ProductPrice({ original, offer }: { original: number; offer?: number })
     <span>PVP <strong>{euros.format(original / 100)}</strong></span>
     {offer !== undefined ? <span className={styles.offerPrice}>Con código <strong>{euros.format(offer / 100)}</strong></span> : null}
   </span>;
+}
+
+function PaymentNotice({ payment }: { payment: PaymentDetails }) {
+  return <aside className={styles.paymentNotice} aria-label="Información de pago">
+    <p><strong>El pedido quedará formalizado cuando se realice el pago.</strong></p>
+    <p>Puedes pagar {payment.bizumPhone ? <>por Bizum al <strong>{payment.bizumPhone}</strong> o</> : null} en persona.</p>
+    <p>El último día para pagar es el <strong>{payment.deadline}</strong> (hora peninsular).</p>
+  </aside>;
 }

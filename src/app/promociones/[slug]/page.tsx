@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { generalShopSlug } from "@/lib/shop/promotion";
-import { getPromotion, promotionUrl, sharePromotion } from "@/lib/shop/repository";
+import { getPromotion, promotionPaymentDetails, promotionUrl, sharePromotion } from "@/lib/shop/repository";
 import { PromotionPhoto } from "./photo";
 import { PromotionBasket } from "./basket";
 import styles from "./promotion.module.css";
@@ -36,7 +36,7 @@ export default async function PromotionPage({ params }: Props) {
       {promotion.cover_image ? <PromotionPhoto className={styles.coverPhoto} src={promotion.cover_image} alt="Diseño de la equipación" /> : null}
       <a href={sharePromotion(promotion)}>Compartir por WhatsApp</a>
     </header>
-    {promotion.slug === generalShopSlug && !promotion.variants.length ? <p>Todavía no hay productos publicados.</p> : <PromotionBasket slug={promotion.slug} initialRevision={promotion.revision} variants={promotion.variants.map(({ id, product, variant, original, offer, image }) => ({
+    {promotion.slug === generalShopSlug && !promotion.variants.length ? <p>Todavía no hay productos publicados.</p> : <PromotionBasket slug={promotion.slug} initialRevision={promotion.revision} payment={promotionPaymentDetails(promotion)} variants={promotion.variants.map(({ id, product, variant, original, offer, image }) => ({
       id, product, variant, original, image,
       advertisedOffer: promotion.slug !== generalShopSlug && Date.parse(promotion.expires_at) > Date.now() ? offer : undefined
     }))} />}

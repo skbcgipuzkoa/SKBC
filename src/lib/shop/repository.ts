@@ -30,10 +30,26 @@ export function promotionUrl(slug: string, host?: string) {
   return new URL(promotionPath(slug), origin);
 }
 
+const promotionDeadlineFormat = new Intl.DateTimeFormat("es-ES", {
+  dateStyle: "full", timeStyle: "short", timeZone: "Europe/Madrid"
+});
+
+export function promotionPaymentDetails(promotion: Promotion) {
+  const expiresAt = Date.parse(promotion.expires_at);
+  if (promotion.slug === generalShopSlug || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return undefined;
+  const phone = process.env.SKBC_SHOP_BIZUM_PHONE?.replace(/\s/g, "") ?? "";
+  return {
+    deadline: promotionDeadlineFormat.format(expiresAt),
+    bizumPhone: /^\d{9}$/.test(phone) ? phone.replace(/(\d{3})(?=\d)/g, "$1 ") : ""
+  };
+}
+
 export function sharePromotion(promotion: Promotion) {
   const includeOffer = promotion.slug !== generalShopSlug && Date.parse(promotion.expires_at) > Date.now();
   const prices = promotion.slug === generalShopSlug ? [] : promotionPriceSummary(promotion.variants, includeOffer);
-  const message = [promotion.title, ...prices.slice(0, 8), promotionUrl(promotion.slug).href].join("\n");
+  const payment = includeOffer ? promotionPaymentDetails(promotion) : undefined;
+  const paymentLine = payment ? "Pago hasta el " + payment.deadline + " (último día)." : "";
+  const message = [promotion.title, ...prices.slice(0, 8), paymentLine, promotionUrl(promotion.slug).href].filter(Boolean).join("\n");
   return "https://wa.me/?text=" + encodeURIComponent(message);
 }
 

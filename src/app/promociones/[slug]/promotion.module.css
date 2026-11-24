@@ -20,3 +20,6 @@
 .pricePair > span { display: inline-flex; flex-wrap: wrap; gap: .35rem; align-items: baseline; padding: .35rem .55rem; border-radius: .45rem; background: #eff3f8; color: #28384e; font-size: .9rem; }
 .pricePair > .offerPrice { background: #e6f4ec; color: #125437; }
 .coverPhoto { display: block; width: min(100%, 32rem); max-height: 32rem; margin: 1rem auto; border-radius: .65rem; }
+
+.paymentNotice { margin-block: .85rem; padding: .75rem .9rem; border: 1px solid #cad8ea; border-radius: .65rem; background: #f1f6fc; color: #23364e; }
+.paymentNotice p { margin-block: .3rem; }

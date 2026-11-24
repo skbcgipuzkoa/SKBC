@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveClubMemberByName } from "@/lib/shop/club-access";
-import { getCatalogOffer, getPromotion, type Promotion } from "@/lib/shop/repository";
+import { getCatalogOffer, getPromotion, promotionPaymentDetails, type Promotion } from "@/lib/shop/repository";
 import { generalShopSlug, quotePromotion, type Selection } from "@/lib/shop/promotion";
 
 const basketSchema = z.object({
@@ -33,6 +33,7 @@ export async function promotionQuote(input: unknown) {
   const live = promotion.slug !== generalShopSlug && Date.parse(promotion.expires_at) > Date.now();
   return {
     revision: promotion.revision,
+    payment: promotionPaymentDetails(offer && quote.status === "applied" ? offer : promotion),
     offerRevision: offer?.revision ?? null,
     status: quote.status,
     total: quote.total,

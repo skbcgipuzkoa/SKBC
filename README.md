@@ -42,3 +42,5 @@ Cada promoción permite cinco prendas acumuladas a precio promocional por alumno
 Aplica también supabase/migrations/20261124160000_shop_member_quota.sql y supabase/migrations/20261124163000_shop_shared_link_access.sql. La migración conserva los pedidos anteriores y bloquea el checkout de promociones en versiones anteriores de la aplicación.
 
 En el editor puedes pegar una URL de imagen directa o subir un JPG, PNG o WebP desde tu dispositivo, de hasta 4 MB. Aplica también supabase/migrations/20261124170000_shop_image_uploads.sql para habilitar el almacenamiento de imágenes.
+
+Configura SKBC_SHOP_BIZUM_PHONE con el teléfono de Bizum del club (recibe nueve cifras). La página usa la caducidad de cada promoción como último día de pago, en horario peninsular.
