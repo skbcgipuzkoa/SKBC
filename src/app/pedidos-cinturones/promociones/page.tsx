@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowUpRight, ChevronRight, Package, Plus, ShoppingBag, Tag 
 import Link from "next/link";
 import { CopyPromotionLink } from "@/app/promociones/copy-link";
 import { SidebarNav } from "@/app/components/SidebarNav";
+import { clubInvitation, listClubInvitationMembers } from "@/lib/shop/club-access";
 import { requirePromotionAdmin } from "@/lib/shop/admin";
 import { euros, generalShopSlug, summarizePromotion, type QuotedLine } from "@/lib/shop/promotion";
 import { getPromotion, promotionPath, promotionUrl, sharePromotion } from "@/lib/shop/repository";
@@ -45,7 +46,9 @@ export default async function ManagePromotions({ searchParams }: {
     getPromotion(generalShopSlug)
   ]);
   if (list.error) throw list.error;
-  const orders = promotion ? await loadOrders(promotion.slug) : [];
+  const [orders, club] = await Promise.all([
+    promotion ? loadOrders(promotion.slug) : [], promotion?.active ? listClubInvitationMembers() : []
+  ]);
   const selectedLines = orders.map(order => order.promotion_slug === promotion?.slug
     ? order.lines : order.lines.filter(line => line.offer === promotion?.slug));
   const summary = summarizePromotion(selectedLines);
@@ -118,6 +121,29 @@ export default async function ManagePromotions({ searchParams }: {
                 <a className="primary-link" href={sharePromotion(promotion.title, promotion.slug)}>Compartir por WhatsApp</a>
                 <CopyPromotionLink url={promotionUrl(promotion.slug).href} />
               </div> : null}
+              {promotion.active ? <details className={styles.order}>
+                <summary><strong>Lista del club y enlaces privados</strong></summary>
+                <div className={styles.orderBody}>
+                  <p>Envía a cada familia su enlace privado para que pueda seleccionar al alumno. Los alumnos sin unidad familiar tienen un enlace individual.</p>
+                  {(["adults", "kids"] as const).map(group => <section key={group}>
+                    <h3>{group === "adults" ? "Adultos" : "Niños"}</h3>
+                    <ul className={styles.lines}>
+                      {club.filter(member => member.class === group).map(member => {
+                        const url = promotionUrl(promotion.slug);
+                        url.hash = new URLSearchParams({ acceso: clubInvitation(member.familyId, member.id) }).toString();
+                        const message = promotion.title + "\n" + url.href;
+                        return <li key={member.id}>
+                          <span>{member.display_name}{member.familyId ? "" : " · Sin unidad familiar"}</span>
+                          <div className={styles.actions}>
+                            <CopyPromotionLink url={url.href} />
+                            <a className="secondary-link" href={"https://wa.me/?text=" + encodeURIComponent(message)}>WhatsApp</a>
+                          </div>
+                        </li>;
+                      })}
+                    </ul>
+                  </section>)}
+                </div>
+              </details> : null}
               {!isStorefront ? <form className={styles.publish} action={publishCatalog}>
                 <h3>Publicar en tienda general</h3>
                 <input type="hidden" name="slug" value={promotion.slug} />
@@ -152,7 +178,7 @@ export default async function ManagePromotions({ searchParams }: {
                 <summary><strong>{order.customer}</strong><span>{date.format(new Date(order.created_at))}</span><b>{euros.format(order.total_cents / 100)}</b></summary>
                 <div className={styles.orderBody}>
                   <p>Referencia {order.id}</p>
-                  <p>Contacto {order.contact}</p>
+                  {order.contact ? <p>Contacto {order.contact}</p> : null}
                   <p>{order.discount_applied ? "Con código de descuento" : "Precio original"}</p>
                   <ul className={styles.lines}>{order.lines.map(line => <li key={line.id}>
                     <span>{line.quantity} × {line.product} · {line.variant}</span><strong>{euros.format(line.price / 100)} por unidad</strong>

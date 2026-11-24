@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { euros, type PromotionVariant } from "@/lib/shop/promotion";
-import { promotionQuote, submitPromotion } from "../actions";
+import { useEffect, useState, type FormEvent } from "react";
+import { euros, generalShopSlug, type PromotionVariant } from "@/lib/shop/promotion";
+import { promotionInviteMembers, promotionQuote, submitPromotion } from "../actions";
 import styles from "./promotion.module.css";
 
 const messages = {
@@ -12,7 +12,7 @@ const messages = {
   invalid: "El código no es válido para esta promoción."
 };
 
-type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; offerRevision: string | null; status: string; total: number; customer: string; contact: string; notes: string };
+type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; offerRevision: string | null; status: string; total: number; customer: string; contact: string; notes: string; invitation?: string; memberId?: string };
 
 export function PromotionBasket({ slug, variants, initialRevision }: { slug: string; initialRevision: string; variants: Omit<PromotionVariant, "offer">[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -22,8 +22,14 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState("");
+  const [invitation, setInvitation] = useState("");
+  const [members, setMembers] = useState<Awaited<ReturnType<typeof promotionInviteMembers>>>([]);
+  const [memberId, setMemberId] = useState("");
+  const [checkingMember, setCheckingMember] = useState(false);
   const [attempt, setAttempt] = useState<Attempt>();
   const selection = variants.flatMap(({ id }) => quantities[id] > 0 ? [{ id, quantity: quantities[id] }] : []);
+  const selectedIds = new Set(selection.map(line => line.id));
+  const restricted = slug !== generalShopSlug || (quote?.status === "applied" && quote.lines.some(line => line.eligible && selectedIds.has(line.id)));
   const groups = new Map<string, typeof variants>();
   for (const variant of variants) {
     const group = groups.get(variant.product);
@@ -32,6 +38,24 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
   }
   const currentTotal = variants.reduce((total, variant) => total + (quantities[variant.id] ?? 0) *
     (quote?.lines.find(line => line.id === variant.id)?.price ?? variant.original), 0);
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.hash.slice(1)).get("acceso") ?? "";
+    if (!token) return;
+    let cancelled = false;
+    setCheckingMember(true);
+    promotionInviteMembers(token).then(list => {
+      if (cancelled) return;
+      setInvitation(token);
+      setMembers(list);
+      if (list.length === 1) setMemberId(list[0].id);
+    }).catch(() => {
+      if (!cancelled) setError("No se pudo comprobar el enlace. Vuelve a abrirlo.");
+    }).finally(() => {
+      if (!cancelled) setCheckingMember(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   async function apply() {
     setBusy(true);
@@ -67,7 +91,8 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
       if (latest.status === "invalid") return;
       const body = {
         slug, code, selection, revision: latest.revision, offerRevision: latest.offerRevision, status: latest.status, total: currentTotal,
-        customer: String(fields.get("customer")), contact: String(fields.get("contact")), notes: String(fields.get("notes"))
+        customer: String(fields.get("customer") ?? ""), contact: String(fields.get("contact") ?? ""), notes: String(fields.get("notes") ?? ""),
+        invitation, memberId
       };
       await send({ ...body, id: crypto.randomUUID() });
     } catch {
@@ -82,6 +107,8 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
     const result = await submitPromotion(body);
     setAttempt(undefined);
     if (result === "saved") setReceipt(body.id);
+    else if (result === "limit") setError("Este alumno tiene un máximo de 5 prendas al precio promocional, contando sus pedidos anteriores. Reduce la cantidad.");
+    else if (result === "member") setError("Selecciona un alumno activo desde el enlace privado de tu familia.");
     else if (result === "changed") setError("El precio o la disponibilidad ha cambiado. Revisa tu pedido e inténtalo de nuevo.");
     else setError("No se pudo confirmar el pedido. Comprueba los datos e inténtalo de nuevo.");
   }
@@ -119,11 +146,26 @@ export function PromotionBasket({ slug, variants, initialRevision }: { slug: str
           return <li key={id}>{quantity} × {item.product} · {item.variant} — {euros.format(quantity * price / 100)}</li>;
         })}</ul>
         <p className={styles.total}>Total {euros.format(currentTotal / 100)}</p>
-        <label>Nombre para el pedido<input name="customer" required minLength={2} maxLength={160} autoComplete="name" /></label>
-        <label>Teléfono o correo de contacto<input name="contact" required minLength={5} maxLength={160} /></label>
+        {restricted ? <>
+          {members.length ? <label>Alumno del club
+            <select required value={memberId} onChange={event => setMemberId(event.target.value)}>
+              <option value="">Selecciona un alumno</option>
+              {(["adults", "kids"] as const).map(group => {
+                const options = members.filter(member => member.class === group);
+                return options.length ? <optgroup key={group} label={group === "adults" ? "Adultos" : "Niños"}>
+                  {options.map(member => <option key={member.id} value={member.id}>{member.display_name}</option>)}
+                </optgroup> : null;
+              })}
+            </select>
+          </label> : <p role="status">{checkingMember ? "Comprobando acceso…" : "Abre el enlace privado que te ha enviado el club para seleccionar al alumno."}</p>}
+          <p>Máximo 5 prendas al precio promocional por alumno inscrito, sumando sus pedidos de esta promoción.</p>
+        </> : <>
+          <label>Nombre para el pedido<input name="customer" required minLength={2} maxLength={160} autoComplete="name" /></label>
+          <label>Teléfono o correo de contacto<input name="contact" required minLength={5} maxLength={160} /></label>
+        </>}
         <label>Observaciones<textarea name="notes" maxLength={1000} /></label>
         {error ? <p role="alert">{error}</p> : null}
-        <button disabled={!selection.length || quote?.status === "invalid"}>Confirmar pedido</button>
+        <button disabled={!selection.length || quote?.status === "invalid" || (restricted && !memberId)}>Confirmar pedido</button>
       </section>
     </fieldset>
     {attempt && !busy ? <button type="submit">Comprobar o reintentar el envío</button> : null}

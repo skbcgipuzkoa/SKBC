@@ -32,3 +32,11 @@ La página compartida muestra la selección de la promoción. El comprador indic
 - Ejecuta node scripts/check-shop-promotion.mjs, npm run typecheck y npm run build. Comprueba un código vigente, uno caducado y la recepción del pedido desde el panel.
 - Para detener la recepción de una promoción, desmarca «Página publicada». Los pedidos ya guardados siguen visibles en administración. Para revertir una versión conserva las tablas y exporta o respalda los pedidos antes de cualquier restauración. Una reversión del código no requiere borrar las tablas agregadas.
 Después de guardar la promoción, selecciona las variantes que quieres añadir a la tienda y pulsa «Publicar variantes seleccionadas». La tienda general está en /tienda y también se puede compartir por WhatsApp. Desde la tienda se puede usar el código vigente en las variantes publicadas que pertenecen a su promoción.
+
+### Acceso del club y límite por alumno
+
+Abre una promoción publicada y despliega «Lista del club y enlaces privados». Envía a cada familia su enlace desde el listado de alumnos. Ese enlace permite seleccionar a sus miembros activos, separados entre adultos y niños. El enlace general sirve para consultar la promoción. Enlaza previamente en el sistema a los miembros de una misma unidad familiar. Un alumno sin unidad familiar tiene un enlace individual.
+
+Cada promoción permite cinco prendas acumuladas a precio promocional por alumno inscrito, incluidas las compradas con su código desde la tienda general. Un pedido se asigna a un alumno concreto. El enlace privado es una credencial de compra transferible, así que compártelo directamente con su familia.
+
+Aplica también supabase/migrations/20261124160000_shop_member_quota.sql. La migración conserva los pedidos anteriores y bloquea el checkout de promociones en versiones anteriores de la aplicación.

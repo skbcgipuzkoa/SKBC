@@ -1,4 +1,4 @@
-import { LogOut } from "lucide-react";
+import { LogOut, Plus } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { BeltOrdersPanel, type BeltMember, type BeltOrderLine } from "@/app/pedidos-cinturones/BeltOrdersPanel";
@@ -39,12 +39,15 @@ export default async function PedidosPage({ searchParams }: {
     <main className="main">
       <div className="topbar">
         <div><p className="eyebrow">Pedidos del club</p><h1>Pedidos</h1></div>
-        <form action={logoutAction}><button className="icon-button" type="submit" title="Salir" aria-label="Salir"><LogOut aria-hidden="true" size={18} /></button></form>
+        <div className="top-actions">
+          <a className="primary-link" href="/pedidos-cinturones/promociones"><Plus aria-hidden="true" size={17} /> Crear promoción</a>
+          <form action={logoutAction}><button className="icon-button" type="submit" title="Salir" aria-label="Salir"><LogOut aria-hidden="true" size={18} /></button></form>
+        </div>
       </div>
       {returnTo ? <a className="class-return-banner" href={returnTo}>Volver a la clase</a> : null}
       {params.saved ? <p className="save-ok">Cambios guardados correctamente.</p> : null}
       {params.error && params.error !== "belt-measure" ? <p className="form-error">No se pudo guardar el cambio.</p> : null}
-      <p><a href="/pedidos-cinturones/promociones">Gestionar pedidos de promociones</a></p>
+      <p><a className="secondary-link" href="/pedidos-cinturones/promociones">Gestionar pedidos de promociones</a></p>
       <MaterialOrdersDashboard {...materialData} returnTo={returnTo} initialTab={params.tab === "payments" ? "payments" : params.tab === "belts" || params.saved || params.error || params.status || params.q ? "belts" : undefined}>
         <BeltOrdersPanel members={members ?? []} lines={lines ?? []} params={params} />
       </MaterialOrdersDashboard>
