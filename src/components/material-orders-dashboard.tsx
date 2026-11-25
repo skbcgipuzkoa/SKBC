@@ -38,6 +38,7 @@ export type MaterialOrdersDashboardProps = {
   loadError?: string;
   initialTab?: TabId;
   returnTo?: string;
+  promotionCollections?: ReactNode;
   children: ReactNode;
 };
 
@@ -103,7 +104,7 @@ export function MaterialOrdersDashboard(props: MaterialOrdersDashboardProps) {
 
     <div id="material-panel-monthly" role="tabpanel" aria-labelledby="material-tab-monthly" hidden={activeTab !== "monthly"}>{activeTab === "monthly" ? <MonthlyView {...props} totals={totals} unresolved={unresolved} /> : null}</div>
     <div id="material-panel-supplier" role="tabpanel" aria-labelledby="material-tab-supplier" hidden={activeTab !== "supplier"}>{activeTab === "supplier" ? <SupplierView rows={props.supplierSummary} campaign={props.campaign} /> : null}</div>
-    <div id="material-panel-payments" role="tabpanel" aria-labelledby="material-tab-payments" hidden={activeTab !== "payments"}>{activeTab === "payments" ? <PaymentsView orders={props.orders} communications={props.communications} campaign={props.campaign} campaigns={props.campaigns} familyPayments={props.familyPayments} allFamilyPayments={props.allFamilyPayments} returnTo={props.returnTo} /> : null}</div>
+    <div id="material-panel-payments" role="tabpanel" aria-labelledby="material-tab-payments" hidden={activeTab !== "payments"}>{activeTab === "payments" ? <>{props.promotionCollections}<PaymentsView orders={props.orders} communications={props.communications} campaign={props.campaign} campaigns={props.campaigns} familyPayments={props.familyPayments} allFamilyPayments={props.allFamilyPayments} returnTo={props.returnTo} /></> : null}</div>
     <div id="material-panel-catalog" role="tabpanel" aria-labelledby="material-tab-catalog" hidden={activeTab !== "catalog"}>{activeTab === "catalog" ? <CatalogView products={props.catalog} /> : null}</div>
     <div id="material-panel-history" role="tabpanel" aria-labelledby="material-tab-history" hidden={activeTab !== "history"}>{activeTab === "history" ? <HistoryView campaigns={props.campaigns} orders={props.historyOrders} /> : null}</div>
     <div id="material-panel-belts" role="tabpanel" aria-labelledby="material-tab-belts" hidden={activeTab !== "belts"} className="material-belt-workflow">{activeTab === "belts" ? props.children : null}</div>

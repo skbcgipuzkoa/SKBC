@@ -1,5 +1,7 @@
 "use server";
 
+import { appendClassReturn, safeClassReturnPath } from "@/lib/class-return";
+
 import { randomBytes, randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -112,6 +114,10 @@ export async function uploadPromotionImage(form: FormData) {
 
 export async function updatePromotionOrderManagement(form: FormData) {
   await requirePromotionAdmin();
+  const fromCollections = form.get("origin") === "collections";
+  const campaign = z.string().uuid().safeParse(form.get("campaign"));
+  const returnTo = form.get("returnTo");
+  const collectionsPath = appendClassReturn("/pedidos-cinturones?tab=payments" + (campaign.success ? "&campaign=" + campaign.data : ""), safeClassReturnPath(typeof returnTo === "string" ? returnTo : undefined));
   const parsed = z.object({
     slug: slugSchema,
     id: z.string().uuid(),
@@ -119,12 +125,13 @@ export async function updatePromotionOrderManagement(form: FormData) {
     payment: z.enum(["pending", "bizum", "cash"]),
     delivery: z.enum(["pending", "delivered"])
   }).safeParse(Object.fromEntries(form));
-  if (!parsed.success) redirect("/pedidos-cinturones/promociones?error=manage");
+  if (!parsed.success) redirect(fromCollections ? collectionsPath + "&manageFailed=invalid" : "/pedidos-cinturones/promociones?error=manage");
 
   const { slug, id, revision, payment, delivery } = parsed.data;
   const { data, error } = await createAdminClient().rpc("shop_update_order_management", {
     p_id: id, p_context_slug: slug, p_revision: revision, p_payment: payment, p_delivery: delivery
   });
-  redirect("/pedidos-cinturones/promociones?promo=" + encodeURIComponent(slug) +
+  const returnPath = fromCollections ? collectionsPath : "/pedidos-cinturones/promociones?promo=" + encodeURIComponent(slug);
+  redirect(returnPath +
     (error || !data ? "&manageFailed=" : "&managed=") + id + "#pedido-" + id);
 }

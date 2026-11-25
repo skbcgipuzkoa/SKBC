@@ -4,39 +4,21 @@ import { CopyPromotionLink } from "@/app/promociones/copy-link";
 import { SidebarNav } from "@/app/components/SidebarNav";
 import { listClubMembers } from "@/lib/shop/club-access";
 import { requirePromotionAdmin } from "@/lib/shop/admin";
-import { euros, generalShopSlug, summarizePromotion, type QuotedLine } from "@/lib/shop/promotion";
+import { euros, generalShopSlug, summarizePromotion } from "@/lib/shop/promotion";
 import { promotionCatalogGroups } from "@/lib/shop/promotion-editor-options";
 import { getPromotion, promotionPath, promotionUrl, sharePromotion } from "@/lib/shop/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listCatalog } from "@/lib/web-orders/repository";
 import { SupplierSummary } from "./supplier-summary";
 import { PromotionEditor } from "./editor";
-import { promotionPaymentLabels, promotionDeliveryLabels, type PromotionPaymentStatus, type PromotionDeliveryStatus } from "@/lib/shop/order-management";
-import { publishCatalog, updatePromotionOrderManagement } from "./actions";
+import { loadPromotionOrders } from "@/lib/shop/admin-orders";
+import { PromotionOrderCard } from "./order-card";
+import { publishCatalog } from "./actions";
 import styles from "./promotions.module.css";
 
 export const dynamic = "force-dynamic";
 
 const route = "/pedidos-cinturones/promociones";
-type Order = { id: string; customer: string; contact: string; notes: string; created_at: string; lines: (QuotedLine & { offer?: string })[]; promotion_slug: string; total_cents: number; discount_applied: boolean; payment_status: PromotionPaymentStatus; delivery_status: PromotionDeliveryStatus; paid_at: string | null; delivered_at: string | null; management_revision: string };
-const date = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Madrid" });
-
-async function loadOrders(slug: string) {
-  const client = createAdminClient();
-  const orders: Order[] = [];
-  const pageSize = 200;
-  const visibility = slug === generalShopSlug ? "promotion_slug.eq." + slug : "promotion_slug.eq." + slug + ",offer_slug.eq." + slug;
-  for (let start = 0; ; start += pageSize) {
-    const { data, error } = await client.from("shop_promotion_orders")
-      .select("id,customer,contact,notes,created_at,lines,total_cents,discount_applied,promotion_slug,payment_status,delivery_status,paid_at,delivered_at,management_revision")
-      .or(visibility).order("created_at", { ascending: false }).order("id")
-      .range(start, start + pageSize - 1).returns<Order[]>();
-    if (error) throw error;
-    orders.push(...data);
-    if (data.length < pageSize) return orders;
-  }
-}
-
 export default async function ManagePromotions({ searchParams }: {
   searchParams: Promise<{ promo?: string; saved?: string; published?: string; managed?: string; manageFailed?: string; error?: string }>;
 }) {
@@ -50,7 +32,7 @@ export default async function ManagePromotions({ searchParams }: {
   ]);
   if (list.error) throw list.error;
   const [orders, club] = await Promise.all([
-    promotion ? loadOrders(promotion.slug) : [], promotion?.active ? listClubMembers() : []
+    promotion ? loadPromotionOrders(promotion.slug) : [], promotion?.active ? listClubMembers() : []
   ]);
   const selectedLines = orders.map(order => order.promotion_slug === promotion?.slug
     ? order.lines : order.lines.filter(line => line.offer === promotion?.slug));
@@ -170,43 +152,8 @@ export default async function ManagePromotions({ searchParams }: {
                 <div><dt>Pagados</dt><dd>{orders.filter(order => order.payment_status !== "pending").length}</dd></div>
                 <div><dt>Entregados</dt><dd>{orders.filter(order => order.delivery_status === "delivered").length}</dd></div>
               </dl> : <p className={styles.empty}><Package size={20} aria-hidden="true" /> Todavía no hay pedidos.</p>}
-              {orders.map(order => <article className={styles.order} key={order.id} id={"pedido-" + order.id}>
-                <div className={styles.orderManagement}>
-                  <div className={styles.panelHeading}>
-                    <h3>{order.customer}</h3>
-                    <strong>{euros.format(order.total_cents / 100)}</strong>
-                  </div>
-                  <p>{date.format(new Date(order.created_at))}</p>
-                  {params.managed === order.id ? <p className="save-ok" role="status">Estados del pedido guardados.</p> : null}
-                  {params.manageFailed === order.id ? <p className="form-error" role="alert">No se guardaron los estados. Revisa los valores actuales antes de volver a guardar.</p> : null}
-                  <form key={order.management_revision} action={updatePromotionOrderManagement} className={`form-grid ${styles.fields} ${styles.managementFields}`}>
-                    <input type="hidden" name="id" value={order.id} />
-                    <input type="hidden" name="slug" value={promotion.slug} />
-                    <input type="hidden" name="revision" value={order.management_revision} />
-                    <label>Pago<select name="payment" defaultValue={order.payment_status} aria-label={"Pago de " + order.customer}>
-                      {Object.entries(promotionPaymentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select></label>
-                    <label>Entrega<select name="delivery" defaultValue={order.delivery_status} aria-label={"Entrega de " + order.customer}>
-                      {Object.entries(promotionDeliveryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select></label>
-                    <button className="secondary-link">Guardar estados</button>
-                  </form>
-                </div>
-                <details>
-                  <summary>Ver prendas y tallas</summary>
-                  <div className={styles.orderBody}>
-                    <p>Referencia {order.id}</p>
-                    {order.contact ? <p>Contacto {order.contact}</p> : null}
-                    <p>{order.discount_applied ? "Con código de descuento" : "Precio original"}</p>
-                    <ul className={styles.lines}>{order.lines.map(line => <li key={line.id}>
-                      <span>{line.quantity} × {line.product} · {line.variant}</span><strong>{euros.format(line.price / 100)} por unidad</strong>
-                    </li>)}</ul>
-                    {order.notes ? <p>{order.notes}</p> : null}
-                    {order.paid_at ? <p>Pago registrado el {date.format(new Date(order.paid_at))}</p> : null}
-                    {order.delivered_at ? <p>Entrega registrada el {date.format(new Date(order.delivered_at))}</p> : null}
-                  </div>
-                </details>
-              </article>)}
+              {orders.map(order => <PromotionOrderCard key={order.id} order={order} slug={promotion.slug}
+                managed={params.managed} manageFailed={params.manageFailed} />)}
             </section>
           </> : null}
 

@@ -1,3 +1,4 @@
+import { PromotionCollections } from "./promociones/collections";
 import { LogOut, Plus } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 import { SidebarNav } from "@/app/components/SidebarNav";
@@ -13,7 +14,7 @@ import { redirect } from "next/navigation";
 import { safeClassReturnPath } from "@/lib/class-return";
 
 export default async function PedidosPage({ searchParams }: {
-  searchParams: Promise<{ saved?: string; error?: string; status?: string; q?: string; campaign?: string; tab?: string; returnTo?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; status?: string; q?: string; campaign?: string; tab?: string; returnTo?: string; managed?: string; manageFailed?: string }>;
 }) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 
@@ -48,7 +49,7 @@ export default async function PedidosPage({ searchParams }: {
       {params.saved ? <p className="save-ok">Cambios guardados correctamente.</p> : null}
       {params.error && params.error !== "belt-measure" ? <p className="form-error">No se pudo guardar el cambio.</p> : null}
       <p><a className="secondary-link" href="/pedidos-cinturones/promociones">Gestionar pedidos de promociones</a></p>
-      <MaterialOrdersDashboard {...materialData} returnTo={returnTo} initialTab={params.tab === "payments" ? "payments" : params.tab === "belts" || params.saved || params.error || params.status || params.q ? "belts" : undefined}>
+      <MaterialOrdersDashboard {...materialData} returnTo={returnTo} promotionCollections={<PromotionCollections managed={params.managed} manageFailed={params.manageFailed} campaign={materialData.campaign?.id} returnTo={returnTo} />} initialTab={params.tab === "payments" ? "payments" : params.tab === "belts" || params.saved || params.error || params.status || params.q ? "belts" : undefined}>
         <BeltOrdersPanel members={members ?? []} lines={lines ?? []} params={params} />
       </MaterialOrdersDashboard>
     </main>

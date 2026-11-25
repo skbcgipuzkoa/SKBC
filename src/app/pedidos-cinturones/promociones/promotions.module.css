@@ -103,3 +103,6 @@
 @media (max-width: 620px) {
   .managementFields { grid-template-columns: minmax(0, 1fr); }
 }
+
+.collectionGroup { display: grid; gap: 10px; min-width: 0; }
+.collectionGroup > h3 { margin: 6px 0 0; font-size: 1rem; }
