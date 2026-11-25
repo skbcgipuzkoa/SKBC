@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 const route = "/pedidos-cinturones/promociones";
 export default async function ManagePromotions({ searchParams }: {
-  searchParams: Promise<{ promo?: string; saved?: string; published?: string; managed?: string; manageFailed?: string; error?: string }>;
+  searchParams: Promise<{ promo?: string; saved?: string; published?: string; managed?: string; manageFailed?: string; deleted?: string; deleteFailed?: string; error?: string }>;
 }) {
   await requirePromotionAdmin();
   const params = await searchParams;
@@ -91,6 +91,8 @@ export default async function ManagePromotions({ searchParams }: {
 
         <div className={styles.stack}>
           {params.published ? <p className="save-ok" role="status">Prendas publicadas con sus tallas. <a href="https://www.skbcgipuzkoa.com/#merchandising">Ver en la web del club</a></p> : null}
+          {params.deleted === "1" ? <p id="resultado-borrado" className="save-ok" role="status">Pedido eliminado.</p> :
+            params.deleteFailed === "1" ? <p id="resultado-borrado" className="form-error" role="alert">No se pudo eliminar el pedido. Recarga la página y revisa si el pedido ha cambiado.</p> : null}
           {params.saved ? <p className="save-ok" role="status">Promoción guardada.</p> : null}
           {params.error ? <p className="form-error" role="alert">{params.error === "manage" ? "No se guardaron los estados. Vuelve a abrir el pedido y comprueba si ha cambiado." : params.error === "expiry" ? "Selecciona un día y una hora válidos en el horario peninsular." : params.error === "publish" ? "Selecciona al menos una prenda y vuelve a cargar si la promoción ha cambiado." : params.error === "invalid" ? "Revisa el código, la fecha y los precios de las variantes." : "No se pudo guardar. Comprueba el identificador y vuelve a cargar si otra persona editó la promoción."}</p> : null}
 

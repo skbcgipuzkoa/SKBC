@@ -14,7 +14,7 @@ import { redirect } from "next/navigation";
 import { safeClassReturnPath } from "@/lib/class-return";
 
 export default async function PedidosPage({ searchParams }: {
-  searchParams: Promise<{ saved?: string; error?: string; status?: string; q?: string; campaign?: string; tab?: string; returnTo?: string; managed?: string; manageFailed?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; status?: string; q?: string; campaign?: string; tab?: string; returnTo?: string; managed?: string; manageFailed?: string; deleted?: string; deleteFailed?: string }>;
 }) {
   if (!(await hasInternalAccess())) redirect("/skbc-interno");
 
@@ -46,6 +46,8 @@ export default async function PedidosPage({ searchParams }: {
         </div>
       </div>
       {returnTo ? <a className="class-return-banner" href={returnTo}>Volver a la clase</a> : null}
+      {params.deleted === "1" ? <p id="resultado-borrado" className="save-ok" role="status">Pedido eliminado.</p> :
+        params.deleteFailed === "1" ? <p id="resultado-borrado" className="form-error" role="alert">No se pudo eliminar el pedido. Recarga la página y revisa si el pedido ha cambiado.</p> : null}
       {params.saved ? <p className="save-ok">Cambios guardados correctamente.</p> : null}
       {params.error && params.error !== "belt-measure" ? <p className="form-error">No se pudo guardar el cambio.</p> : null}
       <p><a className="secondary-link" href="/pedidos-cinturones/promociones">Gestionar pedidos de promociones</a></p>

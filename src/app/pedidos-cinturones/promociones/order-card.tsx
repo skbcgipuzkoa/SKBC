@@ -2,6 +2,7 @@ import { euros } from "@/lib/shop/promotion";
 import { plannedPaymentLabels, promotionPaymentLabels, promotionDeliveryLabels } from "@/lib/shop/order-management";
 import type { PromotionAdminOrder } from "@/lib/shop/admin-orders";
 import { updatePromotionOrderManagement } from "./actions";
+import { DeleteOrderButton } from "./delete-order-button";
 import styles from "./promotions.module.css";
 
 const date = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Madrid" });
@@ -47,6 +48,7 @@ export function PromotionOrderCard({ order, slug, managed, manageFailed, fromCol
         <input type="hidden" name="delivery" value={order.delivery_status} />
         <button type="submit" className="primary-link">Confirmar Bizum recibido</button>
       </form> : null}
+      <DeleteOrderButton customer={order.customer} amount={euros.format(order.total_cents / 100)}>{managementFields}</DeleteOrderButton>
     </div>
     <details>
       <summary>Ver prendas y tallas</summary>

@@ -116,3 +116,10 @@
 .orderStatus[data-tone="red"] { background: #fee2e2; color: #991b1b; }
 
 .confirmBizum { margin-top: 10px; }
+
+.deleteOrder { margin-top: 12px; padding: 8px 0; min-height: 40px; border: 0; background: transparent; color: #a22121; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.deleteDialog { margin: auto; width: min(440px, calc(100% - 30px)); border: 1px solid #d9e2ec; border-radius: 14px; padding: 22px; color: #172a40; background: #fff; }
+.deleteDialog::backdrop { background: #102338a8; }
+.deleteDialog h3 { margin: 0 0 12px; }
+.deleteDialog p { margin: 6px 0 12px; }
+.deleteControls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

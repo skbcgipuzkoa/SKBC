@@ -112,12 +112,17 @@ export async function uploadPromotionImage(form: FormData) {
   return { url: storage.getPublicUrl(path).data.publicUrl };
 }
 
-export async function updatePromotionOrderManagement(form: FormData) {
-  await requirePromotionAdmin();
+function orderManagementLocation(form: FormData) {
   const fromCollections = form.get("origin") === "collections";
   const campaign = z.string().uuid().safeParse(form.get("campaign"));
   const returnTo = form.get("returnTo");
   const collectionsPath = appendClassReturn("/pedidos-cinturones?tab=payments" + (campaign.success ? "&campaign=" + campaign.data : ""), safeClassReturnPath(typeof returnTo === "string" ? returnTo : undefined));
+  return { fromCollections, collectionsPath };
+}
+
+export async function updatePromotionOrderManagement(form: FormData) {
+  await requirePromotionAdmin();
+  const { fromCollections, collectionsPath } = orderManagementLocation(form);
   const parsed = z.object({
     slug: slugSchema,
     id: z.string().uuid(),
@@ -134,4 +139,23 @@ export async function updatePromotionOrderManagement(form: FormData) {
   const returnPath = fromCollections ? collectionsPath : "/pedidos-cinturones/promociones?promo=" + encodeURIComponent(slug);
   redirect(returnPath +
     (error || !data ? "&manageFailed=" : "&managed=") + id + "#pedido-" + id);
+}
+
+export async function deletePromotionOrder(form: FormData) {
+  await requirePromotionAdmin();
+  const { fromCollections, collectionsPath } = orderManagementLocation(form);
+  const parsed = z.object({
+    slug: slugSchema,
+    id: z.string().uuid(),
+    revision: z.string().uuid(),
+    confirmed: z.literal("yes")
+  }).safeParse(Object.fromEntries(form));
+  if (!parsed.success) redirect(fromCollections ? collectionsPath + "&deleteFailed=1" : "/pedidos-cinturones/promociones?deleteFailed=1");
+
+  const { slug, id, revision } = parsed.data;
+  const { data, error } = await createAdminClient().rpc("shop_delete_order", {
+    p_id: id, p_context_slug: slug, p_revision: revision
+  });
+  const returnPath = fromCollections ? collectionsPath : "/pedidos-cinturones/promociones?promo=" + encodeURIComponent(slug);
+  redirect(returnPath + (error || !data ? "&deleteFailed=1" : "&deleted=1") + "#resultado-borrado");
 }
