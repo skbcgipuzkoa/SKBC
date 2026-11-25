@@ -12,13 +12,25 @@ export function useStoreCategory() { return useContext(SectionContext); }
 
 export function StoreCategories({ children }: { children: ReactNode }) {
   const [section, setSection] = useState<ShopSection | "all">("all");
+  const results = useRef<HTMLDivElement>(null);
+
+  function selectSection(next: ShopSection | "all") {
+    if (next === section) return;
+    setSection(next);
+    const panel = results.current;
+    if (panel && panel.getBoundingClientRect().top < 0) panel.scrollIntoView({ block: "start" });
+  }
+
   return <SectionContext.Provider value={section}>
-    <nav className={styles.categories} aria-label="Categorías de la tienda">
-      <button type="button" aria-pressed={section === "all"} onClick={() => setSection("all")}>Todo</button>
-      {Object.entries(shopSections).map(([key, name]) => <button key={key} type="button" aria-pressed={key === section}
-        onClick={() => setSection(key as ShopSection)}>{name}</button>)}
-    </nav>
-    {children}
+    <div className={styles.catalogLayout}>
+      <nav className={styles.categories} aria-label="Categorías de la tienda">
+        <p className={styles.categoryHeading}>Categorías</p>
+        <button type="button" aria-pressed={section === "all"} onClick={() => selectSection("all")}>Todo</button>
+        {Object.entries(shopSections).map(([key, name]) => <button key={key} type="button" aria-pressed={key === section}
+          onClick={() => selectSection(key as ShopSection)}>{name}</button>)}
+      </nav>
+      <div className={styles.catalogResults} ref={results}>{children}</div>
+    </div>
   </SectionContext.Provider>;
 }
 

@@ -16,9 +16,22 @@
 .hero h1 { color: inherit; font-size: clamp(2.35rem, 6vw, 4.6rem); line-height: 1.03; letter-spacing: -.045em; margin: 0 0 12px; }
 .hero p { color: #e1eefb; margin: 0; font-size: clamp(1rem, 2vw, 1.2rem); }
 .content { max-width: 1240px; margin: auto; padding: 24px clamp(16px, 4vw, 42px) 56px; display: grid; gap: 20px; }
-.categories { display: flex; gap: 8px; flex-wrap: wrap; }
-.categories button { border: 1px solid var(--store-line); border-radius: 999px; background: #fff; color: var(--store-ink); padding: 8px 17px; font-weight: 700; cursor: pointer; }
+.catalogLayout { display: grid; grid-template-columns: 190px minmax(0, 1fr); align-items: start; gap: 20px; }
+.catalogResults { display: grid; min-width: 0; gap: 20px; scroll-margin-top: 78px; }
+.categories { position: sticky; top: 78px; z-index: 5; display: grid; gap: 5px; padding: 12px; border: 1px solid var(--store-line); border-radius: 12px; background: #fff; }
+.categoryHeading { margin: 4px 8px 6px; color: #41617c; font-size: .8rem; font-weight: 800; }
+.categories button { min-height: 44px; border: 1px solid transparent; border-radius: 8px; background: #fff; color: var(--store-ink); padding: 8px 12px; font-weight: 700; text-align: left; white-space: nowrap; cursor: pointer; }
+.categories button:hover { border-color: #aec6dc; background: #eff6fc; }
 .categories button[aria-pressed="true"] { background: var(--store-navy); border-color: var(--store-navy); color: #fff; }
+.categories button:focus-visible { outline: 2px solid var(--store-accent); outline-offset: 1px; }
+@media (max-width: 740px) {
+  .catalogLayout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .categories { top: 61px; display: flex; overflow-x: auto; gap: 5px; padding: 5px; border-radius: 0 0 10px 10px; }
+  .categories button { flex: 0 0 auto; }
+  .categoryHeading { display: none; }
+  .catalogResults { scroll-margin-top: 132px; }
+  .shell :is([id="pedido-material"], [id="pedido-ropa"]) { scroll-margin-top: 132px; }
+}
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr)); gap: 16px; }
 .product { min-width: 0; background: #fff; border-radius: 15px; overflow: hidden; border: 1px solid var(--store-line); display: grid; align-content: start; }
 .media { aspect-ratio: 5 / 3; background: #edf2f6; }
