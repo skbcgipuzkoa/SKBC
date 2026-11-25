@@ -53,7 +53,7 @@ export default async function ShopPage() {
     <header className={styles.header}>
       <div className={styles.headerInner}>
         <a className={styles.brand} href={clubWebsite} aria-label="SKBC Gipuzkoa, web del club">
-          <img src="/ficha-skbc.png" alt="" width={40} height={40} /><span>SKBC Gipuzkoa</span>
+          <img src="/store-club-emblem.webp" alt="" width={40} height={40} /><span>SKBC Gipuzkoa</span>
         </a>
         <a className={styles.backToClub} href={clubWebsite + "/#merchandising"}>
           <ArrowLeft size={18} aria-hidden="true" /> Volver a la web del club

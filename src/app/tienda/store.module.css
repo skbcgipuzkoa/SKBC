@@ -2,7 +2,7 @@
 .header { position: sticky; top: 0; z-index: 20; background: #fff; border-bottom: 1px solid var(--store-line); box-shadow: 0 2px 12px #10233812; }
 .headerInner { max-width: 1240px; margin: auto; padding: 8px clamp(12px, 4vw, 42px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; color: var(--store-ink); }
-.brand img { width: 40px; height: 40px; object-fit: contain; }
+.brand img { width: 40px; height: 40px; object-fit: contain; filter: brightness(0); }
 .backToClub { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 8px 13px; border: 1px solid #aec6dc; border-radius: 9px; color: #144b7b; background: #eff6fc; font-size: .88rem; font-weight: 750; line-height: 1.15; }
 .backToClub svg { flex: none; }
 .backToClub:hover { background: #e0eef9; }
@@ -11,7 +11,24 @@
 @media (max-width: 405px) {
   .brand span { display: none; }
 }
-.hero { color: #fff; background: linear-gradient(117deg,#0c2844,#174d77); }
+.hero { position: relative; overflow: hidden; isolation: isolate; color: #fff; background: linear-gradient(117deg,#0c2844,#174d77); }
+.hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset-inline-end: max(4%, calc((100% - 1240px) / 2));
+  top: 50%;
+  width: clamp(190px, 24vw, 290px);
+  aspect-ratio: 1;
+  transform: translateY(-50%) rotate(-8deg);
+  background: #fff;
+  opacity: .16;
+  mask: url("/store-club-emblem.webp") center / contain no-repeat;
+  pointer-events: none;
+}
+@media (max-width: 740px) {
+  .hero::before { inset-inline-end: -55px; width: 215px; opacity: .10; }
+}
 .heroInner { max-width: 1240px; margin: auto; padding: clamp(32px, 6vw, 76px) clamp(16px, 4vw, 42px); }
 .hero h1 { color: inherit; font-size: clamp(2.35rem, 6vw, 4.6rem); line-height: 1.03; letter-spacing: -.045em; margin: 0 0 12px; }
 .hero p { color: #e1eefb; margin: 0; font-size: clamp(1rem, 2vw, 1.2rem); }
