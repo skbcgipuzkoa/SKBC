@@ -33,10 +33,11 @@ export default async function PromotionPage({ params }: Props) {
       <img src="/ficha-skbc.png" alt="SKBC GIPUZKOA" width={72} height={72} />
       <h1>{promotion.title}</h1>
       <p>{promotion.description}</p>
-      {promotion.cover_image ? <PromotionPhoto className={styles.coverPhoto} src={promotion.cover_image} alt="Diseño de la equipación" /> : null}
       <a href={sharePromotion(promotion)}>Compartir por WhatsApp</a>
     </header>
-    {promotion.slug === generalShopSlug && !promotion.variants.length ? <p>Todavía no hay productos publicados.</p> : <PromotionBasket slug={promotion.slug} initialRevision={promotion.revision} payment={promotionPaymentDetails(promotion)} variants={promotion.variants.map(({ id, product, variant, original, offer, image }) => ({
+    {promotion.slug === generalShopSlug && !promotion.variants.length ? <p>Todavía no hay productos publicados.</p> : <PromotionBasket slug={promotion.slug} initialRevision={promotion.revision} payment={promotionPaymentDetails(promotion)}
+      cover={promotion.cover_image ? <PromotionPhoto className={styles.coverPhoto} src={promotion.cover_image} alt="Diseño de la equipación" /> : null}
+      variants={promotion.variants.map(({ id, product, variant, original, offer, image }) => ({
       id, product, variant, original, image,
       advertisedOffer: promotion.slug !== generalShopSlug && Date.parse(promotion.expires_at) > Date.now() ? offer : undefined
     }))} />}

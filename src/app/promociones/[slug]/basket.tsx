@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Tag } from "lucide-react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { euros, generalShopSlug, type PromotionVariant } from "@/lib/shop/promotion";
 import { promotionQuote, submitPromotion } from "../actions";
 import { PromotionPhoto } from "./photo";
@@ -8,7 +9,7 @@ import styles from "./promotion.module.css";
 
 const messages = {
   none: "",
-  applied: "Código aplicado.",
+  applied: "Código aplicado. El descuento se aplica a los productos de la promoción.",
   expired: "La promoción ha terminado. Se aplican los precios originales.",
   invalid: "El código no es válido para esta promoción."
 };
@@ -17,9 +18,10 @@ type Attempt = { id: string; slug: string; code: string; selection: { id: string
 
 type PaymentDetails = { deadline: string; bizumPhone: string };
 
-export function PromotionBasket({ slug, variants, initialRevision, payment }: { slug: string; initialRevision: string; payment?: PaymentDetails; variants: (Omit<PromotionVariant, "offer"> & { advertisedOffer?: number })[] }) {
+export function PromotionBasket({ slug, variants, initialRevision, payment, cover }: { slug: string; initialRevision: string; payment?: PaymentDetails; cover?: ReactNode; variants: (Omit<PromotionVariant, "offer"> & { advertisedOffer?: number })[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState("");
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof promotionQuote>>>();
   const [revision, setRevision] = useState(initialRevision);
   const [error, setError] = useState("");
@@ -44,13 +46,14 @@ export function PromotionBasket({ slug, variants, initialRevision, payment }: { 
 
   async function apply() {
     setBusy(true);
+    setCodeError("");
     setError("");
     try {
       const result = await promotionQuote({ slug, code });
       setQuote(result);
       setRevision(result.revision);
     } catch {
-      setError("No se pudo comprobar el código. Inténtalo de nuevo.");
+      setCodeError("No se pudo comprobar el código. Inténtalo de nuevo.");
     } finally {
       setBusy(false);
     }
@@ -108,6 +111,27 @@ export function PromotionBasket({ slug, variants, initialRevision, payment }: { 
 
   return <form className={styles.stack} onSubmit={checkout}>
     <fieldset disabled={busy || !!attempt} className={styles.stack}>
+      <section className={`${styles.card} ${styles.promoCode}`} aria-labelledby="promotion-code-title">
+        <h2 id="promotion-code-title"><Tag size={20} aria-hidden="true" /> Código promocional</h2>
+        <p>Introduce tu código para aplicar el precio especial a tu pedido.</p>
+        <div className={styles.promoCodeControls}>
+          <input aria-label="Código promocional" aria-describedby="promotion-code-status" value={code}
+            placeholder="Escribe aquí tu código" maxLength={50} autoCapitalize="characters" autoComplete="off" spellCheck={false}
+            onChange={event => {
+              setCode(event.target.value);
+              setCodeError("");
+              setQuote(undefined);
+            }}
+            onKeyDown={event => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              if (code.trim() && !busy) void apply();
+            }} />
+          <button type="button" onClick={apply} disabled={!code.trim()}>Aplicar código</button>
+        </div>
+        <p id="promotion-code-status" role="status" className={styles.promoCodeStatus}>{codeError || (quote ? messages[quote.status] : "")}</p>
+      </section>
+      {cover}
       {restricted ? <section className={styles.card}>
         <h2>¿A nombre de quién es el pedido?</h2>
         <label>Nombre y apellidos del alumno
@@ -141,12 +165,6 @@ export function PromotionBasket({ slug, variants, initialRevision, payment }: { 
       </div>
       <section className={styles.card}>
         <h2>Tu pedido</h2>
-        <label>Código de descuento<input value={code} maxLength={50} onChange={event => {
-          setCode(event.target.value);
-          setQuote(undefined);
-        }} /></label>
-        <button type="button" onClick={apply}>Aplicar código</button>
-        <p role="status">{quote ? messages[quote.status] : ""}</p>
         <ul>{selection.map(({ id, quantity }) => {
           const item = variants.find(variant => variant.id === id)!;
           const price = quote?.lines.find(line => line.id === id)?.price ?? item.original;
