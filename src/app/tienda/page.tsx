@@ -10,6 +10,8 @@ import { clubWebsite, loadMaterialProducts, storeImage } from "./material";
 import { MaterialStore } from "./material-store";
 import styles from "./store.module.css";
 
+const edition2027 = new Set(["CAMISETA ADULTOS", "CAMISETA NIÑOS", "SUDADERA ADULTOS", "SUDADERA NIÑOS"]);
+
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Tienda del club | SKBC Gipuzkoa",
@@ -35,6 +37,7 @@ export default async function ShopPage() {
         id: items[0].id,
         name: group.title,
         section,
+        edition: section === "club" && edition2027.has(group.title) ? "2027" : undefined,
         image: items.map(item => storeImage(item.image, "https://skbc.vercel.app")).find(Boolean),
         options: items.map(item => ({
           id: item.id,

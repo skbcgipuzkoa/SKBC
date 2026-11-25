@@ -6,7 +6,7 @@ import { euros, generalShopSlug, type PromotionVariant } from "@/lib/shop/promot
 import { promotionQuote, submitPromotion } from "../actions";
 import { plannedPaymentLabels } from "@/lib/shop/order-management";
 import { PromotionPhoto } from "./photo";
-import { StoreGrid, useStoreCategory, type StoreProduct } from "../../tienda/catalog";
+import { matchesStoreSection, StoreGrid, useStoreCategory, type StoreProduct } from "../../tienda/catalog";
 import styles from "./promotion.module.css";
 
 const messages = {
@@ -34,7 +34,7 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
   const [attempt, setAttempt] = useState<Attempt>();
   const selection = variants.flatMap(({ id }) => quantities[id] > 0 ? [{ id, quantity: quantities[id] }] : []);
   const category = useStoreCategory();
-  const showStorefront = !storefront || category === "all" || storefront.some(product => product.section === category) || selection.length > 0;
+  const showStorefront = !storefront || storefront.some(product => matchesStoreSection(product, category)) || selection.length > 0;
   const selectedIds = new Set(selection.map(line => line.id));
   const restricted = slug !== generalShopSlug || (quote?.status === "applied" && quote.lines.some(line => line.eligible && selectedIds.has(line.id)));
   const paymentNotice = restricted ? (quote ? quote.payment : payment) : undefined;

@@ -6,15 +6,16 @@ import { shopSections, type ShopSection } from "@/lib/shop/catalog-sections";
 import { euros } from "@/lib/shop/promotion";
 import styles from "./store.module.css";
 
-const SectionContext = createContext<ShopSection | "all">("all");
+type StoreSection = ShopSection | "all" | "edition-2027";
+const SectionContext = createContext<StoreSection>("all");
 
 export function useStoreCategory() { return useContext(SectionContext); }
 
 export function StoreCategories({ children }: { children: ReactNode }) {
-  const [section, setSection] = useState<ShopSection | "all">("all");
+  const [section, setSection] = useState<StoreSection>("all");
   const results = useRef<HTMLDivElement>(null);
 
-  function selectSection(next: ShopSection | "all") {
+  function selectSection(next: StoreSection) {
     if (next === section) return;
     setSection(next);
     const panel = results.current;
@@ -26,8 +27,11 @@ export function StoreCategories({ children }: { children: ReactNode }) {
       <nav className={styles.categories} aria-label="Categorías de la tienda">
         <p className={styles.categoryHeading}>Categorías</p>
         <button type="button" aria-pressed={section === "all"} onClick={() => selectSection("all")}>Todo</button>
-        {Object.entries(shopSections).map(([key, name]) => <button key={key} type="button" aria-pressed={key === section}
-          onClick={() => selectSection(key as ShopSection)}>{name}</button>)}
+        {Object.entries(shopSections).map(([key, name]) => key === "club" ? <div key={key} className={styles.categoryGroup}>
+          <button type="button" aria-pressed={section === "club"} onClick={() => selectSection("club")}>{name}</button>
+          <button className={styles.subcategory} type="button" aria-label="Edición 2027" aria-pressed={section === "edition-2027"}
+            onClick={() => selectSection("edition-2027")}>Edición 2027</button>
+        </div> : <button key={key} type="button" aria-pressed={key === section} onClick={() => selectSection(key as ShopSection)}>{name}</button>)}
       </nav>
       <div className={styles.catalogResults} ref={results}>{children}</div>
     </div>
@@ -36,16 +40,34 @@ export function StoreCategories({ children }: { children: ReactNode }) {
 
 type Option = { id: string; label: string; price: number; image?: string };
 export type StoreProduct = {
-  id: string; name: string; section: ShopSection; image?: string; brand?: string; description?: string; options: Option[];
+  id: string; name: string; section: ShopSection; edition?: "2027"; image?: string; brand?: string; description?: string; options: Option[];
 };
+
+export function matchesStoreSection(product: StoreProduct, section: StoreSection) {
+  if (section === "edition-2027") return product.section === "club" && product.edition === "2027";
+  return section === "all" || product.section === section;
+}
 
 export function StoreGrid({ products, add, recipient = false }: {
   products: StoreProduct[]; add: (product: StoreProduct, option: Option, quantity: number, name: string) => boolean | void; recipient?: boolean;
 }) {
   const section = useContext(SectionContext);
-  const visible = products.filter(product => section === "all" || product.section === section);
+  const visible = products.filter(product => matchesStoreSection(product, section));
+  const edition = visible.filter(product => product.edition === "2027");
+  const regular = visible.filter(product => !product.edition);
   if (!visible.length) return null;
-  return <div className={styles.grid}>{visible.map(product => <ProductCard key={product.id} product={product} add={add} recipient={recipient} />)}</div>;
+
+  function cards(items: StoreProduct[]) {
+    return <div className={styles.grid}>{items.map(product => <ProductCard key={product.id} product={product} add={add} recipient={recipient} />)}</div>;
+  }
+
+  return <>
+    {edition.length ? <section className={styles.collection} aria-labelledby="store-edition-2027">
+      <h2 id="store-edition-2027">Edición 2027</h2>
+      {cards(edition)}
+    </section> : null}
+    {regular.length ? cards(regular) : null}
+  </>;
 }
 
 function ProductCard({ product, add, recipient }: {

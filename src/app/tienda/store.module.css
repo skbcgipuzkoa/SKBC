@@ -67,3 +67,12 @@
 .guide, .feedback a { color: #075c9d; text-decoration: underline; }
 .guide { font-size: .85rem; }
 .orderNote { margin: 0; color: #41617c; font-size: .9rem; }
+
+.categoryGroup { display: grid; gap: 5px; }
+.categories .subcategory { margin-inline-start: 14px; font-size: .88rem; border-inline-start-color: #aec6dc; }
+.collection { min-width: 0; display: grid; gap: 12px; }
+.collection > h2 { margin: 0; font-size: clamp(1.35rem, 2.8vw, 2rem); letter-spacing: -.02em; }
+@media (max-width: 740px) {
+  .categoryGroup { display: flex; flex: none; }
+  .categories .subcategory { margin-inline-start: 0; }
+}
