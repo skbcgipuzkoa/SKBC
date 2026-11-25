@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveClubMemberByName } from "@/lib/shop/club-access";
 import { getCatalogOffer, getPromotion, promotionPaymentDetails, type Promotion } from "@/lib/shop/repository";
-import { generalShopSlug, quotePromotion, type Selection } from "@/lib/shop/promotion";
+import { generalShopSlug, normalizeClubMemberName, quotePromotion, type Selection } from "@/lib/shop/promotion";
 
 const basketSchema = z.object({
   slug: z.string().max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -75,10 +75,11 @@ export async function submitPromotion(input: unknown) {
   const eligible = new Set(offer?.variants.map(variant => variant.id));
   const attributed = status === "applied" && offer && quote.lines.some(line => eligible.has(line.id));
   const restricted = slug !== generalShopSlug || !!attributed;
+  const name = restricted ? normalizeClubMemberName(customer) : "";
+  if (restricted && name.split(" ").length < 2) return "name";
   const member = restricted ? await getActiveClubMemberByName(customer) : null;
-  if (restricted && !member) return "member";
   if (!restricted && (customer.length < 2 || contact.length < 5)) return "invalid";
-  const { data, error } = await client.rpc("shop_submit_promotion_order", {
+  const { data, error } = await client.rpc("shop_submit_named_order", {
     p_slug: slug, p_revision: revision, p_id: id, p_customer: member?.display_name ?? customer, p_contact: restricted ? "" : contact,
     p_notes: notes, p_lines: quote.lines.map(({ id, product, variant, original, quantity, price }) => ({
       id, product, variant, original, quantity, price,
@@ -92,5 +93,5 @@ export async function submitPromotion(input: unknown) {
     console.error("Promotion order database error", error.code);
     throw error;
   }
-  return data as "saved" | "conflict" | "changed" | "limit" | "member";
+  return data as "saved" | "conflict" | "changed" | "limit" | "member" | "name";
 }

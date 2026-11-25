@@ -113,8 +113,9 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
     const result = await submitPromotion(body);
     setAttempt(undefined);
     if (result === "saved") setReceipt({ id: body.id, total: body.total, payment: instructions });
-    else if (result === "limit") setError("Este alumno tiene un máximo de 5 prendas al precio promocional, contando sus pedidos anteriores. Reduce la cantidad.");
-    else if (result === "member") setError("Comprueba que el nombre y los apellidos coincidan con tu inscripción en el club.");
+    else if (result === "limit") setError("Este nombre ya alcanza el máximo de 5 prendas al precio promocional, contando sus pedidos anteriores. Reduce la cantidad.");
+    else if (result === "name") setError("Escribe el nombre y los apellidos para el pedido.");
+    else if (result === "member") setError("Se han actualizado los datos del pedido. Vuelve a intentarlo.");
     else if (result === "changed") setError("El precio o la disponibilidad ha cambiado. Revisa tu pedido e inténtalo de nuevo.");
     else setError("No se pudo confirmar el pedido. Comprueba los datos e inténtalo de nuevo.");
   }
@@ -153,10 +154,10 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
       {cover}
       {restricted ? <section className={styles.card}>
         <h2>¿A nombre de quién es el pedido?</h2>
-        <label>Nombre y apellidos del alumno
+        <label>Nombre y apellidos
           <input name="customer" required minLength={2} maxLength={160} autoComplete="name" />
         </label>
-        <p>Máximo 5 prendas al precio promocional por alumno inscrito, sumando sus pedidos de esta promoción.</p>
+        <p>Máximo 5 prendas al precio promocional por persona, sumando sus pedidos de esta promoción.</p>
       </section> : null}
       <div className={styles.grid}>
         {[...groups].map(([product, options]) => {

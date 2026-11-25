@@ -35,7 +35,7 @@ Después de guardar la promoción, selecciona las variantes que quieres añadir 
 
 ### Enlace común y límite por alumno
 
-Abre una promoción publicada y comparte el mismo enlace con el club desde «Compartir por WhatsApp». El comprador escribe el nombre y los apellidos del alumno. El servidor valida que coincida con un único alumno activo antes de registrar el pedido. El listado de adultos y niños se consulta desde el panel de administración. El administrador conserva la lista de adultos y niños.
+Abre una promoción publicada y comparte el mismo enlace con el club desde «Compartir por WhatsApp». El comprador escribe el nombre y los apellidos de la persona que realiza el pedido. El cupo de cinco prendas se acumula por nombre en cada promoción; cuando es posible, se conserva el vínculo con el alumno y sus pedidos anteriores. El listado de adultos y niños se consulta desde el panel de administración. El administrador conserva la lista de adultos y niños.
 
 Cada promoción permite cinco prendas acumuladas a precio promocional por alumno inscrito, incluidas las compradas con su código desde la tienda general. Un pedido se asigna a un alumno concreto. El enlace común no contiene credenciales de ningún miembro.
 
