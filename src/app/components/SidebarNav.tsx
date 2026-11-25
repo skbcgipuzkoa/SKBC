@@ -36,6 +36,7 @@ const sectionItems: NavItem[] = [
   { label: "Cursos", href: "/cursos" },
   { label: "Calendario", href: "/calendario" },
   { label: "Pedidos", href: "/pedidos-cinturones" },
+  { label: "Tienda", href: "/pedidos-cinturones/tienda" },
   { label: "Proximos examenes", href: "/proximos-examenes" },
   { label: "Rankings", href: "/rankings" },
   { label: "Avisos", href: "/avisos" },
