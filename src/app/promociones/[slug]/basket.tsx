@@ -1,7 +1,7 @@
 "use client";
 
-import { Tag } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Minus, Plus, Tag } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { euros, generalShopSlug, type PromotionVariant } from "@/lib/shop/promotion";
 import { promotionQuote, submitPromotion } from "../actions";
 import { PromotionPhoto } from "./photo";
@@ -26,6 +26,8 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
   const [revision, setRevision] = useState(initialRevision);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const checkoutFeedback = useRef<HTMLElement | null>(null);
   const [receipt, setReceipt] = useState<{ id: string; total: number; payment?: PaymentDetails }>();
   const [attempt, setAttempt] = useState<Attempt>();
   const selection = variants.flatMap(({ id }) => quantities[id] > 0 ? [{ id, quantity: quantities[id] }] : []);
@@ -44,7 +46,17 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
   const currentTotal = variants.reduce((total, variant) => total + (quantities[variant.id] ?? 0) *
     (quote?.lines.find(line => line.id === variant.id)?.price ?? variant.original), 0);
 
-  async function apply() {
+  useEffect(() => {
+    if (error || receipt) checkoutFeedback.current?.focus();
+  }, [error, receipt]);
+
+  function setQuantity(id: string, quantity: number) {
+    setQuantities(current => ({ ...current, [id]: Math.max(0, Math.min(2147483647, quantity)) }));
+    setError("");
+  }
+
+  async function apply()
+ {
     setBusy(true);
     setCodeError("");
     setError("");
@@ -63,6 +75,7 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
     event.preventDefault();
     const fields = new FormData(event.currentTarget);
     setBusy(true);
+    setSubmitting(true);
     setError("");
     try {
       if (attempt) {
@@ -72,20 +85,26 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
       const latest = await promotionQuote({ slug, code });
       setQuote(latest);
       setRevision(latest.revision);
-      if ((quote && (quote.status !== latest.status || quote.offerRevision !== latest.offerRevision)) || (revision && revision !== latest.revision) || (!quote && code.trim())) {
-        setError("Revisa el total actualizado y confirma de nuevo.");
+      if (latest.status === "invalid") {
+        setError("El código promocional no es válido. Revísalo antes de confirmar.");
         return;
       }
-      if (latest.status === "invalid") return;
+      if ((quote && (quote.status !== latest.status || quote.offerRevision !== latest.offerRevision)) || (revision && revision !== latest.revision) || (!quote && code.trim())) {
+        setError(latest.status === "applied"
+          ? "Código aplicado. Revisa el importe y pulsa Confirmar pedido."
+          : "El importe se ha actualizado. Revísalo y pulsa Confirmar pedido.");
+        return;
+      }
       const body = {
         slug, code, selection, revision: latest.revision, offerRevision: latest.offerRevision, status: latest.status, total: currentTotal,
         customer: String(fields.get("customer") ?? ""), contact: String(fields.get("contact") ?? ""), notes: String(fields.get("notes") ?? "")
       };
-      await send({ ...body, id: crypto.randomUUID() }, restricted ? latest.payment : undefined);
+      await send({ ...body, id: latest.requestId }, restricted ? latest.payment : undefined);
     } catch {
-      setError("No se ha podido verificar la confirmación. Puedes reintentarlo.");
+      setError("No hemos podido comprobar si el pedido se guardó. Vuelve a intentarlo desde esta pantalla.");
     } finally {
       setBusy(false);
+      setSubmitting(false);
     }
   }
 
@@ -100,7 +119,7 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
     else setError("No se pudo confirmar el pedido. Comprueba los datos e inténtalo de nuevo.");
   }
 
-  if (receipt) return <section className={styles.card} role="status">
+  if (receipt) return <section className={styles.card} role="status" tabIndex={-1} ref={checkoutFeedback}>
     <h2>Pedido recibido</h2>
     <p>Referencia {receipt.id}</p>
     {receipt.payment ? <>
@@ -109,7 +128,7 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
     </> : null}
   </section>;
 
-  return <form className={styles.stack} onSubmit={checkout}>
+  return <form className={styles.stack} onSubmit={checkout} data-no-global-feedback="true">
     <fieldset disabled={busy || !!attempt} className={styles.stack}>
       <section className={`${styles.card} ${styles.promoCode}`} aria-labelledby="promotion-code-title">
         <h2 id="promotion-code-title"><Tag size={20} aria-hidden="true" /> Código promocional</h2>
@@ -155,9 +174,21 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
                   {variant}
                   {!uniform ? <ProductPrice original={original} offer={advertisedOffer} /> : null}
                 </label>
-                <input id={id} aria-label={"Cantidad de " + product + " " + variant} type="number" min={0} max={2147483647} step={1} value={quantities[id] ?? 0} onChange={event =>
-                  setQuantities({ ...quantities, [id]: Number(event.target.value) })
-                } />
+                <div className={styles.quantityControls}>
+                  <button type="button" aria-label={"Quitar una unidad de " + product + " " + variant}
+                    disabled={!quantities[id]} onClick={() => setQuantity(id, (quantities[id] ?? 0) - 1)}>
+                    <Minus size={16} aria-hidden="true" />
+                  </button>
+                  <input id={id} aria-label={"Cantidad de " + product + " " + variant} inputMode="numeric" pattern="[0-9]*"
+                    placeholder="0" value={quantities[id] || ""} onChange={event => {
+                      const value = event.target.value;
+                      if (/^\d*$/.test(value)) setQuantity(id, Number(value));
+                    }} />
+                  <button type="button" aria-label={"Añadir una unidad de " + product + " " + variant}
+                    onClick={() => setQuantity(id, (quantities[id] ?? 0) + 1)}>
+                    <Plus size={16} aria-hidden="true" />
+                  </button>
+                </div>
               </div>;
             })}
           </section>;
@@ -176,9 +207,11 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
           <label>Teléfono o correo de contacto<input name="contact" required minLength={5} maxLength={160} /></label>
         </> : null}
         <label>Observaciones<textarea name="notes" maxLength={1000} /></label>
-        {error ? <p role="alert">{error}</p> : null}
         {paymentNotice ? <PaymentNotice payment={paymentNotice} /> : null}
-        <button disabled={!selection.length || quote?.status === "invalid"}>Confirmar pedido</button>
+        {error ? <p className={styles.checkoutError} role="alert" ref={element => { checkoutFeedback.current = element; }} tabIndex={-1}>{error}</p> : null}
+        <button className={styles.confirmOrder} disabled={!selection.length || quote?.status === "invalid"}>
+          {submitting ? "Enviando pedido…" : "Confirmar pedido"}
+        </button>
       </section>
     </fieldset>
     {attempt && !busy ? <button type="submit">Comprobar o reintentar el envío</button> : null}

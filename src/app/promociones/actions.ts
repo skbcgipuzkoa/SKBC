@@ -1,6 +1,6 @@
 "use server";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveClubMemberByName } from "@/lib/shop/club-access";
@@ -32,6 +32,7 @@ export async function promotionQuote(input: unknown) {
   const eligible = new Set(offer?.variants.map(variant => variant.id));
   const live = promotion.slug !== generalShopSlug && Date.parse(promotion.expires_at) > Date.now();
   return {
+    requestId: randomUUID(),
     revision: promotion.revision,
     payment: promotionPaymentDetails(offer && quote.status === "applied" ? offer : promotion),
     offerRevision: offer?.revision ?? null,
@@ -87,6 +88,9 @@ export async function submitPromotion(input: unknown) {
     p_offer_revision: attributed ? offer.revision : null,
     p_member_id: member?.id ?? null, p_family_id: member?.familyId ?? null
   });
-  if (error) throw error;
+  if (error) {
+    console.error("Promotion order database error", error.code);
+    throw error;
+  }
   return data as "saved" | "conflict" | "changed" | "limit" | "member";
 }

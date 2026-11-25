@@ -38,3 +38,16 @@
 @media (max-width: 440px) {
   .promoCodeControls { grid-template-columns: minmax(0, 1fr); }
 }
+
+.line { grid-template-columns: minmax(0, 1fr) auto; }
+.quantityControls { display: grid; grid-template-columns: 44px minmax(3rem, 4rem) 44px; gap: .3rem; align-items: center; }
+.quantityControls input { text-align: center; border: 1px solid #9caec3; border-radius: .45rem; padding: .3rem; }
+.quantityControls button { display: grid; place-items: center; color: #173c71; border: 1px solid #a7bad0; background: #edf5ff; border-radius: .45rem; padding: 0; margin: .3rem 0; }
+.quantityControls button:disabled { opacity: .55; }
+.checkoutError { padding: .75rem; border-left: 3px solid #a23a33; color: #842823; background: #fff0ef; }
+.confirmOrder { width: 100%; color: white; background: #184f98; border: 0; border-radius: .55rem; padding: .65rem; font-weight: 700; }
+.confirmOrder:disabled { color: #3c4e65; background: #d1dce9; }
+
+@media (max-width: 360px) {
+  .line { grid-template-columns: minmax(0, 1fr); }
+}
