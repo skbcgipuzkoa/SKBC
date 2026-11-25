@@ -4,6 +4,7 @@ import { Minus, Plus, Tag } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { euros, generalShopSlug, type PromotionVariant } from "@/lib/shop/promotion";
 import { promotionQuote, submitPromotion } from "../actions";
+import { plannedPaymentLabels } from "@/lib/shop/order-management";
 import { PromotionPhoto } from "./photo";
 import styles from "./promotion.module.css";
 
@@ -14,7 +15,7 @@ const messages = {
   invalid: "El código no es válido para esta promoción."
 };
 
-type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; offerRevision: string | null; status: string; total: number; customer: string; contact: string; notes: string };
+type Attempt = { id: string; slug: string; code: string; selection: { id: string; quantity: number }[]; revision: string; offerRevision: string | null; status: string; total: number; customer: string; contact: string; notes: string; paymentMethod?: string };
 
 type PaymentDetails = { deadline: string; bizumPhone: string };
 
@@ -97,7 +98,8 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
       }
       const body = {
         slug, code, selection, revision: latest.revision, offerRevision: latest.offerRevision, status: latest.status, total: currentTotal,
-        customer: String(fields.get("customer") ?? ""), contact: String(fields.get("contact") ?? ""), notes: String(fields.get("notes") ?? "")
+        customer: String(fields.get("customer") ?? ""), contact: String(fields.get("contact") ?? ""), notes: String(fields.get("notes") ?? ""),
+        paymentMethod: String(fields.get("paymentMethod") ?? "") || undefined
       };
       await send({ ...body, id: latest.requestId }, restricted ? latest.payment : undefined);
     } catch {
@@ -207,6 +209,12 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
           <label>Nombre para el pedido<input name="customer" required minLength={2} maxLength={160} autoComplete="name" /></label>
           <label>Teléfono o correo de contacto<input name="contact" required minLength={5} maxLength={160} /></label>
         </> : null}
+        <label>Forma de pago prevista (opcional)
+          <select name="paymentMethod" defaultValue="">
+            <option value="">Sin indicar</option>
+            {Object.entries(plannedPaymentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
         <label>Observaciones<textarea name="notes" maxLength={1000} /></label>
         {paymentNotice ? <PaymentNotice payment={paymentNotice} /> : null}
         {error ? <p className={styles.checkoutError} role="alert" ref={element => { checkoutFeedback.current = element; }} tabIndex={-1}>{error}</p> : null}

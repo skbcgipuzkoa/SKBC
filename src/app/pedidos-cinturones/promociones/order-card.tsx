@@ -1,5 +1,5 @@
 import { euros } from "@/lib/shop/promotion";
-import { promotionPaymentLabels, promotionDeliveryLabels } from "@/lib/shop/order-management";
+import { plannedPaymentLabels, promotionPaymentLabels, promotionDeliveryLabels } from "@/lib/shop/order-management";
 import type { PromotionAdminOrder } from "@/lib/shop/admin-orders";
 import { updatePromotionOrderManagement } from "./actions";
 import styles from "./promotions.module.css";
@@ -19,7 +19,7 @@ export function PromotionOrderCard({ order, slug, managed, manageFailed, fromCol
         <span className={styles.orderStatus} data-tone={order.payment_status === "pending" ? "red" : "green"}>{promotionPaymentLabels[order.payment_status]}</span>
         <span className={styles.orderStatus} data-tone={order.delivery_status === "delivered" ? "green" : "yellow"}>{promotionDeliveryLabels[order.delivery_status]}</span>
       </div>
-      <p>{date.format(new Date(order.created_at))}</p>
+      <p>{date.format(new Date(order.created_at))} · Forma de pago prevista: {order.planned_payment_method ? plannedPaymentLabels[order.planned_payment_method] : "Sin indicar"}</p>
       {managed === order.id ? <p className="save-ok" role="status">Estados del pedido guardados.</p> : null}
       {manageFailed === order.id ? <p className="form-error" role="alert">No se guardaron los estados. Revisa los valores actuales antes de volver a guardar.</p> : null}
       <form key={order.management_revision} action={updatePromotionOrderManagement} className={`form-grid ${styles.fields} ${styles.managementFields}`}>

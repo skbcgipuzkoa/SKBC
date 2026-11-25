@@ -11,3 +11,10 @@ export const promotionDeliveryLabels = {
 
 export type PromotionPaymentStatus = keyof typeof promotionPaymentLabels;
 export type PromotionDeliveryStatus = keyof typeof promotionDeliveryLabels;
+
+export const plannedPaymentLabels = {
+  bizum: "Bizum",
+  cash: "En mano"
+} as const;
+
+export type PlannedPaymentMethod = keyof typeof plannedPaymentLabels;

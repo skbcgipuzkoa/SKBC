@@ -53,13 +53,14 @@ const checkoutSchema = basketSchema.extend({
   status: z.enum(["none", "invalid", "expired", "applied"]),
   customer: z.string().trim().max(160),
   contact: z.string().trim().max(160),
-  notes: z.string().trim().max(1000)
+  notes: z.string().trim().max(1000),
+  paymentMethod: z.enum(["bizum", "cash"]).optional()
 });
 
 export async function submitPromotion(input: unknown) {
   const parsed = checkoutSchema.safeParse(input);
   if (!parsed.success || !parsed.data.selection.length) return "invalid";
-  const { id, slug, revision, offerRevision, total, status, code, selection, customer, contact, notes } = parsed.data;
+  const { id, slug, revision, offerRevision, total, status, code, selection, customer, contact, notes, paymentMethod } = parsed.data;
   const hash = createHash("sha256").update(JSON.stringify(parsed.data)).digest("hex");
   const client = createAdminClient();
   const existing = await client.from("shop_promotion_orders").select("request_hash").eq("id", id).maybeSingle();
@@ -79,7 +80,7 @@ export async function submitPromotion(input: unknown) {
   if (restricted && name.split(" ").length < 2) return "name";
   const member = restricted ? await getActiveClubMemberByName(customer) : null;
   if (!restricted && (customer.length < 2 || contact.length < 5)) return "invalid";
-  const { data, error } = await client.rpc("shop_submit_named_order", {
+  const { data, error } = await client.rpc("shop_submit_order_with_payment_method", {
     p_slug: slug, p_revision: revision, p_id: id, p_customer: member?.display_name ?? customer, p_contact: restricted ? "" : contact,
     p_notes: notes, p_lines: quote.lines.map(({ id, product, variant, original, quantity, price }) => ({
       id, product, variant, original, quantity, price,
@@ -87,11 +88,12 @@ export async function submitPromotion(input: unknown) {
     })), p_total: total, p_discount: status === "applied" && (!offer || !!attributed), p_hash: hash,
     p_offer_slug: attributed ? offer.slug : null,
     p_offer_revision: attributed ? offer.revision : null,
-    p_member_id: member?.id ?? null, p_family_id: member?.familyId ?? null
+    p_member_id: member?.id ?? null, p_family_id: member?.familyId ?? null,
+    p_payment_method: paymentMethod ?? null
   });
   if (error) {
     console.error("Promotion order database error", error.code);
     throw error;
   }
-  return data as "saved" | "conflict" | "changed" | "limit" | "member" | "name";
+  return data as "saved" | "conflict" | "changed" | "limit" | "member" | "name" | "invalid";
 }
