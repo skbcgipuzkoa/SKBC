@@ -5,6 +5,7 @@ import { SidebarNav } from "@/app/components/SidebarNav";
 import { listClubMembers } from "@/lib/shop/club-access";
 import { requirePromotionAdmin } from "@/lib/shop/admin";
 import { euros, generalShopSlug, summarizePromotion, type QuotedLine } from "@/lib/shop/promotion";
+import { promotionCatalogGroups } from "@/lib/shop/promotion-editor-options";
 import { getPromotion, promotionPath, promotionUrl, sharePromotion } from "@/lib/shop/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listCatalog } from "@/lib/web-orders/repository";
@@ -105,9 +106,9 @@ export default async function ManagePromotions({ searchParams }: {
         </nav>
 
         <div className={styles.stack}>
-          {params.published ? <p className="save-ok" role="status">Variantes publicadas en la tienda general.</p> : null}
+          {params.published ? <p className="save-ok" role="status">Prendas publicadas en la tienda general con sus tallas.</p> : null}
           {params.saved ? <p className="save-ok" role="status">Promoción guardada.</p> : null}
-          {params.error ? <p className="form-error" role="alert">{params.error === "expiry" ? "Selecciona un día y una hora válidos en el horario peninsular." : params.error === "publish" ? "Selecciona al menos una variante y vuelve a cargar si la promoción ha cambiado." : params.error === "invalid" ? "Revisa el código, la fecha y los precios de las variantes." : "No se pudo guardar. Comprueba el identificador y vuelve a cargar si otra persona editó la promoción."}</p> : null}
+          {params.error ? <p className="form-error" role="alert">{params.error === "expiry" ? "Selecciona un día y una hora válidos en el horario peninsular." : params.error === "publish" ? "Selecciona al menos una prenda y vuelve a cargar si la promoción ha cambiado." : params.error === "invalid" ? "Revisa el código, la fecha y los precios de las variantes." : "No se pudo guardar. Comprueba el identificador y vuelve a cargar si otra persona editó la promoción."}</p> : null}
 
           {promotion ? <>
             <section className={`card ${styles.panel}`}>
@@ -141,11 +142,12 @@ export default async function ManagePromotions({ searchParams }: {
                 <input type="hidden" name="slug" value={promotion.slug} />
                 <input type="hidden" name="revision" value={promotion.revision} />
                 <div className={styles.checklist}>
-                  {promotion.variants.map(variant => <label key={variant.id}>
-                    <input type="checkbox" name="catalog_variant" value={variant.id} /> {variant.product} · {variant.variant}
+                  {promotionCatalogGroups(promotion.variants).map(group => <label key={group.key}>
+                    <input type="checkbox" name="catalog_group" value={group.key} />
+                    <span><strong>{group.title}</strong><small>{group.sizes.join(" · ")}</small></span>
                   </label>)}
                 </div>
-                <button className="secondary-link">Publicar variantes seleccionadas</button>
+                <button className="secondary-link">Publicar prendas seleccionadas</button>
               </form> : null}
             </section>
 

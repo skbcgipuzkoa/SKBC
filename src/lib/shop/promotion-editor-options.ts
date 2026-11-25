@@ -78,3 +78,27 @@ export function groupPromotionRows(variants: PromotionEditorVariant[]): Promotio
     return [{ ...row, sizes: included.map(({ id, variant }) => ({ id, variant })) }];
   });
 }
+
+export function promotionCatalogGroups(variants: readonly { id: string; product: string; variant: string }[]) {
+  const groups = new Map<string, {
+    key: string; title: string; sizes: string[]; ids: string[]; profile?: typeof promotionSizeProfiles[number];
+  }>();
+  for (const variant of variants) {
+    const profile = promotionSizeProfiles.find(item => item.sizes.some(size => promotionSizeLabel(item, size) === variant.variant));
+    const groupLabel = profile?.label.split(" · ")[1];
+    const key = JSON.stringify([variant.product, profile?.label ?? ""]);
+    let group = groups.get(key);
+    if (!group) {
+      const title = groupLabel && !variant.product.toLocaleLowerCase("es").includes(groupLabel.toLocaleLowerCase("es"))
+        ? variant.product + " · " + groupLabel : variant.product;
+      group = { key, title, sizes: [], ids: [], profile };
+      groups.set(key, group);
+    }
+    group.ids.push(variant.id);
+    group.sizes.push(profile ? variant.variant.split(" · ").at(-1)! : variant.variant);
+  }
+  return [...groups.values()].map(({ profile, sizes, ...group }) => ({
+    ...group,
+    sizes: profile ? profile.sizes.filter(size => sizes.includes(size)) : [...new Set(sizes)]
+  }));
+}

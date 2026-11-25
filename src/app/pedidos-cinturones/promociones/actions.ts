@@ -3,7 +3,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { promotionDeadline } from "@/lib/shop/promotion-editor-options";
+import { promotionCatalogGroups, promotionDeadline } from "@/lib/shop/promotion-editor-options";
+import { getPromotion } from "@/lib/shop/repository";
 import { requirePromotionAdmin } from "@/lib/shop/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -70,14 +71,22 @@ export async function savePromotion(form: FormData) {
 
 export async function publishCatalog(form: FormData) {
   await requirePromotionAdmin();
-  const parsed = z.object({ slug: slugSchema, revision: z.string().uuid(), ids: z.array(z.string().uuid()).min(1).max(200) })
-    .safeParse({ slug: form.get("slug"), revision: form.get("revision"), ids: form.getAll("catalog_variant") });
+  const parsed = z.object({ slug: slugSchema, revision: z.string().uuid(), groups: z.array(z.string().max(512)).min(1).max(200) })
+    .safeParse({ slug: form.get("slug"), revision: form.get("revision"), groups: form.getAll("catalog_group") });
   if (!parsed.success) redirect("/pedidos-cinturones/promociones?error=publish");
-  const { slug, revision, ids } = parsed.data;
+  const { slug, revision, groups } = parsed.data;
+  const back = "/pedidos-cinturones/promociones?promo=" + encodeURIComponent(slug);
+  const promotion = await getPromotion(slug);
+  if (!promotion || promotion.revision !== revision) redirect(back + "&error=publish");
+
+  const keys = new Set(groups);
+  const selected = promotionCatalogGroups(promotion.variants).filter(group => keys.has(group.key));
+  if (selected.length !== keys.size) redirect(back + "&error=publish");
+  const ids = selected.flatMap(group => group.ids);
   const { data, error } = await createAdminClient().rpc("shop_publish_catalog", {
     p_slug: slug, p_revision: revision, p_variants: ids
   });
-  redirect("/pedidos-cinturones/promociones?promo=" + encodeURIComponent(slug) +
+  redirect(back +
     (error || !data ? "&error=publish" : "&published=1"));
 }
 export async function uploadPromotionImage(form: FormData) {
