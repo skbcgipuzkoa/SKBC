@@ -41,10 +41,25 @@ export async function PromotionCollections({ managed, manageFailed, campaign, re
     <h2 id="promotion-collections-heading">Cobros de promociones</h2>
     {manageFailed === "invalid" ? <p className="form-error" role="alert">No se pudo guardar el pedido. Revisa los datos y vuelve a intentarlo.</p> : null}
     {groups.size === 0 ? <p>Todavía no hay pedidos de la tienda.</p> : null}
-    {Array.from(groups, ([slug, orders]) => <section key={slug} className={styles.collectionGroup}>
-      <h3>{slug === generalShopSlug ? "Tienda general" : titles.get(slug) ?? slug} · {orders.length} {orders.length === 1 ? "pedido" : "pedidos"}</h3>
-      {orders.map(order => <PromotionOrderCard key={order.id} order={order} slug={slug}
-        managed={managed} manageFailed={manageFailed} campaign={campaign} returnTo={returnTo} fromCollections />)}
-    </section>)}
+    {Array.from(groups, ([slug, orders]) => {
+      const title = slug === generalShopSlug ? "Tienda general" : titles.get(slug) ?? slug;
+      const paid = orders.filter(order => order.payment_status !== "pending").length;
+      const delivered = orders.filter(order => order.delivery_status === "delivered").length;
+      const recentlyEdited = orders.some(order => order.id === managed || order.id === manageFailed);
+      return <details key={slug} className={`material-section ${styles.collectionGroup}`} open={recentlyEdited || undefined}>
+        <summary className="material-section-heading">
+          <h3>Pedido conjunto · {title}</h3>
+          <div className={styles.orderStatuses}>
+            <span>{orders.length} {orders.length === 1 ? "pedido" : "pedidos"}</span>
+            <span className={styles.orderStatus} data-tone={paid === orders.length ? "green" : paid ? "yellow" : "red"}>{paid}/{orders.length} pagados</span>
+            <span className={styles.orderStatus} data-tone={delivered === orders.length ? "green" : delivered || paid ? "yellow" : "red"}>{delivered}/{orders.length} entregados</span>
+          </div>
+        </summary>
+        <div className={styles.collectionOrders}>
+          {orders.map(order => <PromotionOrderCard key={order.id} order={order} slug={slug}
+            managed={managed} manageFailed={manageFailed} campaign={campaign} returnTo={returnTo} fromCollections />)}
+        </div>
+      </details>;
+    })}
   </section>;
 }

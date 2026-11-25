@@ -15,6 +15,10 @@ export function PromotionOrderCard({ order, slug, managed, manageFailed, fromCol
         <h3>{order.customer}</h3>
         <strong>{euros.format(order.total_cents / 100)}</strong>
       </div>
+      <div className={styles.orderStatuses}>
+        <span className={styles.orderStatus} data-tone={order.payment_status === "pending" ? "red" : "green"}>{promotionPaymentLabels[order.payment_status]}</span>
+        <span className={styles.orderStatus} data-tone={order.delivery_status === "delivered" ? "green" : "yellow"}>{promotionDeliveryLabels[order.delivery_status]}</span>
+      </div>
       <p>{date.format(new Date(order.created_at))}</p>
       {managed === order.id ? <p className="save-ok" role="status">Estados del pedido guardados.</p> : null}
       {manageFailed === order.id ? <p className="form-error" role="alert">No se guardaron los estados. Revisa los valores actuales antes de volver a guardar.</p> : null}
