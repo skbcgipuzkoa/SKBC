@@ -84,3 +84,9 @@
 .supplierTable td { color: #516078; }
 .supplierTable td[data-ordered="true"] { background: #e5f0ff; color: #173c71; font-weight: 750; }
 .supplierTable .supplierTotal { background: #eef4fb; color: #152c52; font-weight: 750; }
+
+.supplierTable thead { display: table-header-group; }
+.supplierTable tbody { display: table-row-group; width: auto; }
+.supplierTable tr { display: table-row; width: auto; border: 0; border-radius: 0; margin: 0; padding: 0; }
+.supplierTable td, .supplierTable th { display: table-cell; width: auto; }
+.supplierTable td::before { content: none; }
