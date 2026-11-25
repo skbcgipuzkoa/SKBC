@@ -9,6 +9,15 @@ const date = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: 
 export function PromotionOrderCard({ order, slug, managed, manageFailed, fromCollections, campaign, returnTo }: {
   order: PromotionAdminOrder; slug: string; managed?: string; manageFailed?: string; fromCollections?: boolean; campaign?: string; returnTo?: string;
 }) {
+  const canConfirmBizum = order.planned_payment_method === "bizum" && order.payment_status === "pending";
+  const managementFields = <>
+    <input type="hidden" name="id" value={order.id} />
+    <input type="hidden" name="slug" value={slug} />
+    {fromCollections ? <input type="hidden" name="origin" value="collections" /> : null}
+    {campaign ? <input type="hidden" name="campaign" value={campaign} /> : null}
+    {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
+    <input type="hidden" name="revision" value={order.management_revision} />
+  </>;
   return <article className={styles.order} key={order.id} id={"pedido-" + order.id}>
     <div className={styles.orderManagement}>
       <div className={styles.panelHeading}>
@@ -23,12 +32,7 @@ export function PromotionOrderCard({ order, slug, managed, manageFailed, fromCol
       {managed === order.id ? <p className="save-ok" role="status">Estados del pedido guardados.</p> : null}
       {manageFailed === order.id ? <p className="form-error" role="alert">No se guardaron los estados. Revisa los valores actuales antes de volver a guardar.</p> : null}
       <form key={order.management_revision} action={updatePromotionOrderManagement} className={`form-grid ${styles.fields} ${styles.managementFields}`}>
-        <input type="hidden" name="id" value={order.id} />
-        <input type="hidden" name="slug" value={slug} />
-        {fromCollections ? <input type="hidden" name="origin" value="collections" /> : null}
-        {campaign ? <input type="hidden" name="campaign" value={campaign} /> : null}
-        {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
-        <input type="hidden" name="revision" value={order.management_revision} />
+        {managementFields}
         <label>Pago<select name="payment" defaultValue={order.payment_status} aria-label={"Pago de " + order.customer}>
           {Object.entries(promotionPaymentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></label>
@@ -37,6 +41,12 @@ export function PromotionOrderCard({ order, slug, managed, manageFailed, fromCol
         </select></label>
         <button className="secondary-link">Guardar estados</button>
       </form>
+      {canConfirmBizum ? <form action={updatePromotionOrderManagement} className={styles.confirmBizum}>
+        {managementFields}
+        <input type="hidden" name="payment" value="bizum" />
+        <input type="hidden" name="delivery" value={order.delivery_status} />
+        <button type="submit" className="primary-link">Confirmar Bizum recibido</button>
+      </form> : null}
     </div>
     <details>
       <summary>Ver prendas y tallas</summary>
