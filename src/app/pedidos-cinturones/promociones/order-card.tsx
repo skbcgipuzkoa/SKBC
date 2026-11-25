@@ -54,8 +54,8 @@ export function PromotionOrderCard({ order, slug, managed, manageFailed, fromCol
         <p>Referencia {order.id}</p>
         {order.contact ? <p>Contacto {order.contact}</p> : null}
         <p>{order.discount_applied ? "Con código de descuento" : "Precio original"}</p>
-        <ul className={styles.lines}>{order.lines.map(line => <li key={line.id}>
-          <span>{line.quantity} × {line.product} · {line.variant}</span><strong>{euros.format(line.price / 100)} por unidad</strong>
+        <ul className={styles.lines}>{order.lines.map((line, index) => <li key={line.id + ":" + index}>
+          <span>{line.quantity} × {line.product} · {line.variant}{line.recipient ? " · Para " + line.recipient : ""}</span><strong>{euros.format(line.price / 100)} por unidad</strong>
         </li>)}</ul>
         {order.notes ? <p>{order.notes}</p> : null}
         {order.paid_at ? <p>Pago registrado el {date.format(new Date(order.paid_at))}</p> : null}

@@ -18,12 +18,10 @@ const getConnection = cache(async () => {
   return { origin: url.origin, headers: { apikey: key, Authorization: "Bearer " + key } };
 });
 
-export async function materialRequest(path: string, body?: object) {
+async function materialRequest(path: string) {
   const { origin, headers } = await getConnection();
   return fetch(origin + "/rest/v1/" + path, {
-    headers: body ? { ...headers, "Content-Type": "application/json" } : headers,
-    method: body ? "POST" : "GET",
-    body: body ? JSON.stringify(body) : undefined,
+    headers,
     cache: "no-store",
     signal: AbortSignal.timeout(12000)
   });

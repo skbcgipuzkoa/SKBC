@@ -2,9 +2,10 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
+import { loadMaterialProducts } from "../tienda/material";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveClubMemberByName } from "@/lib/shop/club-access";
-import { getCatalogOffer, getPromotion, promotionPaymentDetails, type Promotion } from "@/lib/shop/repository";
+import { getCatalogOffer, getPromotion, promotionPaymentDetails, shopBizumPhone, type Promotion } from "@/lib/shop/repository";
 import { generalShopSlug, normalizeClubMemberName, quotePromotion, type Selection } from "@/lib/shop/promotion";
 
 const basketSchema = z.object({
@@ -54,24 +55,43 @@ const checkoutSchema = basketSchema.extend({
   customer: z.string().trim().max(160),
   contact: z.string().trim().max(160),
   notes: z.string().trim().max(1000),
-  paymentMethod: z.enum(["bizum", "cash"]).optional()
+  paymentMethod: z.enum(["bizum", "cash"]).optional(),
+  store: z.object({ material: z.array(z.object({ id: z.string().uuid(), quantity: z.number().int().min(1).max(10),
+    recipient: z.string().trim().min(1).max(120) })).max(30) }).optional()
 });
 
 export async function submitPromotion(input: unknown) {
   const parsed = checkoutSchema.safeParse(input);
-  if (!parsed.success || !parsed.data.selection.length) return "invalid";
-  const { id, slug, revision, offerRevision, total, status, code, selection, customer, contact, notes, paymentMethod } = parsed.data;
+  if (!parsed.success) return "invalid";
+  const { id, slug, revision, offerRevision, total, status, code, selection, customer, contact, notes, paymentMethod, store } = parsed.data;
+  if (store && (slug !== generalShopSlug || !paymentMethod)) return "invalid";
+  if (!selection.length && !store?.material.length) return "invalid";
   const hash = createHash("sha256").update(JSON.stringify(parsed.data)).digest("hex");
   const client = createAdminClient();
   const existing = await client.from("shop_promotion_orders").select("request_hash").eq("id", id).maybeSingle();
   if (existing.error) throw existing.error;
   if (existing.data) return existing.data.request_hash === hash ? "saved" : "conflict";
+  if (store && paymentMethod === "bizum" && !shopBizumPhone()) return "invalid";
   const promotion = await getPromotion(slug);
   if (!promotion?.active || promotion.revision !== revision) return "changed";
   const { quote, offer } = await priceBasket(promotion, code, selection);
   if ((offer?.revision ?? null) !== offerRevision) return "changed";
-  if (quote.total !== total || quote.status !== status) return "changed";
+  if (quote.status !== status) return "changed";
   if (status === "invalid") return "invalid";
+
+  const materialLines: { id: string; product: string; variant: string; recipient: string; original: number; price: number; quantity: number }[] = [];
+  if (store?.material.length) {
+    const productOptions = new Map((await loadMaterialProducts()).flatMap(product =>
+      product.options.map(option => [option.id, { product: product.name, variant: option.label, price: option.price }] as const)
+    ));
+    for (const { id, quantity, recipient } of store.material) {
+      const option = productOptions.get(id);
+      if (!option) return "changed";
+      materialLines.push({ id, quantity, recipient, ...option, original: option.price });
+    }
+  }
+  const expectedTotal = quote.total + materialLines.reduce((sum, line) => sum + line.price * line.quantity, 0);
+  if (expectedTotal !== total) return "changed";
 
   const eligible = new Set(offer?.variants.map(variant => variant.id));
   const attributed = status === "applied" && offer && quote.lines.some(line => eligible.has(line.id));
@@ -79,13 +99,13 @@ export async function submitPromotion(input: unknown) {
   const name = restricted ? normalizeClubMemberName(customer) : "";
   if (restricted && name.split(" ").length < 2) return "name";
   const member = restricted ? await getActiveClubMemberByName(customer) : null;
-  if (!restricted && (customer.length < 2 || contact.length < 5)) return "invalid";
+  if ((!restricted || store) && (customer.length < 2 || contact.length < 5)) return "invalid";
   const { data, error } = await client.rpc("shop_submit_order_with_payment_method", {
-    p_slug: slug, p_revision: revision, p_id: id, p_customer: member?.display_name ?? customer, p_contact: restricted ? "" : contact,
-    p_notes: notes, p_lines: quote.lines.map(({ id, product, variant, original, quantity, price }) => ({
+    p_slug: slug, p_revision: revision, p_id: id, p_customer: member?.display_name ?? customer, p_contact: restricted && !store ? "" : contact,
+    p_notes: notes, p_lines: [...quote.lines.map(({ id, product, variant, original, quantity, price }) => ({
       id, product, variant, original, quantity, price,
       ...(attributed && eligible.has(id) ? { offer: offer.slug } : {})
-    })), p_total: total, p_discount: status === "applied" && (!offer || !!attributed), p_hash: hash,
+    })), ...materialLines], p_total: total, p_discount: status === "applied" && (!offer || !!attributed), p_hash: hash,
     p_offer_slug: attributed ? offer.slug : null,
     p_offer_revision: attributed ? offer.revision : null,
     p_member_id: member?.id ?? null, p_family_id: member?.familyId ?? null,

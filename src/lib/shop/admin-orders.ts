@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generalShopSlug, type QuotedLine } from "./promotion";
 import type { PlannedPaymentMethod, PromotionPaymentStatus, PromotionDeliveryStatus } from "./order-management";
 
-export type PromotionAdminOrder = { id: string; customer: string; contact: string; notes: string; created_at: string; lines: (QuotedLine & { offer?: string })[]; promotion_slug: string; offer_slug: string | null; total_cents: number; discount_applied: boolean; payment_status: PromotionPaymentStatus; delivery_status: PromotionDeliveryStatus; paid_at: string | null; delivered_at: string | null; management_revision: string; planned_payment_method: PlannedPaymentMethod | null };
+export type PromotionAdminOrder = { id: string; customer: string; contact: string; notes: string; created_at: string; lines: (QuotedLine & { offer?: string; recipient?: string })[]; promotion_slug: string; offer_slug: string | null; total_cents: number; discount_applied: boolean; payment_status: PromotionPaymentStatus; delivery_status: PromotionDeliveryStatus; paid_at: string | null; delivered_at: string | null; management_revision: string; planned_payment_method: PlannedPaymentMethod | null };
 
 export async function loadPromotionOrders(slug?: string) {
   const client = createAdminClient();

@@ -6,7 +6,6 @@ import { euros, generalShopSlug, type PromotionVariant } from "@/lib/shop/promot
 import { promotionQuote, submitPromotion } from "../actions";
 import { plannedPaymentLabels } from "@/lib/shop/order-management";
 import { PromotionPhoto } from "./photo";
-import { matchesStoreSection, StoreGrid, useStoreCategory, type StoreProduct } from "../../tienda/catalog";
 import styles from "./promotion.module.css";
 
 const messages = {
@@ -20,7 +19,7 @@ type Attempt = { id: string; slug: string; code: string; selection: { id: string
 
 type PaymentDetails = { deadline: string; bizumPhone: string };
 
-export function PromotionBasket({ slug, variants, initialRevision, payment, cover, storefront }: { slug: string; initialRevision: string; payment?: PaymentDetails; cover?: ReactNode; storefront?: StoreProduct[]; variants: (Omit<PromotionVariant, "offer"> & { advertisedOffer?: number })[] }) {
+export function PromotionBasket({ slug, variants, initialRevision, payment, cover }: { slug: string; initialRevision: string; payment?: PaymentDetails; cover?: ReactNode; variants: (Omit<PromotionVariant, "offer"> & { advertisedOffer?: number })[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
@@ -33,8 +32,6 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
   const [receipt, setReceipt] = useState<{ id: string; total: number; payment?: PaymentDetails }>();
   const [attempt, setAttempt] = useState<Attempt>();
   const selection = variants.flatMap(({ id }) => quantities[id] > 0 ? [{ id, quantity: quantities[id] }] : []);
-  const category = useStoreCategory();
-  const showStorefront = !storefront || storefront.some(product => matchesStoreSection(product, category)) || selection.length > 0;
   const selectedIds = new Set(selection.map(line => line.id));
   const restricted = slug !== generalShopSlug || (quote?.status === "applied" && quote.lines.some(line => line.eligible && selectedIds.has(line.id)));
   const paymentNotice = restricted ? (quote ? quote.payment : payment) : undefined;
@@ -128,20 +125,15 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
   if (receipt) return <section className={styles.card} role="status" tabIndex={-1} ref={checkoutFeedback}>
     <h2>Pedido recibido</h2>
     <p>Referencia {receipt.id}</p>
-    {storefront && !receipt.payment ? <p className={styles.total}>Total {euros.format(receipt.total / 100)}</p> : null}
     {receipt.payment ? <>
       <p className={styles.total}>Importe a pagar {euros.format(receipt.total / 100)}</p>
       <PaymentNotice payment={receipt.payment} />
     </> : null}
-    {storefront ? <button type="button" className="secondary-link" onClick={() => {
-      setReceipt(undefined);
-      setQuantities({});
-      setCode("");
-      setQuote(undefined);
-    }}>Seguir comprando</button> : null}
   </section>;
 
-  const codeField = <section className={`${styles.card} ${styles.promoCode}`} aria-labelledby="promotion-code-title">
+  return <form className={styles.stack} onSubmit={checkout} data-no-global-feedback="true">
+    <fieldset disabled={busy || !!attempt} className={styles.stack}>
+      <section className={`${styles.card} ${styles.promoCode}`} aria-labelledby="promotion-code-title">
         <h2 id="promotion-code-title"><Tag size={20} aria-hidden="true" /> Código promocional</h2>
         <p>Introduce tu código para aplicar el precio especial a tu pedido.</p>
         <div className={styles.promoCodeControls}>
@@ -160,13 +152,7 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
           <button type="button" onClick={apply} disabled={!code.trim()}>Aplicar código</button>
         </div>
         <p id="promotion-code-status" role="status" className={styles.promoCodeStatus}>{codeError || (quote ? messages[quote.status] : "")}</p>
-      </section>;
-
-  if (!showStorefront) return null;
-
-  return <form className={styles.stack} onSubmit={checkout} data-no-global-feedback="true">
-    <fieldset disabled={busy || !!attempt} className={styles.stack}>
-      {!storefront ? codeField : null}
+      </section>
       {cover}
       {restricted ? <section className={styles.card}>
         <h2>¿A nombre de quién es el pedido?</h2>
@@ -175,7 +161,7 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
         </label>
         <p>Máximo 5 prendas al precio promocional por persona, sumando sus pedidos de esta promoción.</p>
       </section> : null}
-      {storefront ? <StoreGrid products={storefront.map(product => ({ ...product, options: product.options.map(option => ({ ...option, price: quotedPrices.get(option.id)?.price ?? option.price })) }))} add={(_product, option, quantity) => setQuantity(option.id, (quantities[option.id] ?? 0) + quantity)} /> : <div className={styles.grid}>
+      <div className={styles.grid}>
         {[...groups].map(([product, options]) => {
           const first = options[0];
           const uniform = options.every(option => option.original === first.original && option.advertisedOffer === first.advertisedOffer);
@@ -210,15 +196,13 @@ export function PromotionBasket({ slug, variants, initialRevision, payment, cove
             })}
           </section>;
         })}
-      </div>}
-      {storefront && selection.length ? codeField : null}
-      <section hidden={!!storefront && !selection.length} className={styles.card} id={storefront ? "pedido-ropa" : undefined}>
-        <h2>{storefront ? "Tu pedido de ropa" : "Tu pedido"}</h2>
+      </div>
+      <section className={styles.card}>
+        <h2>Tu pedido</h2>
         <ul>{selection.map(({ id, quantity }) => {
           const item = variants.find(variant => variant.id === id)!;
           const price = quote?.lines.find(line => line.id === id)?.price ?? item.original;
-          return <li key={id}>{quantity} × {item.product} · {item.variant} — {euros.format(quantity * price / 100)}
-            {storefront ? <button type="button" onClick={() => setQuantity(id, 0)} aria-label={"Quitar " + item.product + " " + item.variant}>Quitar</button> : null}</li>;
+          return <li key={id}>{quantity} × {item.product} · {item.variant} — {euros.format(quantity * price / 100)}</li>;
         })}</ul>
         <p className={styles.total}>Total {euros.format(currentTotal / 100)}</p>
         {!restricted ? <>

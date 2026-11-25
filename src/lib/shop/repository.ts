@@ -34,13 +34,17 @@ const promotionDeadlineFormat = new Intl.DateTimeFormat("es-ES", {
   dateStyle: "full", timeStyle: "short", timeZone: "Europe/Madrid"
 });
 
+export function shopBizumPhone() {
+  const phone = process.env.SKBC_SHOP_BIZUM_PHONE?.replace(/\s/g, "") ?? "";
+  return /^\d{9}$/.test(phone) ? phone.replace(/(\d{3})(?=\d)/g, "$1 ") : "";
+}
+
 export function promotionPaymentDetails(promotion: Promotion) {
   const expiresAt = Date.parse(promotion.expires_at);
   if (promotion.slug === generalShopSlug || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return undefined;
-  const phone = process.env.SKBC_SHOP_BIZUM_PHONE?.replace(/\s/g, "") ?? "";
   return {
     deadline: promotionDeadlineFormat.format(expiresAt),
-    bizumPhone: /^\d{9}$/.test(phone) ? phone.replace(/(\d{3})(?=\d)/g, "$1 ") : ""
+    bizumPhone: shopBizumPhone()
   };
 }
 

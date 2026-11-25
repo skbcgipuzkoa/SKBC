@@ -25,20 +25,20 @@ export async function PromotionCollections({ managed, manageFailed, campaign, re
     titles = new Map(promotions.data.map(({ slug, title }) => [slug, title]));
     groups = new Map();
     for (const order of orders) {
-      const slug = order.offer_slug ?? order.promotion_slug;
+      const slug = order.promotion_slug;
       const group = groups.get(slug);
       if (group) group.push(order);
       else groups.set(slug, [order]);
     }
   } catch {
     return <section className={`panel ${styles.panel}`}>
-      <h2>Cobros de promociones</h2>
+      <h2>Cobros de tienda y promociones</h2>
       <p role="alert" className="form-error">No se pudieron cargar los pedidos de la tienda. Recarga la página para volver a intentarlo.</p>
     </section>;
   }
 
   return <section className={`panel ${styles.panel}`} aria-labelledby="promotion-collections-heading">
-    <h2 id="promotion-collections-heading">Cobros de promociones</h2>
+    <h2 id="promotion-collections-heading">Cobros de tienda y promociones</h2>
     {manageFailed === "invalid" ? <p className="form-error" role="alert">No se pudo guardar el pedido. Revisa los datos y vuelve a intentarlo.</p> : null}
     {groups.size === 0 ? <p>Todavía no hay pedidos de la tienda.</p> : null}
     {Array.from(groups, ([slug, orders]) => {

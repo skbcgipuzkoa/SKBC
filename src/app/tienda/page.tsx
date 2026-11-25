@@ -3,11 +3,10 @@ import type { Metadata } from "next";
 import { generalShopSlug } from "@/lib/shop/promotion";
 import { shopSection, type ShopSection } from "@/lib/shop/catalog-sections";
 import { promotionCatalogGroups } from "@/lib/shop/promotion-editor-options";
-import { getPromotion } from "@/lib/shop/repository";
-import { PromotionBasket } from "../promociones/[slug]/basket";
-import { StoreCategories, type StoreProduct } from "./catalog";
+import { getPromotion, shopBizumPhone } from "@/lib/shop/repository";
+import { StoreCheckout } from "./store-checkout";
+import type { StoreProduct } from "./catalog";
 import { clubWebsite, loadMaterialProducts, storeImage } from "./material";
-import { MaterialStore } from "./material-store";
 import styles from "./store.module.css";
 
 const edition2027 = new Set(["CAMISETA ADULTOS", "CAMISETA NIÑOS", "SUDADERA ADULTOS", "SUDADERA NIÑOS"]);
@@ -65,12 +64,9 @@ export default async function ShopPage() {
       <p>Dogis, obis, ropa del club y material de entrenamiento.</p>
     </div></section>
     <div className={styles.content}>
-      <p className={styles.orderNote}>La ropa y el material de entrenamiento se confirman por separado desde esta tienda.</p>
-      <StoreCategories>
-        {shop && products.length ? <PromotionBasket slug={generalShopSlug} initialRevision={shop.revision} variants={variants} storefront={products} /> : null}
-        {material.status === "fulfilled" ? <MaterialStore products={material.value} /> : <p role="status">El catálogo de material no está disponible en este momento. <a href={clubWebsite + "/#merchandising"}>Consultar en la web del club</a></p>}
-        {clothing.status === "rejected" ? <p role="status">No se pudo cargar el catálogo de ropa. Vuelve a intentarlo en unos minutos.</p> : null}
-      </StoreCategories>
+      {shop ? <StoreCheckout clothing={products} material={material.status === "fulfilled" ? material.value : []}
+        revision={shop.revision} bizumPhone={shopBizumPhone()} /> : <p role="status">La tienda no está disponible en este momento.</p>}
+      {material.status === "rejected" ? <p role="status">El catálogo de material no está disponible en este momento.</p> : null}
     </div>
   </main>;
 }

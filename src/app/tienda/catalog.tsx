@@ -9,8 +9,6 @@ import styles from "./store.module.css";
 type StoreSection = ShopSection | "all" | "edition-2027";
 const SectionContext = createContext<StoreSection>("all");
 
-export function useStoreCategory() { return useContext(SectionContext); }
-
 export function StoreCategories({ children }: { children: ReactNode }) {
   const [section, setSection] = useState<StoreSection>("all");
   const results = useRef<HTMLDivElement>(null);
@@ -48,8 +46,8 @@ export function matchesStoreSection(product: StoreProduct, section: StoreSection
   return section === "all" || product.section === section;
 }
 
-export function StoreGrid({ products, add, recipient = false }: {
-  products: StoreProduct[]; add: (product: StoreProduct, option: Option, quantity: number, name: string) => boolean | void; recipient?: boolean;
+export function StoreGrid({ products, add, onViewCart, recipient = false }: {
+  products: StoreProduct[]; onViewCart: () => void; add: (product: StoreProduct, option: Option, quantity: number, name: string) => boolean | void; recipient?: boolean;
 }) {
   const section = useContext(SectionContext);
   const visible = products.filter(product => matchesStoreSection(product, section));
@@ -58,7 +56,7 @@ export function StoreGrid({ products, add, recipient = false }: {
   if (!visible.length) return null;
 
   function cards(items: StoreProduct[]) {
-    return <div className={styles.grid}>{items.map(product => <ProductCard key={product.id} product={product} add={add} recipient={recipient} />)}</div>;
+    return <div className={styles.grid}>{items.map(product => <ProductCard key={product.id} product={product} add={add} onViewCart={onViewCart} recipient={recipient} />)}</div>;
   }
 
   return <>
@@ -70,8 +68,8 @@ export function StoreGrid({ products, add, recipient = false }: {
   </>;
 }
 
-function ProductCard({ product, add, recipient }: {
-  product: StoreProduct; add: (product: StoreProduct, option: Option, quantity: number, name: string) => boolean | void; recipient: boolean;
+function ProductCard({ product, add, onViewCart, recipient }: {
+  product: StoreProduct; onViewCart: () => void; add: (product: StoreProduct, option: Option, quantity: number, name: string) => boolean | void; recipient: boolean;
 }) {
   const [id, setId] = useState(product.options.length === 1 ? product.options[0].id : "");
   const [quantity, setQuantity] = useState("1");
@@ -114,7 +112,7 @@ function ProductCard({ product, add, recipient }: {
         onClick={() => { if (option) { const added = add(product, option, units, name.trim()); setMessage(added === false ? "No se pudo añadir. Revisa tu pedido." : "Añadido al pedido"); } }}>
         <Plus size={17} aria-hidden="true" /> Añadir al pedido
       </button>
-      <span className={styles.feedback} role="status">{message === "Añadido al pedido" ? <a href={recipient ? "#pedido-material" : "#pedido-ropa"}>Añadido · Ver pedido</a> : message}</span>
+      <span className={styles.feedback} role="status">{message === "Añadido al pedido" ? <button type="button" onClick={onViewCart}>Añadido · Ver carrito</button> : message}</span>
     </div>
     {showImage ? <dialog className={styles.photoDialog} ref={dialog} aria-label={"Foto de " + product.name} onClick={event => {
       if (event.target === event.currentTarget) event.currentTarget.close();
