@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import { generalShopSlug } from "@/lib/shop/promotion";
 import { shopSection, type ShopSection } from "@/lib/shop/catalog-sections";
@@ -47,8 +48,14 @@ export default async function ShopPage() {
 
   return <main className={styles.shell}>
     <header className={styles.header}>
-      <a className={styles.brand} href={clubWebsite}><img src="/ficha-skbc.png" alt="" width={46} height={46} /> SKBC Gipuzkoa</a>
-      <a href={clubWebsite + "/#merchandising"}>Volver a la web del club</a>
+      <div className={styles.headerInner}>
+        <a className={styles.brand} href={clubWebsite} aria-label="SKBC Gipuzkoa, web del club">
+          <img src="/ficha-skbc.png" alt="" width={40} height={40} /><span>SKBC Gipuzkoa</span>
+        </a>
+        <a className={styles.backToClub} href={clubWebsite + "/#merchandising"}>
+          <ArrowLeft size={18} aria-hidden="true" /> Volver a la web del club
+        </a>
+      </div>
     </header>
     <section className={styles.hero}><div className={styles.heroInner}>
       <h1>Tienda del club</h1>
