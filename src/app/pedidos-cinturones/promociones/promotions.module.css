@@ -73,3 +73,14 @@
   .footer > button { width: 100%; }
   .metrics > div { padding: 8px 6px; }
 }
+
+.supplierGroups, .supplierGroup { display: grid; gap: 12px; min-width: 0; }
+.supplierGroup h3 { margin: 0; padding: 8px 12px; color: #173c71; background: #edf4fc; border-radius: 8px; }
+.supplierTableScroll { overflow-x: auto; border: 1px solid var(--line, #d9e2ec); border-radius: 8px; }
+.supplierTable { width: 100%; border-collapse: collapse; white-space: nowrap; text-align: center; font-variant-numeric: tabular-nums; }
+.supplierTable caption { text-align: left; font-weight: 750; padding: .65rem .8rem; background: #f5f8fc; }
+.supplierTable :is(th, td) { border-top: 1px solid var(--line, #d9e2ec); padding: .55rem .6rem; }
+.supplierTable :is(th, td):first-child { text-align: left; }
+.supplierTable td { color: #516078; }
+.supplierTable td[data-ordered="true"] { background: #e5f0ff; color: #173c71; font-weight: 750; }
+.supplierTable .supplierTotal { background: #eef4fb; color: #152c52; font-weight: 750; }

@@ -8,6 +8,7 @@ import { euros, generalShopSlug, summarizePromotion, type QuotedLine } from "@/l
 import { getPromotion, promotionPath, promotionUrl, sharePromotion } from "@/lib/shop/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listCatalog } from "@/lib/web-orders/repository";
+import { SupplierSummary } from "./supplier-summary";
 import { PromotionEditor } from "./editor";
 import { publishCatalog } from "./actions";
 import styles from "./promotions.module.css";
@@ -155,11 +156,7 @@ export default async function ManagePromotions({ searchParams }: {
                 <div><dt>Unidades</dt><dd>{summary.reduce((total, line) => total + line.quantity, 0)}</dd></div>
                 <div><dt>Importe</dt><dd>{euros.format(consolidatedTotal / 100)}</dd></div>
               </dl>
-              {summary.length ? <ul className={styles.lines}>
-                {summary.map(line => <li key={JSON.stringify([line.id, line.product, line.variant])}>
-                  <span>{line.product} · {line.variant}</span><strong>{line.quantity} uds.</strong>
-                </li>)}
-              </ul> : null}
+              <SupplierSummary lines={summary} />
             </section>
 
             <section className={`card ${styles.panel}`}>
