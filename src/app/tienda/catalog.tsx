@@ -29,8 +29,8 @@ export function StoreCategories({ children }: { children: ReactNode }) {
         <button type="button" aria-pressed={section === "all"} onClick={() => selectSection("all")}>Todo</button>
         {Object.entries(shopSections).map(([key, name]) => key === "club" ? <div key={key} className={styles.categoryGroup}>
           <button type="button" aria-pressed={section === "club"} onClick={() => selectSection("club")}>{name}</button>
-          <button className={styles.subcategory} type="button" aria-label="Edición 2027" aria-pressed={section === "edition-2027"}
-            onClick={() => selectSection("edition-2027")}>Edición 2027</button>
+          {section === "club" || section === "edition-2027" ? <button className={styles.subcategory} type="button" aria-pressed={section === "edition-2027"}
+            onClick={() => selectSection("edition-2027")}>Edición 2027</button> : null}
         </div> : <button key={key} type="button" aria-pressed={key === section} onClick={() => selectSection(key as ShopSection)}>{name}</button>)}
       </nav>
       <div className={styles.catalogResults} ref={results}>{children}</div>
@@ -62,10 +62,10 @@ export function StoreGrid({ products, add, recipient = false }: {
   }
 
   return <>
-    {edition.length ? <section className={styles.collection} aria-labelledby="store-edition-2027">
-      <h2 id="store-edition-2027">Edición 2027</h2>
+    {edition.length ? <details key={section} className={styles.collection} open={section === "edition-2027" || undefined}>
+      <summary>Edición 2027 <span>{edition.length} {edition.length === 1 ? "prenda" : "prendas"}</span></summary>
       {cards(edition)}
-    </section> : null}
+    </details> : null}
     {regular.length ? cards(regular) : null}
   </>;
 }

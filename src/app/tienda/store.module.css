@@ -70,8 +70,11 @@
 
 .categoryGroup { display: grid; gap: 5px; }
 .categories .subcategory { margin-inline-start: 14px; font-size: .88rem; border-inline-start-color: #aec6dc; }
-.collection { min-width: 0; display: grid; gap: 12px; }
-.collection > h2 { margin: 0; font-size: clamp(1.35rem, 2.8vw, 2rem); letter-spacing: -.02em; }
+.collection { min-width: 0; padding: 13px; background: #fff; border: 1px solid var(--store-line); border-radius: 12px; }
+.collection summary { cursor: pointer; color: var(--store-ink); font-size: 1.15rem; font-weight: 800; padding: 4px; }
+.collection summary span { margin-inline-start: 8px; color: #41617c; font-weight: 650; font-size: .85rem; }
+.collection[open] > .grid { margin-top: 13px; }
+.collection summary:focus-visible { outline: 2px solid var(--store-accent); outline-offset: 2px; }
 @media (max-width: 740px) {
   .categoryGroup { display: flex; flex: none; }
   .categories .subcategory { margin-inline-start: 0; }
