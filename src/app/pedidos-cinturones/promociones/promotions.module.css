@@ -93,3 +93,13 @@
 
 .checklist label > span { display: grid; gap: 3px; }
 .checklist small { color: #40546d; }
+
+.orderManagement { padding: 12px; }
+.orderManagement h3, .orderManagement p { margin: 0; overflow-wrap: anywhere; }
+.orderManagement p { margin: 4px 0 12px; color: #40546d; }
+.orderManagement + details { border-top: 1px solid var(--line, #d9e2ec); }
+.managementFields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; }
+.order:target { outline: 2px solid #225fa8; outline-offset: 2px; }
+@media (max-width: 620px) {
+  .managementFields { grid-template-columns: minmax(0, 1fr); }
+}

@@ -44,3 +44,7 @@ Aplica también supabase/migrations/20261124160000_shop_member_quota.sql, supaba
 En el editor puedes pegar una URL de imagen directa o subir un JPG, PNG o WebP desde tu dispositivo, de hasta 4 MB. Aplica también supabase/migrations/20261124170000_shop_image_uploads.sql para habilitar el almacenamiento de imágenes.
 
 Configura SKBC_SHOP_BIZUM_PHONE con el teléfono de Bizum del club (recibe nueve cifras). La página usa la caducidad de cada promoción como último día de pago, en horario peninsular.
+
+### Cobros y entregas
+
+Cada compra confirmada aparece automáticamente en «Pedidos por promoción → Pedidos recibidos». Desde cada pedido se gestionan el pago pendiente, el cobro por Bizum o en mano y la entrega. Aplica también supabase/migrations/20261125110000_shop_order_management.sql para habilitar estos estados.
